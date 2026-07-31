@@ -1,0 +1,378 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  DOCTOR
+  SECRETARY
+  SYSTEM_ADMIN
+}
+
+enum PracticeStaffRole {
+  SECRETARY
+}
+
+enum AppointmentStatus {
+  PENDING_VERIFICATION
+  CONFIRMED
+  WAITING
+  CALLED
+  NOW_SERVING
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  EXPIRED
+  RESCHEDULED
+}
+
+enum AppointmentCancelledByType {
+  PATIENT
+  DOCTOR
+  SECRETARY
+  SYSTEM
+}
+
+enum OtpPurpose {
+  CREATE_BOOKING
+  VIEW_BOOKING
+  CANCEL_BOOKING
+  RESCHEDULE_BOOKING
+  CHANGE_MOBILE_NUMBER
+}
+
+enum BookingAccessTokenPurpose {
+  VIEW_AND_MANAGE_BOOKING
+  VIEW_ONLY
+}
+
+enum FollowUpRecommendationStatus {
+  SCHEDULED
+  SENT
+  CANCELLED
+  FAILED
+  EXPIRED
+}
+
+enum NotificationType {
+  OTP
+  BOOKING_CONFIRMED
+  APPOINTMENT_REMINDER
+  QUEUE_UPDATE
+  PATIENT_CALLED
+  FOLLOW_UP_REMINDER
+  CANCELLATION_CONFIRMATION
+  RESCHEDULE_CONFIRMATION
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
+
+model User {
+  id                String    @id @default(uuid())
+  firstName         String @db.VarChar(100)
+  lastName          String @db.VarChar(100)
+  email             String @unique @db.VarChar(255)
+  mobileNumber      String @db.VarChar(30)
+  passwordHash      String @db.VarChar(255)
+  role              UserRole
+  isActive          Boolean   @default(true)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  doctorProfile DoctorProfile?
+  practiceStaffAssignments PracticeStaff[]
+  createdAppointments Appointment[]
+  followUpRecommendations FollowUpRecommendation[]
+}
+
+model DoctorProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  middleName          String?  @db.VarChar(100)
+  suffix              String?  @db.VarChar(30)
+  professionalTitle   String   @db.VarChar(50)
+  specialization      String   @db.VarChar(150)
+  licenseNumber       String   @unique @db.VarChar(100)
+  profileDescription  String?
+  profilePhotoUrl     String?  @db.VarChar(500)
+  publicSlug          String?  @unique @db.VarChar(120)
+  isProfilePublic     Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+    practiceLocations PracticeLocation[]
+    accountSettings   DoctorAccountSettings?
+    user              User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+}
+
+model DoctorAccountSettings {
+  id                          String   @id @default(uuid())
+  doctorProfileId             String   @unique
+  defaultTimeZone             String   @default("Asia/Manila") @db.VarChar(100)
+  defaultConsultationMinutes  Int      @default(30)
+  maximumAdvanceBookingDays   Int      @default(30)
+  allowOnlineBooking          Boolean  @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+}
+
+model PracticeLocation {
+  id                String   @id @default(uuid())
+  doctorProfileId   String
+  name              String   @db.VarChar(200)
+  addressLine1      String   @db.VarChar(255)
+  addressLine2      String?  @db.VarChar(255)
+  cityMunicipality  String   @db.VarChar(120)
+  province          String   @db.VarChar(120)
+  postalCode        String?  @db.VarChar(20)
+  contactNumber     String   @db.VarChar(30)
+  isActive           Boolean  @default(true)
+  isBookingEnabled  Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+    doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+    staffAssignments PracticeStaff[]
+    appointments Appointment[]
+
+  @@index([doctorProfileId])
+}
+
+model PracticeStaff {
+  id                 String            @id @default(uuid())
+  userId             String
+  practiceLocationId String
+  staffRole          PracticeStaffRole @default(SECRETARY)
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+    user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, practiceLocationId])
+  @@index([userId])
+  @@index([practiceLocationId])
+}
+
+model Patient {
+  id                      String   @id @default(uuid())
+  fullName                String   @db.VarChar(150)
+  mobileNumberEncrypted   String
+  mobileNumberHash        String   @unique @db.VarChar(128)
+  mobileVerifiedAt        DateTime?
+  isActive                Boolean  @default(true)
+  anonymizedAt            DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  appointments Appointment[]
+  otpVerifications OtpVerification[]
+}
+
+model Appointment {
+  id                        String                        @id @default(uuid())
+  bookingReference          String                        @unique @db.VarChar(20)
+
+  patientId                 String
+  patient Patient @relation(fields: [patientId], references: [id])
+  practiceLocationId        String
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id])
+
+  scheduledStartAt          DateTime @db.Timestamptz(3)
+  scheduledEndAt            DateTime @db.Timestamptz(3)
+  estimatedServiceMinutes   Int
+  queueNumber               Int?
+
+  status                    AppointmentStatus            @default(PENDING_VERIFICATION)
+
+  mobileVerifiedAt        DateTime? @db.Timestamptz(3)
+  confirmedAt             DateTime? @db.Timestamptz(3)
+  arrivedAt               DateTime? @db.Timestamptz(3)
+  calledAt                DateTime? @db.Timestamptz(3)
+  serviceStartedAt        DateTime? @db.Timestamptz(3)
+  serviceCompletedAt      DateTime? @db.Timestamptz(3)
+
+  cancelledAt               DateTime? @db.Timestamptz(3)
+  cancelledByType           AppointmentCancelledByType?
+  cancellationReason        String?                       @db.VarChar(255)
+
+  expiredAt                 DateTime? @db.Timestamptz(3)
+  noShowMarkedAt            DateTime? @db.Timestamptz(3)
+
+  createdByUserId           String?
+  createdByUser User? @relation(fields: [createdByUserId], references: [id])
+
+  anonymizedAt              DateTime? @db.Timestamptz(3)
+
+  createdAt                 DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@unique([practiceLocationId, scheduledStartAt, queueNumber])
+  @@index([practiceLocationId, scheduledStartAt])
+  @@index([practiceLocationId, status, scheduledStartAt])
+  @@index([patientId])
+  @@index([status])
+
+  
+  otpVerifications OtpVerification[]
+  bookingAccessTokens BookingAccessToken[]
+  contactPreference ContactPreference?
+  followUpRecommendations FollowUpRecommendation[]
+  notificationLogs NotificationLog[]
+}
+
+
+model OtpVerification {
+  id               String     @id @default(uuid())
+
+  patientId        String?
+  patient Patient? @relation(fields: [patientId], references: [id])
+  appointmentId    String?
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  mobileNumberHash String     @db.VarChar(128)
+  otpHash          String     @db.VarChar(255)
+  purpose          OtpPurpose
+
+  expiresAt        DateTime   @db.Timestamptz(3)
+
+  attemptCount     Int        @default(0)
+  maxAttempts      Int        @default(5)
+
+  verifiedAt       DateTime?  @db.Timestamptz(3)
+  consumedAt       DateTime?  @db.Timestamptz(3)
+  invalidatedAt    DateTime?  @db.Timestamptz(3)
+
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@index([mobileNumberHash, purpose, expiresAt])
+  @@index([appointmentId])
+}
+
+model BookingAccessToken {
+  id            String                      @id @default(uuid())
+
+  appointmentId String
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  tokenHash     String                      @unique @db.VarChar(255)
+
+  purpose       BookingAccessTokenPurpose   @default(VIEW_AND_MANAGE_BOOKING)
+
+  expiresAt     DateTime                    @db.Timestamptz(3)
+
+  lastUsedAt    DateTime?                   @db.Timestamptz(3)
+  revokedAt     DateTime?                   @db.Timestamptz(3)
+
+  createdAt     DateTime                    @default(now()) @db.Timestamptz(3)
+
+  @@index([appointmentId])
+  @@index([expiresAt])
+}
+
+model ContactPreference {
+  id                       String   @id @default(uuid())
+
+  appointmentId            String   @unique
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  allowOperationalMessages Boolean  @default(true)
+  allowFollowUpReminder    Boolean  @default(false)
+  allowMarketingMessages   Boolean  @default(false)
+
+  acknowledgedAt           DateTime @db.Timestamptz(3)
+  withdrawnAt              DateTime? @db.Timestamptz(3)
+
+  privacyNoticeVersion     String   @db.VarChar(30)
+
+  createdAt                DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+}
+
+model FollowUpRecommendation {
+  id                      String                       @id @default(uuid())
+
+  appointmentId           String
+  appointment             Appointment @relation(fields: [appointmentId], references: [id])
+
+  recommendedByUserId     String
+  recommendedByUser       User        @relation(fields: [recommendedByUserId], references: [id])
+
+  recommendedFollowUpDate DateTime                     @db.Date
+  reminderScheduledAt     DateTime                     @db.Timestamptz(3)
+
+  status                  FollowUpRecommendationStatus @default(SCHEDULED)
+
+  shortNote               String?                      @db.VarChar(150)
+
+  sentAt                  DateTime?                    @db.Timestamptz(3)
+  cancelledAt             DateTime?                    @db.Timestamptz(3)
+
+  createdAt               DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([appointmentId])
+  @@index([status, reminderScheduledAt])
+
+  notificationLogs NotificationLog[]
+}
+
+model NotificationLog {
+  id                         String              @id @default(uuid())
+
+ appointmentId            String?
+ appointment              Appointment?           @relation(fields: [appointmentId], references: [id])
+
+ followUpRecommendationId String?
+ followUpRecommendation   FollowUpRecommendation? @relation(fields: [followUpRecommendationId], references: [id])
+
+  type                       NotificationType
+  channel                    NotificationChannel
+
+  recipientMobileEncrypted   String
+
+  status                     NotificationStatus  @default(PENDING)
+
+  providerMessageId          String?             @db.VarChar(150)
+
+  sentAt                     DateTime?           @db.Timestamptz(3)
+  deliveredAt                DateTime?           @db.Timestamptz(3)
+  failedAt                   DateTime?           @db.Timestamptz(3)
+
+  failureReason              String?             @db.VarChar(255)
+
+  createdAt                  DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@index([appointmentId])
+  @@index([status, createdAt])
+  @@index([providerMessageId])
+}

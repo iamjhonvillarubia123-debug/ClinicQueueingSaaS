@@ -1,0 +1,27 @@
+// Draft only.
+//
+// Migration is blocked because the uploaded specifications reference
+// BookingQuestion.id, but no BookingQuestion table specification has
+// been provided.
+
+model AppointmentAnswer {
+  id                         String      @id @default(uuid())
+
+  appointmentId              String
+  appointment                Appointment @relation(fields: [appointmentId], references: [id])
+
+  bookingQuestionId          String
+
+  answerText                 String?
+  answerNumber               Decimal?    @db.Decimal(10, 2)
+  answerBoolean              Boolean?
+  selectedOptionValue        String?     @db.VarChar(100)
+
+  estimatedMinutesAdjustment Int         @default(0)
+
+  createdAt                  DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@unique([appointmentId, bookingQuestionId])
+  @@index([bookingQuestionId])
+}
