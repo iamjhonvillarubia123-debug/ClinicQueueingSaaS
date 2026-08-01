@@ -1,0 +1,126 @@
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
+
+import { PrismaService } from '../prisma/prisma.service';
+
+import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
+
+@Injectable()
+export class PracticeLocationService {
+  constructor(
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async create(
+    userId: string,
+    createPracticeLocationDto: CreatePracticeLocationDto,
+  ) {
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: {
+        userId,
+      },
+    });
+
+    if (!doctorProfile) {
+      throw new ForbiddenException(
+        'Only a doctor may create a practice location.',
+      );
+    }
+
+    const name = createPracticeLocationDto.name.trim();
+    const addressLine1 = createPracticeLocationDto.addressLine1.trim();
+
+    const existingLocation =
+      await this.prisma.practiceLocation.findFirst({
+        where: {
+          doctorProfileId: doctorProfile.id,
+          isActive: true,
+          name: {
+            equals: name,
+            mode: 'insensitive',
+          },
+          addressLine1: {
+            equals: addressLine1,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+    if (existingLocation) {
+      throw new ConflictException(
+        'An active practice location with this name and address already exists.',
+      );
+    }
+
+    return this.prisma.practiceLocation.create({
+      data: {
+        doctorProfileId: doctorProfile.id,
+        name,
+        addressLine1,
+        addressLine2:
+          createPracticeLocationDto.addressLine2?.trim() || null,
+        cityMunicipality:
+          createPracticeLocationDto.cityMunicipality.trim(),
+        province: createPracticeLocationDto.province.trim(),
+        postalCode:
+          createPracticeLocationDto.postalCode?.trim() || null,
+        contactNumber:
+          createPracticeLocationDto.contactNumber.trim(),
+      },
+      select: {
+        id: true,
+        doctorProfileId: true,
+        name: true,
+        addressLine1: true,
+        addressLine2: true,
+        cityMunicipality: true,
+        province: true,
+        postalCode: true,
+        contactNumber: true,
+        isActive: true,
+        isBookingEnabled: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async findAllForDoctor(userId: string) {
+  const doctorProfile = await this.prisma.doctorProfile.findUnique({
+    where: {
+      userId,
+    },
+  });
+
+  if (!doctorProfile) {
+    throw new ForbiddenException(
+      'Only a doctor may view practice locations.',
+    );
+  }
+
+  return this.prisma.practiceLocation.findMany({
+    where: {
+      doctorProfileId: doctorProfile.id,
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+    select: {
+      id: true,
+      name: true,
+      addressLine1: true,
+      addressLine2: true,
+      cityMunicipality: true,
+      province: true,
+      postalCode: true,
+      contactNumber: true,
+      isActive: true,
+      isBookingEnabled: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+}
+}

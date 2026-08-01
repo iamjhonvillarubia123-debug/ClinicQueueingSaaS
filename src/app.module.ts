@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AppController } from './app/app.controller';
 import { DoctorModule } from './doctor/doctor.module';
+import { PracticeLocationModule } from './practice-location/practice-location.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { DoctorModule } from './doctor/doctor.module';
     AuthModule,
     PrismaModule,
     DoctorModule,
+    PracticeLocationModule,
   ],
   controllers: [AppController],
 })
