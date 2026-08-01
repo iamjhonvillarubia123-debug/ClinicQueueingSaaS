@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AppController } from './app/app.controller';
 import { DoctorModule } from './doctor/doctor.module';
 import { PracticeLocationModule } from './practice-location/practice-location.module';
+import { PracticeStaffModule } from './practice-staff/practice-staff.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { PracticeLocationModule } from './practice-location/practice-location.mo
     PrismaModule,
     DoctorModule,
     PracticeLocationModule,
+    PracticeStaffModule,
   ],
   controllers: [AppController],
 })
