@@ -87,6 +87,12 @@ enum BookingDraftStatus {
   CANCELLED
 }
 
+enum ExistingPatientResponse {
+  YES
+  NO
+  UNSURE
+}
+
 enum QueueEventType {
   NEXT_PATIENT
   SELF_SERVICE_REINSERTION
@@ -399,7 +405,8 @@ model BookingDraft {
   bookingReference String             @unique @db.VarChar(20)
   status           BookingDraftStatus @default(PENDING_OTP)
 
-  practiceLocationId String
+  practiceLocationId      String
+  existingPatientResponse ExistingPatientResponse
 
   firstName  String  @db.VarChar(100)
   middleName String? @db.VarChar(100)
