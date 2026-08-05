@@ -1,0 +1,43 @@
+// Draft for review.
+//
+// Purpose:
+// Stores OTP verification attempts associated with a temporary
+// BookingDraft before Patient and Appointment creation.
+//
+// The active schema still contains older Patient and Appointment
+// relationships. Those relationships require review before this
+// draft is promoted into schema.prisma.
+
+model OtpVerification {
+  id String @id @default(uuid())
+
+  patientId String?
+  patient   Patient? @relation(
+    fields: [patientId],
+    references: [id]
+  )
+
+  appointmentId String?
+  appointment   Appointment? @relation(
+    fields: [appointmentId],
+    references: [id]
+  )
+
+  mobileNumberHash String @db.VarChar(128)
+  otpHash          String @db.VarChar(255)
+  purpose          OtpPurpose
+
+  expiresAt DateTime @db.Timestamptz(3)
+
+  attemptCount Int @default(0)
+  maxAttempts  Int @default(5)
+
+  verifiedAt    DateTime? @db.Timestamptz(3)
+  consumedAt    DateTime? @db.Timestamptz(3)
+  invalidatedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([mobileNumberHash, purpose, expiresAt])
+  @@index([appointmentId])
+}

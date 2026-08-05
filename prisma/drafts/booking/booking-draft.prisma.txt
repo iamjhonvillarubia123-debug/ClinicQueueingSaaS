@@ -1,0 +1,89 @@
+// Draft for review.
+//
+// Purpose:
+// Temporarily stores an unverified public booking request while the
+// patient completes OTP verification.
+//
+// A BookingDraft is not an Appointment.
+// A Patient and Appointment are created only after successful OTP
+// verification.
+
+enum ExistingPatientResponse {
+  YES
+  NO
+  UNSURE
+}
+
+enum BookingDraftStatus {
+  PENDING_OTP
+  CONSUMED
+  EXPIRED
+  CANCELLED
+}
+
+model BookingDraft {
+  id               String             @id @default(uuid())
+  status           BookingDraftStatus @default(PENDING_OTP)
+
+  practiceLocationId String
+  practiceLocation   PracticeLocation @relation(
+    fields: [practiceLocationId],
+    references: [id]
+  )
+
+  firstName  String  @db.VarChar(100)
+  middleName String? @db.VarChar(100)
+  lastName   String  @db.VarChar(100)
+  suffix     String? @db.VarChar(20)
+ 
+  existingPatientResponse ExistingPatientResponse
+
+  mobileNumberEncrypted String
+  mobileNumberHash      String @db.VarChar(128)
+  mobileNumberLastFour  String @db.Char(4)
+
+  serviceDate DateTime @db.Date
+  estimatedServiceMinutes Int
+
+  expiresAt   DateTime  @db.Timestamptz(3)
+  consumedAt  DateTime? @db.Timestamptz(3)
+  cancelledAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  otpVerifications OtpVerification[]
+
+  @@index([practiceLocationId, serviceDate])
+  @@index([
+    mobileNumberHash,
+    practiceLocationId,
+    serviceDate,
+    status,
+    expiresAt
+])
+  @@index([expiresAt])
+
+}
+
+
+  
+
+
+
+
+
+
+//
+// Proposed addition to OtpVerification:
+//
+// bookingDraftId String?
+// bookingDraft   BookingDraft? @relation(
+//   fields: [bookingDraftId],
+//   references: [id]
+// )
+//
+// @@index([bookingDraftId])
+//
+// Proposed opposite relation in PracticeLocation:
+//
+// bookingDrafts BookingDraft[]

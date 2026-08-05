@@ -1,0 +1,150 @@
+// ======================================================
+// STATUS:
+//
+// Reviewed
+//
+// ======================================================
+//
+// DOMAIN:
+//
+// Appointment and Queue Management
+//
+// ======================================================
+//
+// PURPOSE:
+//
+// Represents one confirmed clinic visit after successful
+// OTP verification.
+//
+// An Appointment is created only after:
+//
+// 1. OTP verification succeeds.
+// 2. The Patient is created or matched.
+// 3. A permanent Queue Number is assigned.
+//
+// ======================================================
+//
+// BUSINESS RULES:
+//
+// - Patients book a consultation date, not an exact time.
+// - Every Appointment has a permanent Queue Number.
+// - Queue Numbers never change.
+// - Queue Numbers restart for each Practice Location
+//   and Service Date.
+// - Estimated consultation time is calculated dynamically.
+// - Missing one queue call does not cancel the Appointment.
+// - Only clinic staff may reinsert a missed patient.
+// - New Appointments begin with WAITING status.
+//
+// ======================================================
+//
+// DEPENDS ON:
+//
+// - Patient
+// - PracticeLocation
+// - User
+// - BookingAccessToken
+// - ContactPreference
+// - FollowUpRecommendation
+// - NotificationLog
+//
+// ======================================================
+//
+// APPROVAL STATUS:
+//
+// Reviewed in Review-0001-Appointment.md
+//
+// ======================================================
+
+enum AppointmentStatus {
+  WAITING
+  CALLED
+  MISSED_CALL
+  PENDING_REINSERTION
+  IN_SERVICE
+  COMPLETED
+  CANCELLED
+}
+
+model Appointment {
+  id               String @id @default(uuid())
+  bookingReference String @unique @db.VarChar(20)
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  practiceLocationId String
+  practiceLocation   PracticeLocation @relation(
+    fields: [practiceLocationId],
+    references: [id]
+  )
+
+  serviceDate            DateTime @db.Date
+  estimatedServiceMinutes Int
+  queueNumber             Int
+
+  status AppointmentStatus @default(WAITING)
+
+  arrivedAt          DateTime? @db.Timestamptz(3)
+  calledAt           DateTime? @db.Timestamptz(3)
+  serviceStartedAt   DateTime? @db.Timestamptz(3)
+  serviceCompletedAt DateTime? @db.Timestamptz(3)
+
+  cancelledAt        DateTime? @db.Timestamptz(3)
+  cancelledByType    AppointmentCancelledByType?
+  cancellationReason String? @db.VarChar(255)
+
+  createdByUserId String?
+  createdByUser   User? @relation(
+    fields: [createdByUserId],
+    references: [id]
+  )
+
+  anonymizedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  bookingAccessTokens     BookingAccessToken[]
+  contactPreference       ContactPreference?
+  followUpRecommendations FollowUpRecommendation[]
+  notificationLogs        NotificationLog[]
+
+  @@unique([practiceLocationId, serviceDate, queueNumber])
+  @@index([practiceLocationId, serviceDate])
+  @@index([practiceLocationId, status, serviceDate])
+  @@index([patientId])
+  @@index([status])
+}
+
+// ======================================================
+// VERSION 1 SMS NOTIFICATION SCOPE
+// ======================================================
+//
+// Supported:
+//
+// - OTP
+// - BOOKING_ACCESS_LINK
+// - NEXT_IN_QUEUE
+// - FOLLOW_UP_REMINDER
+// - CANCELLATION_CONFIRMATION
+//
+// Deferred or removed:
+//
+// - APPOINTMENT_REMINDER
+// - QUEUE_UPDATE
+// - PATIENT_CALLED
+// - RESCHEDULE_CONFIRMATION
+//
+// OTP notifications occur before Appointment creation
+// and should later link to BookingDraft or OtpVerification.
+//
+// Booking access, next-in-queue, cancellation, and
+// follow-up notifications may remain related to Appointment.
+//
+// Missed queue calls do not send SMS.
+// The patient checks the queue application and may press
+// "I'm Here" or approach reception.
+//
+// Raw OTP values and raw booking access tokens must never
+// be stored in NotificationLog.
