@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { CreateBookingDraftDto } from './dto/create-booking-draft.dto';
+import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
 
 @Injectable()
 export class BookingService {
@@ -164,6 +165,7 @@ export class BookingService {
         'Unable to generate a unique booking reference.',
       );
     }
+    
 
     const otpResult =
       await this.otpService.createBookingOtp(
@@ -179,6 +181,15 @@ export class BookingService {
         maxAttempts:
           otpResult.otpVerification.maxAttempts,
       },
-    };
+           };
   }
+
+  verifyBookingOtp(
+  verifyBookingOtpDto: VerifyBookingOtpDto,
+) {
+  return this.otpService.verifyBookingOtp(
+    verifyBookingOtpDto.bookingDraftId,
+    verifyBookingOtpDto.otp,
+  );
+}
 }

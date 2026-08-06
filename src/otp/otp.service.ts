@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -182,6 +183,112 @@ export class OtpService {
       return {
         otp,
         otpVerification,
+      };
+    },
+  );
+}
+
+async verifyBookingOtp(
+  bookingDraftId: string,
+  submittedOtp: string,
+) {
+  const now = new Date();
+
+  return this.prisma.$transaction(
+    async (transaction) => {
+      const otpVerification =
+        await transaction.otpVerification.findFirst({
+          where: {
+            bookingDraftId,
+            purpose: 'BOOKING_VERIFICATION',
+            verifiedAt: null,
+            consumedAt: null,
+            invalidatedAt: null,
+            expiresAt: {
+              gt: now,
+            },
+            attemptCount: {
+              lt: 5,
+            },
+            bookingDraft: {
+              status: 'PENDING_OTP',
+              expiresAt: {
+                gt: now,
+              },
+              consumedAt: null,
+              cancelledAt: null,
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          select: {
+            id: true,
+            bookingDraftId: true,
+            otpHash: true,
+            purpose: true,
+            attemptCount: true,
+            maxAttempts: true,
+          },
+        });
+
+      if (!otpVerification) {
+        throw new BadRequestException(
+          'OTP verification failed.',
+        );
+      }
+
+      const matches = this.verifyOtpHash(
+        otpVerification.bookingDraftId,
+        otpVerification.purpose,
+        submittedOtp,
+        otpVerification.otpHash,
+      );
+
+      if (!matches) {
+        const nextAttemptCount =
+          otpVerification.attemptCount + 1;
+
+        await transaction.otpVerification.update({
+          where: {
+            id: otpVerification.id,
+          },
+          data: {
+            attemptCount: {
+              increment: 1,
+            },
+            invalidatedAt:
+              nextAttemptCount >=
+              otpVerification.maxAttempts
+                ? now
+                : null,
+          },
+        });
+
+        throw new BadRequestException(
+          'OTP verification failed.',
+        );
+      }
+
+      const verifiedOtp =
+        await transaction.otpVerification.update({
+          where: {
+            id: otpVerification.id,
+          },
+          data: {
+            verifiedAt: now,
+          },
+          select: {
+            id: true,
+            bookingDraftId: true,
+            purpose: true,
+            verifiedAt: true,
+          },
+        });
+
+      return {
+        message: 'OTP verified successfully.',
+        otpVerification: verifiedOtp,
       };
     },
   );

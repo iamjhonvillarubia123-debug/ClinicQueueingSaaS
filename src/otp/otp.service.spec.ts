@@ -40,9 +40,11 @@ describe('OtpService', () => {
     findFirst: jest.fn(),
   },
   otpVerification: {
-    updateMany: jest.fn(),
-    create: jest.fn(),
-  },
+  findFirst: jest.fn(),
+  update: jest.fn(),
+  updateMany: jest.fn(),
+  create: jest.fn(),
+},
   $transaction: jest.fn(
     async (callback) =>
       callback({
@@ -295,5 +297,168 @@ it('should reject a malformed stored OTP hash', () => {
     prismaServiceMock.otpVerification.create,
   ).not.toHaveBeenCalled();
     });
+
+    it('should verify a valid booking OTP', async () => {
+  const now = new Date();
+
+  prismaServiceMock.otpVerification.findFirst.mockResolvedValue({
+    id: 'otp-1',
+    bookingDraftId: 'draft-1',
+    otpHash: service.hashOtp(
+      'draft-1',
+      'BOOKING_VERIFICATION',
+      '123456',
+    ),
+    purpose: 'BOOKING_VERIFICATION',
+    attemptCount: 0,
+    maxAttempts: 5,
+  });
+
+  prismaServiceMock.otpVerification.update.mockResolvedValue({
+    id: 'otp-1',
+    bookingDraftId: 'draft-1',
+    purpose: 'BOOKING_VERIFICATION',
+    verifiedAt: now,
+  });
+
+  const result = await service.verifyBookingOtp(
+    'draft-1',
+    '123456',
+  );
+
+  expect(
+    prismaServiceMock.otpVerification.findFirst,
+  ).toHaveBeenCalled();
+
+  expect(
+    prismaServiceMock.otpVerification.update,
+  ).toHaveBeenCalledWith({
+    where: {
+      id: 'otp-1',
+    },
+    data: {
+      verifiedAt: expect.any(Date),
+    },
+    select: {
+      id: true,
+      bookingDraftId: true,
+      purpose: true,
+      verifiedAt: true,
+    },
+  });
+
+  expect(result).toEqual({
+    message: 'OTP verified successfully.',
+    otpVerification: {
+      id: 'otp-1',
+      bookingDraftId: 'draft-1',
+      purpose: 'BOOKING_VERIFICATION',
+      verifiedAt: now,
+    },
+  });
+});
+
+it('should increment the attempt count for an incorrect OTP', async () => {
+  prismaServiceMock.otpVerification.findFirst.mockResolvedValue({
+    id: 'otp-1',
+    bookingDraftId: 'draft-1',
+    otpHash: service.hashOtp(
+      'draft-1',
+      'BOOKING_VERIFICATION',
+      '123456',
+    ),
+    purpose: 'BOOKING_VERIFICATION',
+    attemptCount: 2,
+    maxAttempts: 5,
+  });
+
+  prismaServiceMock.otpVerification.update.mockResolvedValue({
+    id: 'otp-1',
+  });
+
+  await expect(
+    service.verifyBookingOtp(
+      'draft-1',
+      '654321',
+    ),
+  ).rejects.toThrow(
+    'OTP verification failed.',
+  );
+
+  expect(
+    prismaServiceMock.otpVerification.update,
+  ).toHaveBeenCalledWith({
+    where: {
+      id: 'otp-1',
+    },
+    data: {
+      attemptCount: {
+        increment: 1,
+      },
+      invalidatedAt: null,
+    },
+  });
+});
+
+it('should invalidate the OTP on the fifth incorrect attempt', async () => {
+  prismaServiceMock.otpVerification.findFirst.mockResolvedValue({
+    id: 'otp-1',
+    bookingDraftId: 'draft-1',
+    otpHash: service.hashOtp(
+      'draft-1',
+      'BOOKING_VERIFICATION',
+      '123456',
+    ),
+    purpose: 'BOOKING_VERIFICATION',
+    attemptCount: 4,
+    maxAttempts: 5,
+  });
+
+  prismaServiceMock.otpVerification.update.mockResolvedValue({
+    id: 'otp-1',
+  });
+
+  await expect(
+    service.verifyBookingOtp(
+      'draft-1',
+      '654321',
+    ),
+  ).rejects.toThrow(
+    'OTP verification failed.',
+  );
+
+  expect(
+    prismaServiceMock.otpVerification.update,
+  ).toHaveBeenCalledWith({
+    where: {
+      id: 'otp-1',
+    },
+    data: {
+      attemptCount: {
+        increment: 1,
+      },
+      invalidatedAt: expect.any(Date),
+    },
+  });
+});
+
+it('should reject verification when no active OTP is available', async () => {
+  prismaServiceMock.otpVerification.findFirst.mockResolvedValue(
+    null,
+  );
+
+  await expect(
+    service.verifyBookingOtp(
+      'draft-1',
+      '123456',
+    ),
+  ).rejects.toThrow(
+    'OTP verification failed.',
+  );
+
+  expect(
+    prismaServiceMock.otpVerification.update,
+  ).not.toHaveBeenCalled();
+});
 
 });

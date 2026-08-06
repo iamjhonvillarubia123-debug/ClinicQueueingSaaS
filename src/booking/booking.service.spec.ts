@@ -19,6 +19,7 @@ describe('BookingService', () => {
   };
   const otpServiceMock = {
   createBookingOtp: jest.fn(),
+  verifyBookingOtp: jest.fn(),
 };
 
   const mobileNumberServiceMock = {
@@ -158,4 +159,46 @@ expect(result.otpVerification).toEqual({
   maxAttempts: 5,
 });
   });
+
+  it('should delegate booking OTP verification to OtpService', async () => {
+  otpServiceMock.verifyBookingOtp.mockResolvedValue({
+    message: 'OTP verified successfully.',
+    otpVerification: {
+      id: 'otp-1',
+      bookingDraftId: 'draft-1',
+      purpose: 'BOOKING_VERIFICATION',
+      verifiedAt: new Date(
+        '2026-08-06T05:00:00.000Z',
+      ),
+    },
+  });
+
+  const result = await service.verifyBookingOtp({
+    bookingDraftId: 'draft-1',
+    otp: '123456',
+  });
+
+  expect(
+    otpServiceMock.verifyBookingOtp,
+  ).toHaveBeenCalledTimes(1);
+
+  expect(
+    otpServiceMock.verifyBookingOtp,
+  ).toHaveBeenCalledWith(
+    'draft-1',
+    '123456',
+  );
+
+  expect(result).toEqual({
+    message: 'OTP verified successfully.',
+    otpVerification: {
+      id: 'otp-1',
+      bookingDraftId: 'draft-1',
+      purpose: 'BOOKING_VERIFICATION',
+      verifiedAt: new Date(
+        '2026-08-06T05:00:00.000Z',
+      ),
+    },
+  });
+});
 });
