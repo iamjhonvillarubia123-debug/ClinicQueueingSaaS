@@ -1,12 +1,20 @@
 import {
   IsDateString,
-  IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
-import { ExistingPatientResponse } from '../../../generated/prisma/client';
+
+export const EXISTING_PATIENT_RESPONSES = [
+  'YES',
+  'NO',
+  'UNSURE',
+] as const;
+
+export type ExistingPatientResponse =
+  (typeof EXISTING_PATIENT_RESPONSES)[number];
 
 export class CreateBookingDraftDto {
   @IsString()
@@ -33,7 +41,7 @@ export class CreateBookingDraftDto {
   @MaxLength(20)
   suffix?: string;
 
-  @IsEnum(ExistingPatientResponse)
+  @IsIn(EXISTING_PATIENT_RESPONSES)
   existingPatientResponse!: ExistingPatientResponse;
 
   @IsString()

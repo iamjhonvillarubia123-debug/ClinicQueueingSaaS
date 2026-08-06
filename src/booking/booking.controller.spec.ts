@@ -1,15 +1,30 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BookingController } from './booking.controller';
+import { BookingService } from './booking.service';
 
 describe('BookingController', () => {
   let controller: BookingController;
 
+  const bookingServiceMock = {
+    createDraft: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [BookingController],
+      providers: [
+        {
+          provide: BookingService,
+          useValue: bookingServiceMock,
+        },
+      ],
     }).compile();
 
-    controller = module.get<BookingController>(BookingController);
+    controller = module.get<BookingController>(
+      BookingController,
+    );
+
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {

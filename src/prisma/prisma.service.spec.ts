@@ -1,18 +1,25 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from './prisma.service';
 
 describe('PrismaService', () => {
-  let service: PrismaService;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [PrismaService],
-    }).compile();
+  beforeEach(() => {
+    process.env.DATABASE_URL =
+      'postgresql://test:test@localhost:5432/test';
+  });
 
-    service = module.get<PrismaService>(PrismaService);
+  afterEach(() => {
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+      return;
+    }
+
+    process.env.DATABASE_URL = originalDatabaseUrl;
   });
 
   it('should be defined', () => {
+    const service = new PrismaService();
+
     expect(service).toBeDefined();
   });
 });
