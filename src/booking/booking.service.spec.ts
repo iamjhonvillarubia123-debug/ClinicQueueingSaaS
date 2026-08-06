@@ -4,6 +4,7 @@ import { MobileNumberService } from '../security/mobile-number/mobile-number.ser
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 import { Prisma } from '../../generated/prisma/client';
+import { OtpService } from '../otp/otp.service';
 
 describe('BookingService', () => {
   let service: BookingService;
@@ -16,6 +17,9 @@ describe('BookingService', () => {
       create: jest.fn(),
     },
   };
+  const otpServiceMock = {
+  createBookingOtp: jest.fn(),
+};
 
   const mobileNumberServiceMock = {
     protect: jest.fn(),
@@ -40,6 +44,10 @@ describe('BookingService', () => {
         {
           provide: BookingReferenceGenerator,
           useValue: bookingReferenceGeneratorMock,
+        },
+        {
+          provide: OtpService,
+          useValue: otpServiceMock,
         },
       ],
     }).compile();
@@ -107,6 +115,17 @@ describe('BookingService', () => {
       createdAt: new Date(),
     });
 
+  otpServiceMock.createBookingOtp.mockResolvedValue({
+    otp: '123456',
+    otpVerification: {
+    id: 'otp-1',
+    expiresAt: new Date(
+      '2026-08-10T00:05:00.000Z',
+    ),
+    maxAttempts: 5,
+  },
+  });
+
   const result = await service.createDraft(dto);
 
   expect(
@@ -117,6 +136,26 @@ describe('BookingService', () => {
     prismaServiceMock.bookingDraft.create,
   ).toHaveBeenCalledTimes(2);
 
-  expect(result.bookingReference).toBe('CQ-SECOND');
+  expect(
+  otpServiceMock.createBookingOtp,
+).toHaveBeenCalledTimes(1);
+
+expect(
+  otpServiceMock.createBookingOtp,
+).toHaveBeenCalledWith('draft-1');
+
+expect(result.bookingDraft.bookingReference).toBe(
+  'CQ-SECOND',
+);
+
+expect(result).not.toHaveProperty('otp');
+
+expect(result.otpVerification).toEqual({
+  id: 'otp-1',
+  expiresAt: new Date(
+    '2026-08-10T00:05:00.000Z',
+  ),
+  maxAttempts: 5,
+});
   });
 });
