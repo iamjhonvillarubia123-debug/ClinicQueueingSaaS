@@ -129,36 +129,6 @@ enum BookingRecoveryAttemptStatus {
   CANCELLED
 }
 
-enum FollowUpRecommendationStatus {
-  SCHEDULED
-  SENT
-  CANCELLED
-  FAILED
-  EXPIRED
-}
-
-enum NotificationType {
-  OTP
-  BOOKING_CONFIRMED
-  APPOINTMENT_REMINDER
-  FOLLOW_UP_REMINDER
-  CANCELLATION_CONFIRMATION
-}
-
-enum NotificationChannel {
-  SMS
-  EMAIL
-  PUSH
-}
-
-enum NotificationStatus {
-  PENDING
-  SENT
-  DELIVERED
-  FAILED
-  CANCELLED
-}
-
 enum ScheduledReminderStatus {
   SCHEDULED
   PROCESSING
@@ -172,6 +142,38 @@ enum ScheduledReminderRecipientSource {
   APPOINTMENT_CONTACT
   BOOKING_GROUP_CONTROLLER
   STAFF_ENTERED
+}
+
+enum NotificationOutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  APPOINTMENT_CANCELLATION
+  CLINIC_DAY_CANCELLATION
+  SCHEDULED_REMINDER
+  SECURITY_NOTIFICATION
+  OTP_VERIFICATION
+  SECRETARY_INVITATION
+  PASSWORD_RESET
+  DOCTOR_EMAIL_VERIFICATION
+}
+
+enum NotificationAttemptOutcome {
+  SUCCESS
+  RETRYABLE_FAILURE
+  PERMANENT_FAILURE
+  UNCERTAIN
 }
 
 enum UserRole {
@@ -319,7 +321,6 @@ model User {
   revokedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityRevokedBy")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
-  followUpRecommendations          FollowUpRecommendation[]
   createdScheduledReminders        ScheduledReminder[]                 @relation("ScheduledReminderCreatedBy")
   editedScheduledReminders         ScheduledReminder[]                 @relation("ScheduledReminderLastEditedBy")
   queueEvents                      QueueEvent[]
@@ -552,6 +553,7 @@ model PracticeLocation {
   bookingRecoveryAttempts BookingRecoveryAttempt[]
   bookingGroupRecoveryAttempts BookingGroupRecoveryAttempt[]
   scheduledReminders ScheduledReminder[]
+  notificationOutboxes NotificationOutbox[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -1037,8 +1039,7 @@ model Appointment {
   bookingRecoveryAttempts BookingRecoveryAttempt[]    @relation("BookingRecoveryCandidateAppointment")
   contactPreference       ContactPreference?
   scheduledReminders      ScheduledReminder[]
-  followUpRecommendations FollowUpRecommendation[]
-  notificationLogs        NotificationLog[]
+  notificationOutboxes    NotificationOutbox[]
   queueEventLinks         QueueEventAppointmentLink[]
   appointmentAnswers      AppointmentAnswer[]
   bookedServices          AppointmentBookedService[]
@@ -1089,6 +1090,7 @@ model OtpVerification {
   @@index([bookingGroupRecoveryAttemptId, createdAt], map: "OtpVerification_group_recovery_created_idx")
   @@index([mobileNumberHash, createdAt], map: "OtpVerification_mobile_created_idx")
   @@index([expiresAt], map: "OtpVerification_expires_idx")
+  notificationOutbox NotificationOutbox? @relation("OtpVerificationNotificationOutbox")
 }
 
 model BookingGroupAccessToken {
@@ -1281,66 +1283,96 @@ model ScheduledReminder {
   @@index([contactPreferenceId], map: "ScheduledReminder_contactPreference_idx")
   @@index([createdByUserId], map: "ScheduledReminder_createdBy_idx")
   @@index([lastEditedByUserId], map: "ScheduledReminder_lastEditedBy_idx")
+  notificationOutbox NotificationOutbox? @relation("ScheduledReminderNotificationOutbox")
 }
 
-model FollowUpRecommendation {
+model NotificationOutbox {
   id String @id @default(uuid())
 
-  appointmentId String
-  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  deliveryIdentityKey String @unique @db.VarChar(64)
+  notificationType    NotificationType
+  channel             NotificationChannel @default(SMS)
+  status              NotificationOutboxStatus @default(PENDING)
 
-  recommendedByUserId String
-  recommendedByUser   User   @relation(fields: [recommendedByUserId], references: [id], onDelete: Restrict)
+  practiceLocationId   String?
+  appointmentId        String?
+  scheduledReminderId  String? @unique
+  commandIdempotencyId String?
+  otpVerificationId    String? @unique
+  secretaryInvitationId String? @unique
+  passwordResetId       String? @unique
+  emailVerificationId   String? @unique
 
-  recommendedFollowUpDate DateTime @db.Date
-  reminderScheduledAt     DateTime @db.Timestamptz(3)
+  recipientMobileEncrypted String?
+  recipientEmailEncrypted  String?
+  messageBodyEncrypted      String?
 
-  status FollowUpRecommendationStatus @default(SCHEDULED)
+  providerIdempotencyKey String @db.VarChar(128)
 
-  shortNote String? @db.VarChar(150)
+  attemptCount Int @default(0)
+
+  processingStartedAt DateTime? @db.Timestamptz(3)
+  leaseExpiresAt      DateTime? @db.Timestamptz(3)
+  processingWorkerId  String?   @db.VarChar(100)
+
+  nextAttemptAt DateTime @db.Timestamptz(3)
 
   sentAt      DateTime? @db.Timestamptz(3)
+  failedAt    DateTime? @db.Timestamptz(3)
   cancelledAt DateTime? @db.Timestamptz(3)
 
+  protectedPayloadPurgedAt DateTime? @db.Timestamptz(3)
+  expiresAt                DateTime  @db.Timestamptz(3)
+
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation? @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  scheduledReminder ScheduledReminder? @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
+  otpVerification    OtpVerification?    @relation("OtpVerificationNotificationOutbox", fields: [otpVerificationId], references: [id], onDelete: Restrict)
 
   notificationLogs NotificationLog[]
 
-  @@index([appointmentId])
-  @@index([status, reminderScheduledAt])
-  @@index([recommendedByUserId])
+  @@index([status, nextAttemptAt], map: "NotificationOutbox_status_nextAttempt_idx")
+  @@index([status, leaseExpiresAt], map: "NotificationOutbox_status_lease_idx")
+  @@index([practiceLocationId, createdAt], map: "NotificationOutbox_location_created_idx")
+  @@index([appointmentId], map: "NotificationOutbox_appointment_idx")
+  @@index([commandIdempotencyId], map: "NotificationOutbox_command_idx")
+  @@index([expiresAt], map: "NotificationOutbox_expires_idx")
 }
 
 model NotificationLog {
   id String @id @default(uuid())
 
-  appointmentId String?
-  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  notificationOutboxId String
+  attemptNumber        Int
 
-  followUpRecommendationId String?
-  followUpRecommendation   FollowUpRecommendation? @relation(fields: [followUpRecommendationId], references: [id])
+  notificationType NotificationType
+  channel          NotificationChannel
+  outcome          NotificationAttemptOutcome
 
-  type    NotificationType
-  channel NotificationChannel
+  providerName               String? @db.VarChar(100)
+  providerReference          String? @db.VarChar(200)
+  providerStatus             String? @db.VarChar(100)
+  providerErrorCode          String? @db.VarChar(100)
+  failureDetailSanitized     String? @db.VarChar(500)
+  retryRecommended           Boolean
+  providerIdempotencyKeyUsed String? @db.VarChar(128)
 
-  recipientMobileEncrypted String
-
-  status NotificationStatus @default(PENDING)
-
-  providerMessageId String? @db.VarChar(150)
-
-  sentAt      DateTime? @db.Timestamptz(3)
-  deliveredAt DateTime? @db.Timestamptz(3)
-  failedAt    DateTime? @db.Timestamptz(3)
-
-  failureReason String? @db.VarChar(255)
+  submittedAt DateTime @db.Timestamptz(3)
+  resolvedAt  DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
 
-  @@index([appointmentId])
-  @@index([status, createdAt])
-  @@index([providerMessageId])
+  notificationOutbox NotificationOutbox @relation(fields: [notificationOutboxId], references: [id], onDelete: Restrict)
+
+  @@unique([notificationOutboxId, attemptNumber], map: "NotificationLog_outbox_attempt_key")
+  @@index([outcome, createdAt], map: "NotificationLog_outcome_created_idx")
+  @@index([providerName, providerReference], map: "NotificationLog_provider_reference_idx")
+  @@index([expiresAt], map: "NotificationLog_expires_idx")
 }
 
 model BookingDraft {
