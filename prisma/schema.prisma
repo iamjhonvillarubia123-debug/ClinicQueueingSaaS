@@ -96,7 +96,8 @@ enum AppointmentCancelledByType {
 }
 
 enum OtpPurpose {
-  BOOKING_VERIFICATION
+  BOOKING
+  APPOINTMENT_RECOVERY
 }
 
 enum BookingAccessTokenPurpose {
@@ -1017,29 +1018,38 @@ model Appointment {
 }
 
 model OtpVerification {
-  id String @id @default(uuid())
+  id      String     @id @default(uuid())
+  purpose OtpPurpose
 
-  bookingDraftId String
-  bookingDraft   BookingDraft @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
+  bookingDraftId           String?
+  bookingRecoveryAttemptId String?
 
-  mobileNumberHash String     @db.VarChar(128)
-  otpHash          String     @db.VarChar(255)
-  purpose          OtpPurpose
+  mobileNumberHash     String? @db.VarChar(64)
+  mobileHashKeyVersion Int?
 
-  expiresAt DateTime @db.Timestamptz(3)
+  otpHash           String? @db.VarChar(64)
+  otpHashKeyVersion Int?
+
+  activeContextKey String? @unique @db.VarChar(100)
 
   attemptCount Int @default(0)
-  maxAttempts  Int @default(5)
 
+  expiresAt     DateTime  @db.Timestamptz(3)
   verifiedAt    DateTime? @db.Timestamptz(3)
   consumedAt    DateTime? @db.Timestamptz(3)
   invalidatedAt DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  @@index([bookingDraftId])
-  @@index([mobileNumberHash, purpose, expiresAt])
-  @@index([expiresAt])
+  bookingDraft BookingDraft? @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
+
+  bookingRecoveryAttempt BookingRecoveryAttempt? @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
+
+  @@index([bookingDraftId, createdAt], map: "OtpVerification_bookingDraft_created_idx")
+  @@index([bookingRecoveryAttemptId, createdAt], map: "OtpVerification_recovery_created_idx")
+  @@index([mobileNumberHash, createdAt], map: "OtpVerification_mobile_created_idx")
+  @@index([expiresAt], map: "OtpVerification_expires_idx")
 }
 
 model BookingAccessToken {
@@ -1098,7 +1108,8 @@ model BookingRecoveryAttempt {
 
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
 
-  candidateAppointment Appointment? @relation("BookingRecoveryCandidateAppointment", fields: [candidateAppointmentId], references: [id], onDelete: SetNull)
+  candidateAppointment Appointment?      @relation("BookingRecoveryCandidateAppointment", fields: [candidateAppointmentId], references: [id], onDelete: SetNull)
+  otpVerifications     OtpVerification[]
 
   @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingRecoveryAttempt_scope_mobile_created_idx")
   @@index([status, expiresAt], map: "BookingRecoveryAttempt_status_expires_idx")

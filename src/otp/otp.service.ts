@@ -141,7 +141,7 @@ export class OtpService {
       await transaction.otpVerification.updateMany({
         where: {
           bookingDraftId: bookingDraft.id,
-          purpose: 'BOOKING_VERIFICATION',
+          purpose: 'BOOKING',
           verifiedAt: null,
           consumedAt: null,
           invalidatedAt: null,
@@ -155,7 +155,7 @@ export class OtpService {
 
       const otpHash = this.hashOtp(
         bookingDraft.id,
-        'BOOKING_VERIFICATION',
+        'BOOKING',
         otp,
       );
 
@@ -166,7 +166,7 @@ export class OtpService {
             mobileNumberHash:
               bookingDraft.mobileNumberHash,
             otpHash,
-            purpose: 'BOOKING_VERIFICATION',
+            purpose: 'BOOKING',
             expiresAt: otpExpiresAt,
           },
           select: {
@@ -175,7 +175,6 @@ export class OtpService {
             purpose: true,
             expiresAt: true,
             attemptCount: true,
-            maxAttempts: true,
             createdAt: true,
           },
         });
@@ -200,7 +199,7 @@ async verifyBookingOtp(
         await transaction.otpVerification.findFirst({
           where: {
             bookingDraftId,
-            purpose: 'BOOKING_VERIFICATION',
+            purpose: 'BOOKING',
             verifiedAt: null,
             consumedAt: null,
             invalidatedAt: null,
@@ -228,11 +227,16 @@ async verifyBookingOtp(
             otpHash: true,
             purpose: true,
             attemptCount: true,
-            maxAttempts: true,
           },
         });
 
-      if (!otpVerification) {
+
+      if (
+        !otpVerification ||
+        otpVerification.purpose !== 'BOOKING' ||
+        !otpVerification.bookingDraftId ||
+        !otpVerification.otpHash
+      ) {
         throw new BadRequestException(
           'OTP verification failed.',
         );
@@ -259,7 +263,7 @@ async verifyBookingOtp(
             },
             invalidatedAt:
               nextAttemptCount >=
-              otpVerification.maxAttempts
+              5
                 ? now
                 : null,
           },

@@ -84,13 +84,13 @@ describe('OtpService', () => {
   it('should produce the same hash for the same OTP context', () => {
     const firstHash = service.hashOtp(
       'draft-1',
-      'BOOKING_VERIFICATION',
+      'BOOKING',
       '123456',
     );
 
     const secondHash = service.hashOtp(
       'draft-1',
-      'BOOKING_VERIFICATION',
+      'BOOKING',
       '123456',
     );
 
@@ -101,13 +101,13 @@ describe('OtpService', () => {
   it('should produce different hashes for different booking drafts', () => {
   const firstHash = service.hashOtp(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
   );
 
   const secondHash = service.hashOtp(
     'draft-2',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
   );
 
@@ -117,13 +117,13 @@ describe('OtpService', () => {
  it('should produce different hashes for different OTP values', () => {
   const firstHash = service.hashOtp(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
   );
 
   const secondHash = service.hashOtp(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '654321',
   );
 
@@ -134,13 +134,13 @@ describe('OtpService', () => {
 it('should verify a valid OTP hash', () => {
   const storedHash = service.hashOtp(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
   );
 
   const matches = service.verifyOtpHash(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
     storedHash,
   );
@@ -151,13 +151,13 @@ it('should verify a valid OTP hash', () => {
  it('should reject an invalid OTP hash', () => {
   const storedHash = service.hashOtp(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
   );
 
   const matches = service.verifyOtpHash(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '654321',
     storedHash,
   );
@@ -167,7 +167,7 @@ it('should verify a valid OTP hash', () => {
 it('should reject a malformed stored OTP hash', () => {
   const matches = service.verifyOtpHash(
     'draft-1',
-    'BOOKING_VERIFICATION',
+    'BOOKING',
     '123456',
     'not-a-valid-hex-hash',
   );
@@ -195,10 +195,9 @@ it('should reject a malformed stored OTP hash', () => {
   prismaServiceMock.otpVerification.create.mockResolvedValue({
     id: 'otp-1',
     bookingDraftId: 'draft-1',
-    purpose: 'BOOKING_VERIFICATION',
+    purpose: 'BOOKING',
     expiresAt,
     attemptCount: 0,
-    maxAttempts: 5,
     createdAt,
   });
 
@@ -227,7 +226,7 @@ it('should reject a malformed stored OTP hash', () => {
   ).toHaveBeenCalledWith({
     where: {
       bookingDraftId: 'draft-1',
-      purpose: 'BOOKING_VERIFICATION',
+      purpose: 'BOOKING',
       verifiedAt: null,
       consumedAt: null,
       invalidatedAt: null,
@@ -246,7 +245,7 @@ it('should reject a malformed stored OTP hash', () => {
       bookingDraftId: 'draft-1',
       mobileNumberHash: 'mobile-hash',
       otpHash: expect.any(String),
-      purpose: 'BOOKING_VERIFICATION',
+      purpose: 'BOOKING',
       expiresAt: expect.any(Date),
     },
     select: {
@@ -255,7 +254,6 @@ it('should reject a malformed stored OTP hash', () => {
       purpose: true,
       expiresAt: true,
       attemptCount: true,
-      maxAttempts: true,
       createdAt: true,
     },
   });
@@ -265,11 +263,10 @@ it('should reject a malformed stored OTP hash', () => {
     otpVerification: {
       id: 'otp-1',
       bookingDraftId: 'draft-1',
-      purpose: 'BOOKING_VERIFICATION',
+      purpose: 'BOOKING',
       expiresAt,
       attemptCount: 0,
-      maxAttempts: 5,
-      createdAt,
+        createdAt,
     },
   });
   });
@@ -306,18 +303,17 @@ it('should reject a malformed stored OTP hash', () => {
     bookingDraftId: 'draft-1',
     otpHash: service.hashOtp(
       'draft-1',
-      'BOOKING_VERIFICATION',
+      'BOOKING',
       '123456',
     ),
-    purpose: 'BOOKING_VERIFICATION',
+    purpose: 'BOOKING',
     attemptCount: 0,
-    maxAttempts: 5,
   });
 
   prismaServiceMock.otpVerification.update.mockResolvedValue({
     id: 'otp-1',
     bookingDraftId: 'draft-1',
-    purpose: 'BOOKING_VERIFICATION',
+    purpose: 'BOOKING',
     verifiedAt: now,
   });
 
@@ -352,7 +348,7 @@ it('should reject a malformed stored OTP hash', () => {
     otpVerification: {
       id: 'otp-1',
       bookingDraftId: 'draft-1',
-      purpose: 'BOOKING_VERIFICATION',
+      purpose: 'BOOKING',
       verifiedAt: now,
     },
   });
@@ -364,12 +360,11 @@ it('should increment the attempt count for an incorrect OTP', async () => {
     bookingDraftId: 'draft-1',
     otpHash: service.hashOtp(
       'draft-1',
-      'BOOKING_VERIFICATION',
+      'BOOKING',
       '123456',
     ),
-    purpose: 'BOOKING_VERIFICATION',
+    purpose: 'BOOKING',
     attemptCount: 2,
-    maxAttempts: 5,
   });
 
   prismaServiceMock.otpVerification.update.mockResolvedValue({
@@ -406,12 +401,11 @@ it('should invalidate the OTP on the fifth incorrect attempt', async () => {
     bookingDraftId: 'draft-1',
     otpHash: service.hashOtp(
       'draft-1',
-      'BOOKING_VERIFICATION',
+      'BOOKING',
       '123456',
     ),
-    purpose: 'BOOKING_VERIFICATION',
+    purpose: 'BOOKING',
     attemptCount: 4,
-    maxAttempts: 5,
   });
 
   prismaServiceMock.otpVerification.update.mockResolvedValue({

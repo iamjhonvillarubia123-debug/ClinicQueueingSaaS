@@ -155,7 +155,7 @@ export class BookingService {
       otpVerification: {
         id: otpResult.otpVerification.id,
         expiresAt: otpResult.otpVerification.expiresAt,
-        maxAttempts: otpResult.otpVerification.maxAttempts,
+        maxAttempts: 5,
       },
     };
   }
