@@ -265,6 +265,12 @@ enum RefundRequestStatus {
   FAILED
 }
 
+enum SubscriptionEntitlementEventType {
+  GRACE_ENTERED
+  SUSPENDED
+  RESTORED
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -1505,6 +1511,7 @@ model DoctorFinancialAccount {
   financialAccessSessions   FinancialAccessSession[]
 
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
+  subscriptionEntitlementEvents SubscriptionEntitlementEvent[]
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1519,6 +1526,7 @@ model DoctorSubscriptionEntitlement {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  events SubscriptionEntitlementEvent[]
 }
 
 model SubscriptionPurchase {
@@ -1553,6 +1561,7 @@ model SubscriptionPurchase {
   @@index([doctorFinancialAccountId, createdAt], map: "SubscriptionPurchase_financialAccount_created_idx")
   @@index([purchasedByUserId, createdAt], map: "SubscriptionPurchase_purchasedBy_created_idx")
   @@index([status, createdAt], map: "SubscriptionPurchase_status_created_idx")
+  entitlementEvents SubscriptionEntitlementEvent[]
 }
 
 model SubscriptionPayment {
@@ -1710,6 +1719,26 @@ model FinancialAccessSession {
 
   @@index([doctorFinancialAccountId, expiresAt], map: "FinancialAccessSession_financialAccount_expires_idx")
   @@index([expiresAt], map: "FinancialAccessSession_expires_idx")
+}
+
+model SubscriptionEntitlementEvent {
+  id String @id @default(uuid())
+
+  doctorSubscriptionEntitlementId String
+  doctorFinancialAccountId        String
+  eventType                       SubscriptionEntitlementEventType
+  effectiveAt                     DateTime @db.Timestamptz(3)
+  subscriptionPurchaseId          String?
+  createdAt                       DateTime @default(now()) @db.Timestamptz(3)
+
+  doctorSubscriptionEntitlement DoctorSubscriptionEntitlement @relation(fields: [doctorSubscriptionEntitlementId], references: [id], onDelete: Restrict)
+  doctorFinancialAccount        DoctorFinancialAccount        @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  subscriptionPurchase          SubscriptionPurchase?         @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
+
+  @@unique([doctorSubscriptionEntitlementId, eventType, effectiveAt], map: "SubscriptionEntitlementEvent_transition_occurrence_key")
+  @@index([doctorFinancialAccountId, effectiveAt], map: "SubscriptionEntitlementEvent_financialAccount_effective_idx")
+  @@index([doctorSubscriptionEntitlementId, effectiveAt], map: "SubscriptionEntitlementEvent_entitlement_effective_idx")
+  @@index([subscriptionPurchaseId], map: "SubscriptionEntitlementEvent_purchase_idx")
 }
 
 model CommandIdempotency {
