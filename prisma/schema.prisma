@@ -159,6 +159,21 @@ enum NotificationStatus {
   CANCELLED
 }
 
+enum ScheduledReminderStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  CANCELLED
+  FAILED
+  EXPIRED
+}
+
+enum ScheduledReminderRecipientSource {
+  APPOINTMENT_CONTACT
+  BOOKING_GROUP_CONTROLLER
+  STAFF_ENTERED
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -305,6 +320,8 @@ model User {
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
   followUpRecommendations          FollowUpRecommendation[]
+  createdScheduledReminders        ScheduledReminder[]                 @relation("ScheduledReminderCreatedBy")
+  editedScheduledReminders         ScheduledReminder[]                 @relation("ScheduledReminderLastEditedBy")
   queueEvents                      QueueEvent[]
   cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
   userSessions                     UserSession[]
@@ -534,6 +551,7 @@ model PracticeLocation {
   bookingQuestions        BookingQuestion[]
   bookingRecoveryAttempts BookingRecoveryAttempt[]
   bookingGroupRecoveryAttempts BookingGroupRecoveryAttempt[]
+  scheduledReminders ScheduledReminder[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -1018,6 +1036,7 @@ model Appointment {
   bookingAccessTokens     BookingAccessToken[]
   bookingRecoveryAttempts BookingRecoveryAttempt[]    @relation("BookingRecoveryCandidateAppointment")
   contactPreference       ContactPreference?
+  scheduledReminders      ScheduledReminder[]
   followUpRecommendations FollowUpRecommendation[]
   notificationLogs        NotificationLog[]
   queueEventLinks         QueueEventAppointmentLink[]
@@ -1201,8 +1220,8 @@ model BookingRecoveryAttempt {
 model ContactPreference {
   id String @id @default(uuid())
 
-  appointmentId String      @unique
-  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  appointmentId String?      @unique
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   allowOperationalMessages Boolean @default(true)
   allowFollowUpReminder    Boolean @default(false)
@@ -1215,6 +1234,53 @@ model ContactPreference {
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  scheduledReminders ScheduledReminder[]
+}
+
+model ScheduledReminder {
+  id String @id @default(uuid())
+
+  practiceLocationId  String
+  sourceAppointmentId String?
+  contactPreferenceId String
+
+  recipientSource          ScheduledReminderRecipientSource
+  recipientMobileEncrypted String?
+  recipientMobileLastFour  String? @db.VarChar(4)
+
+  status ScheduledReminderStatus @default(SCHEDULED)
+
+  scheduledFor DateTime @db.Timestamptz(3)
+  expiresAt    DateTime @db.Timestamptz(3)
+
+  messageBody String?
+
+  createdByUserId    String
+  lastEditedByUserId String
+
+  sentAt      DateTime? @db.Timestamptz(3)
+  cancelledAt DateTime? @db.Timestamptz(3)
+  failedAt    DateTime? @db.Timestamptz(3)
+  expiredAt   DateTime? @db.Timestamptz(3)
+
+  protectedDataClearedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation  PracticeLocation  @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  sourceAppointment Appointment?      @relation(fields: [sourceAppointmentId], references: [id], onDelete: SetNull)
+  contactPreference ContactPreference @relation(fields: [contactPreferenceId], references: [id], onDelete: Restrict)
+
+  createdByUser    User @relation("ScheduledReminderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lastEditedByUser User @relation("ScheduledReminderLastEditedBy", fields: [lastEditedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([practiceLocationId, status, scheduledFor], map: "ScheduledReminder_location_status_due_idx")
+  @@index([status, scheduledFor], map: "ScheduledReminder_status_due_idx")
+  @@index([sourceAppointmentId], map: "ScheduledReminder_sourceAppointment_idx")
+  @@index([contactPreferenceId], map: "ScheduledReminder_contactPreference_idx")
+  @@index([createdByUserId], map: "ScheduledReminder_createdBy_idx")
+  @@index([lastEditedByUserId], map: "ScheduledReminder_lastEditedBy_idx")
 }
 
 model FollowUpRecommendation {
