@@ -242,6 +242,18 @@ enum SubscriptionPaymentStatus {
   EXPIRED
 }
 
+enum SubscriptionCreditEntryType {
+  CREDIT_CREATED
+  PURCHASE_RESERVED
+  PURCHASE_CONSUMED
+  PURCHASE_RELEASED
+  REFUND_RESERVED
+  REFUND_FAILED_RELEASED
+  RECOVERY_TRANSFER_OUT
+  RECOVERY_TRANSFER_IN
+  ADJUSTMENT
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -1476,6 +1488,8 @@ model DoctorFinancialAccount {
 
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
   subscriptionPurchases SubscriptionPurchase[]
+  creditEntries             SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryOwner")
+  counterpartyCreditEntries SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryCounterparty")
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1523,6 +1537,7 @@ model SubscriptionPurchase {
   @@index([doctorFinancialAccountId, createdAt], map: "SubscriptionPurchase_financialAccount_created_idx")
   @@index([purchasedByUserId, createdAt], map: "SubscriptionPurchase_purchasedBy_created_idx")
   @@index([status, createdAt], map: "SubscriptionPurchase_status_created_idx")
+  creditEntries SubscriptionCreditEntry[]
 }
 
 model SubscriptionPayment {
@@ -1548,6 +1563,37 @@ model SubscriptionPayment {
   @@unique([provider, providerPaymentReference], map: "SubscriptionPayment_provider_reference_key")
   @@index([subscriptionPurchaseId, createdAt], map: "SubscriptionPayment_purchase_created_idx")
   @@index([status, createdAt], map: "SubscriptionPayment_status_created_idx")
+}
+
+model SubscriptionCreditEntry {
+  id String @id @default(uuid())
+
+  doctorFinancialAccountId String
+  entryType                SubscriptionCreditEntryType
+  amount                   Decimal @db.Decimal(18, 2)
+
+  subscriptionPurchaseId              String?
+  refundRequestId                     String?
+  counterpartyDoctorFinancialAccountId String?
+  relatedCreditEntryId                String?
+  commandIdempotencyId                String?
+
+  occurredAt DateTime @db.Timestamptz(3)
+
+  doctorFinancialAccount DoctorFinancialAccount @relation("SubscriptionCreditEntryOwner", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  subscriptionPurchase  SubscriptionPurchase?   @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
+  counterpartyDoctorFinancialAccount DoctorFinancialAccount? @relation("SubscriptionCreditEntryCounterparty", fields: [counterpartyDoctorFinancialAccountId], references: [id], onDelete: Restrict)
+  commandIdempotency CommandIdempotency? @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+
+  relatedCreditEntry SubscriptionCreditEntry?  @relation("SubscriptionCreditEntryRelated", fields: [relatedCreditEntryId], references: [id], onDelete: Restrict)
+  relatedByEntries   SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryRelated")
+
+  @@index([doctorFinancialAccountId, occurredAt], map: "SubscriptionCreditEntry_financialAccount_occurred_idx")
+  @@index([subscriptionPurchaseId], map: "SubscriptionCreditEntry_purchase_idx")
+  @@index([refundRequestId], map: "SubscriptionCreditEntry_refundRequest_idx")
+  @@index([counterpartyDoctorFinancialAccountId], map: "SubscriptionCreditEntry_counterparty_idx")
+  @@index([relatedCreditEntryId], map: "SubscriptionCreditEntry_related_idx")
+  @@index([commandIdempotencyId], map: "SubscriptionCreditEntry_command_idx")
 }
 
 model CommandIdempotency {
@@ -1617,6 +1663,7 @@ model CommandIdempotency {
   @@index([resultAdministrativeAccountActionId], map: "CommandIdempotency_resultAdminAction_idx")
   doctorFinancialAccount DoctorFinancialAccount? @relation("CommandIdempotencyDoctorFinancialAccount", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchaseCommandIdempotency")
+  subscriptionCreditEntries SubscriptionCreditEntry[]
 }
 
 model BookingDraft {
