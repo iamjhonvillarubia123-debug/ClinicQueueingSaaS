@@ -33,6 +33,14 @@ enum PracticeStaffCapabilityStatus {
   REVOKED
 }
 
+enum SecretarySettingsDraftStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  RETURNED_FOR_REWORK
+}
+
 enum AppointmentStatus {
   WAITING
   CALLED
@@ -194,6 +202,7 @@ model User {
   practiceStaffAssignments         PracticeStaff[]
   grantedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityGrantedBy")
   revokedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityRevokedBy")
+  reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
   followUpRecommendations          FollowUpRecommendation[]
   queueEvents                      QueueEvent[]
@@ -405,7 +414,8 @@ model PracticeLocation {
 
   currentRegularPracticeStaff PracticeStaff? @relation("PracticeLocationCurrentRegularSecretary", fields: [currentRegularPracticeStaffId], references: [id], onDelete: Restrict)
 
-  staffAssignments PracticeStaff[]
+  staffAssignments        PracticeStaff[]
+  secretarySettingsDrafts SecretarySettingsDraft[]
 
   bookingDrafts    BookingDraft[]
   appointments     Appointment[]
@@ -440,7 +450,8 @@ model PracticeStaff {
   // one-to-one pointer; historical PracticeStaff rows remain preserved.
   regularSecretaryFor PracticeLocation? @relation("PracticeLocationCurrentRegularSecretary")
 
-  capabilities PracticeStaffCapability[]
+  capabilities                    PracticeStaffCapability[]
+  authoredSecretarySettingsDrafts SecretarySettingsDraft[]
 
   @@unique([userId, practiceLocationId])
   @@index([practiceLocationId, isActive])
@@ -476,6 +487,42 @@ model PracticeStaffCapability {
   @@index([practiceStaffId, status])
   @@index([grantedByUserId, grantedAt])
   @@index([revokedByUserId, revokedAt])
+}
+
+model SecretarySettingsDraft {
+  id String @id @default(uuid())
+
+  practiceLocationId    String
+  authorPracticeStaffId String
+
+  status SecretarySettingsDraftStatus @default(DRAFT)
+
+  // Submission/review timestamps express the workflow boundary.
+  // No expiry field exists because SUBMITTED drafts do not expire by age.
+  submittedAt DateTime? @db.Timestamptz(3)
+  reviewedAt  DateTime? @db.Timestamptz(3)
+
+  // Doctor reviewer exists only after a Doctor decision.
+  reviewedByUserId String?
+
+  // Optional Doctor comment for REJECTED / RETURNED_FOR_REWORK.
+  reviewComment String? @db.VarChar(1000)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  // Historical authorship remains attached to the original PracticeStaff row
+  // even after current regular-Secretary replacement.
+  authorPracticeStaff PracticeStaff @relation(fields: [authorPracticeStaffId], references: [id], onDelete: Restrict)
+
+  reviewedByUser User? @relation("SecretarySettingsDraftReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([practiceLocationId, status])
+  @@index([authorPracticeStaffId, status])
+  @@index([reviewedByUserId, reviewedAt])
+  @@index([submittedAt])
 }
 
 model Patient {
