@@ -254,6 +254,17 @@ enum SubscriptionCreditEntryType {
   ADJUSTMENT
 }
 
+enum RefundMethod {
+  GCASH
+  MAYA
+}
+
+enum RefundRequestStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -418,6 +429,8 @@ model User {
   commandIdempotenciesAsAccountUser CommandIdempotency[] @relation("CommandIdempotencyAccountUser")
   doctorFinancialAccount DoctorFinancialAccount?
   subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchasePurchasedBy")
+  processedRefundRequests RefundRequest[] @relation("RefundRequestProcessedByAdmin")
+  refundProcessingAttempts RefundProcessingAttempt[] @relation("RefundProcessingAttemptProcessedByAdmin")
 }
 
 model DoctorProfile {
@@ -1490,6 +1503,7 @@ model DoctorFinancialAccount {
   subscriptionPurchases SubscriptionPurchase[]
   creditEntries             SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryOwner")
   counterpartyCreditEntries SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryCounterparty")
+  refundRequests RefundRequest[]
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1588,12 +1602,74 @@ model SubscriptionCreditEntry {
   relatedCreditEntry SubscriptionCreditEntry?  @relation("SubscriptionCreditEntryRelated", fields: [relatedCreditEntryId], references: [id], onDelete: Restrict)
   relatedByEntries   SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryRelated")
 
+  refundRequest RefundRequest? @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
+
   @@index([doctorFinancialAccountId, occurredAt], map: "SubscriptionCreditEntry_financialAccount_occurred_idx")
   @@index([subscriptionPurchaseId], map: "SubscriptionCreditEntry_purchase_idx")
   @@index([refundRequestId], map: "SubscriptionCreditEntry_refundRequest_idx")
   @@index([counterpartyDoctorFinancialAccountId], map: "SubscriptionCreditEntry_counterparty_idx")
   @@index([relatedCreditEntryId], map: "SubscriptionCreditEntry_related_idx")
   @@index([commandIdempotencyId], map: "SubscriptionCreditEntry_command_idx")
+}
+
+model RefundRequest {
+  id String @id @default(uuid())
+
+  doctorFinancialAccountId String
+  requestedAmount          Decimal @db.Decimal(18, 2)
+
+  reasonCode      String  @db.VarChar(100)
+  otherReasonText String? @db.VarChar(1000)
+  method          RefundMethod
+
+  accountNameProtected  String
+  destinationProtected  String
+  destinationLast4      String @db.VarChar(4)
+
+  status RefundRequestStatus @default(PENDING)
+
+  submittedAt DateTime  @db.Timestamptz(3)
+  completedAt DateTime? @db.Timestamptz(3)
+  failedAt    DateTime? @db.Timestamptz(3)
+
+  processedBySystemAdminUserId String?
+  completionReference          String? @db.VarChar(255)
+  proofReference               String? @db.VarChar(500)
+
+  commandIdempotencyId String? @unique
+
+  doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  processedBySystemAdminUser User? @relation("RefundRequestProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
+  commandIdempotency CommandIdempotency? @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+
+  creditEntries       SubscriptionCreditEntry[]
+  processingAttempts  RefundProcessingAttempt[]
+
+  @@index([doctorFinancialAccountId, submittedAt], map: "RefundRequest_financialAccount_submitted_idx")
+  @@index([status, submittedAt], map: "RefundRequest_status_submitted_idx")
+  @@index([processedBySystemAdminUserId], map: "RefundRequest_processedBy_idx")
+}
+
+model RefundProcessingAttempt {
+  id String @id @default(uuid())
+
+  refundRequestId String
+  processedBySystemAdminUserId String?
+
+  provider         String @db.VarChar(100)
+  attemptReference String @db.VarChar(255)
+  attemptedAt      DateTime @db.Timestamptz(3)
+
+  outcome                String  @db.VarChar(100)
+  failureCategory        String? @db.VarChar(100)
+  failureDetailSanitized String? @db.VarChar(1000)
+
+  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
+  processedBySystemAdminUser User? @relation("RefundProcessingAttemptProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
+
+  @@index([refundRequestId, attemptedAt], map: "RefundProcessingAttempt_refund_attempted_idx")
+  @@index([processedBySystemAdminUserId, attemptedAt], map: "RefundProcessingAttempt_admin_attempted_idx")
+  @@index([provider, attemptReference], map: "RefundProcessingAttempt_provider_reference_idx")
 }
 
 model CommandIdempotency {
@@ -1664,6 +1740,7 @@ model CommandIdempotency {
   doctorFinancialAccount DoctorFinancialAccount? @relation("CommandIdempotencyDoctorFinancialAccount", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchaseCommandIdempotency")
   subscriptionCreditEntries SubscriptionCreditEntry[]
+  refundRequests RefundRequest[]
 }
 
 model BookingDraft {
