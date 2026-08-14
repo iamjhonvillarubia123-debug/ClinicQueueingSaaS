@@ -46,6 +46,16 @@ enum ServiceAvailabilityStatus {
   INACTIVE
 }
 
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
 enum AppointmentStatus {
   WAITING
   CALLED
@@ -423,6 +433,8 @@ model PracticeLocation {
   staffAssignments        PracticeStaff[]
   secretarySettingsDrafts SecretarySettingsDraft[]
   services                PracticeLocationService[]
+  practiceSchedules       PracticeSchedule[]
+  scheduleExceptions      ScheduleException[]
 
   bookingDrafts    BookingDraft[]
   appointments     Appointment[]
@@ -526,7 +538,9 @@ model SecretarySettingsDraft {
 
   reviewedByUser User? @relation("SecretarySettingsDraftReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
 
-  proposedServices SecretarySettingsDraftService[]
+  proposedServices           SecretarySettingsDraftService[]
+  proposedPracticeSchedules  SecretarySettingsDraftPracticeSchedule[]
+  proposedScheduleExceptions SecretarySettingsDraftScheduleException[]
 
   @@index([practiceLocationId, status])
   @@index([authorPracticeStaffId, status])
@@ -607,6 +621,103 @@ model SecretarySettingsDraftService {
   @@index([secretarySettingsDraftId])
   @@index([practiceLocationServiceId])
   @@index([sourceDoctorServiceTemplateId])
+}
+
+model PracticeSchedule {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+  weekday            Weekday
+
+  isOpen Boolean @default(false)
+
+  // Local wall-clock values interpreted only through PracticeLocation.timeZone.
+  opensAtLocal  DateTime? @db.Time(0)
+  closesAtLocal DateTime? @db.Time(0)
+
+  // Optional additional public automated-admission cutoff.
+  // NULL means no separate cutoff at this layer.
+  maximumOnlineBookingUntilLocal DateTime? @db.Time(0)
+
+  // Independent workload/capacity ceiling for the Service Date.
+  // It is not clinic closing time and may differ from closesAtLocal.
+  maximumOperatingUntilLocal DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  @@unique([practiceLocationId, weekday])
+  @@index([practiceLocationId])
+}
+
+model ScheduleException {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  // Complete date-specific replacement of recurring schedule for this date.
+  isOpen Boolean
+
+  opensAtLocal                   DateTime? @db.Time(0)
+  closesAtLocal                  DateTime? @db.Time(0)
+  maximumOnlineBookingUntilLocal DateTime? @db.Time(0)
+
+  // Date-specific override of the recurring maximumOperatingUntil.
+  // NULL means no date-specific maximum-operating override is stored here.
+  maximumOperatingUntilLocal DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  @@unique([practiceLocationId, serviceDate])
+  @@index([practiceLocationId, serviceDate])
+}
+
+model SecretarySettingsDraftPracticeSchedule {
+  id String @id @default(uuid())
+
+  secretarySettingsDraftId String
+  weekday                  Weekday
+
+  proposedIsOpen                         Boolean
+  proposedOpensAtLocal                   DateTime? @db.Time(0)
+  proposedClosesAtLocal                  DateTime? @db.Time(0)
+  proposedMaximumOnlineBookingUntilLocal DateTime? @db.Time(0)
+  proposedMaximumOperatingUntilLocal     DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  secretarySettingsDraft SecretarySettingsDraft @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
+
+  @@unique([secretarySettingsDraftId, weekday])
+  @@index([secretarySettingsDraftId])
+}
+
+model SecretarySettingsDraftScheduleException {
+  id String @id @default(uuid())
+
+  secretarySettingsDraftId String
+  serviceDate              DateTime @db.Date
+
+  proposedIsOpen                         Boolean
+  proposedOpensAtLocal                   DateTime? @db.Time(0)
+  proposedClosesAtLocal                  DateTime? @db.Time(0)
+  proposedMaximumOnlineBookingUntilLocal DateTime? @db.Time(0)
+  proposedMaximumOperatingUntilLocal     DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  secretarySettingsDraft SecretarySettingsDraft @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
+
+  @@unique([secretarySettingsDraftId, serviceDate])
+  @@index([secretarySettingsDraftId, serviceDate])
 }
 
 model Patient {
