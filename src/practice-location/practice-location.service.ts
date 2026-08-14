@@ -3,16 +3,13 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-
+import { PracticeLocationLifecycleStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 
 @Injectable()
 export class PracticeLocationService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async create(
     userId: string,
@@ -33,21 +30,20 @@ export class PracticeLocationService {
     const name = createPracticeLocationDto.name.trim();
     const addressLine1 = createPracticeLocationDto.addressLine1.trim();
 
-    const existingLocation =
-      await this.prisma.practiceLocation.findFirst({
-        where: {
-          doctorProfileId: doctorProfile.id,
-          isActive: true,
-          name: {
-            equals: name,
-            mode: 'insensitive',
-          },
-          addressLine1: {
-            equals: addressLine1,
-            mode: 'insensitive',
-          },
+    const existingLocation = await this.prisma.practiceLocation.findFirst({
+      where: {
+        doctorProfileId: doctorProfile.id,
+        lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+        name: {
+          equals: name,
+          mode: 'insensitive',
         },
-      });
+        addressLine1: {
+          equals: addressLine1,
+          mode: 'insensitive',
+        },
+      },
+    });
 
     if (existingLocation) {
       throw new ConflictException(
@@ -62,17 +58,16 @@ export class PracticeLocationService {
         addressLine1,
         addressLine2:
           createPracticeLocationDto.addressLine2?.trim() || null,
-        cityMunicipality:
-          createPracticeLocationDto.cityMunicipality.trim(),
+        cityMunicipality: createPracticeLocationDto.cityMunicipality.trim(),
         province: createPracticeLocationDto.province.trim(),
-        postalCode:
-          createPracticeLocationDto.postalCode?.trim() || null,
-        contactNumber:
-          createPracticeLocationDto.contactNumber.trim(),
+        postalCode: createPracticeLocationDto.postalCode?.trim() || null,
+        contactNumber: createPracticeLocationDto.contactNumber.trim(),
       },
       select: {
         id: true,
         doctorProfileId: true,
+        publicIdentifier: true,
+        lifecycleStatus: true,
         name: true,
         addressLine1: true,
         addressLine2: true,
@@ -80,7 +75,8 @@ export class PracticeLocationService {
         province: true,
         postalCode: true,
         contactNumber: true,
-        isActive: true,
+        countryCode: true,
+        timeZone: true,
         isBookingEnabled: true,
         createdAt: true,
       },
@@ -88,39 +84,43 @@ export class PracticeLocationService {
   }
 
   async findAllForDoctor(userId: string) {
-  const doctorProfile = await this.prisma.doctorProfile.findUnique({
-    where: {
-      userId,
-    },
-  });
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: {
+        userId,
+      },
+    });
 
-  if (!doctorProfile) {
-    throw new ForbiddenException(
-      'Only a doctor may view practice locations.',
-    );
+    if (!doctorProfile) {
+      throw new ForbiddenException(
+        'Only a doctor may view practice locations.',
+      );
+    }
+
+    return this.prisma.practiceLocation.findMany({
+      where: {
+        doctorProfileId: doctorProfile.id,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      select: {
+        id: true,
+        publicIdentifier: true,
+        lifecycleStatus: true,
+        name: true,
+        addressLine1: true,
+        addressLine2: true,
+        cityMunicipality: true,
+        province: true,
+        postalCode: true,
+        contactNumber: true,
+        countryCode: true,
+        timeZone: true,
+        isBookingEnabled: true,
+        currentRegularPracticeStaffId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
-
-  return this.prisma.practiceLocation.findMany({
-    where: {
-      doctorProfileId: doctorProfile.id,
-    },
-    orderBy: {
-      createdAt: 'asc',
-    },
-    select: {
-      id: true,
-      name: true,
-      addressLine1: true,
-      addressLine2: true,
-      cityMunicipality: true,
-      province: true,
-      postalCode: true,
-      contactNumber: true,
-      isActive: true,
-      isBookingEnabled: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-}
 }

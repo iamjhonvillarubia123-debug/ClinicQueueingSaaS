@@ -17,6 +17,22 @@ enum PracticeStaffRole {
   SECRETARY
 }
 
+enum PracticeLocationLifecycleStatus {
+  DRAFT
+  ACTIVE
+  DISABLED
+  PERMANENTLY_DELETED
+}
+
+enum PracticeStaffCapabilityType {
+  CANCEL_CLINIC_DAY
+}
+
+enum PracticeStaffCapabilityStatus {
+  ACTIVE
+  REVOKED
+}
+
 enum AppointmentStatus {
   WAITING
   CALLED
@@ -174,13 +190,15 @@ model User {
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
 
-  doctorProfile                 DoctorProfile?
-  practiceStaffAssignments      PracticeStaff[]
-  createdAppointments           Appointment[]
-  followUpRecommendations       FollowUpRecommendation[]
-  queueEvents                   QueueEvent[]
-  userSessions                  UserSession[]
-  dataRetentionAcknowledgements DoctorDataRetentionAcknowledgement[]
+  doctorProfile                    DoctorProfile?
+  practiceStaffAssignments         PracticeStaff[]
+  grantedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityGrantedBy")
+  revokedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityRevokedBy")
+  createdAppointments              Appointment[]
+  followUpRecommendations          FollowUpRecommendation[]
+  queueEvents                      QueueEvent[]
+  userSessions                     UserSession[]
+  dataRetentionAcknowledgements    DoctorDataRetentionAcknowledgement[]
 
   permanentClosureAuditsAsAccount AccountPermanentClosureAudit[] @relation("AccountPermanentClosureAuditAccountUser")
   permanentClosureAuditsInitiated AccountPermanentClosureAudit[] @relation("AccountPermanentClosureAuditInitiator")
@@ -190,8 +208,6 @@ model User {
 
   receivedApplicationNotifications           ApplicationNotification[] @relation("ApplicationNotificationRecipient")
   secretaryLifecycleApplicationNotifications ApplicationNotification[] @relation("ApplicationNotificationAffectedSecretary")
-
-  @@index([email])
 }
 
 model DoctorProfile {
@@ -353,31 +369,56 @@ model ApplicationNotification {
 }
 
 model PracticeLocation {
-  id               String   @id @default(uuid())
-  doctorProfileId  String
-  name             String   @db.VarChar(200)
-  addressLine1     String   @db.VarChar(255)
-  addressLine2     String?  @db.VarChar(255)
-  cityMunicipality String   @db.VarChar(120)
-  province         String   @db.VarChar(120)
-  postalCode       String?  @db.VarChar(20)
-  contactNumber    String   @db.VarChar(30)
-  isActive         Boolean  @default(true)
-  isBookingEnabled Boolean  @default(true)
-  createdAt        DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+  id              String @id @default(uuid())
+  doctorProfileId String
 
-  doctorProfile                     DoctorProfile                      @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
-  staffAssignments                  PracticeStaff[]
-  bookingDrafts                     BookingDraft[]
-  appointments                      Appointment[]
-  queueCounters                     QueueCounter[]
-  queueEvents                       QueueEvent[]
-  bookingQuestions                  BookingQuestion[]
+  // Phase 5 stable public-route identity. It is not an auth credential.
+  publicIdentifier String @unique @default(uuid()) @db.VarChar(64)
+
+  // Phase 3 lifecycle authority. Legacy PracticeLocation.isActive is removed.
+  lifecycleStatus PracticeLocationLifecycleStatus @default(DRAFT)
+
+  // Public online-booking control remains independent from lifecycle.
+  isBookingEnabled Boolean @default(true)
+
+  // DRAFT locations may be incomplete. Activation-time application validation
+  // requires the effective fields needed for operation/public presentation.
+  name             String? @db.VarChar(200)
+  addressLine1     String? @db.VarChar(255)
+  addressLine2     String? @db.VarChar(255)
+  cityMunicipality String? @db.VarChar(120)
+  province         String? @db.VarChar(120)
+  postalCode       String? @db.VarChar(20)
+  contactNumber    String? @db.VarChar(30)
+
+  // Authoritative after configuration; DRAFT may still be incomplete.
+  countryCode String? @db.Char(2)
+  timeZone    String? @db.VarChar(100)
+
+  // Exactly zero or one current regular Secretary assignment.
+  currentRegularPracticeStaffId String? @unique
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+
+  currentRegularPracticeStaff PracticeStaff? @relation("PracticeLocationCurrentRegularSecretary", fields: [currentRegularPracticeStaffId], references: [id], onDelete: Restrict)
+
+  staffAssignments PracticeStaff[]
+
+  bookingDrafts    BookingDraft[]
+  appointments     Appointment[]
+  queueCounters    QueueCounter[]
+  queueEvents      QueueEvent[]
+  bookingQuestions BookingQuestion[]
+
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
 
   @@index([doctorProfileId])
+  @@index([lifecycleStatus])
+  @@index([doctorProfileId, lifecycleStatus])
 }
 
 model PracticeStaff {
@@ -385,16 +426,56 @@ model PracticeStaff {
   userId             String
   practiceLocationId String
   staffRole          PracticeStaffRole @default(SECRETARY)
-  isActive           Boolean           @default(true)
-  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime          @updatedAt @db.Timestamptz(3)
+
+  // Valid domain-specific assignment eligibility flag.
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
 
+  // Current regular-Secretary authority is held by PracticeLocation's
+  // one-to-one pointer; historical PracticeStaff rows remain preserved.
+  regularSecretaryFor PracticeLocation? @relation("PracticeLocationCurrentRegularSecretary")
+
+  capabilities PracticeStaffCapability[]
+
   @@unique([userId, practiceLocationId])
-  @@index([userId])
-  @@index([practiceLocationId])
+  @@index([practiceLocationId, isActive])
+  @@index([userId, isActive])
+}
+
+model PracticeStaffCapability {
+  id String @id @default(uuid())
+
+  practiceStaffId String
+
+  capabilityType PracticeStaffCapabilityType
+  status         PracticeStaffCapabilityStatus @default(ACTIVE)
+
+  // Derived backend key representing the one currently active grant for the
+  // assignment + capability type. Cleared on revocation.
+  activeCapabilityKey String? @unique @db.VarChar(64)
+
+  grantedByUserId String
+  grantedAt       DateTime @db.Timestamptz(3)
+
+  revokedByUserId String?
+  revokedAt       DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  practiceStaff PracticeStaff @relation(fields: [practiceStaffId], references: [id], onDelete: Restrict)
+
+  grantedByUser User @relation("PracticeStaffCapabilityGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+
+  revokedByUser User? @relation("PracticeStaffCapabilityRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([practiceStaffId, status])
+  @@index([grantedByUserId, grantedAt])
+  @@index([revokedByUserId, revokedAt])
 }
 
 model Patient {
