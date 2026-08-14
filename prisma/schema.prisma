@@ -41,6 +41,11 @@ enum SecretarySettingsDraftStatus {
   RETURNED_FOR_REWORK
 }
 
+enum ServiceAvailabilityStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum AppointmentStatus {
   WAITING
   CALLED
@@ -235,8 +240,9 @@ model DoctorProfile {
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
   practiceLocations PracticeLocation[]
+  serviceTemplates  DoctorServiceTemplate[]
   accountSettings   DoctorAccountSettings?
-  user              User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
 }
 
 model DoctorAccountSettings {
@@ -416,6 +422,7 @@ model PracticeLocation {
 
   staffAssignments        PracticeStaff[]
   secretarySettingsDrafts SecretarySettingsDraft[]
+  services                PracticeLocationService[]
 
   bookingDrafts    BookingDraft[]
   appointments     Appointment[]
@@ -519,10 +526,87 @@ model SecretarySettingsDraft {
 
   reviewedByUser User? @relation("SecretarySettingsDraftReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
 
+  proposedServices SecretarySettingsDraftService[]
+
   @@index([practiceLocationId, status])
   @@index([authorPracticeStaffId, status])
   @@index([reviewedByUserId, reviewedAt])
   @@index([submittedAt])
+}
+
+model DoctorServiceTemplate {
+  id String @id @default(uuid())
+
+  doctorProfileId String
+
+  name            String                    @db.VarChar(150)
+  durationMinutes Int
+  status          ServiceAvailabilityStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+
+  @@index([doctorProfileId, status])
+  @@index([doctorProfileId, name])
+}
+
+model PracticeLocationService {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+
+  // Optional provenance only. Once copied, this location Service is fully
+  // independent and never synchronizes back to the Doctor-wide template.
+  sourceDoctorServiceTemplateId String?
+
+  name            String                    @db.VarChar(150)
+  durationMinutes Int
+  status          ServiceAvailabilityStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  // No FK is intentionally used for sourceDoctorServiceTemplateId.
+  // Template deletion/retirement must never block or mutate copied location
+  // Services. Provenance is informational only.
+
+  draftProposals SecretarySettingsDraftService[]
+
+  @@index([practiceLocationId, status])
+  @@index([practiceLocationId, name])
+  @@index([sourceDoctorServiceTemplateId])
+}
+
+model SecretarySettingsDraftService {
+  id String @id @default(uuid())
+
+  secretarySettingsDraftId String
+
+  // Existing effective Service being proposed for edit/deactivation.
+  // NULL means the proposal creates a new location-only/copied Service.
+  practiceLocationServiceId String?
+
+  // Optional Doctor template selected as the copy source for a proposed
+  // location Service. It is provenance only, not synchronization authority.
+  sourceDoctorServiceTemplateId String?
+
+  proposedName            String                    @db.VarChar(150)
+  proposedDurationMinutes Int
+  proposedStatus          ServiceAvailabilityStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  secretarySettingsDraft  SecretarySettingsDraft   @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
+  practiceLocationService PracticeLocationService? @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
+
+  @@index([secretarySettingsDraftId])
+  @@index([practiceLocationServiceId])
+  @@index([sourceDoctorServiceTemplateId])
 }
 
 model Patient {
