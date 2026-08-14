@@ -104,6 +104,16 @@ enum BookingAccessTokenPurpose {
   VIEW_ONLY
 }
 
+enum BookingRecoveryAttemptStatus {
+  PENDING_OTP
+  VERIFIED
+  CANDIDATE_CONFIRMED
+  COMPLETED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
 enum FollowUpRecommendationStatus {
   SCHEDULED
   SENT
@@ -500,13 +510,14 @@ model PracticeLocation {
   practiceSchedules       PracticeSchedule[]
   scheduleExceptions      ScheduleException[]
 
-  bookingDrafts    BookingDraft[]
-  appointments     Appointment[]
-  bookingGroups    BookingGroup[]
-  clinicDays       ClinicDay[]
-  queueCounters    QueueCounter[]
-  queueEvents      QueueEvent[]
-  bookingQuestions BookingQuestion[]
+  bookingDrafts           BookingDraft[]
+  appointments            Appointment[]
+  bookingGroups           BookingGroup[]
+  clinicDays              ClinicDay[]
+  queueCounters           QueueCounter[]
+  queueEvents             QueueEvent[]
+  bookingQuestions        BookingQuestion[]
+  bookingRecoveryAttempts BookingRecoveryAttempt[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -987,6 +998,7 @@ model Appointment {
   createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
 
   bookingAccessTokens     BookingAccessToken[]
+  bookingRecoveryAttempts BookingRecoveryAttempt[]    @relation("BookingRecoveryCandidateAppointment")
   contactPreference       ContactPreference?
   followUpRecommendations FollowUpRecommendation[]
   notificationLogs        NotificationLog[]
@@ -1034,9 +1046,12 @@ model BookingAccessToken {
   id String @id @default(uuid())
 
   appointmentId String
-  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
 
-  tokenHash String @unique @db.VarChar(255)
+  // Required when the credential is created/usable. Nullable only so approved
+  // security/privacy cleanup can destroy credential material without retaining
+  // a patient-correlating secret indefinitely.
+  tokenHash String? @unique @db.VarChar(255)
 
   purpose BookingAccessTokenPurpose @default(VIEW_AND_MANAGE_BOOKING)
 
@@ -1049,6 +1064,46 @@ model BookingAccessToken {
 
   @@index([appointmentId])
   @@index([expiresAt])
+  @@index([appointmentId, revokedAt, expiresAt], map: "BookingAccessToken_active_lookup_idx")
+}
+
+model BookingRecoveryAttempt {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  mobileNumberEncrypted String?
+  mobileNumberHash      String? @db.VarChar(64)
+  mobileHashKeyVersion  Int?
+  mobileNumberLastFour  String? @db.VarChar(4)
+
+  status BookingRecoveryAttemptStatus @default(PENDING_OTP)
+
+  candidateAppointmentId String?
+
+  verifiedAt           DateTime? @db.Timestamptz(3)
+  candidateConfirmedAt DateTime? @db.Timestamptz(3)
+  completedAt          DateTime? @db.Timestamptz(3)
+  rejectedAt           DateTime? @db.Timestamptz(3)
+  cancelledAt          DateTime? @db.Timestamptz(3)
+  expiredAt            DateTime? @db.Timestamptz(3)
+
+  expiresAt DateTime @db.Timestamptz(3)
+
+  protectedDataClearedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  candidateAppointment Appointment? @relation("BookingRecoveryCandidateAppointment", fields: [candidateAppointmentId], references: [id], onDelete: SetNull)
+
+  @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingRecoveryAttempt_scope_mobile_created_idx")
+  @@index([status, expiresAt], map: "BookingRecoveryAttempt_status_expires_idx")
+  @@index([candidateAppointmentId], map: "BookingRecoveryAttempt_candidate_idx")
+  @@index([expiresAt], map: "BookingRecoveryAttempt_expires_idx")
 }
 
 model ContactPreference {
