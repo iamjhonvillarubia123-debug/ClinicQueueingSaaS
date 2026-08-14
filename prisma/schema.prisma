@@ -95,9 +95,23 @@ enum AppointmentCancelledByType {
   SYSTEM
 }
 
+enum BookingGroupAccessTokenPurpose {
+  CONTROLLER_ACCESS
+}
+
+enum BookingGroupRecoveryAttemptStatus {
+  PENDING_OTP
+  VERIFIED
+  COMPLETED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
 enum OtpPurpose {
   BOOKING
   APPOINTMENT_RECOVERY
+  BOOKING_GROUP_RECOVERY
 }
 
 enum BookingAccessTokenPurpose {
@@ -519,6 +533,7 @@ model PracticeLocation {
   queueEvents             QueueEvent[]
   bookingQuestions        BookingQuestion[]
   bookingRecoveryAttempts BookingRecoveryAttempt[]
+  bookingGroupRecoveryAttempts BookingGroupRecoveryAttempt[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -946,6 +961,8 @@ model BookingGroup {
 
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointments     Appointment[]
+  accessTokens      BookingGroupAccessToken[]
+  recoveryAttempts BookingGroupRecoveryAttempt[]
 
   @@index([practiceLocationId, serviceDate])
   @@index([controllingMobileNumberHash, practiceLocationId, serviceDate])
@@ -1022,7 +1039,8 @@ model OtpVerification {
   purpose OtpPurpose
 
   bookingDraftId           String?
-  bookingRecoveryAttemptId String?
+  bookingRecoveryAttemptId      String?
+  bookingGroupRecoveryAttemptId String?
 
   mobileNumberHash     String? @db.VarChar(64)
   mobileHashKeyVersion Int?
@@ -1045,11 +1063,74 @@ model OtpVerification {
   bookingDraft BookingDraft? @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
 
   bookingRecoveryAttempt BookingRecoveryAttempt? @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
+  bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation(fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: Restrict)
 
   @@index([bookingDraftId, createdAt], map: "OtpVerification_bookingDraft_created_idx")
   @@index([bookingRecoveryAttemptId, createdAt], map: "OtpVerification_recovery_created_idx")
+  @@index([bookingGroupRecoveryAttemptId, createdAt], map: "OtpVerification_group_recovery_created_idx")
   @@index([mobileNumberHash, createdAt], map: "OtpVerification_mobile_created_idx")
   @@index([expiresAt], map: "OtpVerification_expires_idx")
+}
+
+model BookingGroupAccessToken {
+  id String @id @default(uuid())
+
+  bookingGroupId String
+  bookingGroup   BookingGroup @relation(fields: [bookingGroupId], references: [id], onDelete: Cascade)
+
+  tokenHash String? @unique @db.VarChar(255)
+
+  purpose BookingGroupAccessTokenPurpose @default(CONTROLLER_ACCESS)
+
+  expiresAt DateTime @db.Timestamptz(3)
+
+  lastUsedAt DateTime? @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([bookingGroupId], map: "BookingGroupAccessToken_group_idx")
+  @@index([expiresAt], map: "BookingGroupAccessToken_expires_idx")
+  @@index([bookingGroupId, revokedAt, expiresAt], map: "BookingGroupAccessToken_active_lookup_idx")
+}
+
+model BookingGroupRecoveryAttempt {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  mobileNumberEncrypted String?
+  mobileNumberHash      String? @db.VarChar(64)
+  mobileHashKeyVersion  Int?
+  mobileNumberLastFour  String? @db.VarChar(4)
+
+  bookingGroupId String?
+
+  status BookingGroupRecoveryAttemptStatus @default(PENDING_OTP)
+
+  verifiedAt  DateTime? @db.Timestamptz(3)
+  completedAt DateTime? @db.Timestamptz(3)
+  rejectedAt  DateTime? @db.Timestamptz(3)
+  cancelledAt DateTime? @db.Timestamptz(3)
+  expiredAt   DateTime? @db.Timestamptz(3)
+
+  expiresAt DateTime @db.Timestamptz(3)
+
+  protectedDataClearedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  bookingGroup     BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: SetNull)
+
+  otpVerifications OtpVerification[]
+
+  @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingGroupRecoveryAttempt_scope_mobile_created_idx")
+  @@index([status, expiresAt], map: "BookingGroupRecoveryAttempt_status_expires_idx")
+  @@index([bookingGroupId], map: "BookingGroupRecoveryAttempt_group_idx")
+  @@index([expiresAt], map: "BookingGroupRecoveryAttempt_expires_idx")
 }
 
 model BookingAccessToken {
