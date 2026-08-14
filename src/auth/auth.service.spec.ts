@@ -1,5 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
+import { UserAccountStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 
@@ -8,7 +9,7 @@ describe('AuthService', () => {
 
   const prismaServiceMock = {
     user: {
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
   };
@@ -38,26 +39,29 @@ describe('AuthService', () => {
   });
 
   it('should be defined', () => {
-  expect(service).toBeDefined();
-});
-
-it('should reject login when the email does not exist', async () => {
-  prismaServiceMock.user.findUnique.mockResolvedValue(null);
-
-  await expect(
-    service.login({
-      email: 'missing@example.com',
-      password: 'WrongPassword123!',
-    }),
-  ).rejects.toThrow('Invalid email or password.');
-
-  expect(prismaServiceMock.user.findUnique).toHaveBeenCalledWith({
-    where: {
-      email: 'missing@example.com',
-    },
+    expect(service).toBeDefined();
   });
 
-  expect(prismaServiceMock.user.update).not.toHaveBeenCalled();
-  expect(jwtServiceMock.signAsync).not.toHaveBeenCalled();
-});
+  it('should reject login when the email does not exist', async () => {
+    prismaServiceMock.user.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.login({
+        email: 'missing@example.com',
+        password: 'WrongPassword123!',
+      }),
+    ).rejects.toThrow('Invalid email or password.');
+
+    expect(prismaServiceMock.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        email: 'missing@example.com',
+        accountStatus: {
+          not: UserAccountStatus.PERMANENTLY_CLOSED,
+        },
+      },
+    });
+
+    expect(prismaServiceMock.user.update).not.toHaveBeenCalled();
+    expect(jwtServiceMock.signAsync).not.toHaveBeenCalled();
+  });
 });
