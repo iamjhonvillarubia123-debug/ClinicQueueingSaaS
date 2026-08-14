@@ -56,6 +56,26 @@ enum Weekday {
   SUNDAY
 }
 
+enum DoctorCalendarRecurrenceType {
+  SINGLE_DATE
+  DATE_RANGE
+  DAILY
+  WEEKLY
+  MONTHLY_DATE
+}
+
+enum DoctorCalendarRuleStatus {
+  ACTIVE
+  RETIRED
+}
+
+enum DoctorCalendarLabelType {
+  SEMINAR
+  HOLIDAY
+  PERSONAL
+  CUSTOM
+}
+
 enum AppointmentStatus {
   WAITING
   CALLED
@@ -249,10 +269,11 @@ model DoctorProfile {
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
-  practiceLocations PracticeLocation[]
-  serviceTemplates  DoctorServiceTemplate[]
-  accountSettings   DoctorAccountSettings?
-  user              User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  practiceLocations   PracticeLocation[]
+  serviceTemplates    DoctorServiceTemplate[]
+  doctorCalendarRules DoctorCalendarRule[]
+  accountSettings     DoctorAccountSettings?
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
 }
 
 model DoctorAccountSettings {
@@ -262,6 +283,7 @@ model DoctorAccountSettings {
   defaultConsultationMinutes Int      @default(30)
   maximumAdvanceBookingDays  Int      @default(30)
   allowOnlineBooking         Boolean  @default(true)
+  noClinicOnRegularHolidays  Boolean  @default(false)
   createdAt                  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt                  DateTime @updatedAt @db.Timestamptz(3)
 
@@ -718,6 +740,68 @@ model SecretarySettingsDraftScheduleException {
 
   @@unique([secretarySettingsDraftId, serviceDate])
   @@index([secretarySettingsDraftId, serviceDate])
+}
+
+model DoctorCalendarRule {
+  id String @id @default(uuid())
+
+  doctorProfileId String
+  recurrenceType  DoctorCalendarRecurrenceType
+  status          DoctorCalendarRuleStatus     @default(ACTIVE)
+
+  startDate DateTime  @db.Date
+  endDate   DateTime? @db.Date
+
+  timeZone String @db.VarChar(100)
+
+  isWholeDay    Boolean   @default(true)
+  startsAtLocal DateTime? @db.Time(0)
+  endsAtLocal   DateTime? @db.Time(0)
+
+  monthlyDayOfMonth Int?
+
+  labelType   DoctorCalendarLabelType @default(PERSONAL)
+  customLabel String?                 @db.VarChar(50)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  retiredAt DateTime? @db.Timestamptz(3)
+
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+
+  weeklyWeekdays      DoctorCalendarRuleWeekday[]
+  occurrenceOverrides DoctorCalendarOccurrenceOverride[]
+
+  @@index([doctorProfileId, status])
+  @@index([doctorProfileId, startDate, endDate])
+  @@index([recurrenceType, status])
+}
+
+model DoctorCalendarRuleWeekday {
+  id String @id @default(uuid())
+
+  doctorCalendarRuleId String
+  weekday              Weekday
+
+  doctorCalendarRule DoctorCalendarRule @relation(fields: [doctorCalendarRuleId], references: [id], onDelete: Restrict)
+
+  @@unique([doctorCalendarRuleId, weekday])
+  @@index([doctorCalendarRuleId])
+}
+
+model DoctorCalendarOccurrenceOverride {
+  id String @id @default(uuid())
+
+  doctorCalendarRuleId String
+  occurrenceDate       DateTime @db.Date
+  isAvailable          Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  doctorCalendarRule DoctorCalendarRule @relation(fields: [doctorCalendarRuleId], references: [id], onDelete: Restrict)
+
+  @@unique([doctorCalendarRuleId, occurrenceDate])
+  @@index([doctorCalendarRuleId, occurrenceDate])
 }
 
 model Patient {
