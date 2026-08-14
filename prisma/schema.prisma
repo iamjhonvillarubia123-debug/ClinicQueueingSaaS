@@ -228,6 +228,20 @@ enum CommandType {
   DOCTOR_RECOVER_SUBSCRIPTION_CREDIT
 }
 
+enum SubscriptionPurchaseStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum SubscriptionPaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -391,6 +405,7 @@ model User {
   commandIdempotenciesAsActor       CommandIdempotency[] @relation("CommandIdempotencyActorUser")
   commandIdempotenciesAsAccountUser CommandIdempotency[] @relation("CommandIdempotencyAccountUser")
   doctorFinancialAccount DoctorFinancialAccount?
+  subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchasePurchasedBy")
 }
 
 model DoctorProfile {
@@ -1460,6 +1475,7 @@ model DoctorFinancialAccount {
   commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyDoctorFinancialAccount")
 
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
+  subscriptionPurchases SubscriptionPurchase[]
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1474,6 +1490,64 @@ model DoctorSubscriptionEntitlement {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+}
+
+model SubscriptionPurchase {
+  id String @id @default(uuid())
+
+  doctorFinancialAccountId String
+  purchasedByUserId        String
+
+  monthsPurchased      Int
+  monthlyPriceSnapshot Decimal @db.Decimal(18, 2)
+  grossAmount          Decimal @db.Decimal(18, 2)
+  creditAmountApplied  Decimal @db.Decimal(18, 2)
+  externalAmountRequired Decimal @db.Decimal(18, 2)
+
+  periodStart DateTime @db.Timestamptz(3)
+  periodEnd   DateTime @db.Timestamptz(3)
+
+  status SubscriptionPurchaseStatus @default(PENDING)
+
+  commandIdempotencyId String? @unique
+
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  completedAt DateTime? @db.Timestamptz(3)
+
+  doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  purchasedByUser        User                   @relation("SubscriptionPurchasePurchasedBy", fields: [purchasedByUserId], references: [id], onDelete: Restrict)
+  commandIdempotency     CommandIdempotency?    @relation("SubscriptionPurchaseCommandIdempotency", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+
+  payments SubscriptionPayment[]
+
+  @@index([doctorFinancialAccountId, createdAt], map: "SubscriptionPurchase_financialAccount_created_idx")
+  @@index([purchasedByUserId, createdAt], map: "SubscriptionPurchase_purchasedBy_created_idx")
+  @@index([status, createdAt], map: "SubscriptionPurchase_status_created_idx")
+}
+
+model SubscriptionPayment {
+  id String @id @default(uuid())
+
+  subscriptionPurchaseId String
+
+  provider                 String @db.VarChar(100)
+  providerPaymentReference String @db.VarChar(200)
+  amount                   Decimal @db.Decimal(18, 2)
+
+  status SubscriptionPaymentStatus @default(PENDING)
+
+  initiatedAt DateTime @db.Timestamptz(3)
+  confirmedAt DateTime? @db.Timestamptz(3)
+  failedAt    DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  subscriptionPurchase SubscriptionPurchase @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerPaymentReference], map: "SubscriptionPayment_provider_reference_key")
+  @@index([subscriptionPurchaseId, createdAt], map: "SubscriptionPayment_purchase_created_idx")
+  @@index([status, createdAt], map: "SubscriptionPayment_status_created_idx")
 }
 
 model CommandIdempotency {
@@ -1542,6 +1616,7 @@ model CommandIdempotency {
   @@index([resultBookingGroupAccessTokenId], map: "CommandIdempotency_resultGroupToken_idx")
   @@index([resultAdministrativeAccountActionId], map: "CommandIdempotency_resultAdminAction_idx")
   doctorFinancialAccount DoctorFinancialAccount? @relation("CommandIdempotencyDoctorFinancialAccount", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchaseCommandIdempotency")
 }
 
 model BookingDraft {
