@@ -656,8 +656,9 @@ model PracticeLocationService {
   // Template deletion/retirement must never block or mutate copied location
   // Services. Provenance is informational only.
 
-  draftProposals         SecretarySettingsDraftService[]
-  bookingDraftSelections BookingDraftServiceSelection[]
+  draftProposals            SecretarySettingsDraftService[]
+  bookingDraftSelections    BookingDraftServiceSelection[]
+  appointmentBookedServices AppointmentBookedService[]
 
   @@index([practiceLocationId, status])
   @@index([practiceLocationId, name])
@@ -991,6 +992,7 @@ model Appointment {
   notificationLogs        NotificationLog[]
   queueEventLinks         QueueEventAppointmentLink[]
   appointmentAnswers      AppointmentAnswer[]
+  bookedServices          AppointmentBookedService[]
 
   @@unique([practiceLocationId, serviceDate, queueNumber])
   @@index([practiceLocationId, serviceDate])
@@ -1395,6 +1397,27 @@ model BookingDraftAnswer {
   @@index([bookingDraftId])
   @@index([bookingDraftMemberId])
   @@index([bookingQuestionId])
+}
+
+model AppointmentBookedService {
+  id String @id @default(uuid())
+
+  appointmentId             String
+  practiceLocationServiceId String
+
+  // Immutable confirmed-booking snapshots. Later Service edits or retirement
+  // must not rewrite what this Appointment originally booked.
+  serviceNameSnapshot     String @db.VarChar(150)
+  durationMinutesSnapshot Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  appointment             Appointment             @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  practiceLocationService PracticeLocationService @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
+
+  @@unique([appointmentId, practiceLocationServiceId], map: "AppointmentBookedService_appointment_service_key")
+  @@index([appointmentId], map: "AppointmentBookedService_appointmentId_idx")
+  @@index([practiceLocationServiceId], map: "AppointmentBookedService_serviceId_idx")
 }
 
 model AppointmentAnswer {
