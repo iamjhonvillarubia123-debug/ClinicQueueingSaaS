@@ -281,6 +281,21 @@ enum SubscriptionEntitlementEventType {
   RESTORED
 }
 
+enum RetentionResourceType {
+  APPOINTMENT
+}
+
+enum RetentionHoldReasonCategory {
+  LEGAL_REQUIREMENT
+  REGULATORY_REQUIREMENT
+  ACTIVE_LEGAL_CLAIM
+  PRESERVATION_ORDER
+}
+
+enum PrivacyErasureResourceType {
+  APPOINTMENT
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -447,6 +462,7 @@ model User {
   subscriptionPurchases                      SubscriptionPurchase[]    @relation("SubscriptionPurchasePurchasedBy")
   processedRefundRequests                    RefundRequest[]           @relation("RefundRequestProcessedByAdmin")
   refundProcessingAttempts                   RefundProcessingAttempt[] @relation("RefundProcessingAttemptProcessedByAdmin")
+  retentionHoldsCreated                      RetentionHold[]
 }
 
 model DoctorProfile {
@@ -677,6 +693,7 @@ model PracticeLocation {
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
   commandIdempotencies              CommandIdempotency[]               @relation("CommandIdempotencyPracticeLocation")
+  queueAnalyticsDaily               QueueAnalyticsDaily[]
 
   @@index([doctorProfileId])
   @@index([lifecycleStatus])
@@ -2059,6 +2076,69 @@ model QueueEventAppointmentLink {
   @@unique([queueEventId, appointmentId])
   @@index([appointmentId, createdAt])
   @@index([queueEventId])
+}
+
+model QueueAnalyticsDaily {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  bookedCount    Int @default(0)
+  servedCount    Int @default(0)
+  cancelledCount Int @default(0)
+  absenceCount   Int @default(0)
+
+  waitingDurationTotalSeconds BigInt @default(0)
+  waitingDurationSampleCount  Int    @default(0)
+  serviceDurationTotalSeconds BigInt @default(0)
+  serviceDurationSampleCount  Int    @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  @@unique([practiceLocationId, serviceDate], map: "QueueAnalyticsDaily_location_serviceDate_key")
+  @@index([serviceDate], map: "QueueAnalyticsDaily_serviceDate_idx")
+}
+
+model PrivacyErasureLedger {
+  id String @id @default(uuid())
+
+  resourceType PrivacyErasureResourceType
+  resourceId   String
+
+  erasureCommittedAt DateTime @db.Timestamptz(3)
+  backupReplayUntil  DateTime @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([resourceType, resourceId], map: "PrivacyErasureLedger_resource_key")
+  @@index([backupReplayUntil], map: "PrivacyErasureLedger_backupReplayUntil_idx")
+}
+
+model RetentionHold {
+  id String @id @default(uuid())
+
+  resourceType   RetentionResourceType
+  resourceId     String
+  reasonCategory RetentionHoldReasonCategory
+
+  reference   String? @db.VarChar(255)
+  explanation String  @db.VarChar(1000)
+
+  createdByUserId String
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  reviewAt        DateTime  @db.Timestamptz(3)
+  expiresAt       DateTime  @db.Timestamptz(3)
+  releasedAt      DateTime? @db.Timestamptz(3)
+
+  createdByUser User @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([resourceType, resourceId, releasedAt, expiresAt], map: "RetentionHold_resource_active_idx")
+  @@index([reviewAt], map: "RetentionHold_reviewAt_idx")
+  @@index([expiresAt], map: "RetentionHold_expiresAt_idx")
+  @@index([createdByUserId, createdAt], map: "RetentionHold_createdBy_created_idx")
 }
 
 model BookingQuestion {
