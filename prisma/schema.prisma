@@ -390,6 +390,7 @@ model User {
   secretaryLifecycleApplicationNotifications ApplicationNotification[] @relation("ApplicationNotificationAffectedSecretary")
   commandIdempotenciesAsActor       CommandIdempotency[] @relation("CommandIdempotencyActorUser")
   commandIdempotenciesAsAccountUser CommandIdempotency[] @relation("CommandIdempotencyAccountUser")
+  doctorFinancialAccount DoctorFinancialAccount?
 }
 
 model DoctorProfile {
@@ -1441,6 +1442,40 @@ model NotificationLog {
   @@index([expiresAt], map: "NotificationLog_expires_idx")
 }
 
+model DoctorFinancialAccount {
+  id String @id @default(uuid())
+
+  doctorUserId String @unique
+
+  recoveryEmailEncrypted String?
+  recoveryEmailHash      String? @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  doctorUser User @relation(fields: [doctorUserId], references: [id], onDelete: Restrict)
+
+  entitlement DoctorSubscriptionEntitlement?
+
+  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyDoctorFinancialAccount")
+
+  @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
+}
+
+model DoctorSubscriptionEntitlement {
+  id String @id @default(uuid())
+
+  doctorFinancialAccountId String @unique
+
+  paidThrough DateTime @db.Timestamptz(3)
+  graceEndsAt DateTime @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+}
+
 model CommandIdempotency {
   id String @id @default(uuid())
 
@@ -1506,6 +1541,7 @@ model CommandIdempotency {
   @@index([resultBookingGroupId], map: "CommandIdempotency_resultBookingGroup_idx")
   @@index([resultBookingGroupAccessTokenId], map: "CommandIdempotency_resultGroupToken_idx")
   @@index([resultAdministrativeAccountActionId], map: "CommandIdempotency_resultAdminAction_idx")
+  doctorFinancialAccount DoctorFinancialAccount? @relation("CommandIdempotencyDoctorFinancialAccount", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
 }
 
 model BookingDraft {
