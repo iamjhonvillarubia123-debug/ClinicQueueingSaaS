@@ -69,7 +69,7 @@ describe('BookingService', () => {
     middleName: 'Santos',
     lastName: 'Reyes',
     suffix: 'Jr.',
-    existingPatientResponse: 'UNSURE',
+    existingPatientResponse: 'UNSURE' as const,
     mobileNumber: '+639171234567',
     serviceDate: '2026-08-10',
   };
@@ -109,7 +109,7 @@ describe('BookingService', () => {
       bookingReference: 'CQ-SECOND',
       status: 'PENDING_OTP',
       practiceLocationId: 'practice-1',
-      existingPatientResponse: 'UNSURE',
+      existingPatientResponse: 'UNSURE' as const,
       serviceDate: new Date('2026-08-10'),
       estimatedServiceMinutes: 30,
       expiresAt: new Date(),

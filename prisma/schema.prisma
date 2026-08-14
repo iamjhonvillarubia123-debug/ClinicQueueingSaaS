@@ -1132,6 +1132,7 @@ model BookingDraftMember {
   serviceSelections BookingDraftServiceSelection[]
 
   @@unique([bookingDraftId, memberOrder])
+  @@unique([id, bookingDraftId])
   @@index([bookingDraftId])
 }
 
@@ -1145,7 +1146,7 @@ model BookingDraftServiceSelection {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   bookingDraft            BookingDraft            @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
-  bookingDraftMember      BookingDraftMember?     @relation(fields: [bookingDraftMemberId], references: [id], onDelete: Restrict)
+  bookingDraftMember      BookingDraftMember?     @relation(fields: [bookingDraftMemberId, bookingDraftId], references: [id, bookingDraftId], onDelete: Restrict)
   practiceLocationService PracticeLocationService @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
 
   @@index([bookingDraftId])
@@ -1257,7 +1258,7 @@ model BookingDraftAnswer {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   bookingDraft       BookingDraft        @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
-  bookingDraftMember BookingDraftMember? @relation(fields: [bookingDraftMemberId], references: [id], onDelete: Restrict)
+  bookingDraftMember BookingDraftMember? @relation(fields: [bookingDraftMemberId, bookingDraftId], references: [id, bookingDraftId], onDelete: Restrict)
   bookingQuestion    BookingQuestion     @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
 
   @@index([bookingDraftId])
