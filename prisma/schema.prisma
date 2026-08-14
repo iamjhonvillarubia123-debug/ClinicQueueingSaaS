@@ -197,6 +197,30 @@ enum ExistingPatientResponse {
   UNSURE
 }
 
+enum WaitingPlacementType {
+  ORDINARY
+  RETURN_TO_QUEUE
+  IM_HERE
+  STAFF_REINSERT
+}
+
+enum ClinicDayStatus {
+  NOT_STARTED
+  DELAYED
+  STARTED
+  CLOSED
+  CANCELLED
+}
+
+enum ClinicDayCancellationReason {
+  DOCTOR_UNAVAILABLE
+  MEDICAL_EMERGENCY
+  PERSONAL_EMERGENCY
+  SCHEDULE_CONFLICT
+  CLINIC_UNAVAILABLE
+  OTHER
+}
+
 enum QueueEventType {
   NEXT_PATIENT
   SELF_SERVICE_REINSERTION
@@ -247,6 +271,7 @@ model User {
   createdAppointments              Appointment[]
   followUpRecommendations          FollowUpRecommendation[]
   queueEvents                      QueueEvent[]
+  cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
   userSessions                     UserSession[]
   dataRetentionAcknowledgements    DoctorDataRetentionAcknowledgement[]
 
@@ -468,6 +493,7 @@ model PracticeLocation {
   bookingDrafts    BookingDraft[]
   appointments     Appointment[]
   bookingGroups    BookingGroup[]
+  clinicDays       ClinicDay[]
   queueCounters    QueueCounter[]
   queueEvents      QueueEvent[]
   bookingQuestions BookingQuestion[]
@@ -501,6 +527,7 @@ model PracticeStaff {
 
   capabilities                    PracticeStaffCapability[]
   authoredSecretarySettingsDrafts SecretarySettingsDraft[]
+  operatingClinicDays             ClinicDay[]               @relation("ClinicDayOperatingPracticeStaff")
 
   @@unique([userId, practiceLocationId])
   @@index([practiceLocationId, isActive])
@@ -914,6 +941,9 @@ model Appointment {
 
   status AppointmentStatus @default(WAITING)
 
+  servingOrderKey      Decimal?              @db.Decimal(38, 18)
+  waitingPlacementType WaitingPlacementType?
+
   firstName  String? @db.VarChar(100)
   middleName String? @db.VarChar(100)
   lastName   String? @db.VarChar(100)
@@ -956,6 +986,7 @@ model Appointment {
   @@unique([practiceLocationId, serviceDate, queueNumber])
   @@index([practiceLocationId, serviceDate])
   @@index([practiceLocationId, status, serviceDate])
+  @@index([practiceLocationId, serviceDate, servingOrderKey])
   @@index([bookingGroupId])
   @@index([mobileNumberHash, practiceLocationId, serviceDate, status])
   @@index([createdByUserId, createdAt])
@@ -1174,6 +1205,42 @@ model BookingDraftServiceSelection {
   @@index([bookingDraftId])
   @@index([bookingDraftMemberId])
   @@index([practiceLocationServiceId])
+}
+
+model ClinicDay {
+  id String @id @default(uuid())
+
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  status ClinicDayStatus @default(NOT_STARTED)
+
+  openingOverrideAt           DateTime? @db.Timestamptz(3)
+  delayedOpeningDeclaredAt    DateTime? @db.Timestamptz(3)
+  maximumOnlineBookingUntilAt DateTime? @db.Timestamptz(3)
+
+  operatingPracticeStaffId String?
+
+  startedAt DateTime? @db.Timestamptz(3)
+  closedAt  DateTime? @db.Timestamptz(3)
+
+  cancelledAt        DateTime?                    @db.Timestamptz(3)
+  cancelledByUserId  String?
+  cancellationReason ClinicDayCancellationReason?
+  cancellationNote   String?                      @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  operatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingPracticeStaff", fields: [operatingPracticeStaffId], references: [id], onDelete: Restrict)
+
+  cancelledByUser User? @relation("ClinicDayCancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([practiceLocationId, serviceDate])
+  @@index([status, serviceDate])
+  @@index([operatingPracticeStaffId, serviceDate])
 }
 
 model QueueCounter {
