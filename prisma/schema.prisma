@@ -185,6 +185,11 @@ enum BookingDraftStatus {
   CANCELLED
 }
 
+enum BookingDraftMode {
+  INDIVIDUAL
+  MULTI_PERSON
+}
+
 enum ExistingPatientResponse {
   YES
   NO
@@ -612,7 +617,8 @@ model PracticeLocationService {
   // Template deletion/retirement must never block or mutate copied location
   // Services. Provenance is informational only.
 
-  draftProposals SecretarySettingsDraftService[]
+  draftProposals         SecretarySettingsDraftService[]
+  bookingDraftSelections BookingDraftServiceSelection[]
 
   @@index([practiceLocationId, status])
   @@index([practiceLocationId, name])
@@ -1063,22 +1069,25 @@ model NotificationLog {
 model BookingDraft {
   id               String             @id @default(uuid())
   bookingReference String             @unique @db.VarChar(20)
+  mode             BookingDraftMode   @default(INDIVIDUAL)
   status           BookingDraftStatus @default(PENDING_OTP)
 
-  practiceLocationId      String
-  existingPatientResponse ExistingPatientResponse
+  practiceLocationId String
 
-  firstName  String  @db.VarChar(100)
+  existingPatientResponse ExistingPatientResponse?
+
+  firstName  String? @db.VarChar(100)
   middleName String? @db.VarChar(100)
-  lastName   String  @db.VarChar(100)
+  lastName   String? @db.VarChar(100)
   suffix     String? @db.VarChar(20)
 
-  mobileNumberEncrypted String
-  mobileNumberHash      String @db.VarChar(128)
-  mobileNumberLastFour  String @db.Char(4)
+  mobileNumberEncrypted String?
+  mobileNumberHash      String? @db.VarChar(128)
+  mobileNumberLastFour  String? @db.Char(4)
 
-  serviceDate             DateTime @db.Date
-  estimatedServiceMinutes Int
+  serviceDate DateTime @db.Date
+
+  estimatedServiceMinutes Int?
 
   expiresAt   DateTime  @db.Timestamptz(3)
   consumedAt  DateTime? @db.Timestamptz(3)
@@ -1087,13 +1096,61 @@ model BookingDraft {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  practiceLocation    PracticeLocation     @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
   otpVerifications    OtpVerification[]
+  bookingDraftMembers BookingDraftMember[]
   bookingDraftAnswers BookingDraftAnswer[]
+  serviceSelections   BookingDraftServiceSelection[]
 
   @@index([practiceLocationId, serviceDate])
-  @@index([mobileNumberHash, expiresAt])
-  @@index([expiresAt])
+  @@index([mobileNumberHash, practiceLocationId, serviceDate, status])
+  @@index([mode, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+model BookingDraftMember {
+  id String @id @default(uuid())
+
+  bookingDraftId String
+  memberOrder    Int
+
+  firstName  String? @db.VarChar(100)
+  middleName String? @db.VarChar(100)
+  lastName   String? @db.VarChar(100)
+  suffix     String? @db.VarChar(20)
+
+  existingPatientResponse ExistingPatientResponse?
+  estimatedServiceMinutes Int?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  bookingDraft BookingDraft @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
+
+  answers           BookingDraftAnswer[]
+  serviceSelections BookingDraftServiceSelection[]
+
+  @@unique([bookingDraftId, memberOrder])
+  @@index([bookingDraftId])
+}
+
+model BookingDraftServiceSelection {
+  id String @id @default(uuid())
+
+  bookingDraftId            String
+  bookingDraftMemberId      String?
+  practiceLocationServiceId String
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  bookingDraft            BookingDraft            @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
+  bookingDraftMember      BookingDraftMember?     @relation(fields: [bookingDraftMemberId], references: [id], onDelete: Restrict)
+  practiceLocationService PracticeLocationService @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
+
+  @@index([bookingDraftId])
+  @@index([bookingDraftMemberId])
+  @@index([practiceLocationServiceId])
 }
 
 model QueueCounter {
@@ -1183,9 +1240,10 @@ model BookingQuestion {
 }
 
 model BookingDraftAnswer {
-  id                String @id @default(uuid())
-  bookingDraftId    String
-  bookingQuestionId String
+  id                   String  @id @default(uuid())
+  bookingDraftId       String
+  bookingDraftMemberId String?
+  bookingQuestionId    String
 
   answerText    String?
   answerNumber  Decimal?
@@ -1198,10 +1256,12 @@ model BookingDraftAnswer {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  bookingDraft    BookingDraft    @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
-  bookingQuestion BookingQuestion @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
+  bookingDraft       BookingDraft        @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
+  bookingDraftMember BookingDraftMember? @relation(fields: [bookingDraftMemberId], references: [id], onDelete: Restrict)
+  bookingQuestion    BookingQuestion     @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
 
-  @@unique([bookingDraftId, bookingQuestionId])
+  @@index([bookingDraftId])
+  @@index([bookingDraftMemberId])
   @@index([bookingQuestionId])
 }
 

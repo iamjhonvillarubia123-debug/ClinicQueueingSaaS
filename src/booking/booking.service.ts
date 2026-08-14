@@ -80,9 +80,9 @@ export class BookingService {
           bookingReference: string;
           status: string;
           practiceLocationId: string;
-          existingPatientResponse: string;
+          existingPatientResponse: string | null;
           serviceDate: Date;
-          estimatedServiceMinutes: number;
+          estimatedServiceMinutes: number | null;
           expiresAt: Date;
           createdAt: Date;
         }

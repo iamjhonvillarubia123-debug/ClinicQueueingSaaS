@@ -132,7 +132,7 @@ export class OtpService {
           },
         });
 
-      if (!bookingDraft) {
+      if (!bookingDraft?.mobileNumberHash) {
         throw new NotFoundException(
           'Booking draft is not available for OTP verification.',
         );
