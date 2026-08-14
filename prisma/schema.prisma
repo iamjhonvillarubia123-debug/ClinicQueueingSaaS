@@ -226,9 +226,19 @@ enum QueueEventType {
   SELF_SERVICE_REINSERTION
   STAFF_REINSERTION
   OUT_FOR_PROCEDURE
-  UNDO_NEXT_PATIENT
+  UNDO
   APPOINTMENT_CANCELLED
   QUEUE_CLOSED
+}
+
+enum QueueEventAppointmentLinkRole {
+  PRIMARY
+  SECONDARY
+}
+
+enum ClinicClosureDisposition {
+  COMPLETED
+  OUT_FOR_PROCEDURE
 }
 
 enum QueueEventActorType {
@@ -979,8 +989,7 @@ model Appointment {
   contactPreference       ContactPreference?
   followUpRecommendations FollowUpRecommendation[]
   notificationLogs        NotificationLog[]
-  primaryQueueEvents      QueueEvent[]             @relation("PrimaryQueueEventAppointment")
-  secondaryQueueEvents    QueueEvent[]             @relation("SecondaryQueueEventAppointment")
+  queueEventLinks         QueueEventAppointmentLink[]
   appointmentAnswers      AppointmentAnswer[]
 
   @@unique([practiceLocationId, serviceDate, queueNumber])
@@ -1262,42 +1271,75 @@ model QueueEvent {
 
   practiceLocationId String
   serviceDate        DateTime @db.Date
+  queueEventSequence BigInt
 
   type      QueueEventType
   actorType QueueEventActorType
 
   actorUserId String?
 
-  primaryAppointmentId   String
-  secondaryAppointmentId String?
-
   previousPrimaryStatus   AppointmentStatus?
   newPrimaryStatus        AppointmentStatus?
   previousSecondaryStatus AppointmentStatus?
   newSecondaryStatus      AppointmentStatus?
 
-  reversedEventId String? @unique
+  previousPrimaryOrderKey   Decimal? @db.Decimal(38, 18)
+  newPrimaryOrderKey        Decimal? @db.Decimal(38, 18)
+  previousSecondaryOrderKey Decimal? @db.Decimal(38, 18)
+  newSecondaryOrderKey      Decimal? @db.Decimal(38, 18)
 
-  isUndoable Boolean   @default(false)
-  undoneAt   DateTime? @db.Timestamptz(3)
+  previousPrimaryWaitingPlacementType   WaitingPlacementType?
+  newPrimaryWaitingPlacementType        WaitingPlacementType?
+  previousSecondaryWaitingPlacementType WaitingPlacementType?
+  newSecondaryWaitingPlacementType      WaitingPlacementType?
+
+  previousPrimaryTerminalAt   DateTime? @db.Timestamptz(3)
+  newPrimaryTerminalAt        DateTime? @db.Timestamptz(3)
+  previousSecondaryTerminalAt DateTime? @db.Timestamptz(3)
+  newSecondaryTerminalAt      DateTime? @db.Timestamptz(3)
+
+  previousPrimarySelfServiceReinsertedAt DateTime? @db.Timestamptz(3)
+  newPrimarySelfServiceReinsertedAt      DateTime? @db.Timestamptz(3)
+
+  clinicClosureDisposition ClinicClosureDisposition?
+
+  reversesQueueEventId String? @unique
 
   metadata Json?
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
-  practiceLocation     PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-  actorUser            User?            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
-  primaryAppointment   Appointment      @relation("PrimaryQueueEventAppointment", fields: [primaryAppointmentId], references: [id], onDelete: Restrict)
-  secondaryAppointment Appointment?     @relation("SecondaryQueueEventAppointment", fields: [secondaryAppointmentId], references: [id], onDelete: Restrict)
-  reversedEvent        QueueEvent?      @relation("QueueEventReversal", fields: [reversedEventId], references: [id], onDelete: Restrict)
-  reversalEvent        QueueEvent?      @relation("QueueEventReversal")
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  actorUser        User?            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 
+  appointmentLinks QueueEventAppointmentLink[]
+
+  reversesQueueEvent   QueueEvent? @relation("QueueEventReversal", fields: [reversesQueueEventId], references: [id], onDelete: Restrict)
+  reversedByQueueEvent QueueEvent? @relation("QueueEventReversal")
+
+  @@unique([practiceLocationId, serviceDate, queueEventSequence], map: "QueueEvent_scope_sequence_key")
+  @@index([practiceLocationId, serviceDate, queueEventSequence], map: "QueueEvent_scope_sequence_idx")
   @@index([practiceLocationId, serviceDate, createdAt])
-  @@index([primaryAppointmentId, createdAt])
-  @@index([secondaryAppointmentId])
   @@index([actorUserId, createdAt])
   @@index([type, createdAt])
-  @@index([isUndoable, practiceLocationId, serviceDate])
+}
+
+model QueueEventAppointmentLink {
+  id String @id @default(uuid())
+
+  queueEventId  String
+  role          QueueEventAppointmentLinkRole
+  appointmentId String
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  queueEvent  QueueEvent  @relation(fields: [queueEventId], references: [id], onDelete: Restrict)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@unique([queueEventId, role])
+  @@unique([queueEventId, appointmentId])
+  @@index([appointmentId, createdAt])
+  @@index([queueEventId])
 }
 
 model BookingQuestion {
