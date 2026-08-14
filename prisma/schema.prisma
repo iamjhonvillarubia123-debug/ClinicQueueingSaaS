@@ -269,11 +269,12 @@ model DoctorProfile {
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
-  practiceLocations   PracticeLocation[]
-  serviceTemplates    DoctorServiceTemplate[]
-  doctorCalendarRules DoctorCalendarRule[]
-  accountSettings     DoctorAccountSettings?
-  user                User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  practiceLocations        PracticeLocation[]
+  serviceTemplates         DoctorServiceTemplate[]
+  bookingQuestionTemplates DoctorBookingQuestionTemplate[]
+  doctorCalendarRules      DoctorCalendarRule[]
+  accountSettings          DoctorAccountSettings?
+  user                     User                            @relation(fields: [userId], references: [id], onDelete: Restrict)
 }
 
 model DoctorAccountSettings {
@@ -563,6 +564,7 @@ model SecretarySettingsDraft {
   proposedServices           SecretarySettingsDraftService[]
   proposedPracticeSchedules  SecretarySettingsDraftPracticeSchedule[]
   proposedScheduleExceptions SecretarySettingsDraftScheduleException[]
+  proposedBookingQuestions   SecretarySettingsDraftBookingQuestion[]
 
   @@index([practiceLocationId, status])
   @@index([authorPracticeStaffId, status])
@@ -740,6 +742,73 @@ model SecretarySettingsDraftScheduleException {
 
   @@unique([secretarySettingsDraftId, serviceDate])
   @@index([secretarySettingsDraftId, serviceDate])
+}
+
+model DoctorBookingQuestionTemplate {
+  id String @id @default(uuid())
+
+  doctorProfileId String
+
+  questionText String              @db.VarChar(500)
+  helpText     String?             @db.VarChar(500)
+  type         BookingQuestionType
+  isRequired   Boolean             @default(false)
+  displayOrder Int
+  isActive     Boolean             @default(true)
+
+  estimatedMinutesAdjustment Int @default(0)
+
+  textMaximumLength Int?
+  numberMinimum     Decimal?
+  numberMaximum     Decimal?
+  selectOptions     Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([doctorProfileId, displayOrder])
+  @@index([doctorProfileId, isActive, displayOrder])
+}
+
+model SecretarySettingsDraftBookingQuestion {
+  id String @id @default(uuid())
+
+  secretarySettingsDraftId String
+
+  // Existing effective BookingQuestion being proposed for edit/deactivation.
+  // NULL means the proposal creates a new PracticeLocation BookingQuestion.
+  bookingQuestionId String?
+
+  // Optional Doctor template provenance for an explicit Apply/copy proposal.
+  // No FK is used because copied runtime configuration must not remain
+  // synchronized to the Doctor-wide template.
+  sourceDoctorBookingQuestionTemplateId String?
+
+  proposedQuestionText String              @db.VarChar(500)
+  proposedHelpText     String?             @db.VarChar(500)
+  proposedType         BookingQuestionType
+  proposedIsRequired   Boolean             @default(false)
+  proposedDisplayOrder Int
+  proposedIsActive     Boolean             @default(true)
+
+  proposedEstimatedMinutesAdjustment Int @default(0)
+
+  proposedTextMaximumLength Int?
+  proposedNumberMinimum     Decimal?
+  proposedNumberMaximum     Decimal?
+  proposedSelectOptions     Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  secretarySettingsDraft SecretarySettingsDraft @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
+  bookingQuestion        BookingQuestion?       @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
+
+  @@index([secretarySettingsDraftId])
+  @@index([bookingQuestionId])
+  @@index([sourceDoctorBookingQuestionTemplateId])
 }
 
 model DoctorCalendarRule {
@@ -1104,9 +1173,10 @@ model BookingQuestion {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  practiceLocation    PracticeLocation     @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  practiceLocation    PracticeLocation                        @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   bookingDraftAnswers BookingDraftAnswer[]
   appointmentAnswers  AppointmentAnswer[]
+  draftProposals      SecretarySettingsDraftBookingQuestion[]
 
   @@unique([practiceLocationId, displayOrder])
   @@index([practiceLocationId, isActive, displayOrder])
