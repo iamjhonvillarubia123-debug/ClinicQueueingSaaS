@@ -450,19 +450,23 @@ model User {
 }
 
 model DoctorProfile {
-  id                 String   @id @default(uuid())
-  userId             String   @unique
-  middleName         String?  @db.VarChar(100)
-  suffix             String?  @db.VarChar(30)
-  professionalTitle  String   @db.VarChar(50)
-  specialization     String   @db.VarChar(150)
-  licenseNumber      String   @unique @db.VarChar(100)
+  id                 String  @id @default(uuid())
+  userId             String  @unique
+  middleName         String? @db.VarChar(100)
+  suffix             String? @db.VarChar(30)
+  professionalTitle  String  @db.VarChar(50)
+  specialization     String  @db.VarChar(150)
+  licenseNumber      String  @unique @db.VarChar(100)
   profileDescription String?
-  profilePhotoUrl    String?  @db.VarChar(500)
-  publicSlug         String?  @unique @db.VarChar(120)
-  isProfilePublic    Boolean  @default(false)
-  createdAt          DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+  profilePhotoUrl    String? @db.VarChar(500)
+  // Phase 5 stable Doctor public-route identity. It is opaque,
+  // non-authoritative for authentication, and independent from publicSlug.
+  publicIdentifier   String  @unique @default(uuid()) @db.VarChar(64)
+
+  publicSlug      String?  @unique @db.VarChar(120)
+  isProfilePublic Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
 
   practiceLocations        PracticeLocation[]
   serviceTemplates         DoctorServiceTemplate[]
