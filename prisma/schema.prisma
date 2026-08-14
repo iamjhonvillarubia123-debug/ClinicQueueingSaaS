@@ -82,6 +82,7 @@ enum AppointmentStatus {
   TEMPORARILY_ABSENT
   OUT_FOR_PROCEDURE
   COMPLETED
+  EXPIRED
   CANCELLED
   NO_SHOW
   RESCHEDULED
@@ -466,6 +467,7 @@ model PracticeLocation {
 
   bookingDrafts    BookingDraft[]
   appointments     Appointment[]
+  bookingGroups    BookingGroup[]
   queueCounters    QueueCounter[]
   queueEvents      QueueEvent[]
   bookingQuestions BookingQuestion[]
@@ -879,28 +881,32 @@ model DoctorCalendarOccurrenceOverride {
   @@index([doctorCalendarRuleId, occurrenceDate])
 }
 
-model Patient {
-  id                    String    @id @default(uuid())
-  fullName              String    @db.VarChar(150)
-  mobileNumberEncrypted String
-  mobileNumberHash      String    @unique @db.VarChar(128)
-  mobileVerifiedAt      DateTime? @db.Timestamptz(3)
-  isActive              Boolean   @default(true)
-  anonymizedAt          DateTime? @db.Timestamptz(3)
-  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+model BookingGroup {
+  id String @id @default(uuid())
 
-  appointments Appointment[]
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  controllingMobileNumberEncrypted String?
+  controllingMobileNumberHash      String?
+  controllingMobileLastFour        String? @db.VarChar(4)
+
+  servingProtectionEndedAt DateTime? @db.Timestamptz(3)
+  createdAt                DateTime  @default(now()) @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  appointments     Appointment[]
+
+  @@index([practiceLocationId, serviceDate])
+  @@index([controllingMobileNumberHash, practiceLocationId, serviceDate])
 }
 
 model Appointment {
   id               String @id @default(uuid())
-  bookingReference String @unique @db.VarChar(20)
+  bookingReference String @unique @db.VarChar(64)
 
-  patientId          String
-  patient            Patient          @relation(fields: [patientId], references: [id])
   practiceLocationId String
-  practiceLocation   PracticeLocation @relation(fields: [practiceLocationId], references: [id])
+  bookingGroupId     String?
 
   serviceDate             DateTime @db.Date
   estimatedServiceMinutes Int
@@ -908,22 +914,36 @@ model Appointment {
 
   status AppointmentStatus @default(WAITING)
 
-  arrivedAt          DateTime? @db.Timestamptz(3)
-  calledAt           DateTime? @db.Timestamptz(3)
-  serviceStartedAt   DateTime? @db.Timestamptz(3)
-  serviceCompletedAt DateTime? @db.Timestamptz(3)
+  firstName  String? @db.VarChar(100)
+  middleName String? @db.VarChar(100)
+  lastName   String? @db.VarChar(100)
+  suffix     String? @db.VarChar(30)
 
-  cancelledAt        DateTime?                   @db.Timestamptz(3)
+  existingPatientResponse ExistingPatientResponse?
+
+  mobileNumberEncrypted String?
+  mobileNumberHash      String?
+  mobileNumberLastFour  String? @db.VarChar(4)
+
+  calledAt     DateTime? @db.Timestamptz(3)
+  completedAt  DateTime? @db.Timestamptz(3)
+  cancelledAt  DateTime? @db.Timestamptz(3)
+  terminalAt   DateTime? @db.Timestamptz(3)
+  anonymizedAt DateTime? @db.Timestamptz(3)
+
   cancelledByType    AppointmentCancelledByType?
   cancellationReason String?                     @db.VarChar(255)
 
   createdByUserId String?
-  createdByUser   User?   @relation(fields: [createdByUserId], references: [id])
 
-  anonymizedAt DateTime? @db.Timestamptz(3)
+  selfServiceReinsertedAt DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  bookingGroup     BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)
+  createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
 
   bookingAccessTokens     BookingAccessToken[]
   contactPreference       ContactPreference?
@@ -936,8 +956,10 @@ model Appointment {
   @@unique([practiceLocationId, serviceDate, queueNumber])
   @@index([practiceLocationId, serviceDate])
   @@index([practiceLocationId, status, serviceDate])
-  @@index([patientId])
-  @@index([status])
+  @@index([bookingGroupId])
+  @@index([mobileNumberHash, practiceLocationId, serviceDate, status])
+  @@index([createdByUserId, createdAt])
+  @@index([status, terminalAt])
 }
 
 model OtpVerification {
