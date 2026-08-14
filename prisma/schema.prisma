@@ -410,8 +410,8 @@ model User {
   revokedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityRevokedBy")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
-  createdScheduledReminders        ScheduledReminder[]                 @relation("ScheduledReminderCreatedBy")
-  editedScheduledReminders         ScheduledReminder[]                 @relation("ScheduledReminderLastEditedBy")
+  createdScheduledReminders        ScheduledReminder[]                  @relation("ScheduledReminderCreatedBy")
+  editedScheduledReminders         ScheduledReminder[]                  @relation("ScheduledReminderLastEditedBy")
   queueEvents                      QueueEvent[]
   cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
   userSessions                     UserSession[]
@@ -425,12 +425,12 @@ model User {
 
   receivedApplicationNotifications           ApplicationNotification[] @relation("ApplicationNotificationRecipient")
   secretaryLifecycleApplicationNotifications ApplicationNotification[] @relation("ApplicationNotificationAffectedSecretary")
-  commandIdempotenciesAsActor       CommandIdempotency[] @relation("CommandIdempotencyActorUser")
-  commandIdempotenciesAsAccountUser CommandIdempotency[] @relation("CommandIdempotencyAccountUser")
-  doctorFinancialAccount DoctorFinancialAccount?
-  subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchasePurchasedBy")
-  processedRefundRequests RefundRequest[] @relation("RefundRequestProcessedByAdmin")
-  refundProcessingAttempts RefundProcessingAttempt[] @relation("RefundProcessingAttemptProcessedByAdmin")
+  commandIdempotenciesAsActor                CommandIdempotency[]      @relation("CommandIdempotencyActorUser")
+  commandIdempotenciesAsAccountUser          CommandIdempotency[]      @relation("CommandIdempotencyAccountUser")
+  doctorFinancialAccount                     DoctorFinancialAccount?
+  subscriptionPurchases                      SubscriptionPurchase[]    @relation("SubscriptionPurchasePurchasedBy")
+  processedRefundRequests                    RefundRequest[]           @relation("RefundRequestProcessedByAdmin")
+  refundProcessingAttempts                   RefundProcessingAttempt[] @relation("RefundProcessingAttemptProcessedByAdmin")
 }
 
 model DoctorProfile {
@@ -516,12 +516,12 @@ model AccountPermanentClosureAudit {
 
   accountUser User @relation("AccountPermanentClosureAuditAccountUser", fields: [accountUserId], references: [id], onDelete: Restrict)
 
-  initiatedByUser User @relation("AccountPermanentClosureAuditInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
+  initiatedByUser    User                @relation("AccountPermanentClosureAuditInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
+  commandIdempotency CommandIdempotency? @relation("CommandIdempotencyPermanentClosureAudits", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
   @@index([occurredAt])
   @@index([closureType, occurredAt])
   @@index([commandIdempotencyId])
-  commandIdempotency CommandIdempotency? @relation("CommandIdempotencyPermanentClosureAudits", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 }
 
 model AdministrativeAccountAction {
@@ -545,12 +545,12 @@ model AdministrativeAccountAction {
 
   restoredByAction AdministrativeAccountAction? @relation("AdministrativeAccountActionRestoration")
 
-  scopes AdministrativeAccountActionScope[]
+  scopes                     AdministrativeAccountActionScope[]
+  resultCommandIdempotencies CommandIdempotency[]               @relation("CommandIdempotencyAdministrativeAccountActionResult")
 
   @@index([targetDoctorUserId, occurredAt])
   @@index([actorUserId, occurredAt])
   @@index([actionType, occurredAt])
-  resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyAdministrativeAccountActionResult")
 }
 
 model AdministrativeAccountActionScope {
@@ -588,14 +588,14 @@ model ApplicationNotification {
 
   affectedSecretaryUser User? @relation("ApplicationNotificationAffectedSecretary", fields: [affectedSecretaryUserId], references: [id], onDelete: Restrict)
 
-  practiceLocation PracticeLocation? @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  practiceLocation   PracticeLocation?   @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  commandIdempotency CommandIdempotency? @relation("CommandIdempotencyApplicationNotifications", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
   @@index([recipientUserId, readAt])
   @@index([recipientUserId, createdAt])
   @@index([affectedSecretaryUserId])
   @@index([practiceLocationId])
   @@index([commandIdempotencyId])
-  commandIdempotency CommandIdempotency? @relation("CommandIdempotencyApplicationNotifications", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 }
 
 model PracticeLocation {
@@ -641,25 +641,25 @@ model PracticeLocation {
   practiceSchedules       PracticeSchedule[]
   scheduleExceptions      ScheduleException[]
 
-  bookingDrafts           BookingDraft[]
-  appointments            Appointment[]
-  bookingGroups           BookingGroup[]
-  clinicDays              ClinicDay[]
-  queueCounters           QueueCounter[]
-  queueEvents             QueueEvent[]
-  bookingQuestions        BookingQuestion[]
-  bookingRecoveryAttempts BookingRecoveryAttempt[]
+  bookingDrafts                BookingDraft[]
+  appointments                 Appointment[]
+  bookingGroups                BookingGroup[]
+  clinicDays                   ClinicDay[]
+  queueCounters                QueueCounter[]
+  queueEvents                  QueueEvent[]
+  bookingQuestions             BookingQuestion[]
+  bookingRecoveryAttempts      BookingRecoveryAttempt[]
   bookingGroupRecoveryAttempts BookingGroupRecoveryAttempt[]
-  scheduledReminders ScheduledReminder[]
-  notificationOutboxes NotificationOutbox[]
+  scheduledReminders           ScheduledReminder[]
+  notificationOutboxes         NotificationOutbox[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
+  commandIdempotencies              CommandIdempotency[]               @relation("CommandIdempotencyPracticeLocation")
 
   @@index([doctorProfileId])
   @@index([lifecycleStatus])
   @@index([doctorProfileId, lifecycleStatus])
-  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyPracticeLocation")
 }
 
 model PracticeStaff {
@@ -1078,15 +1078,15 @@ model BookingGroup {
   servingProtectionEndedAt DateTime? @db.Timestamptz(3)
   createdAt                DateTime  @default(now()) @db.Timestamptz(3)
 
-  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-  appointments     Appointment[]
-  accessTokens      BookingGroupAccessToken[]
-  recoveryAttempts BookingGroupRecoveryAttempt[]
+  practiceLocation             PracticeLocation              @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  appointments                 Appointment[]
+  accessTokens                 BookingGroupAccessToken[]
+  recoveryAttempts             BookingGroupRecoveryAttempt[]
+  commandIdempotenciesAsScope  CommandIdempotency[]          @relation("CommandIdempotencyBookingGroupScope")
+  commandIdempotenciesAsResult CommandIdempotency[]          @relation("CommandIdempotencyResultBookingGroup")
 
   @@index([practiceLocationId, serviceDate])
   @@index([controllingMobileNumberHash, practiceLocationId, serviceDate])
-  commandIdempotenciesAsScope  CommandIdempotency[] @relation("CommandIdempotencyBookingGroupScope")
-  commandIdempotenciesAsResult CommandIdempotency[] @relation("CommandIdempotencyResultBookingGroup")
 }
 
 model Appointment {
@@ -1136,14 +1136,16 @@ model Appointment {
   bookingGroup     BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)
   createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
 
-  bookingAccessTokens     BookingAccessToken[]
-  bookingRecoveryAttempts BookingRecoveryAttempt[]    @relation("BookingRecoveryCandidateAppointment")
-  contactPreference       ContactPreference?
-  scheduledReminders      ScheduledReminder[]
-  notificationOutboxes    NotificationOutbox[]
-  queueEventLinks         QueueEventAppointmentLink[]
-  appointmentAnswers      AppointmentAnswer[]
-  bookedServices          AppointmentBookedService[]
+  bookingAccessTokens        BookingAccessToken[]
+  bookingRecoveryAttempts    BookingRecoveryAttempt[]    @relation("BookingRecoveryCandidateAppointment")
+  contactPreference          ContactPreference?
+  scheduledReminders         ScheduledReminder[]
+  notificationOutboxes       NotificationOutbox[]
+  queueEventLinks            QueueEventAppointmentLink[]
+  appointmentAnswers         AppointmentAnswer[]
+  bookedServices             AppointmentBookedService[]
+  commandIdempotencies       CommandIdempotency[]        @relation("CommandIdempotencyAppointmentScope")
+  resultCommandIdempotencies CommandIdempotency[]        @relation("CommandIdempotencyResultAppointment")
 
   @@unique([practiceLocationId, serviceDate, queueNumber])
   @@index([practiceLocationId, serviceDate])
@@ -1153,15 +1155,13 @@ model Appointment {
   @@index([mobileNumberHash, practiceLocationId, serviceDate, status])
   @@index([createdByUserId, createdAt])
   @@index([status, terminalAt])
-  commandIdempotencies       CommandIdempotency[] @relation("CommandIdempotencyAppointmentScope")
-  resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultAppointment")
 }
 
 model OtpVerification {
   id      String     @id @default(uuid())
   purpose OtpPurpose
 
-  bookingDraftId           String?
+  bookingDraftId                String?
   bookingRecoveryAttemptId      String?
   bookingGroupRecoveryAttemptId String?
 
@@ -1185,15 +1185,15 @@ model OtpVerification {
 
   bookingDraft BookingDraft? @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
 
-  bookingRecoveryAttempt BookingRecoveryAttempt? @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
+  bookingRecoveryAttempt      BookingRecoveryAttempt?      @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
   bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation(fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: Restrict)
+  notificationOutbox          NotificationOutbox?          @relation("OtpVerificationNotificationOutbox")
 
   @@index([bookingDraftId, createdAt], map: "OtpVerification_bookingDraft_created_idx")
   @@index([bookingRecoveryAttemptId, createdAt], map: "OtpVerification_recovery_created_idx")
   @@index([bookingGroupRecoveryAttemptId, createdAt], map: "OtpVerification_group_recovery_created_idx")
   @@index([mobileNumberHash, createdAt], map: "OtpVerification_mobile_created_idx")
   @@index([expiresAt], map: "OtpVerification_expires_idx")
-  notificationOutbox NotificationOutbox? @relation("OtpVerificationNotificationOutbox")
 }
 
 model BookingGroupAccessToken {
@@ -1211,12 +1211,12 @@ model BookingGroupAccessToken {
   lastUsedAt DateTime? @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt                  DateTime             @default(now()) @db.Timestamptz(3)
+  resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultBookingGroupAccessToken")
 
   @@index([bookingGroupId], map: "BookingGroupAccessToken_group_idx")
   @@index([expiresAt], map: "BookingGroupAccessToken_expires_idx")
   @@index([bookingGroupId, revokedAt, expiresAt], map: "BookingGroupAccessToken_active_lookup_idx")
-  resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultBookingGroupAccessToken")
 }
 
 model BookingGroupRecoveryAttempt {
@@ -1250,13 +1250,13 @@ model BookingGroupRecoveryAttempt {
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   bookingGroup     BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: SetNull)
 
-  otpVerifications OtpVerification[]
+  otpVerifications     OtpVerification[]
+  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyBookingGroupRecoveryAttempt")
 
   @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingGroupRecoveryAttempt_scope_mobile_created_idx")
   @@index([status, expiresAt], map: "BookingGroupRecoveryAttempt_status_expires_idx")
   @@index([bookingGroupId], map: "BookingGroupRecoveryAttempt_group_idx")
   @@index([expiresAt], map: "BookingGroupRecoveryAttempt_expires_idx")
-  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyBookingGroupRecoveryAttempt")
 }
 
 model BookingAccessToken {
@@ -1315,14 +1315,14 @@ model BookingRecoveryAttempt {
 
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
 
-  candidateAppointment Appointment?      @relation("BookingRecoveryCandidateAppointment", fields: [candidateAppointmentId], references: [id], onDelete: SetNull)
+  candidateAppointment Appointment?         @relation("BookingRecoveryCandidateAppointment", fields: [candidateAppointmentId], references: [id], onDelete: SetNull)
   otpVerifications     OtpVerification[]
+  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyBookingRecoveryAttempt")
 
   @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingRecoveryAttempt_scope_mobile_created_idx")
   @@index([status, expiresAt], map: "BookingRecoveryAttempt_status_expires_idx")
   @@index([candidateAppointmentId], map: "BookingRecoveryAttempt_candidate_idx")
   @@index([expiresAt], map: "BookingRecoveryAttempt_expires_idx")
-  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyBookingRecoveryAttempt")
 }
 
 model ContactPreference {
@@ -1340,8 +1340,8 @@ model ContactPreference {
 
   privacyNoticeVersion String @db.VarChar(30)
 
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   scheduledReminders ScheduledReminder[]
 }
 
@@ -1354,7 +1354,7 @@ model ScheduledReminder {
 
   recipientSource          ScheduledReminderRecipientSource
   recipientMobileEncrypted String?
-  recipientMobileLastFour  String? @db.VarChar(4)
+  recipientMobileLastFour  String?                          @db.VarChar(4)
 
   status ScheduledReminderStatus @default(SCHEDULED)
 
@@ -1380,8 +1380,9 @@ model ScheduledReminder {
   sourceAppointment Appointment?      @relation(fields: [sourceAppointmentId], references: [id], onDelete: SetNull)
   contactPreference ContactPreference @relation(fields: [contactPreferenceId], references: [id], onDelete: Restrict)
 
-  createdByUser    User @relation("ScheduledReminderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  lastEditedByUser User @relation("ScheduledReminderLastEditedBy", fields: [lastEditedByUserId], references: [id], onDelete: Restrict)
+  createdByUser      User                @relation("ScheduledReminderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  lastEditedByUser   User                @relation("ScheduledReminderLastEditedBy", fields: [lastEditedByUserId], references: [id], onDelete: Restrict)
+  notificationOutbox NotificationOutbox? @relation("ScheduledReminderNotificationOutbox")
 
   @@index([practiceLocationId, status, scheduledFor], map: "ScheduledReminder_location_status_due_idx")
   @@index([status, scheduledFor], map: "ScheduledReminder_status_due_idx")
@@ -1389,29 +1390,28 @@ model ScheduledReminder {
   @@index([contactPreferenceId], map: "ScheduledReminder_contactPreference_idx")
   @@index([createdByUserId], map: "ScheduledReminder_createdBy_idx")
   @@index([lastEditedByUserId], map: "ScheduledReminder_lastEditedBy_idx")
-  notificationOutbox NotificationOutbox? @relation("ScheduledReminderNotificationOutbox")
 }
 
 model NotificationOutbox {
   id String @id @default(uuid())
 
-  deliveryIdentityKey String @unique @db.VarChar(64)
+  deliveryIdentityKey String                   @unique @db.VarChar(64)
   notificationType    NotificationType
-  channel             NotificationChannel @default(SMS)
+  channel             NotificationChannel      @default(SMS)
   status              NotificationOutboxStatus @default(PENDING)
 
-  practiceLocationId   String?
-  appointmentId        String?
-  scheduledReminderId  String? @unique
-  commandIdempotencyId String?
-  otpVerificationId    String? @unique
+  practiceLocationId    String?
+  appointmentId         String?
+  scheduledReminderId   String? @unique
+  commandIdempotencyId  String?
+  otpVerificationId     String? @unique
   secretaryInvitationId String? @unique
   passwordResetId       String? @unique
   emailVerificationId   String? @unique
 
   recipientMobileEncrypted String?
   recipientEmailEncrypted  String?
-  messageBodyEncrypted      String?
+  messageBodyEncrypted     String?
 
   providerIdempotencyKey String @db.VarChar(128)
 
@@ -1436,7 +1436,7 @@ model NotificationOutbox {
   practiceLocation PracticeLocation? @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
-  scheduledReminder ScheduledReminder? @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
+  scheduledReminder  ScheduledReminder?  @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
   otpVerification    OtpVerification?    @relation("OtpVerificationNotificationOutbox", fields: [otpVerificationId], references: [id], onDelete: Restrict)
   commandIdempotency CommandIdempotency? @relation("CommandIdempotencyNotificationOutboxes", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
@@ -1468,7 +1468,7 @@ model NotificationLog {
   retryRecommended           Boolean
   providerIdempotencyKeyUsed String? @db.VarChar(128)
 
-  submittedAt DateTime @db.Timestamptz(3)
+  submittedAt DateTime  @db.Timestamptz(3)
   resolvedAt  DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -1497,13 +1497,14 @@ model DoctorFinancialAccount {
 
   entitlement DoctorSubscriptionEntitlement?
 
-  commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyDoctorFinancialAccount")
-
-  @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
-  subscriptionPurchases SubscriptionPurchase[]
+  commandIdempotencies      CommandIdempotency[]      @relation("CommandIdempotencyDoctorFinancialAccount")
+  subscriptionPurchases     SubscriptionPurchase[]
   creditEntries             SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryOwner")
   counterpartyCreditEntries SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryCounterparty")
-  refundRequests RefundRequest[]
+  refundRequests            RefundRequest[]
+  financialAccessSessions   FinancialAccessSession[]
+
+  @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1526,10 +1527,10 @@ model SubscriptionPurchase {
   doctorFinancialAccountId String
   purchasedByUserId        String
 
-  monthsPurchased      Int
-  monthlyPriceSnapshot Decimal @db.Decimal(18, 2)
-  grossAmount          Decimal @db.Decimal(18, 2)
-  creditAmountApplied  Decimal @db.Decimal(18, 2)
+  monthsPurchased        Int
+  monthlyPriceSnapshot   Decimal @db.Decimal(18, 2)
+  grossAmount            Decimal @db.Decimal(18, 2)
+  creditAmountApplied    Decimal @db.Decimal(18, 2)
   externalAmountRequired Decimal @db.Decimal(18, 2)
 
   periodStart DateTime @db.Timestamptz(3)
@@ -1546,12 +1547,12 @@ model SubscriptionPurchase {
   purchasedByUser        User                   @relation("SubscriptionPurchasePurchasedBy", fields: [purchasedByUserId], references: [id], onDelete: Restrict)
   commandIdempotency     CommandIdempotency?    @relation("SubscriptionPurchaseCommandIdempotency", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
-  payments SubscriptionPayment[]
+  payments      SubscriptionPayment[]
+  creditEntries SubscriptionCreditEntry[]
 
   @@index([doctorFinancialAccountId, createdAt], map: "SubscriptionPurchase_financialAccount_created_idx")
   @@index([purchasedByUserId, createdAt], map: "SubscriptionPurchase_purchasedBy_created_idx")
   @@index([status, createdAt], map: "SubscriptionPurchase_status_created_idx")
-  creditEntries SubscriptionCreditEntry[]
 }
 
 model SubscriptionPayment {
@@ -1559,13 +1560,13 @@ model SubscriptionPayment {
 
   subscriptionPurchaseId String
 
-  provider                 String @db.VarChar(100)
-  providerPaymentReference String @db.VarChar(200)
+  provider                 String  @db.VarChar(100)
+  providerPaymentReference String  @db.VarChar(200)
   amount                   Decimal @db.Decimal(18, 2)
 
   status SubscriptionPaymentStatus @default(PENDING)
 
-  initiatedAt DateTime @db.Timestamptz(3)
+  initiatedAt DateTime  @db.Timestamptz(3)
   confirmedAt DateTime? @db.Timestamptz(3)
   failedAt    DateTime? @db.Timestamptz(3)
 
@@ -1584,20 +1585,20 @@ model SubscriptionCreditEntry {
 
   doctorFinancialAccountId String
   entryType                SubscriptionCreditEntryType
-  amount                   Decimal @db.Decimal(18, 2)
+  amount                   Decimal                     @db.Decimal(18, 2)
 
-  subscriptionPurchaseId              String?
-  refundRequestId                     String?
+  subscriptionPurchaseId               String?
+  refundRequestId                      String?
   counterpartyDoctorFinancialAccountId String?
-  relatedCreditEntryId                String?
-  commandIdempotencyId                String?
+  relatedCreditEntryId                 String?
+  commandIdempotencyId                 String?
 
   occurredAt DateTime @db.Timestamptz(3)
 
-  doctorFinancialAccount DoctorFinancialAccount @relation("SubscriptionCreditEntryOwner", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
-  subscriptionPurchase  SubscriptionPurchase?   @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
+  doctorFinancialAccount             DoctorFinancialAccount  @relation("SubscriptionCreditEntryOwner", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  subscriptionPurchase               SubscriptionPurchase?   @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
   counterpartyDoctorFinancialAccount DoctorFinancialAccount? @relation("SubscriptionCreditEntryCounterparty", fields: [counterpartyDoctorFinancialAccountId], references: [id], onDelete: Restrict)
-  commandIdempotency CommandIdempotency? @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+  commandIdempotency                 CommandIdempotency?     @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
   relatedCreditEntry SubscriptionCreditEntry?  @relation("SubscriptionCreditEntryRelated", fields: [relatedCreditEntryId], references: [id], onDelete: Restrict)
   relatedByEntries   SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryRelated")
@@ -1618,13 +1619,13 @@ model RefundRequest {
   doctorFinancialAccountId String
   requestedAmount          Decimal @db.Decimal(18, 2)
 
-  reasonCode      String  @db.VarChar(100)
-  otherReasonText String? @db.VarChar(1000)
+  reasonCode      String       @db.VarChar(100)
+  otherReasonText String?      @db.VarChar(1000)
   method          RefundMethod
 
-  accountNameProtected  String
-  destinationProtected  String
-  destinationLast4      String @db.VarChar(4)
+  accountNameProtected String
+  destinationProtected String
+  destinationLast4     String @db.VarChar(4)
 
   status RefundRequestStatus @default(PENDING)
 
@@ -1638,12 +1639,12 @@ model RefundRequest {
 
   commandIdempotencyId String? @unique
 
-  doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
-  processedBySystemAdminUser User? @relation("RefundRequestProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
-  commandIdempotency CommandIdempotency? @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+  doctorFinancialAccount     DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  processedBySystemAdminUser User?                  @relation("RefundRequestProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
+  commandIdempotency         CommandIdempotency?    @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
-  creditEntries       SubscriptionCreditEntry[]
-  processingAttempts  RefundProcessingAttempt[]
+  creditEntries      SubscriptionCreditEntry[]
+  processingAttempts RefundProcessingAttempt[]
 
   @@index([doctorFinancialAccountId, submittedAt], map: "RefundRequest_financialAccount_submitted_idx")
   @@index([status, submittedAt], map: "RefundRequest_status_submitted_idx")
@@ -1653,50 +1654,89 @@ model RefundRequest {
 model RefundProcessingAttempt {
   id String @id @default(uuid())
 
-  refundRequestId String
+  refundRequestId              String
   processedBySystemAdminUserId String?
 
-  provider         String @db.VarChar(100)
-  attemptReference String @db.VarChar(255)
+  provider         String   @db.VarChar(100)
+  attemptReference String   @db.VarChar(255)
   attemptedAt      DateTime @db.Timestamptz(3)
 
   outcome                String  @db.VarChar(100)
   failureCategory        String? @db.VarChar(100)
   failureDetailSanitized String? @db.VarChar(1000)
 
-  refundRequest RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
-  processedBySystemAdminUser User? @relation("RefundProcessingAttemptProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
+  refundRequest              RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
+  processedBySystemAdminUser User?         @relation("RefundProcessingAttemptProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
 
   @@index([refundRequestId, attemptedAt], map: "RefundProcessingAttempt_refund_attempted_idx")
   @@index([processedBySystemAdminUserId, attemptedAt], map: "RefundProcessingAttempt_admin_attempted_idx")
   @@index([provider, attemptReference], map: "RefundProcessingAttempt_provider_reference_idx")
 }
 
+model FinancialAccessChallenge {
+  id String @id @default(uuid())
+
+  recoveryEmailHash       String @db.VarChar(64)
+  recipientEmailEncrypted String
+  codeHash                String @db.VarChar(64)
+
+  expiresAt     DateTime  @db.Timestamptz(3)
+  attemptCount  Int       @default(0)
+  verifiedAt    DateTime? @db.Timestamptz(3)
+  consumedAt    DateTime? @db.Timestamptz(3)
+  invalidatedAt DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  sessions FinancialAccessSession[]
+
+  @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
+  @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
+}
+
+model FinancialAccessSession {
+  id String @id @default(uuid())
+
+  doctorFinancialAccountId String
+  sourceChallengeId        String @unique
+  tokenHash                String @unique @db.VarChar(64)
+
+  expiresAt  DateTime  @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  lastUsedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  doctorFinancialAccount DoctorFinancialAccount   @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  sourceChallenge        FinancialAccessChallenge @relation(fields: [sourceChallengeId], references: [id], onDelete: Restrict)
+
+  @@index([doctorFinancialAccountId, expiresAt], map: "FinancialAccessSession_financialAccount_expires_idx")
+  @@index([expiresAt], map: "FinancialAccessSession_expires_idx")
+}
+
 model CommandIdempotency {
   id String @id @default(uuid())
 
-  idempotencyKey     String @db.VarChar(100)
-  commandIdentityKey String @unique @db.VarChar(64)
+  idempotencyKey     String      @db.VarChar(100)
+  commandIdentityKey String      @unique @db.VarChar(64)
   commandType        CommandType
-  requestFingerprint String @db.VarChar(64)
+  requestFingerprint String      @db.VarChar(64)
 
-  practiceLocationId String?
-  serviceDate        DateTime? @db.Date
-  appointmentId      String?
-  bookingDraftId     String?
+  practiceLocationId       String?
+  serviceDate              DateTime? @db.Date
+  appointmentId            String?
+  bookingDraftId           String?
   bookingRecoveryAttemptId String?
-  actorUserId        String?
-  accountUserId      String?
+  actorUserId              String?
+  accountUserId            String?
 
   bookingGroupId                String?
   bookingGroupRecoveryAttemptId String?
 
   doctorFinancialAccountId String?
 
-  resultAppointmentId              String?
-  resultQueueEventId               String?
-  resultBookingGroupId             String?
-  resultBookingGroupAccessTokenId  String?
+  resultAppointmentId                 String?
+  resultQueueEventId                  String?
+  resultBookingGroupId                String?
+  resultBookingGroupAccessTokenId     String?
   resultAdministrativeAccountActionId String?
 
   completedAt DateTime @db.Timestamptz(3)
@@ -1708,19 +1748,23 @@ model CommandIdempotency {
   actorUser        User?             @relation("CommandIdempotencyActorUser", fields: [actorUserId], references: [id], onDelete: Restrict)
   accountUser      User?             @relation("CommandIdempotencyAccountUser", fields: [accountUserId], references: [id], onDelete: Restrict)
 
-  bookingRecoveryAttempt BookingRecoveryAttempt? @relation("CommandIdempotencyBookingRecoveryAttempt", fields: [bookingRecoveryAttemptId], references: [id], onDelete: SetNull)
-  bookingGroupScope BookingGroup? @relation("CommandIdempotencyBookingGroupScope", fields: [bookingGroupId], references: [id], onDelete: SetNull)
+  bookingRecoveryAttempt      BookingRecoveryAttempt?      @relation("CommandIdempotencyBookingRecoveryAttempt", fields: [bookingRecoveryAttemptId], references: [id], onDelete: SetNull)
+  bookingGroupScope           BookingGroup?                @relation("CommandIdempotencyBookingGroupScope", fields: [bookingGroupId], references: [id], onDelete: SetNull)
   bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation("CommandIdempotencyBookingGroupRecoveryAttempt", fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: SetNull)
 
-  resultAppointment Appointment? @relation("CommandIdempotencyResultAppointment", fields: [resultAppointmentId], references: [id], onDelete: SetNull)
-  resultQueueEvent QueueEvent? @relation("CommandIdempotencyResultQueueEvent", fields: [resultQueueEventId], references: [id], onDelete: Restrict)
-  resultBookingGroup BookingGroup? @relation("CommandIdempotencyResultBookingGroup", fields: [resultBookingGroupId], references: [id], onDelete: SetNull)
-  resultBookingGroupAccessToken BookingGroupAccessToken? @relation("CommandIdempotencyResultBookingGroupAccessToken", fields: [resultBookingGroupAccessTokenId], references: [id], onDelete: SetNull)
+  resultAppointment                 Appointment?                 @relation("CommandIdempotencyResultAppointment", fields: [resultAppointmentId], references: [id], onDelete: SetNull)
+  resultQueueEvent                  QueueEvent?                  @relation("CommandIdempotencyResultQueueEvent", fields: [resultQueueEventId], references: [id], onDelete: Restrict)
+  resultBookingGroup                BookingGroup?                @relation("CommandIdempotencyResultBookingGroup", fields: [resultBookingGroupId], references: [id], onDelete: SetNull)
+  resultBookingGroupAccessToken     BookingGroupAccessToken?     @relation("CommandIdempotencyResultBookingGroupAccessToken", fields: [resultBookingGroupAccessTokenId], references: [id], onDelete: SetNull)
   resultAdministrativeAccountAction AdministrativeAccountAction? @relation("CommandIdempotencyAdministrativeAccountActionResult", fields: [resultAdministrativeAccountActionId], references: [id], onDelete: Restrict)
 
-  notificationOutboxes   NotificationOutbox[]        @relation("CommandIdempotencyNotificationOutboxes")
-  applicationNotifications ApplicationNotification[] @relation("CommandIdempotencyApplicationNotifications")
-  permanentClosureAudits AccountPermanentClosureAudit[] @relation("CommandIdempotencyPermanentClosureAudits")
+  notificationOutboxes      NotificationOutbox[]           @relation("CommandIdempotencyNotificationOutboxes")
+  applicationNotifications  ApplicationNotification[]      @relation("CommandIdempotencyApplicationNotifications")
+  permanentClosureAudits    AccountPermanentClosureAudit[] @relation("CommandIdempotencyPermanentClosureAudits")
+  doctorFinancialAccount    DoctorFinancialAccount?        @relation("CommandIdempotencyDoctorFinancialAccount", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  subscriptionPurchases     SubscriptionPurchase[]         @relation("SubscriptionPurchaseCommandIdempotency")
+  subscriptionCreditEntries SubscriptionCreditEntry[]
+  refundRequests            RefundRequest[]
 
   @@index([expiresAt], map: "CommandIdempotency_expires_idx")
   @@index([practiceLocationId, serviceDate], map: "CommandIdempotency_location_date_idx")
@@ -1737,10 +1781,6 @@ model CommandIdempotency {
   @@index([resultBookingGroupId], map: "CommandIdempotency_resultBookingGroup_idx")
   @@index([resultBookingGroupAccessTokenId], map: "CommandIdempotency_resultGroupToken_idx")
   @@index([resultAdministrativeAccountActionId], map: "CommandIdempotency_resultAdminAction_idx")
-  doctorFinancialAccount DoctorFinancialAccount? @relation("CommandIdempotencyDoctorFinancialAccount", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
-  subscriptionPurchases SubscriptionPurchase[] @relation("SubscriptionPurchaseCommandIdempotency")
-  subscriptionCreditEntries SubscriptionCreditEntry[]
-  refundRequests RefundRequest[]
 }
 
 model BookingDraft {
@@ -1929,15 +1969,15 @@ model QueueEvent {
 
   appointmentLinks QueueEventAppointmentLink[]
 
-  reversesQueueEvent   QueueEvent? @relation("QueueEventReversal", fields: [reversesQueueEventId], references: [id], onDelete: Restrict)
-  reversedByQueueEvent QueueEvent? @relation("QueueEventReversal")
+  reversesQueueEvent         QueueEvent?          @relation("QueueEventReversal", fields: [reversesQueueEventId], references: [id], onDelete: Restrict)
+  reversedByQueueEvent       QueueEvent?          @relation("QueueEventReversal")
+  resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultQueueEvent")
 
   @@unique([practiceLocationId, serviceDate, queueEventSequence], map: "QueueEvent_scope_sequence_key")
   @@index([practiceLocationId, serviceDate, queueEventSequence], map: "QueueEvent_scope_sequence_idx")
   @@index([practiceLocationId, serviceDate, createdAt])
   @@index([actorUserId, createdAt])
   @@index([type, createdAt])
-  resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultQueueEvent")
 }
 
 model QueueEventAppointmentLink {
