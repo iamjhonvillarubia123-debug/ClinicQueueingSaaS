@@ -167,6 +167,16 @@ enum NotificationType {
   SECRETARY_INVITATION
   PASSWORD_RESET
   DOCTOR_EMAIL_VERIFICATION
+  FINANCIAL_ACCESS_VERIFICATION
+  SUBSCRIPTION_GRACE_ENTERED
+  SUBSCRIPTION_PAYMENT_SUCCEEDED
+  SUBSCRIPTION_SUSPENDED
+  SUBSCRIPTION_RESTORED
+  REFUND_REQUEST_SUBMITTED
+  REFUND_COMPLETED
+  REFUND_FAILED
+  COMPLIANCE_SUSPENSION_IMPOSED
+  COMPLIANCE_SUSPENSION_LIFTED
 }
 
 enum NotificationAttemptOutcome {
@@ -553,6 +563,7 @@ model AdministrativeAccountAction {
 
   scopes                     AdministrativeAccountActionScope[]
   resultCommandIdempotencies CommandIdempotency[]               @relation("CommandIdempotencyAdministrativeAccountActionResult")
+  notificationOutboxes       NotificationOutbox[]
 
   @@index([targetDoctorUserId, occurredAt])
   @@index([actorUserId, occurredAt])
@@ -1406,14 +1417,19 @@ model NotificationOutbox {
   channel             NotificationChannel      @default(SMS)
   status              NotificationOutboxStatus @default(PENDING)
 
-  practiceLocationId    String?
-  appointmentId         String?
-  scheduledReminderId   String? @unique
-  commandIdempotencyId  String?
-  otpVerificationId     String? @unique
-  secretaryInvitationId String? @unique
-  passwordResetId       String? @unique
-  emailVerificationId   String? @unique
+  practiceLocationId             String?
+  appointmentId                  String?
+  scheduledReminderId            String? @unique
+  commandIdempotencyId           String?
+  otpVerificationId              String? @unique
+  secretaryInvitationId          String? @unique
+  passwordResetId                String? @unique
+  emailVerificationId            String? @unique
+  financialAccessChallengeId     String?
+  subscriptionEntitlementEventId String?
+  subscriptionPurchaseId         String?
+  refundRequestId                String?
+  administrativeAccountActionId  String?
 
   recipientMobileEncrypted String?
   recipientEmailEncrypted  String?
@@ -1442,9 +1458,14 @@ model NotificationOutbox {
   practiceLocation PracticeLocation? @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
-  scheduledReminder  ScheduledReminder?  @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
-  otpVerification    OtpVerification?    @relation("OtpVerificationNotificationOutbox", fields: [otpVerificationId], references: [id], onDelete: Restrict)
-  commandIdempotency CommandIdempotency? @relation("CommandIdempotencyNotificationOutboxes", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+  scheduledReminder            ScheduledReminder?            @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
+  otpVerification              OtpVerification?              @relation("OtpVerificationNotificationOutbox", fields: [otpVerificationId], references: [id], onDelete: Restrict)
+  commandIdempotency           CommandIdempotency?           @relation("CommandIdempotencyNotificationOutboxes", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
+  financialAccessChallenge     FinancialAccessChallenge?     @relation(fields: [financialAccessChallengeId], references: [id], onDelete: Restrict)
+  subscriptionEntitlementEvent SubscriptionEntitlementEvent? @relation(fields: [subscriptionEntitlementEventId], references: [id], onDelete: Restrict)
+  subscriptionPurchase         SubscriptionPurchase?         @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
+  refundRequest                RefundRequest?                @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
+  administrativeAccountAction  AdministrativeAccountAction?  @relation(fields: [administrativeAccountActionId], references: [id], onDelete: Restrict)
 
   notificationLogs NotificationLog[]
 
@@ -1453,7 +1474,12 @@ model NotificationOutbox {
   @@index([practiceLocationId, createdAt], map: "NotificationOutbox_location_created_idx")
   @@index([appointmentId], map: "NotificationOutbox_appointment_idx")
   @@index([commandIdempotencyId], map: "NotificationOutbox_command_idx")
+  @@index([refundRequestId], map: "NotificationOutbox_refundRequest_idx")
   @@index([expiresAt], map: "NotificationOutbox_expires_idx")
+  @@index([financialAccessChallengeId], map: "NotificationOutbox_financialAccessChallenge_idx")
+  @@index([subscriptionEntitlementEventId], map: "NotificationOutbox_subscriptionEntitlementEvent_idx")
+  @@index([subscriptionPurchaseId], map: "NotificationOutbox_subscriptionPurchase_idx")
+  @@index([administrativeAccountActionId], map: "NotificationOutbox_administrativeAccountAction_idx")
 }
 
 model NotificationLog {
@@ -1503,15 +1529,15 @@ model DoctorFinancialAccount {
 
   entitlement DoctorSubscriptionEntitlement?
 
-  commandIdempotencies      CommandIdempotency[]      @relation("CommandIdempotencyDoctorFinancialAccount")
-  subscriptionPurchases     SubscriptionPurchase[]
-  creditEntries             SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryOwner")
-  counterpartyCreditEntries SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryCounterparty")
-  refundRequests            RefundRequest[]
-  financialAccessSessions   FinancialAccessSession[]
+  commandIdempotencies          CommandIdempotency[]           @relation("CommandIdempotencyDoctorFinancialAccount")
+  subscriptionPurchases         SubscriptionPurchase[]
+  creditEntries                 SubscriptionCreditEntry[]      @relation("SubscriptionCreditEntryOwner")
+  counterpartyCreditEntries     SubscriptionCreditEntry[]      @relation("SubscriptionCreditEntryCounterparty")
+  refundRequests                RefundRequest[]
+  financialAccessSessions       FinancialAccessSession[]
+  subscriptionEntitlementEvents SubscriptionEntitlementEvent[]
 
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
-  subscriptionEntitlementEvents SubscriptionEntitlementEvent[]
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1525,8 +1551,8 @@ model DoctorSubscriptionEntitlement {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
-  events SubscriptionEntitlementEvent[]
+  doctorFinancialAccount DoctorFinancialAccount         @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
+  events                 SubscriptionEntitlementEvent[]
 }
 
 model SubscriptionPurchase {
@@ -1555,13 +1581,14 @@ model SubscriptionPurchase {
   purchasedByUser        User                   @relation("SubscriptionPurchasePurchasedBy", fields: [purchasedByUserId], references: [id], onDelete: Restrict)
   commandIdempotency     CommandIdempotency?    @relation("SubscriptionPurchaseCommandIdempotency", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
-  payments      SubscriptionPayment[]
-  creditEntries SubscriptionCreditEntry[]
+  payments             SubscriptionPayment[]
+  creditEntries        SubscriptionCreditEntry[]
+  notificationOutboxes NotificationOutbox[]
+  entitlementEvents    SubscriptionEntitlementEvent[]
 
   @@index([doctorFinancialAccountId, createdAt], map: "SubscriptionPurchase_financialAccount_created_idx")
   @@index([purchasedByUserId, createdAt], map: "SubscriptionPurchase_purchasedBy_created_idx")
   @@index([status, createdAt], map: "SubscriptionPurchase_status_created_idx")
-  entitlementEvents SubscriptionEntitlementEvent[]
 }
 
 model SubscriptionPayment {
@@ -1652,8 +1679,9 @@ model RefundRequest {
   processedBySystemAdminUser User?                  @relation("RefundRequestProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
   commandIdempotency         CommandIdempotency?    @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
 
-  creditEntries      SubscriptionCreditEntry[]
-  processingAttempts RefundProcessingAttempt[]
+  creditEntries        SubscriptionCreditEntry[]
+  processingAttempts   RefundProcessingAttempt[]
+  notificationOutboxes NotificationOutbox[]
 
   @@index([doctorFinancialAccountId, submittedAt], map: "RefundRequest_financialAccount_submitted_idx")
   @@index([status, submittedAt], map: "RefundRequest_status_submitted_idx")
@@ -1696,7 +1724,8 @@ model FinancialAccessChallenge {
   invalidatedAt DateTime? @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
 
-  sessions FinancialAccessSession[]
+  sessions             FinancialAccessSession[]
+  notificationOutboxes NotificationOutbox[]
 
   @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
   @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
@@ -1727,13 +1756,14 @@ model SubscriptionEntitlementEvent {
   doctorSubscriptionEntitlementId String
   doctorFinancialAccountId        String
   eventType                       SubscriptionEntitlementEventType
-  effectiveAt                     DateTime @db.Timestamptz(3)
+  effectiveAt                     DateTime                         @db.Timestamptz(3)
   subscriptionPurchaseId          String?
-  createdAt                       DateTime @default(now()) @db.Timestamptz(3)
+  createdAt                       DateTime                         @default(now()) @db.Timestamptz(3)
 
   doctorSubscriptionEntitlement DoctorSubscriptionEntitlement @relation(fields: [doctorSubscriptionEntitlementId], references: [id], onDelete: Restrict)
   doctorFinancialAccount        DoctorFinancialAccount        @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   subscriptionPurchase          SubscriptionPurchase?         @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
+  notificationOutboxes          NotificationOutbox[]
 
   @@unique([doctorSubscriptionEntitlementId, eventType, effectiveAt], map: "SubscriptionEntitlementEvent_transition_occurrence_key")
   @@index([doctorFinancialAccountId, effectiveAt], map: "SubscriptionEntitlementEvent_financialAccount_effective_idx")
