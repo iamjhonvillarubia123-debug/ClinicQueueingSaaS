@@ -4,6 +4,7 @@ import {
   Headers,
   Param,
   Post,
+  Put,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -13,6 +14,8 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { CreateSecretarySettingsDraftDto } from './dto/create-secretary-settings-draft.dto';
 import { ReviewSecretarySettingsDraftDto } from './dto/review-secretary-settings-draft.dto';
+import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
+import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
 
 @Controller('secretary-settings-drafts')
@@ -20,6 +23,7 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
 export class SecretarySettingsDraftController {
   constructor(
     private readonly secretarySettingsDraftService: SecretarySettingsDraftService,
+    private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
   ) {}
 
   @Post()
@@ -28,6 +32,19 @@ export class SecretarySettingsDraftController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.secretarySettingsDraftService.create(request.user.userId, dto);
+  }
+
+  @Put(':draftId/practice-schedule')
+  upsertPracticeSchedule(
+    @Param('draftId') draftId: string,
+    @Body() dto: UpsertSecretarySettingsDraftPracticeScheduleDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftScheduleService.upsertPracticeSchedule(
+      request.user.userId,
+      draftId,
+      dto,
+    );
   }
 
   @Post(':draftId/submit')
