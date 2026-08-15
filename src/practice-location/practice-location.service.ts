@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { PracticeLocationLifecycleStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
@@ -63,7 +67,9 @@ export class PracticeLocationService {
         cityMunicipality: this.normalizeOptionalText(
           createPracticeLocationDto.cityMunicipality,
         ),
-        province: this.normalizeOptionalText(createPracticeLocationDto.province),
+        province: this.normalizeOptionalText(
+          createPracticeLocationDto.province,
+        ),
         postalCode: this.normalizeOptionalText(
           createPracticeLocationDto.postalCode,
         ),
