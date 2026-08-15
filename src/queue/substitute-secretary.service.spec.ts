@@ -2,7 +2,6 @@ import { createHash } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdministrativeRestrictionStatus,
-  ClinicDayOperatingStaffChangeType,
   ClinicDayStatus,
   CommandType,
   PracticeStaffRole,
@@ -56,7 +55,9 @@ describe('SubstituteSecretaryService', () => {
     );
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.commandIdempotency.create.mockResolvedValue({ id: 'cmd-1' });
+    prismaServiceMock.commandIdempotency.create.mockResolvedValue({
+      id: 'cmd-1',
+    });
     prismaServiceMock.clinicDay.update.mockResolvedValue({});
     prismaServiceMock.clinicDayOperatingStaffAudit.create.mockResolvedValue({});
     prismaServiceMock.user.findUnique.mockResolvedValue({
@@ -151,14 +152,12 @@ describe('SubstituteSecretaryService', () => {
         },
       ])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([readyStaff('staff-regular', 'secretary-regular')]);
+      .mockResolvedValueOnce([
+        readyStaff('staff-regular', 'secretary-regular'),
+      ]);
 
     await expect(
-      service.end(
-        'doctor-1',
-        { clinicDayId: 'clinic-day-1' },
-        'end-sub-key',
-      ),
+      service.end('doctor-1', { clinicDayId: 'clinic-day-1' }, 'end-sub-key'),
     ).resolves.toEqual({
       ended: true,
       replayed: false,
@@ -187,11 +186,7 @@ describe('SubstituteSecretaryService', () => {
       .mockResolvedValueOnce([]);
 
     await expect(
-      service.end(
-        'doctor-1',
-        { clinicDayId: 'clinic-day-1' },
-        'end-sub-key',
-      ),
+      service.end('doctor-1', { clinicDayId: 'clinic-day-1' }, 'end-sub-key'),
     ).resolves.toEqual({
       ended: true,
       replayed: false,
