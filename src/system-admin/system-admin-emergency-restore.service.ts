@@ -49,7 +49,9 @@ export class SystemAdminEmergencyRestoreService {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     const normalizedResolutionText = resolutionText.trim();
     if (!normalizedResolutionText) {
-      throw new BadRequestException('Emergency restoration resolution is required.');
+      throw new BadRequestException(
+        'Emergency restoration resolution is required.',
+      );
     }
 
     const commandType = CommandType.SYSTEM_ADMIN_EMERGENCY_RESTORE_DOCTOR;
@@ -206,7 +208,10 @@ export class SystemAdminEmergencyRestoreService {
       FOR UPDATE OF emergency
     `);
     const emergencyAction = rows[0];
-    if (!emergencyAction || emergencyAction.targetDoctorUserId !== targetDoctorUserId) {
+    if (
+      !emergencyAction ||
+      emergencyAction.targetDoctorUserId !== targetDoctorUserId
+    ) {
       throw new ConflictException(
         'No unresolved emergency suspension is available for restoration.',
       );
@@ -292,7 +297,8 @@ export class SystemAdminEmergencyRestoreService {
     });
     if (
       !action ||
-      action.actionType !== AdministrativeAccountActionType.EMERGENCY_RESTORATION ||
+      action.actionType !==
+        AdministrativeAccountActionType.EMERGENCY_RESTORATION ||
       action.targetDoctorUserId !== expectedTargetDoctorUserId
     ) {
       throw new InternalServerErrorException(

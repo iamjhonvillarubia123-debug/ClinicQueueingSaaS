@@ -21,18 +21,27 @@ describe('SystemAdminEmergencyRestoreService', () => {
     commandIdempotency: { findUnique: jest.fn(), create: jest.fn() },
   };
   const prisma = {
-    $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
+      callback(tx),
+    ),
   } as unknown as PrismaService;
   const passwordVerify = jest.fn().mockResolvedValue(true);
-  const passwordSecurity = { verify: passwordVerify } as unknown as PasswordSecurityService;
-  const service = new SystemAdminEmergencyRestoreService(prisma, passwordSecurity);
+  const passwordSecurity = {
+    verify: passwordVerify,
+  } as unknown as PasswordSecurityService;
+  const service = new SystemAdminEmergencyRestoreService(
+    prisma,
+    passwordSecurity,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
     tx.$executeRaw.mockResolvedValue(0);
     tx.$queryRaw.mockResolvedValue([]);
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
-    tx.administrativeAccountAction.create.mockResolvedValue({ id: 'restore-1' });
+    tx.administrativeAccountAction.create.mockResolvedValue({
+      id: 'restore-1',
+    });
     tx.user.update.mockResolvedValue({});
     tx.userSession.updateMany.mockResolvedValue({ count: 1 });
     tx.commandIdempotency.create.mockResolvedValue({});
@@ -42,13 +51,15 @@ describe('SystemAdminEmergencyRestoreService', () => {
   function arrangeTarget(status: AdministrativeRestrictionStatus) {
     tx.user.findUnique
       .mockResolvedValueOnce({
-        id: 'admin-1', role: UserRole.SYSTEM_ADMIN,
+        id: 'admin-1',
+        role: UserRole.SYSTEM_ADMIN,
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
         passwordHash: 'admin-hash',
       })
       .mockResolvedValueOnce({
-        id: 'doctor-1', role: UserRole.DOCTOR,
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: status,
       });
@@ -58,25 +69,41 @@ describe('SystemAdminEmergencyRestoreService', () => {
     arrangeTarget(AdministrativeRestrictionStatus.EMERGENCY_SUSPENDED);
     tx.$queryRaw
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: 'emergency-1', targetDoctorUserId: 'doctor-1', occurredAt: new Date('2026-08-15T10:00:00Z') }])
+      .mockResolvedValueOnce([
+        {
+          id: 'emergency-1',
+          targetDoctorUserId: 'doctor-1',
+          occurredAt: new Date('2026-08-15T10:00:00Z'),
+        },
+      ])
       .mockResolvedValueOnce([]);
 
-    await expect(service.emergencyRestoreDoctor(
-      'admin-1', 'doctor-1', 'Emergency resolved.', 'admin-password', 'restore-key',
-    )).resolves.toEqual({
-      restored: true, replayed: false,
+    await expect(
+      service.emergencyRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Emergency resolved.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).resolves.toEqual({
+      restored: true,
+      replayed: false,
       administrativeAccountActionId: 'restore-1',
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     });
 
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'doctor-1' },
-      data: { administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE },
+      data: {
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      },
     });
     expect(tx.administrativeAccountAction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         actionType: AdministrativeAccountActionType.EMERGENCY_RESTORATION,
-        restoresActionId: 'emergency-1', resolutionText: 'Emergency resolved.',
+        restoresActionId: 'emergency-1',
+        resolutionText: 'Emergency resolved.',
       }) as unknown,
       select: { id: true },
     });
@@ -87,39 +114,69 @@ describe('SystemAdminEmergencyRestoreService', () => {
     arrangeTarget(AdministrativeRestrictionStatus.EMERGENCY_SUSPENDED);
     tx.$queryRaw
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: 'emergency-1', targetDoctorUserId: 'doctor-1', occurredAt: new Date('2026-08-15T10:00:00Z') }])
+      .mockResolvedValueOnce([
+        {
+          id: 'emergency-1',
+          targetDoctorUserId: 'doctor-1',
+          occurredAt: new Date('2026-08-15T10:00:00Z'),
+        },
+      ])
       .mockResolvedValueOnce([{ id: 'normal-1' }]);
 
     const result = await service.emergencyRestoreDoctor(
-      'admin-1', 'doctor-1', 'Emergency resolved.', 'admin-password', 'restore-key',
+      'admin-1',
+      'doctor-1',
+      'Emergency resolved.',
+      'admin-password',
+      'restore-key',
     );
-    expect(result.administrativeRestrictionStatus).toBe(AdministrativeRestrictionStatus.SUSPENDED);
+    expect(result.administrativeRestrictionStatus).toBe(
+      AdministrativeRestrictionStatus.SUSPENDED,
+    );
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'doctor-1' },
-      data: { administrativeRestrictionStatus: AdministrativeRestrictionStatus.SUSPENDED },
+      data: {
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.SUSPENDED,
+      },
     });
   });
 
   it('rejects restore from any state other than EMERGENCY_SUSPENDED', async () => {
     arrangeTarget(AdministrativeRestrictionStatus.SUSPENDED);
-    await expect(service.emergencyRestoreDoctor(
-      'admin-1', 'doctor-1', 'Resolved.', 'admin-password', 'restore-key',
-    )).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.emergencyRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Resolved.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('requires fresh SYSTEM_ADMIN password step-up', async () => {
     arrangeTarget(AdministrativeRestrictionStatus.EMERGENCY_SUSPENDED);
     passwordVerify.mockResolvedValue(false);
-    await expect(service.emergencyRestoreDoctor(
-      'admin-1', 'doctor-1', 'Resolved.', 'wrong-password', 'restore-key',
-    )).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(
+      service.emergencyRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Resolved.',
+        'wrong-password',
+        'restore-key',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
     expect(tx.user.update).not.toHaveBeenCalled();
   });
 
   it('replays committed emergency restoration without applying effects again', async () => {
     arrangeTarget(AdministrativeRestrictionStatus.NONE);
     const fingerprint = createHash('sha256')
-      .update(`${CommandType.SYSTEM_ADMIN_EMERGENCY_RESTORE_DOCTOR}|admin-1|doctor-1|Emergency resolved.`, 'utf8')
+      .update(
+        `${CommandType.SYSTEM_ADMIN_EMERGENCY_RESTORE_DOCTOR}|admin-1|doctor-1|Emergency resolved.`,
+        'utf8',
+      )
       .digest('hex');
     tx.commandIdempotency.findUnique.mockResolvedValue({
       requestFingerprint: fingerprint,
@@ -131,10 +188,17 @@ describe('SystemAdminEmergencyRestoreService', () => {
       targetDoctorUserId: 'doctor-1',
     });
 
-    await expect(service.emergencyRestoreDoctor(
-      'admin-1', 'doctor-1', 'Emergency resolved.', 'admin-password', 'restore-key',
-    )).resolves.toEqual({
-      restored: true, replayed: true,
+    await expect(
+      service.emergencyRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Emergency resolved.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).resolves.toEqual({
+      restored: true,
+      replayed: true,
       administrativeAccountActionId: 'restore-1',
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     });
