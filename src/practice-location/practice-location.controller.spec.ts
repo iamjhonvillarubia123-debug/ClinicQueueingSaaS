@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
+import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationController } from './practice-location.controller';
@@ -10,6 +11,7 @@ describe('PracticeLocationController', () => {
   let controller: PracticeLocationController;
 
   const practiceLocationServiceMock = {};
+  const practiceLocationActivationServiceMock = {};
   const practiceLocationLifecycleServiceMock = {};
   const practiceLocationPermanentDeleteServiceMock = {};
   const authenticationServiceMock = {};
@@ -24,6 +26,10 @@ describe('PracticeLocationController', () => {
         {
           provide: PracticeLocationService,
           useValue: practiceLocationServiceMock,
+        },
+        {
+          provide: PracticeLocationActivationService,
+          useValue: practiceLocationActivationServiceMock,
         },
         {
           provide: PracticeLocationLifecycleService,
