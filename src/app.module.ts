@@ -8,6 +8,7 @@ import { PracticeLocationModule } from './practice-location/practice-location.mo
 import { PracticeStaffModule } from './practice-staff/practice-staff.module';
 import { PatientModule } from './patient/patient.module';
 import { BookingModule } from './booking/booking.module';
+import { SecretaryModule } from './secretary/secretary.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { BookingModule } from './booking/booking.module';
     AuthModule,
     PrismaModule,
     DoctorModule,
+    SecretaryModule,
     PracticeLocationModule,
     PracticeStaffModule,
     PatientModule,
