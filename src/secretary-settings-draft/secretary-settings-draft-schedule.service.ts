@@ -39,20 +39,21 @@ export class SecretarySettingsDraftScheduleService {
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
 
       const row = this.normalizeSchedule(dto);
-      const saved = await transaction.secretarySettingsDraftPracticeSchedule.upsert({
-        where: {
-          secretarySettingsDraftId_weekday: {
+      const saved =
+        await transaction.secretarySettingsDraftPracticeSchedule.upsert({
+          where: {
+            secretarySettingsDraftId_weekday: {
+              secretarySettingsDraftId: draft.id,
+              weekday: dto.weekday,
+            },
+          },
+          create: {
             secretarySettingsDraftId: draft.id,
             weekday: dto.weekday,
+            ...row,
           },
-        },
-        create: {
-          secretarySettingsDraftId: draft.id,
-          weekday: dto.weekday,
-          ...row,
-        },
-        update: row,
-      });
+          update: row,
+        });
 
       return {
         saved: true,
@@ -62,7 +63,9 @@ export class SecretarySettingsDraftScheduleService {
     });
   }
 
-  private normalizeSchedule(dto: UpsertSecretarySettingsDraftPracticeScheduleDto) {
+  private normalizeSchedule(
+    dto: UpsertSecretarySettingsDraftPracticeScheduleDto,
+  ) {
     if (!dto.isOpen) {
       if (
         dto.opensAtLocal ||
