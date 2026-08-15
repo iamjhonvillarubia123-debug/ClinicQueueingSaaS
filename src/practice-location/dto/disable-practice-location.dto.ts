@@ -1,4 +1,10 @@
-import { Equals, IsBoolean, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import {
+  Equals,
+  IsBoolean,
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class DisablePracticeLocationDto {
   @IsUUID()
