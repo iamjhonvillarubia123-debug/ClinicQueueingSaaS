@@ -9,6 +9,7 @@ import { PracticeStaffModule } from './practice-staff/practice-staff.module';
 import { PatientModule } from './patient/patient.module';
 import { BookingModule } from './booking/booking.module';
 import { QueueModule } from './queue/queue.module';
+import { ScheduleModule } from './schedule/schedule.module';
 import { SecretaryModule } from './secretary/secretary.module';
 import { SecretarySettingsDraftModule } from './secretary-settings-draft/secretary-settings-draft.module';
 import { SystemAdminModule } from './system-admin/system-admin.module';
@@ -27,6 +28,7 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     PracticeLocationModule,
     PracticeStaffModule,
     QueueModule,
+    ScheduleModule,
     PatientModule,
     BookingModule,
   ],
