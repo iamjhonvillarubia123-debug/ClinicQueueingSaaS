@@ -1,38 +1,38 @@
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreatePracticeLocationDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(200)
-  name!: string;
+  name?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  addressLine1!: string;
+  addressLine1?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(255)
   addressLine2?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(120)
-  cityMunicipality!: string;
+  cityMunicipality?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(120)
-  province!: string;
+  province?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(20)
   postalCode?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(30)
-  contactNumber!: string;
+  contactNumber?: string;
 }
