@@ -38,9 +38,11 @@ describe('SecretarySettingsDraftScheduleService', () => {
         currentAssignmentActive: true,
       },
     ]);
-    prismaServiceMock.secretarySettingsDraftPracticeSchedule.upsert.mockResolvedValue({
-      weekday: Weekday.MONDAY,
-    });
+    prismaServiceMock.secretarySettingsDraftPracticeSchedule.upsert.mockResolvedValue(
+      {
+        weekday: Weekday.MONDAY,
+      },
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -78,17 +80,24 @@ describe('SecretarySettingsDraftScheduleService', () => {
       isOpen: false,
     });
 
-    expect(
-      prismaServiceMock.secretarySettingsDraftPracticeSchedule.upsert,
-    ).toHaveBeenCalledWith(
+    const upsertCall = prismaServiceMock.secretarySettingsDraftPracticeSchedule
+      .upsert.mock.calls[0]?.[0] as {
+      create: {
+        proposedIsOpen: boolean;
+        proposedOpensAtLocal: Date | null;
+        proposedClosesAtLocal: Date | null;
+        proposedMaximumOnlineBookingUntilLocal: Date | null;
+        proposedMaximumOperatingUntilLocal: Date | null;
+      };
+    };
+
+    expect(upsertCall.create).toEqual(
       expect.objectContaining({
-        create: expect.objectContaining({
-          proposedIsOpen: false,
-          proposedOpensAtLocal: null,
-          proposedClosesAtLocal: null,
-          proposedMaximumOnlineBookingUntilLocal: null,
-          proposedMaximumOperatingUntilLocal: null,
-        }),
+        proposedIsOpen: false,
+        proposedOpensAtLocal: null,
+        proposedClosesAtLocal: null,
+        proposedMaximumOnlineBookingUntilLocal: null,
+        proposedMaximumOperatingUntilLocal: null,
       }),
     );
   });
