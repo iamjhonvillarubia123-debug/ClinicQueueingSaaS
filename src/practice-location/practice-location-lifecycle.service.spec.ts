@@ -143,7 +143,8 @@ describe('PracticeLocationLifecycleService', () => {
       prismaServiceMock.scheduledReminder.updateMany,
     ).toHaveBeenCalledTimes(1);
     expect(
-      (prismaServiceMock.practiceStaff as { updateMany?: jest.Mock }).updateMany,
+      (prismaServiceMock.practiceStaff as { updateMany?: jest.Mock })
+        .updateMany,
     ).toBeUndefined();
   });
 
@@ -243,8 +244,7 @@ describe('PracticeLocationLifecycleService', () => {
       .mockResolvedValueOnce([]);
     const fingerprint = createHash('sha256')
       .update(
-        'PRACTICE_LOCATION_DISABLE|doctor-1|location-1|confirmed',
-        'utf8',
+        'PRACTICE_LOCATION_DISABLE|doctor-1|location-1|confirmed', 'utf8',
       )
       .digest('hex');
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
