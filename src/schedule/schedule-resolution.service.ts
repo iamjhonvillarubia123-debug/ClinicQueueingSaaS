@@ -3,7 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PracticeLocationLifecycleStatus } from '../../generated/prisma/client';
+import {
+  PracticeLocationLifecycleStatus,
+  Prisma,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScheduleTimeService } from './schedule-time.service';
 
@@ -19,6 +22,11 @@ export type ResolvedPlannedSchedule = {
   maximumOperatingUntilAt: Date | null;
 };
 
+type ScheduleClient = Pick<
+  Prisma.TransactionClient,
+  'practiceLocation' | 'scheduleException' | 'practiceSchedule'
+>;
+
 @Injectable()
 export class ScheduleResolutionService {
   constructor(
@@ -29,9 +37,11 @@ export class ScheduleResolutionService {
   async resolveConfiguredSchedule(
     practiceLocationId: string,
     serviceDate: string,
+    transaction?: ScheduleClient,
   ): Promise<ResolvedPlannedSchedule> {
+    const db: ScheduleClient = transaction ?? this.prisma;
     const date = this.scheduleTime.parseServiceDate(serviceDate);
-    const location = await this.prisma.practiceLocation.findUnique({
+    const location = await db.practiceLocation.findUnique({
       where: { id: practiceLocationId },
       select: { id: true, timeZone: true },
     });
@@ -47,7 +57,7 @@ export class ScheduleResolutionService {
     this.scheduleTime.assertValidTimeZone(timeZone);
 
     const dateValue = new Date(Date.UTC(date.year, date.month - 1, date.day));
-    const exception = await this.prisma.scheduleException.findUnique({
+    const exception = await db.scheduleException.findUnique({
       where: {
         practiceLocationId_serviceDate: {
           practiceLocationId,
@@ -67,7 +77,7 @@ export class ScheduleResolutionService {
     }
 
     const weekday = this.scheduleTime.weekday(date);
-    const recurring = await this.prisma.practiceSchedule.findUnique({
+    const recurring = await db.practiceSchedule.findUnique({
       where: {
         practiceLocationId_weekday: { practiceLocationId, weekday },
       },
@@ -99,8 +109,10 @@ export class ScheduleResolutionService {
   async resolveOperationalSchedule(
     practiceLocationId: string,
     serviceDate: string,
+    transaction?: ScheduleClient,
   ): Promise<ResolvedPlannedSchedule> {
-    const location = await this.prisma.practiceLocation.findUnique({
+    const db: ScheduleClient = transaction ?? this.prisma;
+    const location = await db.practiceLocation.findUnique({
       where: { id: practiceLocationId },
       select: { lifecycleStatus: true },
     });
@@ -111,6 +123,7 @@ export class ScheduleResolutionService {
       const configured = await this.resolveConfiguredSchedule(
         practiceLocationId,
         serviceDate,
+        db,
       );
       return {
         ...configured,
@@ -121,7 +134,7 @@ export class ScheduleResolutionService {
         maximumOperatingUntilAt: null,
       };
     }
-    return this.resolveConfiguredSchedule(practiceLocationId, serviceDate);
+    return this.resolveConfiguredSchedule(practiceLocationId, serviceDate, db);
   }
 
   private resolveRow(
