@@ -12,13 +12,18 @@ import { UserRole } from '../../generated/prisma/client';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { EmergencySuspendDoctorDto } from './dto/emergency-suspend-doctor.dto';
 import { NormalRestoreDoctorDto } from './dto/normal-restore-doctor.dto';
 import { NormalSuspendDoctorDto } from './dto/normal-suspend-doctor.dto';
+import { SystemAdminEmergencyService } from './system-admin-emergency.service';
 import { SystemAdminService } from './system-admin.service';
 
 @Controller('system-admin')
 export class SystemAdminController {
-  constructor(private readonly systemAdminService: SystemAdminService) {}
+  constructor(
+    private readonly systemAdminService: SystemAdminService,
+    private readonly systemAdminEmergencyService: SystemAdminEmergencyService,
+  ) {}
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('doctors/:doctorUserId/normal-suspend')
@@ -55,6 +60,27 @@ export class SystemAdminController {
       doctorUserId,
       dto.resolutionText,
       dto.adminPassword,
+      idempotencyKey,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('doctors/:doctorUserId/emergency-suspend')
+  emergencySuspendDoctor(
+    @Request() request: AuthenticatedRequest,
+    @Param('doctorUserId') doctorUserId: string,
+    @Body() dto: EmergencySuspendDoctorDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+  ) {
+    this.assertSystemAdminTarget(request, doctorUserId, dto.targetDoctorUserId);
+
+    return this.systemAdminEmergencyService.emergencySuspendDoctor(
+      request.user.userId,
+      doctorUserId,
+      dto.reasonCategory,
+      dto.explanation,
+      dto.adminPassword,
+      dto.confirmStopOperations,
       idempotencyKey,
     );
   }
