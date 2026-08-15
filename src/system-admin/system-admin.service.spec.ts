@@ -34,8 +34,9 @@ describe('SystemAdminService', () => {
     ),
   } as unknown as PrismaService;
 
+  const passwordVerify = jest.fn().mockResolvedValue(true);
   const passwordSecurity = {
-    verify: jest.fn().mockResolvedValue(true),
+    verify: passwordVerify,
   } as unknown as PasswordSecurityService;
 
   const service = new SystemAdminService(prisma, passwordSecurity);
@@ -49,7 +50,7 @@ describe('SystemAdminService', () => {
     tx.user.update.mockResolvedValue({});
     tx.userSession.updateMany.mockResolvedValue({ count: 2 });
     tx.commandIdempotency.create.mockResolvedValue({});
-    passwordSecurity.verify.mockResolvedValue(true);
+    passwordVerify.mockResolvedValue(true);
   });
 
   it('normally suspends a Doctor without changing voluntary accountStatus', async () => {
@@ -129,7 +130,7 @@ describe('SystemAdminService', () => {
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
       });
-    passwordSecurity.verify.mockResolvedValue(false);
+    passwordVerify.mockResolvedValue(false);
 
     await expect(
       service.normalSuspendDoctor(
@@ -187,7 +188,8 @@ describe('SystemAdminService', () => {
         id: 'doctor-1',
         role: UserRole.DOCTOR,
         accountStatus: UserAccountStatus.ACTIVE,
-        administrativeRestrictionStatus: AdministrativeRestrictionStatus.SUSPENDED,
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.SUSPENDED,
       });
 
     const fingerprint = createHash('sha256')
