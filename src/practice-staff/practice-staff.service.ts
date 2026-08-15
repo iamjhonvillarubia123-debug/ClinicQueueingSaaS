@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { PracticeStaffRole, UserRole } from '../../generated/prisma/client';
+import {
+  PracticeStaffRole,
+  UserAccountStatus,
+  UserRole,
+} from '../../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -50,9 +54,12 @@ export class PracticeStaffService {
       throw new NotFoundException('Secretary user was not found.');
     }
 
-    if (staffUser.role !== UserRole.SECRETARY) {
+    if (
+      staffUser.role !== UserRole.SECRETARY ||
+      staffUser.accountStatus !== UserAccountStatus.ACTIVE
+    ) {
       throw new ForbiddenException(
-        'Only a secretary user may be assigned as practice staff.',
+        'Only an eligible active secretary user may be assigned as practice staff.',
       );
     }
 
