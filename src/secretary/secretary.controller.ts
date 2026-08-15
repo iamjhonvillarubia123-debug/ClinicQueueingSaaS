@@ -1,7 +1,15 @@
-import { Controller, Headers, Post, Request, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Post,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { ReactivateSecretaryDto } from './dto/reactivate-secretary.dto';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
 
 @Controller('secretary')
@@ -18,6 +26,18 @@ export class SecretaryController {
   ) {
     return this.secretaryLifecycleService.disable(
       request.user.userId,
+      idempotencyKey,
+    );
+  }
+
+  @Post('account/reactivate')
+  reactivateAccount(
+    @Body() dto: ReactivateSecretaryDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+  ) {
+    return this.secretaryLifecycleService.reactivate(
+      dto.email,
+      dto.password,
       idempotencyKey,
     );
   }
