@@ -33,6 +33,12 @@ enum PracticeStaffCapabilityStatus {
   REVOKED
 }
 
+enum ClinicDayOperatingStaffChangeType {
+  ASSIGNED
+  REPLACED
+  CLEARED
+}
+
 enum SecretarySettingsDraftStatus {
   DRAFT
   SUBMITTED
@@ -459,6 +465,7 @@ model User {
   editedScheduledReminders         ScheduledReminder[]                  @relation("ScheduledReminderLastEditedBy")
   queueEvents                      QueueEvent[]
   cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
+  clinicDayOperatingStaffAudits    ClinicDayOperatingStaffAudit[]       @relation("ClinicDayOperatingStaffAuditActor")
   userSessions                     UserSession[]
   emailVerifications               EmailVerification[]
   passwordResets                   PasswordReset[]
@@ -752,6 +759,7 @@ model PracticeLocation {
   appointments                 Appointment[]
   bookingGroups                BookingGroup[]
   clinicDays                   ClinicDay[]
+  clinicDayOperatingStaffAudits ClinicDayOperatingStaffAudit[]
   queueCounters                QueueCounter[]
   queueEvents                  QueueEvent[]
   bookingQuestions             BookingQuestion[]
@@ -791,7 +799,9 @@ model PracticeStaff {
 
   capabilities                    PracticeStaffCapability[]
   authoredSecretarySettingsDrafts SecretarySettingsDraft[]
-  operatingClinicDays             ClinicDay[]               @relation("ClinicDayOperatingPracticeStaff")
+  operatingClinicDays             ClinicDay[]                    @relation("ClinicDayOperatingPracticeStaff")
+  priorOperatingStaffAudits       ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditPreviousStaff")
+  newOperatingStaffAudits         ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditNewStaff")
 
   @@unique([userId, practiceLocationId])
   @@index([practiceLocationId, isActive])
@@ -2053,6 +2063,8 @@ model ClinicDay {
 
   operatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingPracticeStaff", fields: [operatingPracticeStaffId], references: [id], onDelete: Restrict)
 
+  operatingStaffAudits ClinicDayOperatingStaffAudit[]
+
   cancelledByUser User? @relation("ClinicDayCancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
 
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -2060,6 +2072,37 @@ model ClinicDay {
   @@unique([practiceLocationId, serviceDate])
   @@index([status, serviceDate])
   @@index([operatingPracticeStaffId, serviceDate])
+}
+
+model ClinicDayOperatingStaffAudit {
+  id String @id @default(uuid())
+
+  clinicDayId        String
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+
+  changeType ClinicDayOperatingStaffChangeType
+
+  previousOperatingPracticeStaffId String?
+  newOperatingPracticeStaffId      String?
+
+  actorUserId String
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  clinicDay        ClinicDay        @relation(fields: [clinicDayId], references: [id], onDelete: Restrict)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+
+  previousOperatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingStaffAuditPreviousStaff", fields: [previousOperatingPracticeStaffId], references: [id], onDelete: Restrict)
+  newOperatingPracticeStaff      PracticeStaff? @relation("ClinicDayOperatingStaffAuditNewStaff", fields: [newOperatingPracticeStaffId], references: [id], onDelete: Restrict)
+
+  actorUser User @relation("ClinicDayOperatingStaffAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicDayId, createdAt])
+  @@index([practiceLocationId, serviceDate, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([previousOperatingPracticeStaffId, createdAt])
+  @@index([newOperatingPracticeStaffId, createdAt])
 }
 
 model QueueCounter {
