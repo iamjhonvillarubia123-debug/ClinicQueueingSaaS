@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from 'crypto';
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import {
   ApplicationNotificationType,
   CommandType,
@@ -45,7 +49,10 @@ export class SecretaryLifecycleService {
         where: { commandIdentityKey },
       });
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         return { disabled: true, replayed: true };
       }
 
@@ -69,7 +76,9 @@ export class SecretaryLifecycleService {
         );
       }
 
-      const assignments = await transaction.$queryRaw<ActiveAssignment[]>(Prisma.sql`
+      const assignments = await transaction.$queryRaw<
+        ActiveAssignment[]
+      >(Prisma.sql`
         SELECT
           ps."id",
           ps."practiceLocationId",
@@ -188,7 +197,8 @@ export class SecretaryLifecycleService {
         await transaction.applicationNotification.create({
           data: {
             recipientUserId: assignment.doctorUserId,
-            notificationType: ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED,
+            notificationType:
+              ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED,
             affectedSecretaryUserId: user.id,
             practiceLocationId: assignment.practiceLocationId,
             notificationIdentityKey: this.hash(
