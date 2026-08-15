@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthenticationService } from './authentication.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetMaintenanceService } from './password-reset-maintenance.service';
 import { PasswordResetService } from './password-reset.service';
 import { CsrfOriginGuard } from './guards/csrf-origin.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
@@ -19,6 +20,7 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
     AuthenticationService,
     EmailVerificationService,
     PasswordResetService,
+    PasswordResetMaintenanceService,
     PasswordSecurityService,
     ProtectedAccountPayloadService,
     SessionAuthGuard,
@@ -29,6 +31,7 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
     AuthenticationService,
     EmailVerificationService,
     PasswordResetService,
+    PasswordResetMaintenanceService,
     PasswordSecurityService,
     ProtectedAccountPayloadService,
     SessionAuthGuard,

@@ -6,6 +6,7 @@ import request from 'supertest';
 import type { Response } from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PasswordResetMaintenanceService } from './../src/auth/password-reset-maintenance.service';
 import { ProtectedAccountPayloadService } from './../src/auth/security/protected-account-payload.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 
@@ -13,6 +14,7 @@ describe('AppController (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
   let protectedPayloadService: ProtectedAccountPayloadService;
+  let passwordResetMaintenanceService: PasswordResetMaintenanceService;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm1s1-e2e-only-jwt-secret-not-for-production',
@@ -42,6 +44,9 @@ describe('AppController (e2e)', () => {
 
     prisma = moduleFixture.get(PrismaService);
     protectedPayloadService = moduleFixture.get(ProtectedAccountPayloadService);
+    passwordResetMaintenanceService = moduleFixture.get(
+      PasswordResetMaintenanceService,
+    );
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
@@ -642,6 +647,146 @@ describe('AppController (e2e)', () => {
     expect(after.emailVerifiedAt?.getTime()).toBe(
       user.emailVerifiedAt?.getTime(),
     );
+  });
+
+  it('expires stale password resets, cancels stale delivery, and deletes only relation-free terminal reset rows', async () => {
+    const unique = randomUUID();
+    const email = `reset-maintenance-${unique}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Maintenance',
+        lastName: 'Doctor',
+        mobileNumber: `+63919${unique.replace(/-/g, '').slice(0, 7)}`,
+        passwordHash: await bcrypt.hash('Maintenance password 42!', 12),
+        role: 'DOCTOR',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    const expiredAt = new Date(Date.now() - 60_000);
+    const createdAt = new Date(expiredAt.getTime() - 30 * 60 * 1000);
+    const stale = await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        tokenHash: 'a'.repeat(64),
+        activeResetKey: ('b' + unique.replace(/-/g, ''))
+          .padEnd(64, 'b')
+          .slice(0, 64),
+        status: 'PENDING',
+        createdAt,
+        expiresAt: expiredAt,
+      },
+    });
+    const staleOutbox = await prisma.notificationOutbox.create({
+      data: {
+        deliveryIdentityKey: `c${unique.replace(/-/g, '').slice(0, 63)}`.padEnd(
+          64,
+          'c',
+        ),
+        notificationType: 'PASSWORD_RESET',
+        channel: 'EMAIL',
+        status: 'PENDING',
+        passwordResetId: stale.id,
+        recipientEmailEncrypted: protectedPayloadService.encrypt(
+          email,
+          'password-reset:recipient',
+        ),
+        messageBodyEncrypted: protectedPayloadService.encrypt(
+          'stale reset',
+          'password-reset:message',
+        ),
+        providerIdempotencyKey: `maintenance:${stale.id}`,
+        createdAt,
+        nextAttemptAt: createdAt,
+        expiresAt: expiredAt,
+      },
+    });
+
+    await expect(
+      passwordResetMaintenanceService.expirePendingBatch(20),
+    ).resolves.toBeGreaterThanOrEqual(1);
+    const expiredReset = await prisma.passwordReset.findUniqueOrThrow({
+      where: { id: stale.id },
+    });
+    const cancelledOutbox = await prisma.notificationOutbox.findUniqueOrThrow({
+      where: { id: staleOutbox.id },
+    });
+    expect(expiredReset.status).toBe('EXPIRED');
+    expect(expiredReset.tokenHash).toBeNull();
+    expect(expiredReset.activeResetKey).toBeNull();
+    expect(cancelledOutbox.status).toBe('CANCELLED');
+
+    const consumed = await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        tokenHash: null,
+        activeResetKey: null,
+        status: 'CONSUMED',
+        expiresAt: new Date(Date.now() + 60_000),
+        consumedAt: new Date(),
+      },
+    });
+    const consumedOutbox = await prisma.notificationOutbox.create({
+      data: {
+        deliveryIdentityKey: `d${unique.replace(/-/g, '').slice(0, 63)}`.padEnd(
+          64,
+          'd',
+        ),
+        notificationType: 'PASSWORD_RESET',
+        channel: 'EMAIL',
+        status: 'PENDING',
+        passwordResetId: consumed.id,
+        recipientEmailEncrypted: protectedPayloadService.encrypt(
+          email,
+          'password-reset:recipient',
+        ),
+        messageBodyEncrypted: protectedPayloadService.encrypt(
+          'consumed reset',
+          'password-reset:message',
+        ),
+        providerIdempotencyKey: `maintenance:${consumed.id}`,
+        nextAttemptAt: new Date(),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await expect(
+      passwordResetMaintenanceService.revalidateOutboxForSend(
+        consumedOutbox.id,
+      ),
+    ).resolves.toBe(false);
+    expect(
+      (
+        await prisma.notificationOutbox.findUniqueOrThrow({
+          where: { id: consumedOutbox.id },
+        })
+      ).status,
+    ).toBe('CANCELLED');
+
+    const oldTerminalExpiresAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const oldTerminalCreatedAt = new Date(
+      oldTerminalExpiresAt.getTime() - 30 * 60 * 1000,
+    );
+    const oldTerminal = await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        status: 'EXPIRED',
+        tokenHash: null,
+        activeResetKey: null,
+        createdAt: oldTerminalCreatedAt,
+        expiresAt: oldTerminalExpiresAt,
+      },
+    });
+
+    await expect(
+      passwordResetMaintenanceService.deleteEligibleTerminalBatch(20),
+    ).resolves.toBeGreaterThanOrEqual(1);
+    expect(
+      await prisma.passwordReset.findUnique({ where: { id: oldTerminal.id } }),
+    ).toBeNull();
   });
 
   afterEach(async () => {
