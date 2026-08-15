@@ -6,10 +6,7 @@ import {
   Weekday,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  LocalDateParts,
-  ScheduleTimeService,
-} from './schedule-time.service';
+import { LocalDateParts, ScheduleTimeService } from './schedule-time.service';
 
 type CalendarClient = Pick<Prisma.TransactionClient, 'doctorCalendarRule'>;
 
@@ -167,7 +164,8 @@ export class DoctorCalendarAvailabilityService {
     const key = this.dateKey(date);
     return rule.occurrenceOverrides.some(
       (override) =>
-        override.isAvailable && this.databaseDateKey(override.occurrenceDate) === key,
+        override.isAvailable &&
+        this.databaseDateKey(override.occurrenceDate) === key,
     );
   }
 
@@ -203,7 +201,9 @@ export class DoctorCalendarAvailabilityService {
   }
 
   private addDays(date: LocalDateParts, days: number): LocalDateParts {
-    const value = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
+    const value = new Date(
+      Date.UTC(date.year, date.month - 1, date.day + days),
+    );
     return {
       year: value.getUTCFullYear(),
       month: value.getUTCMonth() + 1,
