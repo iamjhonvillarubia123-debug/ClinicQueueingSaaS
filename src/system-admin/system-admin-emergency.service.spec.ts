@@ -1,8 +1,5 @@
 import { createHash } from 'crypto';
-import {
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import {
   AdministrativeAccountActionType,
   AdministrativeReasonCategory,
@@ -36,10 +33,11 @@ describe('SystemAdminEmergencyService', () => {
     },
   };
 
+  const transactionMock = jest.fn(
+    (callback: (client: typeof tx) => unknown) => callback(tx),
+  );
   const prisma = {
-    $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
-      callback(tx),
-    ),
+    $transaction: transactionMock,
   } as unknown as PrismaService;
 
   const passwordVerify = jest.fn().mockResolvedValue(true);
@@ -160,9 +158,11 @@ describe('SystemAdminEmergencyService', () => {
         administrativeRestrictionStatus:
           AdministrativeRestrictionStatus.SUSPENDED,
       });
-    tx.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      { id: 'normal-action-1', targetDoctorUserId: 'doctor-1' },
-    ]);
+    tx.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'normal-action-1', targetDoctorUserId: 'doctor-1' },
+      ]);
 
     await expect(
       service.emergencySuspendDoctor(
@@ -194,7 +194,7 @@ describe('SystemAdminEmergencyService', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 
   it('requires fresh SYSTEM_ADMIN password step-up', async () => {
