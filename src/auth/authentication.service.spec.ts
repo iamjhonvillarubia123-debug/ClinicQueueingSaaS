@@ -82,6 +82,28 @@ describe('AuthenticationService', () => {
     expect(prismaServiceMock.userSession.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each([
+    UserAccountStatus.VOLUNTARILY_DISABLED,
+    UserAccountStatus.PERMANENTLY_CLOSED,
+  ])(
+    'rejects a stale session when current accountStatus becomes %s',
+    async (accountStatus) => {
+      const session = validSession();
+      prismaServiceMock.userSession.findUnique.mockResolvedValue({
+        ...session,
+        user: {
+          ...session.user,
+          accountStatus,
+        },
+      });
+
+      await expect(
+        service.authenticateOrdinarySession('raw-token'),
+      ).rejects.toThrow('Authentication required.');
+      expect(prismaServiceMock.userSession.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects stale session when current doctor becomes administratively restricted', async () => {
     const session = validSession();
     prismaServiceMock.userSession.findUnique.mockResolvedValue({
