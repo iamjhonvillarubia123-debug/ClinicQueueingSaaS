@@ -30,7 +30,10 @@ describe('CrossLocationScheduleConflictService', () => {
       providers: [
         CrossLocationScheduleConflictService,
         { provide: PrismaService, useValue: prismaServiceMock },
-        { provide: ScheduleResolutionService, useValue: scheduleResolutionMock },
+        {
+          provide: ScheduleResolutionService,
+          useValue: scheduleResolutionMock,
+        },
         {
           provide: DoctorCalendarAvailabilityService,
           useValue: doctorCalendarMock,
@@ -122,11 +125,9 @@ describe('CrossLocationScheduleConflictService', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(scheduleResolutionMock.resolveConfiguredSchedule).toHaveBeenCalledWith(
-      'location-la',
-      '2026-08-16',
-      expect.anything(),
-    );
+    expect(
+      scheduleResolutionMock.resolveConfiguredSchedule,
+    ).toHaveBeenCalledWith('location-la', '2026-08-16', expect.anything());
   });
 
   it('does not reserve another location interval when Doctor Calendar blocks that clinic day', async () => {
