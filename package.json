@@ -17,11 +17,11 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config ./test/jest-e2e.json",
+    "test:e2e": "node ./test/run-e2e.mjs",
     "typecheck": "tsc --noEmit",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
-    "verify:static": "npm run typecheck && npm run lint:check && npm test -- --runInBand && npm run test:e2e -- --runInBand && npm run prisma:validate && npm run prisma:generate && npm run build",
+    "verify:static": "npm run typecheck \u0026\u0026 npm run lint:check \u0026\u0026 npm test -- --runInBand \u0026\u0026 npm run test:e2e -- --runInBand \u0026\u0026 npm run prisma:validate \u0026\u0026 npm run prisma:generate \u0026\u0026 npm run build",
     "lint:check": "eslint \"{src,apps,libs,test}/**/*.ts\""
   },
   "dependencies": {
