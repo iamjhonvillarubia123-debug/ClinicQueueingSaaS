@@ -55,7 +55,9 @@ export class PracticeLocationLifecycleService {
     idempotencyKey: string,
   ) {
     if (!dto.confirmDisable) {
-      throw new BadRequestException('Practice location disable must be confirmed.');
+      throw new BadRequestException(
+        'Practice location disable must be confirmed.',
+      );
     }
 
     const key = this.normalizeIdempotencyKey(idempotencyKey);
@@ -97,9 +99,7 @@ export class PracticeLocationLifecycleService {
         return { disabled: true, replayed: true };
       }
 
-      if (
-        location.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE
-      ) {
+      if (location.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE) {
         throw new ConflictException(
           'Only an active practice location may be disabled.',
         );
@@ -160,7 +160,9 @@ export class PracticeLocationLifecycleService {
     transaction: TransactionClient,
     practiceLocationId: string,
   ): Promise<LockedPracticeLocation> {
-    const rows = await transaction.$queryRaw<LockedPracticeLocation[]>(Prisma.sql`
+    const rows = await transaction.$queryRaw<
+      LockedPracticeLocation[]
+    >(Prisma.sql`
       SELECT
         pl."id",
         pl."lifecycleStatus",
@@ -258,7 +260,9 @@ export class PracticeLocationLifecycleService {
     actorUserId: string,
     now: Date,
   ): Promise<void> {
-    const clinicDays = await transaction.$queryRaw<OperatingClinicDay[]>(Prisma.sql`
+    const clinicDays = await transaction.$queryRaw<
+      OperatingClinicDay[]
+    >(Prisma.sql`
       SELECT
         "id",
         "practiceLocationId",
@@ -280,8 +284,7 @@ export class PracticeLocationLifecycleService {
           practiceLocationId: clinicDay.practiceLocationId,
           serviceDate: clinicDay.serviceDate,
           changeType: ClinicDayOperatingStaffChangeType.CLEARED,
-          previousOperatingPracticeStaffId:
-            clinicDay.operatingPracticeStaffId,
+          previousOperatingPracticeStaffId: clinicDay.operatingPracticeStaffId,
           newOperatingPracticeStaffId: null,
           actorUserId,
           createdAt: now,
