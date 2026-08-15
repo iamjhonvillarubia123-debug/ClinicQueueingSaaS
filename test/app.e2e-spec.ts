@@ -452,7 +452,7 @@ describe('AppController (e2e)', () => {
         email,
         firstName: 'Reset',
         lastName: 'Doctor',
-        mobileNumber: `+63917${unique.replace(/-/g, '').slice(0, 7)}`,
+        mobileNumber: `+63917${unique.replace(/\D/g, '').padEnd(7, '0').slice(0, 7)}`,
         passwordHash: await bcrypt.hash(oldPassword, 12),
         role: 'DOCTOR',
         accountStatus: 'ACTIVE',
@@ -606,7 +606,7 @@ describe('AppController (e2e)', () => {
         email,
         firstName: 'Disabled',
         lastName: 'Doctor',
-        mobileNumber: `+63918${unique.replace(/-/g, '').slice(0, 7)}`,
+        mobileNumber: `+63917${unique.replace(/\D/g, '').padEnd(7, '0').slice(0, 7)}`,
         passwordHash: await bcrypt.hash('Old disabled password', 12),
         role: 'DOCTOR',
         accountStatus: 'VOLUNTARILY_DISABLED',
@@ -890,6 +890,264 @@ describe('AppController (e2e)', () => {
     });
     expect(stillRestricted.accountStatus).toBe('VOLUNTARILY_DISABLED');
     expect(stillRestricted.administrativeRestrictionStatus).toBe('SUSPENDED');
+  });
+
+  it('permanently closes a Doctor exactly once and allows only a new User identity to return', async () => {
+    if (!app) throw new Error('E2E application did not initialize.');
+
+    const unique = randomUUID();
+    const email = `doctor-delete-${unique}@example.test`;
+    const password = 'Doctor permanent delete password 42!';
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Permanent',
+        lastName: 'Closure',
+        mobileNumber: `+63921${unique.replace(/-/g, '').slice(0, 7)}`,
+        passwordHash: await bcrypt.hash(password, 12),
+        role: 'DOCTOR',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const profile = await prisma.doctorProfile.create({
+      data: {
+        userId: user.id,
+        professionalTitle: 'Dr.',
+        specialization: 'General Medicine',
+        licenseNumber: `DEL-${unique}`,
+        isProfilePublic: true,
+      },
+    });
+
+    const browser = request.agent(app.getHttpServer());
+    await browser.post('/auth/login').send({ email, password }).expect(201);
+    await browser.get('/auth/profile').expect(200);
+
+    const idempotencyKey = `delete-${unique}`;
+    await request(app.getHttpServer())
+      .post('/doctor/account/permanent-delete')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({
+        email,
+        password,
+        confirmPermanentDelete: true,
+      })
+      .expect(201, {
+        permanentlyClosed: true,
+        replayed: false,
+        publicRouteRetired: true,
+      })
+      .expect(201);
+
+    const closedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(closedUser.accountStatus).toBe('PERMANENTLY_CLOSED');
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+    await browser.get('/auth/profile').expect(401);
+
+    const auditRows = await prisma.accountPermanentClosureAudit.findMany({
+      where: { accountUserId: user.id },
+    });
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]).toEqual(
+      expect.objectContaining({
+        initiatedByUserId: user.id,
+        closureType: 'DOCTOR_PERMANENT_CLOSURE',
+        previousAccountStatus: 'ACTIVE',
+      }),
+    );
+
+    const commandRows = await prisma.commandIdempotency.findMany({
+      where: {
+        accountUserId: user.id,
+        commandType: 'DOCTOR_DELETE_ACCOUNT',
+      },
+    });
+    expect(commandRows).toHaveLength(1);
+
+    const closureOutboxes = await prisma.notificationOutbox.findMany({
+      where: {
+        commandIdempotencyId: commandRows[0].id,
+        notificationType: 'SECURITY_NOTIFICATION',
+        channel: 'EMAIL',
+      },
+    });
+    expect(closureOutboxes).toHaveLength(1);
+
+    await request(app.getHttpServer())
+      .post('/doctor/account/permanent-delete')
+      .set('Idempotency-Key', idempotencyKey)
+      .send({
+        email,
+        password,
+        confirmPermanentDelete: true,
+      })
+      .expect(201, {
+        permanentlyClosed: true,
+        replayed: true,
+        publicRouteRetired: true,
+      })
+      .expect(201);
+
+    expect(
+      await prisma.accountPermanentClosureAudit.count({
+        where: { accountUserId: user.id },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.commandIdempotency.count({
+        where: {
+          accountUserId: user.id,
+          commandType: 'DOCTOR_DELETE_ACCOUNT',
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.notificationOutbox.count({
+        where: {
+          commandIdempotencyId: commandRows[0].id,
+          notificationType: 'SECURITY_NOTIFICATION',
+          channel: 'EMAIL',
+        },
+      }),
+    ).toBe(1);
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/doctor/account/reactivate')
+      .set('Idempotency-Key', `reactivate-closed-${unique}`)
+      .send({ email, password })
+      .expect(401);
+
+    const registration = await request(app.getHttpServer())
+      .post('/doctor/register')
+      .send({
+        firstName: 'Returned',
+        lastName: 'Doctor',
+        email,
+        mobileNumber: `+63917${unique.replace(/\D/g, '').padEnd(7, '0').slice(0, 7)}`,
+        password: 'Returned Doctor Password 42!',
+        professionalTitle: 'Dr.',
+        specialization: 'General Medicine',
+        licenseNumber: `RETURN-${unique}`,
+      })
+      .expect(201);
+
+    const newUserId = (registration.body as { userId: string }).userId;
+    expect(newUserId).not.toBe(user.id);
+    expect(
+      (
+        await prisma.user.findUniqueOrThrow({
+          where: { id: user.id },
+        })
+      ).accountStatus,
+    ).toBe('PERMANENTLY_CLOSED');
+    expect(
+      (
+        await prisma.doctorProfile.findUniqueOrThrow({
+          where: { id: profile.id },
+        })
+      ).publicIdentifier,
+    ).toBe(profile.publicIdentifier);
+  });
+
+  it('rejects Doctor Permanent Delete while an owned ClinicDay is STARTED without committing closure effects', async () => {
+    if (!app) throw new Error('E2E application did not initialize.');
+
+    const unique = randomUUID();
+    const email = `doctor-delete-started-${unique}@example.test`;
+    const password = 'Started clinic delete password 42!';
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Started',
+        lastName: 'Clinic',
+        mobileNumber: `+63923${unique.replace(/-/g, '').slice(0, 7)}`,
+        passwordHash: await bcrypt.hash(password, 12),
+        role: 'DOCTOR',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const profile = await prisma.doctorProfile.create({
+      data: {
+        userId: user.id,
+        professionalTitle: 'Dr.',
+        specialization: 'General Medicine',
+        licenseNumber: `START-${unique}`,
+      },
+    });
+    const location = await prisma.practiceLocation.create({
+      data: {
+        doctorProfileId: profile.id,
+      },
+    });
+    const startedAt = new Date();
+    const clinicDay = await prisma.clinicDay.create({
+      data: {
+        practiceLocationId: location.id,
+        serviceDate: new Date(
+          Date.UTC(
+            startedAt.getUTCFullYear(),
+            startedAt.getUTCMonth(),
+            startedAt.getUTCDate(),
+          ),
+        ),
+        status: 'STARTED',
+        startedAt,
+        createdAt: startedAt,
+      },
+    });
+
+    await request(app.getHttpServer())
+      .post('/doctor/account/permanent-delete')
+      .set('Idempotency-Key', `delete-started-${unique}`)
+      .send({
+        email,
+        password,
+        confirmPermanentDelete: true,
+      })
+      .expect(409);
+
+    expect(
+      (
+        await prisma.user.findUniqueOrThrow({
+          where: { id: user.id },
+        })
+      ).accountStatus,
+    ).toBe('ACTIVE');
+    expect(
+      (
+        await prisma.clinicDay.findUniqueOrThrow({
+          where: { id: clinicDay.id },
+        })
+      ).status,
+    ).toBe('STARTED');
+    expect(
+      await prisma.accountPermanentClosureAudit.count({
+        where: { accountUserId: user.id },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.commandIdempotency.count({
+        where: {
+          accountUserId: user.id,
+          commandType: 'DOCTOR_DELETE_ACCOUNT',
+        },
+      }),
+    ).toBe(0);
   });
   afterEach(async () => {
     if (app) {
