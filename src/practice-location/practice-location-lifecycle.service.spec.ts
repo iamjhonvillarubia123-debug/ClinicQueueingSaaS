@@ -243,9 +243,7 @@ describe('PracticeLocationLifecycleService', () => {
       ])
       .mockResolvedValueOnce([]);
     const fingerprint = createHash('sha256')
-      .update(
-        'PRACTICE_LOCATION_DISABLE|doctor-1|location-1|confirmed', 'utf8',
-      )
+      .update('PRACTICE_LOCATION_DISABLE|doctor-1|location-1|confirmed', 'utf8')
       .digest('hex');
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
       requestFingerprint: fingerprint,
