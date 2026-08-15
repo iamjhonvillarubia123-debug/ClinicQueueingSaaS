@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PracticeLocationLifecycleStatus, Weekday } from '../../generated/prisma/client';
+import {
+  PracticeLocationLifecycleStatus,
+  Weekday,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScheduleResolutionService } from './schedule-resolution.service';
 import { ScheduleTimeService } from './schedule-time.service';
@@ -53,7 +56,9 @@ describe('ScheduleResolutionService', () => {
     expect(result.source).toBe('SCHEDULE_EXCEPTION');
     expect(result.opensAt?.toISOString()).toBe('2026-08-16T02:00:00.000Z');
     expect(result.closesAt?.toISOString()).toBe('2026-08-16T07:00:00.000Z');
-    expect(prismaServiceMock.practiceSchedule.findUnique).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceSchedule.findUnique,
+    ).not.toHaveBeenCalled();
   });
 
   it('falls back to the recurring weekday schedule when no exception exists', async () => {
@@ -98,7 +103,9 @@ describe('ScheduleResolutionService', () => {
 
     expect(result.isOpen).toBe(false);
     expect(result.source).toBe('SCHEDULE_EXCEPTION');
-    expect(prismaServiceMock.practiceSchedule.findUnique).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceSchedule.findUnique,
+    ).not.toHaveBeenCalled();
   });
 
   it('returns no planned schedule when neither exception nor recurring row exists', async () => {
