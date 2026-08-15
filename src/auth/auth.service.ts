@@ -1,5 +1,4 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import {
   AdministrativeRestrictionStatus,
   UserAccountStatus,
@@ -7,6 +6,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
+import { PasswordSecurityService } from './security/password-security.service';
 import {
   generateSessionToken,
   hashSessionToken,
@@ -25,7 +25,10 @@ export interface LoginResult {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordSecurityService: PasswordSecurityService,
+  ) {}
 
   async login(loginDto: LoginDto): Promise<LoginResult> {
     const normalizedEmail = normalizeEmail(loginDto.email);
@@ -38,7 +41,10 @@ export class AuthService {
     });
 
     const passwordMatches = user
-      ? await bcrypt.compare(loginDto.password, user.passwordHash)
+      ? await this.passwordSecurityService.verify(
+          loginDto.password,
+          user.passwordHash,
+        )
       : false;
 
     if (!user || !passwordMatches || !this.isOrdinaryLoginEligible(user)) {
