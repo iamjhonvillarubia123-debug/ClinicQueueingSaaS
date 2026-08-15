@@ -80,26 +80,32 @@ describe('SecretarySettingsDraftScheduleService', () => {
       isOpen: false,
     });
 
-    const upsertCall = prismaServiceMock.secretarySettingsDraftPracticeSchedule
-      .upsert.mock.calls[0]?.[0] as {
+    expect(
+      prismaServiceMock.secretarySettingsDraftPracticeSchedule.upsert,
+    ).toHaveBeenCalledWith({
+      where: {
+        secretarySettingsDraftId_weekday: {
+          secretarySettingsDraftId: 'draft-1',
+          weekday: Weekday.MONDAY,
+        },
+      },
       create: {
-        proposedIsOpen: boolean;
-        proposedOpensAtLocal: Date | null;
-        proposedClosesAtLocal: Date | null;
-        proposedMaximumOnlineBookingUntilLocal: Date | null;
-        proposedMaximumOperatingUntilLocal: Date | null;
-      };
-    };
-
-    expect(upsertCall.create).toEqual(
-      expect.objectContaining({
+        secretarySettingsDraftId: 'draft-1',
+        weekday: Weekday.MONDAY,
         proposedIsOpen: false,
         proposedOpensAtLocal: null,
         proposedClosesAtLocal: null,
         proposedMaximumOnlineBookingUntilLocal: null,
         proposedMaximumOperatingUntilLocal: null,
-      }),
-    );
+      },
+      update: {
+        proposedIsOpen: false,
+        proposedOpensAtLocal: null,
+        proposedClosesAtLocal: null,
+        proposedMaximumOnlineBookingUntilLocal: null,
+        proposedMaximumOperatingUntilLocal: null,
+      },
+    });
   });
 
   it('rejects an overnight recurring proposal in Version 1', async () => {
