@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-} from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PracticeLocationLifecycleStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
@@ -27,40 +23,53 @@ export class PracticeLocationService {
       );
     }
 
-    const name = createPracticeLocationDto.name.trim();
-    const addressLine1 = createPracticeLocationDto.addressLine1.trim();
+    const name = this.normalizeOptionalText(createPracticeLocationDto.name);
+    const addressLine1 = this.normalizeOptionalText(
+      createPracticeLocationDto.addressLine1,
+    );
 
-    const existingLocation = await this.prisma.practiceLocation.findFirst({
-      where: {
-        doctorProfileId: doctorProfile.id,
-        lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
-        name: {
-          equals: name,
-          mode: 'insensitive',
+    if (name && addressLine1) {
+      const existingLocation = await this.prisma.practiceLocation.findFirst({
+        where: {
+          doctorProfileId: doctorProfile.id,
+          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+          name: {
+            equals: name,
+            mode: 'insensitive',
+          },
+          addressLine1: {
+            equals: addressLine1,
+            mode: 'insensitive',
+          },
         },
-        addressLine1: {
-          equals: addressLine1,
-          mode: 'insensitive',
-        },
-      },
-    });
+      });
 
-    if (existingLocation) {
-      throw new ConflictException(
-        'An active practice location with this name and address already exists.',
-      );
+      if (existingLocation) {
+        throw new ConflictException(
+          'An active practice location with this name and address already exists.',
+        );
+      }
     }
 
     return this.prisma.practiceLocation.create({
       data: {
         doctorProfileId: doctorProfile.id,
+        lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
         name,
         addressLine1,
-        addressLine2: createPracticeLocationDto.addressLine2?.trim() || null,
-        cityMunicipality: createPracticeLocationDto.cityMunicipality.trim(),
-        province: createPracticeLocationDto.province.trim(),
-        postalCode: createPracticeLocationDto.postalCode?.trim() || null,
-        contactNumber: createPracticeLocationDto.contactNumber.trim(),
+        addressLine2: this.normalizeOptionalText(
+          createPracticeLocationDto.addressLine2,
+        ),
+        cityMunicipality: this.normalizeOptionalText(
+          createPracticeLocationDto.cityMunicipality,
+        ),
+        province: this.normalizeOptionalText(createPracticeLocationDto.province),
+        postalCode: this.normalizeOptionalText(
+          createPracticeLocationDto.postalCode,
+        ),
+        contactNumber: this.normalizeOptionalText(
+          createPracticeLocationDto.contactNumber,
+        ),
       },
       select: {
         id: true,
@@ -121,5 +130,10 @@ export class PracticeLocationService {
         updatedAt: true,
       },
     });
+  }
+
+  private normalizeOptionalText(value: string | undefined): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
   }
 }
