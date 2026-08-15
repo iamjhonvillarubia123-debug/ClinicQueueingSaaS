@@ -163,8 +163,9 @@ describe('Account security closure (e2e)', () => {
       .expect(201);
 
     await browser
-      .post('/practice-staff/assign')
+      .post('/practice-staff/regular/assign')
       .set('Origin', 'https://app.example.test')
+      .set('Idempotency-Key', `assign-active-${unique}`)
       .send({
         practiceLocationId: ownLocation.id,
         userId: activeSecretary.id,
@@ -172,26 +173,31 @@ describe('Account security closure (e2e)', () => {
       .expect(201);
 
     await browser
-      .post('/practice-staff/assign')
+      .post('/practice-staff/regular/replace')
       .set('Origin', 'https://app.example.test')
+      .set('Idempotency-Key', `replace-disabled-${unique}`)
       .send({
         practiceLocationId: ownLocation.id,
         userId: disabledSecretary.id,
+        password,
       })
       .expect(403);
 
     await browser
-      .post('/practice-staff/assign')
+      .post('/practice-staff/regular/replace')
       .set('Origin', 'https://app.example.test')
+      .set('Idempotency-Key', `replace-closed-${unique}`)
       .send({
         practiceLocationId: ownLocation.id,
         userId: closedSecretary.id,
+        password,
       })
       .expect(403);
 
     await browser
-      .post('/practice-staff/assign')
+      .post('/practice-staff/regular/assign')
       .set('Origin', 'https://app.example.test')
+      .set('Idempotency-Key', `assign-cross-location-${unique}`)
       .send({
         practiceLocationId: otherLocation.id,
         userId: activeSecretary.id,
@@ -203,9 +209,16 @@ describe('Account security closure (e2e)', () => {
         where: {
           practiceLocationId: ownLocation.id,
           userId: activeSecretary.id,
+          isActive: true,
         },
       }),
     ).toBe(1);
+    expect(
+      await prisma.practiceLocation.findUnique({
+        where: { id: ownLocation.id },
+        select: { currentRegularPracticeStaffId: true },
+      }),
+    ).toEqual({ currentRegularPracticeStaffId: expect.any(String) });
     expect(
       await prisma.practiceStaff.count({
         where: {
