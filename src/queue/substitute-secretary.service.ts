@@ -137,9 +137,7 @@ export class SubstituteSecretaryService {
           )
         : null;
       const restoredRegularId =
-        regular && this.isOperationallyReady(regular)
-          ? regular.id
-          : null;
+        regular && this.isOperationallyReady(regular) ? regular.id : null;
       const now = new Date();
 
       await transaction.clinicDay.update({
@@ -154,8 +152,7 @@ export class SubstituteSecretaryService {
           changeType: restoredRegularId
             ? ClinicDayOperatingStaffChangeType.REPLACED
             : ClinicDayOperatingStaffChangeType.CLEARED,
-          previousOperatingPracticeStaffId:
-            clinicDay.operatingPracticeStaffId,
+          previousOperatingPracticeStaffId: clinicDay.operatingPracticeStaffId,
           newOperatingPracticeStaffId: restoredRegularId,
           actorUserId: authenticatedUserId,
           createdAt: now,
@@ -237,9 +234,7 @@ export class SubstituteSecretaryService {
           'Selected secretary is not operationally ready for this practice location.',
         );
       }
-      if (
-        clinicDay.currentRegularPracticeStaffId === substitute.id
-      ) {
+      if (clinicDay.currentRegularPracticeStaffId === substitute.id) {
         throw new ConflictException(
           'The current regular secretary cannot be assigned as a substitute.',
         );
