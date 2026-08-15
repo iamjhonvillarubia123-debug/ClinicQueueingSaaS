@@ -59,7 +59,9 @@ describe('PracticeLocationPermanentDeleteService', () => {
     );
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.commandIdempotency.create.mockResolvedValue({ id: 'cmd-1' });
+    prismaServiceMock.commandIdempotency.create.mockResolvedValue({
+      id: 'cmd-1',
+    });
     prismaServiceMock.user.findUnique.mockResolvedValue({
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.ACTIVE,
@@ -72,7 +74,9 @@ describe('PracticeLocationPermanentDeleteService', () => {
     prismaServiceMock.notificationOutbox.findFirst.mockResolvedValue(null);
     prismaServiceMock.scheduledReminder.findMany.mockResolvedValue([]);
     prismaServiceMock.practiceLocation.update.mockResolvedValue({});
-    prismaServiceMock.practiceStaffCapability.updateMany.mockResolvedValue({ count: 1 });
+    prismaServiceMock.practiceStaffCapability.updateMany.mockResolvedValue({
+      count: 1,
+    });
     prismaServiceMock.practiceStaff.updateMany.mockResolvedValue({ count: 1 });
   });
 
@@ -123,16 +127,13 @@ describe('PracticeLocationPermanentDeleteService', () => {
       .mockResolvedValueOnce([
         {
           id: 'location-1',
-          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+          lifecycleStatus: PracticeLocationLifecycleStatus.DISABLED,
           doctorUserId: 'doctor-1',
           timeZone: 'Asia/Manila',
         },
       ])
       .mockResolvedValueOnce([]);
-    prismaServiceMock.clinicDay.findFirst.mockResolvedValue({
-      id: 'clinic-day-1',
-      status: ClinicDayStatus.STARTED,
-    });
+    prismaServiceMock.clinicDay.findFirst.mockResolvedValue({ id: 'started-1' });
 
     await expect(
       service.permanentlyDelete(
@@ -145,6 +146,7 @@ describe('PracticeLocationPermanentDeleteService', () => {
         'delete-location-key',
       ),
     ).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
   });
 
   it('blocks permanent delete until future confirmed Appointments are resolved', async () => {
@@ -171,7 +173,7 @@ describe('PracticeLocationPermanentDeleteService', () => {
         'delete-location-key',
       ),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
+    expect(prismaServiceMock.practiceStaff.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects permanent delete when current password is invalid', async () => {
@@ -198,6 +200,7 @@ describe('PracticeLocationPermanentDeleteService', () => {
         'delete-location-key',
       ),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
   });
 
   it('replays a committed permanent delete without repeating authority effects', async () => {
@@ -212,7 +215,10 @@ describe('PracticeLocationPermanentDeleteService', () => {
       ])
       .mockResolvedValueOnce([]);
     const fingerprint = createHash('sha256')
-      .update('PRACTICE_LOCATION_DELETE|doctor-1|location-1|confirmed', 'utf8')
+      .update(
+        'PRACTICE_LOCATION_DELETE|doctor-1|location-1|confirmed',
+        'utf8',
+      )
       .digest('hex');
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
       requestFingerprint: fingerprint,
