@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcrypt';
 import request from 'supertest';
 import type { Response } from 'supertest';
 import { App } from 'supertest/types';
@@ -332,6 +333,104 @@ describe('AppController (e2e)', () => {
     expect(oldAfter.accountStatus).toBe('PERMANENTLY_CLOSED');
     expect(newUser.email).toBe(email);
     expect(newUser.emailVerifiedAt).toBeNull();
+  });
+
+  it('supports multiple sessions, bounded idle renewal, and idempotent server-side logout', async () => {
+    if (!app) throw new Error('E2E application did not initialize.');
+
+    const unique = randomUUID();
+    const email = `session-${unique}@example.test`;
+    const password = 'M2Slice2C-Session-Password-42!';
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Session',
+        lastName: 'Doctor',
+        mobileNumber: '+639171234567',
+        passwordHash: await bcrypt.hash(password, 12),
+        role: 'DOCTOR',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    const firstBrowser = request.agent(app.getHttpServer());
+    const secondBrowser = request.agent(app.getHttpServer());
+
+    const firstLogin = await firstBrowser
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+    expect(firstLogin.body).not.toHaveProperty('sessionToken');
+    const firstCookie = firstLogin.headers['set-cookie']?.[0];
+    expect(firstCookie).toContain('HttpOnly');
+    expect(firstCookie).toContain('SameSite=Lax');
+    expect(firstCookie).toContain('Path=/');
+
+    const firstSession = await prisma.userSession.findFirstOrThrow({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    await secondBrowser
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    expect(await prisma.userSession.count({ where: { userId: user.id } })).toBe(
+      2,
+    );
+
+    const absoluteExpiry = new Date(Date.now() + 30 * 60 * 1000);
+    await prisma.userSession.update({
+      where: { id: firstSession.id },
+      data: {
+        lastSeenAt: new Date(Date.now() - 10 * 60 * 1000),
+        idleExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        expiresAt: absoluteExpiry,
+      },
+    });
+
+    await firstBrowser.get('/auth/profile').expect(200);
+    const renewed = await prisma.userSession.findUniqueOrThrow({
+      where: { id: firstSession.id },
+    });
+    expect(renewed.idleExpiresAt.getTime()).toBe(absoluteExpiry.getTime());
+    expect(renewed.expiresAt.getTime()).toBe(absoluteExpiry.getTime());
+
+    const activeSessions = await prisma.userSession.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    const secondSession = activeSessions.find(
+      (item) => item.id !== firstSession.id,
+    );
+    if (!secondSession) throw new Error('Second session was not created.');
+
+    const logout = await firstBrowser
+      .post('/auth/logout')
+      .set('Origin', 'http://localhost:3000')
+      .expect(201);
+    expect(logout.body).toEqual({ loggedOut: true });
+    expect(logout.headers['set-cookie']?.[0]).toContain('clinic_session=;');
+
+    const firstAfterLogout = await prisma.userSession.findUniqueOrThrow({
+      where: { id: firstSession.id },
+    });
+    const secondAfterLogout = await prisma.userSession.findUniqueOrThrow({
+      where: { id: secondSession.id },
+    });
+    expect(firstAfterLogout.revokedAt).not.toBeNull();
+    expect(secondAfterLogout.revokedAt).toBeNull();
+
+    await firstBrowser.get('/auth/profile').expect(401);
+    await secondBrowser.get('/auth/profile').expect(200);
+
+    await firstBrowser
+      .post('/auth/logout')
+      .set('Origin', 'http://localhost:3000')
+      .expect(201, { loggedOut: true });
   });
 
   afterEach(async () => {

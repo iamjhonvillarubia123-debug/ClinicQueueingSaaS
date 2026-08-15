@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'node:crypto';
 export const SESSION_COOKIE_NAME = 'clinic_session';
 export const SESSION_IDLE_LIFETIME_MS = 2 * 60 * 60 * 1000;
 export const SESSION_ABSOLUTE_LIFETIME_MS = 12 * 60 * 60 * 1000;
+export const SESSION_COOKIE_MAX_AGE_MS = SESSION_ABSOLUTE_LIFETIME_MS;
 export const SESSION_TOUCH_THROTTLE_MS = 5 * 60 * 1000;
 
 export function normalizeEmail(email: string): string {

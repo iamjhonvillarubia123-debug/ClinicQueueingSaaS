@@ -13,8 +13,13 @@ import { EmailVerificationService } from './email-verification.service';
 import { LoginDto } from './dto/login.dto';
 import { ResendEmailVerificationDto } from './dto/resend-email-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { CsrfOriginGuard } from './guards/csrf-origin.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
-import { SESSION_COOKIE_NAME } from './security/session-security';
+import {
+  readCookie,
+  SESSION_COOKIE_MAX_AGE_MS,
+  SESSION_COOKIE_NAME,
+} from './security/session-security';
 import type { AuthenticatedRequest } from './types/authenticated-request';
 
 @Controller('auth')
@@ -36,10 +41,29 @@ export class AuthController {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 12 * 60 * 60 * 1000,
+      maxAge: SESSION_COOKIE_MAX_AGE_MS,
     });
 
     return result.response;
+  }
+
+  @UseGuards(CsrfOriginGuard)
+  @Post('logout')
+  async logout(
+    @Request() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const rawToken = readCookie(request.headers.cookie, SESSION_COOKIE_NAME);
+    const result = await this.authService.logout(rawToken);
+
+    response.clearCookie(SESSION_COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+
+    return result;
   }
 
   @Post('resend-email-verification')

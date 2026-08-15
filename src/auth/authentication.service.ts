@@ -38,23 +38,7 @@ export class AuthenticationService {
 
     const user = session.user;
 
-    if (user.accountStatus !== UserAccountStatus.ACTIVE) {
-      throw new UnauthorizedException('Authentication required.');
-    }
-
-    if (
-      user.role === UserRole.DOCTOR &&
-      user.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE
-    ) {
-      throw new UnauthorizedException('Authentication required.');
-    }
-
-    if (
-      user.role === UserRole.SECRETARY &&
-      user.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE
-    ) {
+    if (!this.isOrdinarySessionEligible(user)) {
       throw new UnauthorizedException('Authentication required.');
     }
 
@@ -73,6 +57,24 @@ export class AuthenticationService {
     };
   }
 
+  private isOrdinarySessionEligible(user: {
+    role: UserRole;
+    accountStatus: UserAccountStatus;
+    administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+  }): boolean {
+    if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
+
+    if (
+      user.role === UserRole.DOCTOR &&
+      user.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
   private async touchSessionIfNeeded(
     sessionId: string,
     lastSeenAt: Date,
@@ -89,10 +91,6 @@ export class AuthenticationService {
     );
     const newIdleExpiry =
       candidateIdleExpiry < expiresAt ? candidateIdleExpiry : expiresAt;
-
-    if (newIdleExpiry <= idleExpiresAt && now <= lastSeenAt) {
-      return;
-    }
 
     await this.prisma.userSession.updateMany({
       where: {

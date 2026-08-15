@@ -52,9 +52,21 @@ export class AuthService {
     const expiresAt = new Date(now.getTime() + SESSION_ABSOLUTE_LIFETIME_MS);
 
     await this.prisma.$transaction(async (transaction) => {
+      const currentUser = await transaction.user.findUnique({
+        where: { id: user.id },
+      });
+
+      if (
+        !currentUser ||
+        currentUser.passwordHash !== user.passwordHash ||
+        !this.isOrdinaryLoginEligible(currentUser)
+      ) {
+        throw new UnauthorizedException('Invalid email or password.');
+      }
+
       await transaction.userSession.create({
         data: {
-          userId: user.id,
+          userId: currentUser.id,
           tokenHash,
           lastSeenAt: now,
           idleExpiresAt,
@@ -64,7 +76,7 @@ export class AuthService {
       });
 
       await transaction.user.update({
-        where: { id: user.id },
+        where: { id: currentUser.id },
         data: { lastLoginAt: now },
       });
     });
@@ -78,6 +90,21 @@ export class AuthService {
     };
   }
 
+  async logout(rawSessionToken: string | null): Promise<{ loggedOut: true }> {
+    if (rawSessionToken) {
+      const tokenHash = hashSessionToken(rawSessionToken);
+      await this.prisma.userSession.updateMany({
+        where: {
+          tokenHash,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    return { loggedOut: true };
+  }
+
   private isOrdinaryLoginEligible(user: {
     role: UserRole;
     accountStatus: UserAccountStatus;
@@ -87,8 +114,9 @@ export class AuthService {
     if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
 
     if (
+      user.role === UserRole.DOCTOR &&
       user.administrativeRestrictionStatus !==
-      AdministrativeRestrictionStatus.NONE
+        AdministrativeRestrictionStatus.NONE
     ) {
       return false;
     }
