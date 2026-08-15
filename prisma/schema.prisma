@@ -597,6 +597,7 @@ model AdministrativeAccountActionScope {
 
   // Wired to ClinicDay when the canonical ClinicDay model is installed.
   clinicDayId String?
+  clinicDay   ClinicDay? @relation(fields: [clinicDayId], references: [id], onDelete: Restrict)
 
   administrativeAccountAction AdministrativeAccountAction @relation(fields: [administrativeAccountActionId], references: [id], onDelete: Restrict)
 
@@ -1981,6 +1982,8 @@ model ClinicDay {
   operatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingPracticeStaff", fields: [operatingPracticeStaffId], references: [id], onDelete: Restrict)
 
   cancelledByUser User? @relation("ClinicDayCancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
+
+  administrativeAccountActionScopes AdministrativeAccountActionScope[]
 
   @@unique([practiceLocationId, serviceDate])
   @@index([status, serviceDate])
