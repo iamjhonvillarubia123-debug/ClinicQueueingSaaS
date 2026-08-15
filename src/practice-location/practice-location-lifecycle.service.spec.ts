@@ -1,8 +1,5 @@
 import { createHash } from 'crypto';
-import {
-  ConflictException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdministrativeRestrictionStatus,
@@ -91,9 +88,7 @@ describe('PracticeLocationLifecycleService', () => {
       count: 1,
     });
     prismaServiceMock.clinicDay.update.mockResolvedValue({});
-    prismaServiceMock.clinicDayOperatingStaffAudit.create.mockResolvedValue(
-      {},
-    );
+    prismaServiceMock.clinicDayOperatingStaffAudit.create.mockResolvedValue({});
     prismaServiceMock.practiceLocation.update.mockResolvedValue({});
   });
 
@@ -144,9 +139,9 @@ describe('PracticeLocationLifecycleService', () => {
     expect(
       prismaServiceMock.practiceStaffCapability.updateMany,
     ).toHaveBeenCalledTimes(1);
-    expect(prismaServiceMock.scheduledReminder.updateMany).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      prismaServiceMock.scheduledReminder.updateMany,
+    ).toHaveBeenCalledTimes(1);
     expect(
       (prismaServiceMock.practiceStaff as { updateMany?: jest.Mock }).updateMany,
     ).toBeUndefined();
@@ -162,7 +157,9 @@ describe('PracticeLocationLifecycleService', () => {
         },
       ])
       .mockResolvedValueOnce([]);
-    prismaServiceMock.clinicDay.findFirst.mockResolvedValue({ id: 'started-1' });
+    prismaServiceMock.clinicDay.findFirst.mockResolvedValue({
+      id: 'started-1',
+    });
 
     await expect(
       service.disable(
@@ -268,6 +265,8 @@ describe('PracticeLocationLifecycleService', () => {
 
     expect(passwordSecurityServiceMock.verify).not.toHaveBeenCalled();
     expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
-    expect(prismaServiceMock.scheduledReminder.updateMany).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.scheduledReminder.updateMany,
+    ).not.toHaveBeenCalled();
   });
 });
