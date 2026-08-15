@@ -102,7 +102,9 @@ export class ScheduleTimeService {
     return candidate;
   }
 
-  weekday(serviceDate: LocalDateParts):
+  weekday(
+    serviceDate: LocalDateParts,
+  ):
     | 'SUNDAY'
     | 'MONDAY'
     | 'TUESDAY'
