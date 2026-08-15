@@ -12,6 +12,7 @@ import { UserRole } from '../../generated/prisma/client';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { NormalRestoreDoctorDto } from './dto/normal-restore-doctor.dto';
 import { NormalSuspendDoctorDto } from './dto/normal-suspend-doctor.dto';
 import { SystemAdminService } from './system-admin.service';
 
@@ -27,12 +28,7 @@ export class SystemAdminController {
     @Body() dto: NormalSuspendDoctorDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
-    if (request.user.role !== UserRole.SYSTEM_ADMIN) {
-      throw new ForbiddenException('SYSTEM_ADMIN authority is required.');
-    }
-    if (dto.targetDoctorUserId !== doctorUserId) {
-      throw new ForbiddenException('Target Doctor identity mismatch.');
-    }
+    this.assertSystemAdminTarget(request, doctorUserId, dto.targetDoctorUserId);
 
     return this.systemAdminService.normalSuspendDoctor(
       request.user.userId,
@@ -42,5 +38,37 @@ export class SystemAdminController {
       dto.adminPassword,
       idempotencyKey,
     );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('doctors/:doctorUserId/normal-restore')
+  normalRestoreDoctor(
+    @Request() request: AuthenticatedRequest,
+    @Param('doctorUserId') doctorUserId: string,
+    @Body() dto: NormalRestoreDoctorDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+  ) {
+    this.assertSystemAdminTarget(request, doctorUserId, dto.targetDoctorUserId);
+
+    return this.systemAdminService.normalRestoreDoctor(
+      request.user.userId,
+      doctorUserId,
+      dto.resolutionText,
+      dto.adminPassword,
+      idempotencyKey,
+    );
+  }
+
+  private assertSystemAdminTarget(
+    request: AuthenticatedRequest,
+    doctorUserId: string,
+    suppliedTargetDoctorUserId: string,
+  ): void {
+    if (request.user.role !== UserRole.SYSTEM_ADMIN) {
+      throw new ForbiddenException('SYSTEM_ADMIN authority is required.');
+    }
+    if (suppliedTargetDoctorUserId !== doctorUserId) {
+      throw new ForbiddenException('Target Doctor identity mismatch.');
+    }
   }
 }
