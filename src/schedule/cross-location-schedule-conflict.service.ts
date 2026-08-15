@@ -66,11 +66,12 @@ export class CrossLocationScheduleConflictService {
       );
 
       for (const serviceDate of serviceDates) {
-        const resolved = await this.scheduleResolution.resolveConfiguredSchedule(
-          location.id,
-          serviceDate,
-          db,
-        );
+        const resolved =
+          await this.scheduleResolution.resolveConfiguredSchedule(
+            location.id,
+            serviceDate,
+            db,
+          );
         if (!resolved.isOpen || !resolved.opensAt || !resolved.closesAt) {
           continue;
         }
