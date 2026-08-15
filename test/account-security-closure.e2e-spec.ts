@@ -104,7 +104,9 @@ describe('Account security closure (e2e)', () => {
     });
 
     if (!doctor.doctorProfile || !otherDoctor.doctorProfile) {
-      throw new Error('Doctor profiles were not created for the security test.');
+      throw new Error(
+        'Doctor profiles were not created for the security test.',
+      );
     }
 
     const ownLocation = await prisma.practiceLocation.create({
@@ -129,7 +131,10 @@ describe('Account security closure (e2e)', () => {
       },
     });
 
-    const createSecretary = (suffix: string, accountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED') =>
+    const createSecretary = (
+      suffix: string,
+      accountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED',
+    ) =>
       prisma.user.create({
         data: {
           email: `security-secretary-${suffix}-${unique}@example.test`,
