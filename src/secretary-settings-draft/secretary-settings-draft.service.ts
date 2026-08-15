@@ -39,24 +39,25 @@ type LockedDraft = {
   status: SecretarySettingsDraftStatus;
 };
 
+type ReviewCommandType =
+  | typeof CommandType.PRACTICE_LOCATION_REJECT_SETTINGS_DRAFT
+  | typeof CommandType.PRACTICE_LOCATION_RETURN_SETTINGS_DRAFT;
+
+type ReviewTargetStatus =
+  | typeof SecretarySettingsDraftStatus.REJECTED
+  | typeof SecretarySettingsDraftStatus.RETURNED_FOR_REWORK;
+
 @Injectable()
 export class SecretarySettingsDraftService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(
-    authenticatedUserId: string,
-    dto: CreateSecretarySettingsDraftDto,
-  ) {
+  async create(authenticatedUserId: string, dto: CreateSecretarySettingsDraftDto) {
     return this.prisma.$transaction(async (transaction) => {
       const authority = await this.lockDraftAuthority(
         transaction,
         dto.practiceLocationId,
       );
-      await this.assertCurrentRegularSecretary(
-        transaction,
-        authenticatedUserId,
-        authority,
-      );
+      this.assertCurrentRegularSecretary(authority, authenticatedUserId);
 
       const existing = await transaction.secretarySettingsDraft.findFirst({
         where: {
@@ -69,13 +70,21 @@ export class SecretarySettingsDraftService {
           },
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, status: true, authorPracticeStaffId: true },
+        select: {
+          id: true,
+          practiceLocationId: true,
+          authorPracticeStaffId: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       });
+
       if (existing) {
         return { ...existing, reused: true };
       }
 
-      const draft = await transaction.secretarySettingsDraft.create({
+      const created = await transaction.secretarySettingsDraft.create({
         data: {
           practiceLocationId: dto.practiceLocationId,
           authorPracticeStaffId: authority.currentRegularPracticeStaffId!,
@@ -87,10 +96,11 @@ export class SecretarySettingsDraftService {
           authorPracticeStaffId: true,
           status: true,
           createdAt: true,
+          updatedAt: true,
         },
       });
 
-      return { ...draft, reused: false };
+      return { ...created, reused: false };
     });
   }
 
@@ -105,31 +115,35 @@ export class SecretarySettingsDraftService {
         transaction,
         draft.practiceLocationId,
       );
-      await this.assertCurrentRegularSecretary(
-        transaction,
-        authenticatedUserId,
-        authority,
-      );
+      this.assertCurrentRegularSecretary(authority, authenticatedUserId);
 
       if (
         draft.status !== SecretarySettingsDraftStatus.DRAFT &&
         draft.status !== SecretarySettingsDraftStatus.RETURNED_FOR_REWORK
       ) {
         throw new ConflictException(
-          'Settings draft cannot be submitted from its current state.',
+          'Only an editable settings draft may be submitted.',
         );
       }
 
-      const now = new Date();
+      const submittedAt = new Date();
       await transaction.secretarySettingsDraft.update({
         where: { id: draft.id },
         data: {
           status: SecretarySettingsDraftStatus.SUBMITTED,
-          submittedAt: now,
+          submittedAt,
+          reviewedAt: null,
+          reviewedByUserId: null,
+          reviewComment: null,
         },
       });
 
-      return { submitted: true, draftId: draft.id };
+      return {
+        submitted: true,
+        draftId: draft.id,
+        status: SecretarySettingsDraftStatus.SUBMITTED,
+        submittedAt,
+      };
     });
   }
 
@@ -170,12 +184,8 @@ export class SecretarySettingsDraftService {
     draftId: string,
     dto: ReviewSecretarySettingsDraftDto,
     idempotencyKey: string,
-    commandType:
-      | CommandType.PRACTICE_LOCATION_REJECT_SETTINGS_DRAFT
-      | CommandType.PRACTICE_LOCATION_RETURN_SETTINGS_DRAFT,
-    targetStatus:
-      | SecretarySettingsDraftStatus.REJECTED
-      | SecretarySettingsDraftStatus.RETURNED_FOR_REWORK,
+    commandType: ReviewCommandType,
+    targetStatus: ReviewTargetStatus,
   ) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     const comment = dto.reviewComment?.trim() || null;
@@ -273,90 +283,12 @@ export class SecretarySettingsDraftService {
       LIMIT 1
       FOR UPDATE OF pl
     `);
+
     const authority = rows[0];
     if (!authority) {
       throw new NotFoundException('Practice location was not found.');
     }
-    if (
-      authority.lifecycleStatus ===
-      PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
-    ) {
-      throw new ConflictException(
-        'A permanently deleted practice location cannot use settings drafts.',
-      );
-    }
     return authority;
-  }
-
-  private async assertCurrentRegularSecretary(
-    transaction: TransactionClient,
-    authenticatedUserId: string,
-    authority: DraftAuthority,
-  ): Promise<void> {
-    if (
-      !authority.currentRegularPracticeStaffId ||
-      authority.currentSecretaryUserId !== authenticatedUserId ||
-      authority.currentAssignmentActive !== true
-    ) {
-      throw new ForbiddenException(
-        'Only the current regular secretary may manage this settings draft.',
-      );
-    }
-
-    const user = await transaction.user.findUnique({
-      where: { id: authenticatedUserId },
-      select: { role: true, accountStatus: true },
-    });
-    if (
-      !user ||
-      user.role !== UserRole.SECRETARY ||
-      user.accountStatus !== UserAccountStatus.ACTIVE
-    ) {
-      throw new ForbiddenException(
-        'Only an eligible active secretary may manage settings drafts.',
-      );
-    }
-  }
-
-  private async assertOwningDoctor(
-    transaction: TransactionClient,
-    authenticatedUserId: string,
-    practiceLocationId: string,
-  ): Promise<void> {
-    const rows = await transaction.$queryRaw<Array<{ doctorUserId: string }>>(
-      Prisma.sql`
-        SELECT dp."userId" AS "doctorUserId"
-        FROM "PracticeLocation" pl
-        INNER JOIN "DoctorProfile" dp
-          ON dp."id" = pl."doctorProfileId"
-        WHERE pl."id" = ${practiceLocationId}
-        LIMIT 1
-        FOR UPDATE OF pl
-      `,
-    );
-    if (rows[0]?.doctorUserId !== authenticatedUserId) {
-      throw new NotFoundException('Settings draft was not found.');
-    }
-
-    const user = await transaction.user.findUnique({
-      where: { id: authenticatedUserId },
-      select: {
-        role: true,
-        accountStatus: true,
-        administrativeRestrictionStatus: true,
-      },
-    });
-    if (
-      !user ||
-      user.role !== UserRole.DOCTOR ||
-      user.accountStatus !== UserAccountStatus.ACTIVE ||
-      user.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE
-    ) {
-      throw new ForbiddenException(
-        'Only the eligible owning doctor may review settings drafts.',
-      );
-    }
   }
 
   private async lockDraft(
@@ -377,6 +309,61 @@ export class SecretarySettingsDraftService {
     return rows[0] ?? null;
   }
 
+  private assertCurrentRegularSecretary(
+    authority: DraftAuthority,
+    authenticatedUserId: string,
+  ): void {
+    if (
+      authority.lifecycleStatus ===
+        PracticeLocationLifecycleStatus.PERMANENTLY_DELETED ||
+      !authority.currentRegularPracticeStaffId ||
+      !authority.currentAssignmentActive ||
+      authority.currentSecretaryUserId !== authenticatedUserId
+    ) {
+      throw new ForbiddenException(
+        'Only the current regular secretary may manage this settings draft.',
+      );
+    }
+  }
+
+  private async assertOwningDoctor(
+    transaction: TransactionClient,
+    authenticatedUserId: string,
+    practiceLocationId: string,
+  ): Promise<void> {
+    const actor = await transaction.user.findUnique({
+      where: { id: authenticatedUserId },
+      select: {
+        id: true,
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        doctorProfile: {
+          select: {
+            practiceLocations: {
+              where: { id: practiceLocationId },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      !actor ||
+      actor.role !== UserRole.DOCTOR ||
+      actor.accountStatus !== UserAccountStatus.ACTIVE ||
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
+      !actor.doctorProfile?.practiceLocations.length
+    ) {
+      throw new ForbiddenException(
+        'Only the eligible owning doctor may review this settings draft.',
+      );
+    }
+  }
+
   private normalizeIdempotencyKey(value: string): string {
     const normalized = value?.trim();
     if (!normalized) {
@@ -386,15 +373,6 @@ export class SecretarySettingsDraftService {
       throw new BadRequestException('Idempotency-Key is too long.');
     }
     return normalized;
-  }
-
-  private async acquireCommandLock(
-    transaction: TransactionClient,
-    commandIdentityKey: string,
-  ): Promise<void> {
-    await transaction.$executeRaw`
-      SELECT pg_advisory_xact_lock(hashtextextended(${commandIdentityKey}, 0))
-    `;
   }
 
   private assertCompatibleReplay(
@@ -410,5 +388,14 @@ export class SecretarySettingsDraftService {
 
   private hash(value: string): string {
     return createHash('sha256').update(value, 'utf8').digest('hex');
+  }
+
+  private async acquireCommandLock(
+    transaction: TransactionClient,
+    commandIdentityKey: string,
+  ): Promise<void> {
+    await transaction.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtextextended(${commandIdentityKey}, 0))
+    `;
   }
 }
