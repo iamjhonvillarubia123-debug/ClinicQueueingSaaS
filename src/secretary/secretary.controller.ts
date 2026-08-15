@@ -9,6 +9,7 @@ import {
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { PermanentlyDeleteSecretaryDto } from './dto/permanently-delete-secretary.dto';
 import { ReactivateSecretaryDto } from './dto/reactivate-secretary.dto';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
 
@@ -38,6 +39,19 @@ export class SecretaryController {
     return this.secretaryLifecycleService.reactivate(
       dto.email,
       dto.password,
+      idempotencyKey,
+    );
+  }
+
+  @Post('account/permanent-delete')
+  permanentlyDeleteAccount(
+    @Body() dto: PermanentlyDeleteSecretaryDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+  ) {
+    return this.secretaryLifecycleService.permanentlyDelete(
+      dto.email,
+      dto.password,
+      dto.confirmPermanentDelete,
       idempotencyKey,
     );
   }
