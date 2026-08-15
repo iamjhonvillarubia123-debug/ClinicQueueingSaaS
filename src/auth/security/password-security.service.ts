@@ -15,4 +15,7 @@ export class PasswordSecurityService {
     this.assertValid(password);
     return bcrypt.hash(password, PASSWORD_BCRYPT_SALT_ROUNDS);
   }
+  async verify(password: string, passwordHash: string): Promise<boolean> {
+    return bcrypt.compare(password, passwordHash);
+  }
 }

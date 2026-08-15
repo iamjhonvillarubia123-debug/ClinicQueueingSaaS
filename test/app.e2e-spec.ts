@@ -25,6 +25,7 @@ describe('AppController (e2e)', () => {
     OTP_HMAC_KEY_V1: Buffer.alloc(32, 3).toString('base64'),
     OTP_HMAC_ACTIVE_KEY_ID: 'e2e-otp-hmac-v1',
     PUBLIC_APP_BASE_URL: 'https://app.example.test',
+    WEB_APP_ORIGIN: 'https://app.example.test',
   };
 
   const originalEnvironment: Record<string, string | undefined> = {};
@@ -415,7 +416,7 @@ describe('AppController (e2e)', () => {
 
     const logout = await firstBrowser
       .post('/auth/logout')
-      .set('Origin', 'http://localhost:3000')
+      .set('Origin', 'https://app.example.test')
       .expect(201);
     expect(logout.body).toEqual({ loggedOut: true });
     expect(logout.headers['set-cookie']?.[0]).toContain('clinic_session=;');
@@ -434,7 +435,7 @@ describe('AppController (e2e)', () => {
 
     await firstBrowser
       .post('/auth/logout')
-      .set('Origin', 'http://localhost:3000')
+      .set('Origin', 'https://app.example.test')
       .expect(201, { loggedOut: true });
   });
 
@@ -789,6 +790,107 @@ describe('AppController (e2e)', () => {
     ).toBeNull();
   });
 
+  it('disables a Doctor, revokes the live session, and requires fresh login after pre-login reactivation', async () => {
+    if (!app) throw new Error('E2E application did not initialize.');
+
+    const unique = randomUUID();
+    const email = `doctor-lifecycle-${unique}@example.test`;
+    const password = 'Doctor lifecycle password 42!';
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Lifecycle',
+        lastName: 'Doctor',
+        mobileNumber: `+63920${unique.replace(/-/g, '').slice(0, 7)}`,
+        passwordHash: await bcrypt.hash(password, 12),
+        role: 'DOCTOR',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    const browser = request.agent(app.getHttpServer());
+    await browser.post('/auth/login').send({ email, password }).expect(201);
+    await browser.get('/auth/profile').expect(200);
+
+    const disableKey = `disable-${unique}`;
+    await browser
+      .post('/doctor/account/disable')
+      .set('Origin', 'https://app.example.test')
+      .set('Idempotency-Key', disableKey)
+      .expect(201, { disabled: true, replayed: false });
+
+    const disabled = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(disabled.accountStatus).toBe('VOLUNTARILY_DISABLED');
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+    await browser.get('/auth/profile').expect(401);
+
+    await browser
+      .post('/doctor/account/disable')
+      .set('Origin', 'https://app.example.test')
+      .set('Idempotency-Key', disableKey)
+      .expect(401);
+
+    const reactivateKey = `reactivate-${unique}`;
+    await request(app.getHttpServer())
+      .post('/doctor/account/reactivate')
+      .set('Idempotency-Key', reactivateKey)
+      .send({ email, password })
+      .expect(201, { reactivated: true, replayed: false });
+
+    const reactivated = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(reactivated.accountStatus).toBe('ACTIVE');
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+
+    await request(app.getHttpServer())
+      .post('/doctor/account/reactivate')
+      .set('Idempotency-Key', reactivateKey)
+      .send({ email, password })
+      .expect(201, { reactivated: true, replayed: true });
+
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        accountStatus: 'VOLUNTARILY_DISABLED',
+        administrativeRestrictionStatus: 'SUSPENDED',
+      },
+    });
+    await prisma.userSession.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    await request(app.getHttpServer())
+      .post('/doctor/account/reactivate')
+      .set('Idempotency-Key', `restricted-${unique}`)
+      .send({ email, password })
+      .expect(409);
+
+    const stillRestricted = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(stillRestricted.accountStatus).toBe('VOLUNTARILY_DISABLED');
+    expect(stillRestricted.administrativeRestrictionStatus).toBe('SUSPENDED');
+  });
   afterEach(async () => {
     if (app) {
       await app.close();
