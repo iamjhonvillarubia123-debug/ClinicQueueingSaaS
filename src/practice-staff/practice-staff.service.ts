@@ -669,19 +669,18 @@ export class PracticeStaffService {
   }
 
   private assertCurrentDoctor(
-    actor:
-      | {
-          role: UserRole;
-          accountStatus: UserAccountStatus;
-          administrativeRestrictionStatus: AdministrativeRestrictionStatus;
-        }
-      | null,
+    actor: {
+      role: UserRole;
+      accountStatus: UserAccountStatus;
+      administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+    } | null,
   ): void {
     if (
       !actor ||
       actor.role !== UserRole.DOCTOR ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ForbiddenException(
         'Only an eligible current doctor may manage regular secretary authority.',
@@ -690,12 +689,10 @@ export class PracticeStaffService {
   }
 
   private assertEligibleSecretary(
-    secretary:
-      | {
-          role: UserRole;
-          accountStatus: UserAccountStatus;
-        }
-      | null,
+    secretary: {
+      role: UserRole;
+      accountStatus: UserAccountStatus;
+    } | null,
   ): void {
     if (
       !secretary ||
