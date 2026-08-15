@@ -83,7 +83,9 @@ describe('SecretaryLifecycleService', () => {
         },
       ]);
 
-    await expect(service.disable('secretary-1', 'disable-key')).resolves.toEqual({
+    await expect(
+      service.disable('secretary-1', 'disable-key'),
+    ).resolves.toEqual({
       disabled: true,
       replayed: false,
     });
@@ -94,10 +96,12 @@ describe('SecretaryLifecycleService', () => {
     });
     expect(tx.userSession.updateMany).toHaveBeenCalledWith({
       where: { userId: 'secretary-1', revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+      data: { revokedAt: expect.any(Date) as unknown },
     });
     expect(tx.practiceLocation.updateMany).toHaveBeenCalledWith({
-      where: { currentRegularPracticeStaffId: { in: ['staff-1', 'staff-2'] } },
+      where: {
+        currentRegularPracticeStaffId: { in: ['staff-1', 'staff-2'] },
+      },
       data: { currentRegularPracticeStaffId: null },
     });
     expect(tx.clinicDay.updateMany).toHaveBeenCalledWith({
@@ -113,7 +117,7 @@ describe('SecretaryLifecycleService', () => {
         status: PracticeStaffCapabilityStatus.REVOKED,
         activeCapabilityKey: null,
         revokedByUserId: 'secretary-1',
-        revokedAt: expect.any(Date),
+        revokedAt: expect.any(Date) as unknown,
       },
     });
     expect(tx.practiceStaff.updateMany).toHaveBeenCalledWith({
@@ -125,19 +129,20 @@ describe('SecretaryLifecycleService', () => {
         commandType: CommandType.SECRETARY_DISABLE_ACCOUNT,
         actorUserId: 'secretary-1',
         accountUserId: 'secretary-1',
-        createdAt: expect.any(Date),
-      }),
+        createdAt: expect.any(Date) as unknown,
+      }) as unknown,
       select: { id: true },
     });
     expect(tx.applicationNotification.create).toHaveBeenCalledTimes(2);
     expect(tx.applicationNotification.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         recipientUserId: 'doctor-1',
-        notificationType: ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED,
+        notificationType:
+          ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED,
         affectedSecretaryUserId: 'secretary-1',
         practiceLocationId: 'location-1',
         commandIdempotencyId: 'command-1',
-      }),
+      }) as unknown,
     });
     expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
   });
@@ -154,7 +159,9 @@ describe('SecretaryLifecycleService', () => {
       .mockResolvedValueOnce([{ id: 'secretary-1' }])
       .mockResolvedValueOnce([]);
 
-    await expect(service.disable('secretary-1', 'disable-key')).resolves.toEqual({
+    await expect(
+      service.disable('secretary-1', 'disable-key'),
+    ).resolves.toEqual({
       disabled: true,
       replayed: false,
     });
@@ -172,7 +179,9 @@ describe('SecretaryLifecycleService', () => {
       requestFingerprint: fingerprint,
     });
 
-    await expect(service.disable('secretary-1', 'disable-key')).resolves.toEqual({
+    await expect(
+      service.disable('secretary-1', 'disable-key'),
+    ).resolves.toEqual({
       disabled: true,
       replayed: true,
     });
