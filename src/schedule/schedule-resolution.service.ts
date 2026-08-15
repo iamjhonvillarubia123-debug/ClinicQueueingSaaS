@@ -49,9 +49,7 @@ export class ScheduleResolutionService {
     const timeZone = location.timeZone.trim();
     this.scheduleTime.assertValidTimeZone(timeZone);
 
-    const dateValue = new Date(
-      Date.UTC(date.year, date.month - 1, date.day),
-    );
+    const dateValue = new Date(Date.UTC(date.year, date.month - 1, date.day));
     const exception = await this.prisma.scheduleException.findUnique({
       where: {
         practiceLocationId_serviceDate: {
@@ -71,7 +69,7 @@ export class ScheduleResolutionService {
       );
     }
 
-    const weekday = this.scheduleTime.weekday(date) as Weekday;
+    const weekday = this.scheduleTime.weekday(date);
     const recurring = await this.prisma.practiceSchedule.findUnique({
       where: {
         practiceLocationId_weekday: { practiceLocationId, weekday },
@@ -112,9 +110,7 @@ export class ScheduleResolutionService {
     if (!location) {
       throw new NotFoundException('Practice location was not found.');
     }
-    if (
-      location.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE
-    ) {
+    if (location.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE) {
       const configured = await this.resolveConfiguredSchedule(
         practiceLocationId,
         serviceDate,
