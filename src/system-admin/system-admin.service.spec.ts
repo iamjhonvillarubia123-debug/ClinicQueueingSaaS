@@ -1,5 +1,9 @@
 import { createHash } from 'crypto';
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   AdministrativeAccountActionType,
   AdministrativeReasonCategory,
@@ -21,7 +25,10 @@ describe('SystemAdminService', () => {
       update: jest.fn(),
     },
     userSession: { updateMany: jest.fn() },
-    administrativeAccountAction: { create: jest.fn() },
+    administrativeAccountAction: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+    },
     commandIdempotency: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -47,6 +54,7 @@ describe('SystemAdminService', () => {
     tx.$executeRaw.mockResolvedValue(0);
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     tx.administrativeAccountAction.create.mockResolvedValue({ id: 'action-1' });
+    tx.administrativeAccountAction.findUnique.mockResolvedValue(null);
     tx.user.update.mockResolvedValue({});
     tx.userSession.updateMany.mockResolvedValue({ count: 2 });
     tx.commandIdempotency.create.mockResolvedValue({});
@@ -219,6 +227,196 @@ describe('SystemAdminService', () => {
     });
 
     expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.administrativeAccountAction.create).not.toHaveBeenCalled();
+    expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('normally restores SUSPENDED to NONE without changing voluntary accountStatus', async () => {
+    tx.user.findUnique
+      .mockResolvedValueOnce({
+        id: 'admin-1',
+        role: UserRole.SYSTEM_ADMIN,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+        passwordHash: 'admin-hash',
+      })
+      .mockResolvedValueOnce({
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
+        accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.SUSPENDED,
+      });
+    tx.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { id: 'suspension-1', targetDoctorUserId: 'doctor-1' },
+      ]);
+    tx.administrativeAccountAction.create.mockResolvedValue({
+      id: 'restoration-1',
+    });
+
+    await expect(
+      service.normalRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Issue resolved after review.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).resolves.toEqual({
+      restored: true,
+      replayed: false,
+      administrativeAccountActionId: 'restoration-1',
+    });
+
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'doctor-1' },
+      data: {
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      },
+    });
+    expect(tx.userSession.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'doctor-1', revokedAt: null },
+      data: { revokedAt: expect.any(Date) as unknown },
+    });
+    expect(tx.administrativeAccountAction.create).toHaveBeenCalledWith({
+      data: {
+        actionType: AdministrativeAccountActionType.NORMAL_RESTORATION,
+        actorUserId: 'admin-1',
+        targetDoctorUserId: 'doctor-1',
+        reasonCategory: null,
+        explanation: null,
+        resolutionText: 'Issue resolved after review.',
+        restoresActionId: 'suspension-1',
+        occurredAt: expect.any(Date) as unknown,
+      },
+      select: { id: true },
+    });
+    expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        commandType: CommandType.SYSTEM_ADMIN_NORMAL_RESTORE_DOCTOR,
+        actorUserId: 'admin-1',
+        accountUserId: 'doctor-1',
+        resultAdministrativeAccountActionId: 'restoration-1',
+      }) as unknown,
+    });
+  });
+
+  it('rejects normal restoration from a non-SUSPENDED restriction state', async () => {
+    tx.user.findUnique
+      .mockResolvedValueOnce({
+        id: 'admin-1',
+        role: UserRole.SYSTEM_ADMIN,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+        passwordHash: 'admin-hash',
+      })
+      .mockResolvedValueOnce({
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.EMERGENCY_SUSPENDED,
+      });
+
+    await expect(
+      service.normalRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Resolved.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.administrativeAccountAction.create).not.toHaveBeenCalled();
+  });
+
+  it('requires an unresolved NORMAL_SUSPENSION for the same Doctor', async () => {
+    tx.user.findUnique
+      .mockResolvedValueOnce({
+        id: 'admin-1',
+        role: UserRole.SYSTEM_ADMIN,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+        passwordHash: 'admin-hash',
+      })
+      .mockResolvedValueOnce({
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.SUSPENDED,
+      });
+    tx.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await expect(
+      service.normalRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Resolved.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.administrativeAccountAction.create).not.toHaveBeenCalled();
+  });
+
+  it('replays committed normal restoration without creating duplicate effects', async () => {
+    tx.user.findUnique
+      .mockResolvedValueOnce({
+        id: 'admin-1',
+        role: UserRole.SYSTEM_ADMIN,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+        passwordHash: 'admin-hash',
+      })
+      .mockResolvedValueOnce({
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      });
+
+    const fingerprint = createHash('sha256')
+      .update(
+        `${CommandType.SYSTEM_ADMIN_NORMAL_RESTORE_DOCTOR}|admin-1|doctor-1|Issue resolved after review.`,
+        'utf8',
+      )
+      .digest('hex');
+    tx.commandIdempotency.findUnique.mockResolvedValue({
+      requestFingerprint: fingerprint,
+      resultAdministrativeAccountActionId: 'restoration-1',
+    });
+    tx.administrativeAccountAction.findUnique.mockResolvedValue({
+      actionType: AdministrativeAccountActionType.NORMAL_RESTORATION,
+      targetDoctorUserId: 'doctor-1',
+    });
+
+    await expect(
+      service.normalRestoreDoctor(
+        'admin-1',
+        'doctor-1',
+        'Issue resolved after review.',
+        'admin-password',
+        'restore-key',
+      ),
+    ).resolves.toEqual({
+      restored: true,
+      replayed: true,
+      administrativeAccountActionId: 'restoration-1',
+    });
+
+    expect(tx.administrativeAccountAction.findUnique).toHaveBeenCalledWith({
+      where: { id: 'restoration-1' },
+      select: { actionType: true, targetDoctorUserId: true },
+    });
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.userSession.updateMany).not.toHaveBeenCalled();
     expect(tx.administrativeAccountAction.create).not.toHaveBeenCalled();
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
   });
