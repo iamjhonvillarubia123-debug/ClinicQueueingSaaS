@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import {
   AdministrativeAccountActionType,
@@ -28,13 +29,13 @@ describe('SystemAdminService', () => {
   };
 
   const prisma = {
-    $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) =>
+    $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
       callback(tx),
     ),
   } as unknown as PrismaService;
 
   const passwordSecurity = {
-    verify: jest.fn(),
+    verify: jest.fn().mockResolvedValue(true),
   } as unknown as PasswordSecurityService;
 
   const service = new SystemAdminService(prisma, passwordSecurity);
@@ -48,7 +49,7 @@ describe('SystemAdminService', () => {
     tx.user.update.mockResolvedValue({});
     tx.userSession.updateMany.mockResolvedValue({ count: 2 });
     tx.commandIdempotency.create.mockResolvedValue({});
-    (passwordSecurity.verify as jest.Mock).mockResolvedValue(true);
+    passwordSecurity.verify.mockResolvedValue(true);
   });
 
   it('normally suspends a Doctor without changing voluntary accountStatus', async () => {
@@ -85,12 +86,13 @@ describe('SystemAdminService', () => {
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'doctor-1' },
       data: {
-        administrativeRestrictionStatus: AdministrativeRestrictionStatus.SUSPENDED,
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.SUSPENDED,
       },
     });
     expect(tx.userSession.updateMany).toHaveBeenCalledWith({
       where: { userId: 'doctor-1', revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+      data: { revokedAt: expect.any(Date) as unknown },
     });
     expect(tx.administrativeAccountAction.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -99,7 +101,7 @@ describe('SystemAdminService', () => {
         targetDoctorUserId: 'doctor-1',
         reasonCategory: AdministrativeReasonCategory.SERIOUS_POLICY_VIOLATION,
         explanation: 'Verified policy violation.',
-      }),
+      }) as unknown,
       select: { id: true },
     });
     expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
@@ -108,7 +110,7 @@ describe('SystemAdminService', () => {
         actorUserId: 'admin-1',
         accountUserId: 'doctor-1',
         resultAdministrativeAccountActionId: 'action-1',
-      }),
+      }) as unknown,
     });
   });
 
@@ -127,7 +129,7 @@ describe('SystemAdminService', () => {
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
       });
-    (passwordSecurity.verify as jest.Mock).mockResolvedValue(false);
+    passwordSecurity.verify.mockResolvedValue(false);
 
     await expect(
       service.normalSuspendDoctor(
@@ -187,16 +189,13 @@ describe('SystemAdminService', () => {
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.SUSPENDED,
       });
-    tx.commandIdempotency.findUnique.mockResolvedValue({
-      requestFingerprint: expect.any(String),
-      resultAdministrativeAccountActionId: 'action-1',
-    });
 
-    const fingerprint = (
-      service as unknown as { hash(value: string): string }
-    ).hash(
-      `${CommandType.SYSTEM_ADMIN_NORMAL_SUSPEND_DOCTOR}|admin-1|doctor-1|${AdministrativeReasonCategory.SECURITY_CONCERN}|Security review.`,
-    );
+    const fingerprint = createHash('sha256')
+      .update(
+        `${CommandType.SYSTEM_ADMIN_NORMAL_SUSPEND_DOCTOR}|admin-1|doctor-1|${AdministrativeReasonCategory.SECURITY_CONCERN}|Security review.`,
+        'utf8',
+      )
+      .digest('hex');
     tx.commandIdempotency.findUnique.mockResolvedValue({
       requestFingerprint: fingerprint,
       resultAdministrativeAccountActionId: 'action-1',
