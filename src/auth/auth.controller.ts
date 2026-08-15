@@ -9,14 +9,19 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
+import { EmailVerificationService } from './email-verification.service';
 import { LoginDto } from './dto/login.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { SESSION_COOKIE_NAME } from './security/session-security';
 import type { AuthenticatedRequest } from './types/authenticated-request';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly emailVerificationService: EmailVerificationService,
+  ) {}
 
   @Post('login')
   async login(
@@ -34,6 +39,11 @@ export class AuthController {
     });
 
     return result.response;
+  }
+
+  @Post('verify-email')
+  verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.emailVerificationService.verify(verifyEmailDto.token);
   }
 
   @UseGuards(SessionAuthGuard)
