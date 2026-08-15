@@ -108,7 +108,10 @@ export class PracticeLocationActivationService {
         practiceLocationId,
       );
       await this.lockUser(transaction, authenticatedUserId);
-      await this.acquireDoctorScheduleLock(transaction, location.doctorProfileId);
+      await this.acquireDoctorScheduleLock(
+        transaction,
+        location.doctorProfileId,
+      );
 
       const actor = await transaction.user.findUnique({
         where: { id: authenticatedUserId },
@@ -292,7 +295,9 @@ export class PracticeLocationActivationService {
     transaction: TransactionClient,
     practiceLocationId: string,
   ): Promise<LockedPracticeLocation> {
-    const rows = await transaction.$queryRaw<LockedPracticeLocation[]>(Prisma.sql`
+    const rows = await transaction.$queryRaw<
+      LockedPracticeLocation[]
+    >(Prisma.sql`
       SELECT
         pl."id",
         pl."doctorProfileId",
