@@ -205,8 +205,8 @@ describe('SecretarySettingsDraftService', () => {
       draftId: 'draft-1',
       status: SecretarySettingsDraftStatus.REJECTED,
     });
-    expect(
-      prismaServiceMock.commandIdempotency.create,
-    ).toHaveBeenCalledTimes(1);
+    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(
+      1,
+    );
   });
 });
