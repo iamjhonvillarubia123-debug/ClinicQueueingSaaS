@@ -5,6 +5,7 @@ import { AuthenticationService } from './authentication.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -12,6 +13,7 @@ describe('AuthController', () => {
   const authServiceMock = { login: jest.fn(), logout: jest.fn() };
   const authenticationServiceMock = {};
   const emailVerificationServiceMock = {};
+  const passwordResetServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue('http://localhost:3000'),
   };
@@ -31,6 +33,10 @@ describe('AuthController', () => {
         {
           provide: EmailVerificationService,
           useValue: emailVerificationServiceMock,
+        },
+        {
+          provide: PasswordResetService,
+          useValue: passwordResetServiceMock,
         },
         {
           provide: ConfigService,

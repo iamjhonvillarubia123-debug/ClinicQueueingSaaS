@@ -5,8 +5,10 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthenticationService } from './authentication.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
 import { CsrfOriginGuard } from './guards/csrf-origin.guard';
 import { SessionAuthGuard } from './guards/session-auth.guard';
+import { PasswordSecurityService } from './security/password-security.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
 
 @Module({
@@ -16,6 +18,8 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
     AuthService,
     AuthenticationService,
     EmailVerificationService,
+    PasswordResetService,
+    PasswordSecurityService,
     ProtectedAccountPayloadService,
     SessionAuthGuard,
     CsrfOriginGuard,
@@ -24,6 +28,8 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
     AuthService,
     AuthenticationService,
     EmailVerificationService,
+    PasswordResetService,
+    PasswordSecurityService,
     ProtectedAccountPayloadService,
     SessionAuthGuard,
     CsrfOriginGuard,

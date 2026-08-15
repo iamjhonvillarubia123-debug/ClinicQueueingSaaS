@@ -10,7 +10,10 @@ import {
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetService } from './password-reset.service';
+import { ConsumePasswordResetDto } from './dto/consume-password-reset.dto';
 import { LoginDto } from './dto/login.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { ResendEmailVerificationDto } from './dto/resend-email-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { CsrfOriginGuard } from './guards/csrf-origin.guard';
@@ -27,6 +30,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly passwordResetService: PasswordResetService,
   ) {}
 
   @Post('login')
@@ -64,6 +68,16 @@ export class AuthController {
     });
 
     return result;
+  }
+
+  @Post('request-password-reset')
+  requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return this.passwordResetService.request(dto.email);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body() dto: ConsumePasswordResetDto) {
+    return this.passwordResetService.consume(dto.token, dto.newPassword);
   }
 
   @Post('resend-email-verification')

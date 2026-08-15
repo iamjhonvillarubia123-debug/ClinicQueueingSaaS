@@ -3,7 +3,6 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import {
   AdministrativeRestrictionStatus,
   Prisma,
@@ -11,6 +10,7 @@ import {
   UserRole,
 } from '../../generated/prisma/client';
 import { EmailVerificationService } from '../auth/email-verification.service';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { normalizeEmail } from '../auth/security/session-security';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
@@ -22,12 +22,8 @@ export class DoctorService {
     private readonly prisma: PrismaService,
     private readonly mobileNumberService: MobileNumberService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly passwordSecurityService: PasswordSecurityService,
   ) {}
-
-  async hashPassword(password: string): Promise<string> {
-    const saltRounds = 12;
-    return bcrypt.hash(password, saltRounds);
-  }
 
   async registerDoctor(registerDoctorDto: RegisterDoctorDto) {
     const normalizedEmail = normalizeEmail(registerDoctorDto.email);
@@ -58,7 +54,9 @@ export class DoctorService {
       throw new ConflictException('A current account already uses this email.');
     }
 
-    const passwordHash = await this.hashPassword(registerDoctorDto.password);
+    const passwordHash = await this.passwordSecurityService.hash(
+      registerDoctorDto.password,
+    );
 
     try {
       return await this.prisma.$transaction(async (transaction) => {

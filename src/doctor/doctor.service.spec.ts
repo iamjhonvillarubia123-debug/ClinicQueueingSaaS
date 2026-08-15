@@ -5,6 +5,7 @@ import {
   UserRole,
 } from '../../generated/prisma/client';
 import { EmailVerificationService } from '../auth/email-verification.service';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { DoctorService } from './doctor.service';
@@ -48,6 +49,9 @@ describe('DoctorService', () => {
   const emailVerificationServiceMock = {
     createInitialVerification: jest.fn(),
   };
+  const passwordSecurityServiceMock = {
+    hash: jest.fn().mockResolvedValue('secure-hash'),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -64,6 +68,10 @@ describe('DoctorService', () => {
         {
           provide: EmailVerificationService,
           useValue: emailVerificationServiceMock,
+        },
+        {
+          provide: PasswordSecurityService,
+          useValue: passwordSecurityServiceMock,
         },
       ],
     }).compile();
@@ -104,8 +112,6 @@ describe('DoctorService', () => {
   });
 
   it('creates Doctor account records and verification intent inside one transaction', async () => {
-    jest.spyOn(service, 'hashPassword').mockResolvedValue('secure-hash');
-
     const result = await service.registerDoctor({
       firstName: '  Jane ',
       middleName: ' Q ',

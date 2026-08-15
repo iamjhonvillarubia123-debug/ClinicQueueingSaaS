@@ -433,6 +433,217 @@ describe('AppController (e2e)', () => {
       .expect(201, { loggedOut: true });
   });
 
+  it('serializes password-reset replacement and consumes one reset exactly once while revoking all sessions', async () => {
+    if (!app) throw new Error('E2E application did not initialize.');
+
+    const unique = randomUUID();
+    const email = `reset-${unique}@example.test`;
+    const oldPassword = 'M2Slice2D-Old-Password-42!';
+    const newPassword = 'M2Slice2D-New-Password-84!';
+    const emailVerifiedAt = new Date();
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Reset',
+        lastName: 'Doctor',
+        mobileNumber: `+63917${unique.replace(/-/g, '').slice(0, 7)}`,
+        passwordHash: await bcrypt.hash(oldPassword, 12),
+        role: 'DOCTOR',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        emailVerifiedAt,
+      },
+    });
+
+    const browserA = request.agent(app.getHttpServer());
+    const browserB = request.agent(app.getHttpServer());
+    await browserA
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(201);
+    await browserB
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(201);
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(2);
+
+    const missingResponse = await request(app.getHttpServer())
+      .post('/auth/request-password-reset')
+      .send({ email: `missing-${unique}@example.test` })
+      .expect(201);
+    const concurrentResponses = await Promise.all([
+      request(app.getHttpServer())
+        .post('/auth/request-password-reset')
+        .send({ email }),
+      request(app.getHttpServer())
+        .post('/auth/request-password-reset')
+        .send({ email }),
+    ]);
+    expect(missingResponse.body).toEqual({ accepted: true });
+    expect(concurrentResponses.map((response) => response.status)).toEqual([
+      201, 201,
+    ]);
+    expect(concurrentResponses[0].body).toEqual({ accepted: true });
+    expect(concurrentResponses[1].body).toEqual({ accepted: true });
+
+    const resets = await prisma.passwordReset.findMany({
+      where: { userId: user.id },
+      include: { notificationOutbox: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const pending = resets.filter((item) => item.status === 'PENDING');
+    expect(pending).toHaveLength(1);
+    expect(
+      resets.filter((item) => item.status === 'REVOKED').length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(pending[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(pending[0].activeResetKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(
+      pending[0].expiresAt.getTime() - pending[0].createdAt.getTime(),
+    ).toBe(30 * 60 * 1000);
+    expect(pending[0].notificationOutbox?.notificationType).toBe(
+      'PASSWORD_RESET',
+    );
+    expect(pending[0].notificationOutbox?.channel).toBe('EMAIL');
+    expect(pending[0].notificationOutbox?.practiceLocationId).toBeNull();
+    expect(pending[0].notificationOutbox?.recipientMobileEncrypted).toBeNull();
+
+    const revokedWithMessage = resets.find(
+      (item) =>
+        item.status === 'REVOKED' &&
+        item.notificationOutbox?.messageBodyEncrypted,
+    );
+    if (!revokedWithMessage?.notificationOutbox?.messageBodyEncrypted) {
+      throw new Error('Revoked password reset message missing.');
+    }
+    const revokedMessage = protectedPayloadService.decrypt(
+      revokedWithMessage.notificationOutbox.messageBodyEncrypted,
+      'password-reset:message',
+    );
+    const revokedUrl = revokedMessage.match(/https:\/\/\S+/)?.[0];
+    const revokedToken = revokedUrl
+      ? new URL(revokedUrl).searchParams.get('token')
+      : null;
+    if (!revokedToken) throw new Error('Revoked password reset token missing.');
+    await request(app.getHttpServer())
+      .post('/auth/reset-password')
+      .send({ token: revokedToken, newPassword })
+      .expect(400);
+
+    const encryptedMessage =
+      pending[0].notificationOutbox?.messageBodyEncrypted;
+    if (!encryptedMessage) throw new Error('Password reset message missing.');
+    const message = protectedPayloadService.decrypt(
+      encryptedMessage,
+      'password-reset:message',
+    );
+    const matchedUrl = message.match(/https:\/\/\S+/)?.[0];
+    if (!matchedUrl) throw new Error('Password reset URL missing.');
+    const token = new URL(matchedUrl).searchParams.get('token');
+    if (!token) throw new Error('Password reset token missing.');
+
+    const consumeResponses = await Promise.all([
+      request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token, newPassword }),
+      request(app.getHttpServer())
+        .post('/auth/reset-password')
+        .send({ token, newPassword }),
+    ]);
+    expect(consumeResponses.map((response) => response.status).sort()).toEqual([
+      201, 400,
+    ]);
+
+    const consumed = await prisma.passwordReset.findUniqueOrThrow({
+      where: { id: pending[0].id },
+    });
+    const resetUser = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(consumed.status).toBe('CONSUMED');
+    expect(consumed.tokenHash).toBeNull();
+    expect(consumed.activeResetKey).toBeNull();
+    expect(resetUser.emailVerifiedAt?.getTime()).toBe(
+      emailVerifiedAt.getTime(),
+    );
+    expect(resetUser.accountStatus).toBe('ACTIVE');
+    expect(resetUser.administrativeRestrictionStatus).toBe('NONE');
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+
+    await browserA.get('/auth/profile').expect(401);
+    await browserB.get('/auth/profile').expect(401);
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: newPassword })
+      .expect(201);
+  });
+
+  it('allows credential reset for a voluntarily disabled account without reactivating it', async () => {
+    if (!app) throw new Error('E2E application did not initialize.');
+
+    const unique = randomUUID();
+    const email = `disabled-reset-${unique}@example.test`;
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName: 'Disabled',
+        lastName: 'Doctor',
+        mobileNumber: `+63918${unique.replace(/-/g, '').slice(0, 7)}`,
+        passwordHash: await bcrypt.hash('Old disabled password', 12),
+        role: 'DOCTOR',
+        accountStatus: 'VOLUNTARILY_DISABLED',
+        administrativeRestrictionStatus: 'SUSPENDED',
+        emailVerifiedAt: new Date(),
+      },
+    });
+
+    await request(app.getHttpServer())
+      .post('/auth/request-password-reset')
+      .send({ email })
+      .expect(201, { accepted: true });
+
+    const reset = await prisma.passwordReset.findFirstOrThrow({
+      where: { userId: user.id, status: 'PENDING' },
+      include: { notificationOutbox: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const encryptedMessage = reset.notificationOutbox?.messageBodyEncrypted;
+    if (!encryptedMessage) throw new Error('Password reset message missing.');
+    const message = protectedPayloadService.decrypt(
+      encryptedMessage,
+      'password-reset:message',
+    );
+    const url = message.match(/https:\/\/\S+/)?.[0];
+    const token = url ? new URL(url).searchParams.get('token') : null;
+    if (!token) throw new Error('Password reset token missing.');
+
+    await request(app.getHttpServer())
+      .post('/auth/reset-password')
+      .send({ token, newPassword: 'New disabled password' })
+      .expect(201, { reset: true });
+
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(after.accountStatus).toBe('VOLUNTARILY_DISABLED');
+    expect(after.administrativeRestrictionStatus).toBe('SUSPENDED');
+    expect(after.emailVerifiedAt?.getTime()).toBe(
+      user.emailVerifiedAt?.getTime(),
+    );
+  });
+
   afterEach(async () => {
     if (app) {
       await app.close();
