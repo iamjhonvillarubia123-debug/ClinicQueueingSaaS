@@ -213,12 +213,15 @@ describe('Account security closure (e2e)', () => {
         },
       }),
     ).toBe(1);
-    expect(
-      await prisma.practiceLocation.findUnique({
-        where: { id: ownLocation.id },
-        select: { currentRegularPracticeStaffId: true },
-      }),
-    ).toEqual({ currentRegularPracticeStaffId: expect.any(String) });
+
+    const ownLocationAuthority = await prisma.practiceLocation.findUnique({
+      where: { id: ownLocation.id },
+      select: { currentRegularPracticeStaffId: true },
+    });
+    expect(typeof ownLocationAuthority?.currentRegularPracticeStaffId).toBe(
+      'string',
+    );
+
     expect(
       await prisma.practiceStaff.count({
         where: {
