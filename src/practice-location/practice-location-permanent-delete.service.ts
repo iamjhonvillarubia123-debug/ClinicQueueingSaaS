@@ -178,7 +178,9 @@ export class PracticeLocationPermanentDeleteService {
     transaction: TransactionClient,
     practiceLocationId: string,
   ): Promise<LockedPracticeLocation> {
-    const rows = await transaction.$queryRaw<LockedPracticeLocation[]>(Prisma.sql`
+    const rows = await transaction.$queryRaw<
+      LockedPracticeLocation[]
+    >(Prisma.sql`
       SELECT
         pl."id",
         pl."lifecycleStatus",
@@ -306,7 +308,9 @@ export class PracticeLocationPermanentDeleteService {
     actorUserId: string,
     now: Date,
   ): Promise<void> {
-    const clinicDays = await transaction.$queryRaw<OperatingClinicDay[]>(Prisma.sql`
+    const clinicDays = await transaction.$queryRaw<
+      OperatingClinicDay[]
+    >(Prisma.sql`
       SELECT
         "id",
         "practiceLocationId",
