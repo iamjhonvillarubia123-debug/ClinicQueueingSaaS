@@ -46,7 +46,9 @@ describe('SecretarySettingsDraftService', () => {
     );
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.commandIdempotency.create.mockResolvedValue({ id: 'cmd-1' });
+    prismaServiceMock.commandIdempotency.create.mockResolvedValue({
+      id: 'cmd-1',
+    });
   });
 
   it('creates a DRAFT for the current regular Secretary and preserves author assignment identity', async () => {
@@ -59,10 +61,6 @@ describe('SecretarySettingsDraftService', () => {
         currentAssignmentActive: true,
       },
     ]);
-    prismaServiceMock.user.findUnique.mockResolvedValue({
-      role: UserRole.SECRETARY,
-      accountStatus: UserAccountStatus.ACTIVE,
-    });
     prismaServiceMock.secretarySettingsDraft.findFirst.mockResolvedValue(null);
     prismaServiceMock.secretarySettingsDraft.create.mockResolvedValue({
       id: 'draft-1',
@@ -70,12 +68,18 @@ describe('SecretarySettingsDraftService', () => {
       authorPracticeStaffId: 'staff-current',
       status: SecretarySettingsDraftStatus.DRAFT,
       createdAt: new Date('2026-08-15T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-15T00:00:00.000Z'),
     });
 
-    await expect(
-      service.create('secretary-1', { practiceLocationId: 'location-1' }),
-    ).resolves.toEqual(expect.objectContaining({ id: 'draft-1', reused: false }));
-    expect(prismaServiceMock.secretarySettingsDraft.create).toHaveBeenCalledWith(
+    const result = await service.create('secretary-1', {
+      practiceLocationId: 'location-1',
+    });
+
+    expect(result.id).toBe('draft-1');
+    expect(result.reused).toBe(false);
+    expect(
+      prismaServiceMock.secretarySettingsDraft.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           authorPracticeStaffId: 'staff-current',
@@ -104,17 +108,16 @@ describe('SecretarySettingsDraftService', () => {
           currentAssignmentActive: true,
         },
       ]);
-    prismaServiceMock.user.findUnique.mockResolvedValue({
-      role: UserRole.SECRETARY,
-      accountStatus: UserAccountStatus.ACTIVE,
-    });
     prismaServiceMock.secretarySettingsDraft.update.mockResolvedValue({});
 
-    await expect(service.submit('secretary-new', 'draft-1')).resolves.toEqual({
-      submitted: true,
-      draftId: 'draft-1',
-    });
-    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledWith(
+    const result = await service.submit('secretary-new', 'draft-1');
+
+    expect(result.submitted).toBe(true);
+    expect(result.draftId).toBe('draft-1');
+    expect(result.status).toBe(SecretarySettingsDraftStatus.SUBMITTED);
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: SecretarySettingsDraftStatus.SUBMITTED,
@@ -143,27 +146,30 @@ describe('SecretarySettingsDraftService', () => {
         },
       ]);
 
-    await expect(service.submit('secretary-old', 'draft-1')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
+    await expect(
+      service.submit('secretary-old', 'draft-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
   });
 
   it('lets the eligible owning Doctor return a submitted draft for rework without changing effective settings', async () => {
-    prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([
-        {
-          id: 'draft-1',
-          practiceLocationId: 'location-1',
-          authorPracticeStaffId: 'staff-old',
-          status: SecretarySettingsDraftStatus.SUBMITTED,
-        },
-      ])
-      .mockResolvedValueOnce([{ doctorUserId: 'doctor-1' }]);
+    prismaServiceMock.$queryRaw.mockResolvedValueOnce([
+      {
+        id: 'draft-1',
+        practiceLocationId: 'location-1',
+        authorPracticeStaffId: 'staff-old',
+        status: SecretarySettingsDraftStatus.SUBMITTED,
+      },
+    ]);
     prismaServiceMock.user.findUnique.mockResolvedValue({
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.ACTIVE,
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      doctorProfile: {
+        practiceLocations: [{ id: 'location-1' }],
+      },
     });
     prismaServiceMock.secretarySettingsDraft.update.mockResolvedValue({});
 
@@ -180,24 +186,27 @@ describe('SecretarySettingsDraftService', () => {
       draftId: 'draft-1',
       status: SecretarySettingsDraftStatus.RETURNED_FOR_REWORK,
     });
-    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledTimes(1);
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a submitted draft terminally and records the protected review command', async () => {
-    prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([
-        {
-          id: 'draft-1',
-          practiceLocationId: 'location-1',
-          authorPracticeStaffId: 'staff-1',
-          status: SecretarySettingsDraftStatus.SUBMITTED,
-        },
-      ])
-      .mockResolvedValueOnce([{ doctorUserId: 'doctor-1' }]);
+    prismaServiceMock.$queryRaw.mockResolvedValueOnce([
+      {
+        id: 'draft-1',
+        practiceLocationId: 'location-1',
+        authorPracticeStaffId: 'staff-1',
+        status: SecretarySettingsDraftStatus.SUBMITTED,
+      },
+    ]);
     prismaServiceMock.user.findUnique.mockResolvedValue({
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.ACTIVE,
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      doctorProfile: {
+        practiceLocations: [{ id: 'location-1' }],
+      },
     });
     prismaServiceMock.secretarySettingsDraft.update.mockResolvedValue({});
 
@@ -209,6 +218,8 @@ describe('SecretarySettingsDraftService', () => {
       draftId: 'draft-1',
       status: SecretarySettingsDraftStatus.REJECTED,
     });
-    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(1);
+    expect(
+      prismaServiceMock.commandIdempotency.create,
+    ).toHaveBeenCalledTimes(1);
   });
 });
