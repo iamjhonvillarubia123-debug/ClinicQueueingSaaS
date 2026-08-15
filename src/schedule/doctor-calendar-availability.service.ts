@@ -39,6 +39,25 @@ export class DoctorCalendarAvailabilityService {
     intervalEnd: Date,
     transaction?: CalendarClient,
   ): Promise<void> {
+    const available = await this.isAvailableForInterval(
+      doctorProfileId,
+      intervalStart,
+      intervalEnd,
+      transaction,
+    );
+    if (!available) {
+      throw new ConflictException(
+        'Doctor Calendar unavailability overlaps the proposed clinic hours.',
+      );
+    }
+  }
+
+  async isAvailableForInterval(
+    doctorProfileId: string,
+    intervalStart: Date,
+    intervalEnd: Date,
+    transaction?: CalendarClient,
+  ): Promise<boolean> {
     if (intervalEnd.getTime() <= intervalStart.getTime()) {
       throw new ConflictException('Clinic schedule interval is invalid.');
     }
@@ -86,12 +105,12 @@ export class DoctorCalendarAvailabilityService {
           block.start.getTime() < intervalEnd.getTime() &&
           intervalStart.getTime() < block.end.getTime()
         ) {
-          throw new ConflictException(
-            'Doctor Calendar unavailability overlaps the proposed clinic hours.',
-          );
+          return false;
         }
       }
     }
+
+    return true;
   }
 
   private resolveBlock(
