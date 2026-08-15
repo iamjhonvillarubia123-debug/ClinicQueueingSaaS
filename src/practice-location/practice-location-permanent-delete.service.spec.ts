@@ -3,7 +3,6 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdministrativeRestrictionStatus,
-  ClinicDayStatus,
   PracticeLocationLifecycleStatus,
   UserAccountStatus,
   UserRole,
@@ -133,7 +132,9 @@ describe('PracticeLocationPermanentDeleteService', () => {
         },
       ])
       .mockResolvedValueOnce([]);
-    prismaServiceMock.clinicDay.findFirst.mockResolvedValue({ id: 'started-1' });
+    prismaServiceMock.clinicDay.findFirst.mockResolvedValue({
+      id: 'started-1',
+    });
 
     await expect(
       service.permanentlyDelete(
@@ -215,10 +216,7 @@ describe('PracticeLocationPermanentDeleteService', () => {
       ])
       .mockResolvedValueOnce([]);
     const fingerprint = createHash('sha256')
-      .update(
-        'PRACTICE_LOCATION_DELETE|doctor-1|location-1|confirmed',
-        'utf8',
-      )
+      .update('PRACTICE_LOCATION_DELETE|doctor-1|location-1|confirmed', 'utf8')
       .digest('hex');
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
       requestFingerprint: fingerprint,
