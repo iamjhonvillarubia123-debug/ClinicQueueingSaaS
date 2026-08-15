@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 
 const schemaPath = path.resolve(__dirname, '..', 'prisma', 'schema.prisma');
-let schema = fs.readFileSync(schemaPath, 'utf8');
+const originalSchema = fs.readFileSync(schemaPath, 'utf8');
+const lineEnding = originalSchema.includes('\r\n') ? '\r\n' : '\n';
+let schema = originalSchema.replace(/\r\n/g, '\n');
 
 function replaceOnce(search, replacement, label) {
   const first = schema.indexOf(search);
@@ -40,7 +42,7 @@ replaceOnce(
 
 replaceOnce(
   `  operatingClinicDays             ClinicDay[]               @relation("ClinicDayOperatingPracticeStaff")\n`,
-  `  operatingClinicDays             ClinicDay[]               @relation("ClinicDayOperatingPracticeStaff")\n  priorOperatingStaffAudits       ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditPreviousStaff")\n  newOperatingStaffAudits         ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditNewStaff")\n`,
+  `  operatingClinicDays             ClinicDay[]                    @relation("ClinicDayOperatingPracticeStaff")\n  priorOperatingStaffAudits       ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditPreviousStaff")\n  newOperatingStaffAudits         ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditNewStaff")\n`,
   'PracticeStaff audit relations',
 );
 
@@ -58,5 +60,5 @@ replaceOnce(
   'ClinicDayOperatingStaffAudit model insertion',
 );
 
-fs.writeFileSync(schemaPath, schema, 'utf8');
+fs.writeFileSync(schemaPath, schema.replace(/\n/g, lineEnding), 'utf8');
 console.log('M2S2F1 Prisma schema synchronization completed.');
