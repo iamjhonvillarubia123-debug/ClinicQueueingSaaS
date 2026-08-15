@@ -489,7 +489,10 @@ describe('SecretaryLifecycleService', () => {
       passwordHash: 'hash',
     });
     const fingerprint = createHash('sha256')
-      .update(`${CommandType.SECRETARY_DELETE_ACCOUNT}|secretary-1|confirmed`, 'utf8')
+      .update(
+        `${CommandType.SECRETARY_DELETE_ACCOUNT}|secretary-1|confirmed`,
+        'utf8',
+      )
       .digest('hex');
     tx.commandIdempotency.findUnique.mockResolvedValue({
       requestFingerprint: fingerprint,
