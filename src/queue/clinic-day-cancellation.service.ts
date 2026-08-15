@@ -104,7 +104,9 @@ export class ClinicDayCancellationService {
         continue;
       }
 
-      const appointments = await transaction.$queryRaw<CancellableAppointment[]>(
+      const appointments = await transaction.$queryRaw<
+        CancellableAppointment[]
+      >(
         Prisma.sql`
           SELECT
             a."id",

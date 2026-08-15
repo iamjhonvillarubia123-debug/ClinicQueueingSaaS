@@ -33,8 +33,8 @@ describe('SystemAdminEmergencyService', () => {
     },
   };
 
-  const transactionMock = jest.fn(
-    (callback: (client: typeof tx) => unknown) => callback(tx),
+  const transactionMock = jest.fn((callback: (client: typeof tx) => unknown) =>
+    callback(tx),
   );
   const prisma = {
     $transaction: transactionMock,
