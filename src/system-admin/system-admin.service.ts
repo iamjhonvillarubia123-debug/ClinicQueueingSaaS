@@ -320,13 +320,17 @@ export class SystemAdminService {
     });
   }
 
-  private assertCurrentSystemAdmin(actor: {
-    id: string;
-    role: UserRole;
-    accountStatus: UserAccountStatus;
-    administrativeRestrictionStatus: AdministrativeRestrictionStatus;
-    passwordHash: string;
-  } | null): asserts actor is {
+  private assertCurrentSystemAdmin(
+    actor:
+      | {
+          id: string;
+          role: UserRole;
+          accountStatus: UserAccountStatus;
+          administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+          passwordHash: string;
+        }
+      | null,
+  ): asserts actor is {
     id: string;
     role: UserRole;
     accountStatus: UserAccountStatus;
