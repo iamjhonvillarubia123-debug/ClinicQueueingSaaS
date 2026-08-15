@@ -77,16 +77,11 @@ describe('SecretarySettingsDraftService', () => {
 
     expect(result.id).toBe('draft-1');
     expect(result.reused).toBe(false);
-    expect(
-      prismaServiceMock.secretarySettingsDraft.create,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          authorPracticeStaffId: 'staff-current',
-          status: SecretarySettingsDraftStatus.DRAFT,
-        }),
-      }),
-    );
+
+    const createCall = prismaServiceMock.secretarySettingsDraft.create.mock.calls[0]?.[0];
+    expect(createCall).toBeDefined();
+    expect(createCall.data.authorPracticeStaffId).toBe('staff-current');
+    expect(createCall.data.status).toBe(SecretarySettingsDraftStatus.DRAFT);
   });
 
   it('allows the new current regular Secretary to submit a surviving draft authored by the outgoing Secretary', async () => {
@@ -115,15 +110,10 @@ describe('SecretarySettingsDraftService', () => {
     expect(result.submitted).toBe(true);
     expect(result.draftId).toBe('draft-1');
     expect(result.status).toBe(SecretarySettingsDraftStatus.SUBMITTED);
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: SecretarySettingsDraftStatus.SUBMITTED,
-        }),
-      }),
-    );
+
+    const updateCall = prismaServiceMock.secretarySettingsDraft.update.mock.calls[0]?.[0];
+    expect(updateCall).toBeDefined();
+    expect(updateCall.data.status).toBe(SecretarySettingsDraftStatus.SUBMITTED);
   });
 
   it('denies the outgoing Secretary after regular Secretary replacement', async () => {
