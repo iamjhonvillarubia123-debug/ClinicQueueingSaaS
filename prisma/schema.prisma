@@ -126,6 +126,13 @@ enum EmailVerificationStatus {
   EXPIRED
 }
 
+enum PasswordResetStatus {
+  PENDING
+  CONSUMED
+  REVOKED
+  EXPIRED
+}
+
 enum BookingRecoveryAttemptStatus {
   PENDING_OTP
   VERIFIED
@@ -454,6 +461,7 @@ model User {
   cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
   userSessions                     UserSession[]
   emailVerifications               EmailVerification[]
+  passwordResets                   PasswordReset[]
   dataRetentionAcknowledgements    DoctorDataRetentionAcknowledgement[]
 
   permanentClosureAuditsAsAccount AccountPermanentClosureAudit[] @relation("AccountPermanentClosureAuditAccountUser")
@@ -559,6 +567,33 @@ model EmailVerification {
   @@index([status, expiresAt])
   @@index([userId, createdAt])
 }
+
+model PasswordReset {
+  id String @id @default(uuid())
+
+  userId String
+
+  tokenHash      String? @db.VarChar(64)
+  activeResetKey String? @unique @db.VarChar(64)
+
+  status PasswordResetStatus @default(PENDING)
+
+  expiresAt DateTime @db.Timestamptz(3)
+  consumedAt DateTime? @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  notificationOutbox NotificationOutbox? @relation("PasswordResetNotificationOutbox")
+
+  @@index([tokenHash])
+  @@index([status, expiresAt])
+  @@index([userId, createdAt])
+}
+
 
 model DoctorDataRetentionAcknowledgement {
   id String @id @default(uuid())
@@ -1515,6 +1550,7 @@ model NotificationOutbox {
   appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   emailVerification EmailVerification? @relation("EmailVerificationNotificationOutbox", fields: [emailVerificationId], references: [id], onDelete: Restrict)
+  passwordReset     PasswordReset?     @relation("PasswordResetNotificationOutbox", fields: [passwordResetId], references: [id], onDelete: Restrict)
 
   scheduledReminder            ScheduledReminder?            @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
   otpVerification              OtpVerification?              @relation("OtpVerificationNotificationOutbox", fields: [otpVerificationId], references: [id], onDelete: Restrict)
