@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import {
   AppointmentCancelledByType,
@@ -145,7 +146,8 @@ export class ClinicDayCancellationService {
             cancelledAt: now,
             terminalAt: now,
             cancelledByType: AppointmentCancelledByType.SYSTEM,
-            cancellationReason: 'Clinic operations stopped by emergency administrative action.',
+            cancellationReason:
+              'Clinic operations stopped by emergency administrative action.',
           },
         });
 
