@@ -51,7 +51,10 @@ type ReviewTargetStatus =
 export class SecretarySettingsDraftService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(authenticatedUserId: string, dto: CreateSecretarySettingsDraftDto) {
+  async create(
+    authenticatedUserId: string,
+    dto: CreateSecretarySettingsDraftDto,
+  ) {
     return this.prisma.$transaction(async (transaction) => {
       const authority = await this.lockDraftAuthority(
         transaction,
@@ -69,17 +72,8 @@ export class SecretarySettingsDraftService {
             ],
           },
         },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          practiceLocationId: true,
-          authorPracticeStaffId: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        orderBy: { updatedAt: 'desc' },
       });
-
       if (existing) {
         return { ...existing, reused: true };
       }
@@ -89,14 +83,6 @@ export class SecretarySettingsDraftService {
           practiceLocationId: dto.practiceLocationId,
           authorPracticeStaffId: authority.currentRegularPracticeStaffId!,
           status: SecretarySettingsDraftStatus.DRAFT,
-        },
-        select: {
-          id: true,
-          practiceLocationId: true,
-          authorPracticeStaffId: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
         },
       });
 
@@ -126,12 +112,12 @@ export class SecretarySettingsDraftService {
         );
       }
 
-      const submittedAt = new Date();
+      const now = new Date();
       await transaction.secretarySettingsDraft.update({
         where: { id: draft.id },
         data: {
           status: SecretarySettingsDraftStatus.SUBMITTED,
-          submittedAt,
+          submittedAt: now,
           reviewedAt: null,
           reviewedByUserId: null,
           reviewComment: null,
@@ -142,7 +128,6 @@ export class SecretarySettingsDraftService {
         submitted: true,
         draftId: draft.id,
         status: SecretarySettingsDraftStatus.SUBMITTED,
-        submittedAt,
       };
     });
   }
@@ -283,7 +268,6 @@ export class SecretarySettingsDraftService {
       LIMIT 1
       FOR UPDATE OF pl
     `);
-
     const authority = rows[0];
     if (!authority) {
       throw new NotFoundException('Practice location was not found.');
@@ -334,7 +318,6 @@ export class SecretarySettingsDraftService {
     const actor = await transaction.user.findUnique({
       where: { id: authenticatedUserId },
       select: {
-        id: true,
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
@@ -343,7 +326,6 @@ export class SecretarySettingsDraftService {
             practiceLocations: {
               where: { id: practiceLocationId },
               select: { id: true },
-              take: 1,
             },
           },
         },
@@ -356,7 +338,7 @@ export class SecretarySettingsDraftService {
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
       actor.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      !actor.doctorProfile?.practiceLocations.length
+      actor.doctorProfile?.practiceLocations.length !== 1
     ) {
       throw new ForbiddenException(
         'Only the eligible owning doctor may review this settings draft.',
