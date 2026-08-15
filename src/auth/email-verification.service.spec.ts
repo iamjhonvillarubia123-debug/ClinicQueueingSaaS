@@ -277,4 +277,98 @@ describe('EmailVerificationService', () => {
       },
     });
   });
+
+  it('returns the same generic resend response when no current account exists', async () => {
+    const prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const service = new EmailVerificationService(
+      prisma,
+      configService,
+      protectedPayloadService,
+    );
+
+    await expect(service.resend('missing@example.com')).resolves.toEqual({
+      accepted: true,
+    });
+    expect(
+      (prisma as unknown as { $transaction: jest.Mock }).$transaction,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('revokes the current pending verification and creates one replacement after the User-scoped lock', async () => {
+    const verificationUpdate = jest.fn().mockResolvedValue({});
+    const outboxUpdate = jest.fn().mockResolvedValue({});
+    const verificationCreate = jest
+      .fn()
+      .mockResolvedValue({ id: 'verification-2' });
+    const outboxCreate = jest.fn().mockResolvedValue({ id: 'outbox-2' });
+    const transaction = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'user-1',
+          email: 'doctor@example.com',
+          role: UserRole.DOCTOR,
+          accountStatus: UserAccountStatus.ACTIVE,
+          administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+          emailVerifiedAt: null,
+        }),
+      },
+      emailVerification: {
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'verification-1',
+          notificationOutbox: {
+            id: 'outbox-1',
+            status: NotificationOutboxStatus.PENDING,
+          },
+        }),
+        update: verificationUpdate,
+        create: verificationCreate,
+      },
+      notificationOutbox: {
+        update: outboxUpdate,
+        create: outboxCreate,
+      },
+    };
+    const prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue({ id: 'user-1' }) },
+      $transaction: jest.fn(
+        (callback: (tx: typeof transaction) => Promise<unknown>) =>
+          callback(transaction),
+      ),
+    } as unknown as PrismaService;
+    const service = new EmailVerificationService(
+      prisma,
+      configService,
+      protectedPayloadService,
+    );
+
+    await expect(service.resend(' Doctor@Example.com ')).resolves.toEqual({
+      accepted: true,
+    });
+    expect(transaction.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(verificationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'verification-1' },
+        data: expect.objectContaining({
+          status: EmailVerificationStatus.REVOKED,
+          tokenHash: null,
+          activeVerificationKey: null,
+        }) as unknown,
+      }),
+    );
+    expect(outboxUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'outbox-1' },
+        data: expect.objectContaining({
+          status: NotificationOutboxStatus.CANCELLED,
+        }) as unknown,
+      }),
+    );
+    expect(verificationCreate).toHaveBeenCalledTimes(1);
+    expect(outboxCreate).toHaveBeenCalledTimes(1);
+  });
 });

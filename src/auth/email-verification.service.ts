@@ -16,6 +16,10 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
 
 const VERIFICATION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const EMAIL_PAYLOAD_PURPOSE = 'doctor-email-verification';
+const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_15_MINUTES = 3;
+const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_24_HOURS = 10;
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export interface CreatedEmailVerification {
   id: string;
@@ -86,6 +90,109 @@ export class EmailVerificationService {
     });
 
     return { id: emailVerification.id, expiresAt };
+  }
+
+  async resend(email: string): Promise<{ accepted: true }> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const currentUser = await this.prisma.user.findFirst({
+      where: {
+        email: normalizedEmail,
+        accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+      },
+      select: { id: true },
+    });
+
+    if (!currentUser) {
+      return { accepted: true };
+    }
+
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${currentUser.id}, 0))
+      `;
+
+      const user = await transaction.user.findUnique({
+        where: { id: currentUser.id },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          accountStatus: true,
+          administrativeRestrictionStatus: true,
+          emailVerifiedAt: true,
+        },
+      });
+
+      if (
+        !user ||
+        user.role !== UserRole.DOCTOR ||
+        user.accountStatus !== UserAccountStatus.ACTIVE ||
+        user.administrativeRestrictionStatus !==
+          AdministrativeRestrictionStatus.NONE ||
+        user.emailVerifiedAt !== null
+      ) {
+        return;
+      }
+
+      const now = new Date();
+      const fifteenMinutesAgo = new Date(now.getTime() - FIFTEEN_MINUTES_MS);
+      const twentyFourHoursAgo = new Date(now.getTime() - TWENTY_FOUR_HOURS_MS);
+      const [recent15MinuteCount, recent24HourCount] = await Promise.all([
+        transaction.emailVerification.count({
+          where: { userId: user.id, createdAt: { gte: fifteenMinutesAgo } },
+        }),
+        transaction.emailVerification.count({
+          where: { userId: user.id, createdAt: { gte: twentyFourHoursAgo } },
+        }),
+      ]);
+
+      if (
+        recent15MinuteCount >= this.verificationIssuanceLimit15Minutes() ||
+        recent24HourCount >= this.verificationIssuanceLimit24Hours()
+      ) {
+        return;
+      }
+
+      const pending = await transaction.emailVerification.findFirst({
+        where: {
+          userId: user.id,
+          status: EmailVerificationStatus.PENDING,
+          activeVerificationKey: { not: null },
+        },
+        include: { notificationOutbox: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (pending) {
+        await transaction.emailVerification.update({
+          where: { id: pending.id },
+          data: {
+            status: EmailVerificationStatus.REVOKED,
+            revokedAt: now,
+            tokenHash: null,
+            activeVerificationKey: null,
+          },
+        });
+
+        if (
+          pending.notificationOutbox?.status ===
+          NotificationOutboxStatus.PENDING
+        ) {
+          await transaction.notificationOutbox.update({
+            where: { id: pending.notificationOutbox.id },
+            data: {
+              status: NotificationOutboxStatus.CANCELLED,
+              cancelledAt: now,
+            },
+          });
+        }
+      }
+
+      await this.createInitialVerification(transaction, user.id, user.email);
+    });
+
+    return { accepted: true };
   }
 
   async verify(token: string): Promise<{ verified: true }> {
@@ -191,6 +298,27 @@ export class EmailVerificationService {
     }
 
     return { verified: true };
+  }
+
+  private verificationIssuanceLimit15Minutes(): number {
+    return this.positiveIntegerConfig(
+      'EMAIL_VERIFICATION_MAX_ISSUANCES_PER_15_MINUTES',
+      DEFAULT_VERIFICATION_ISSUANCE_LIMIT_15_MINUTES,
+    );
+  }
+
+  private verificationIssuanceLimit24Hours(): number {
+    return this.positiveIntegerConfig(
+      'EMAIL_VERIFICATION_MAX_ISSUANCES_PER_24_HOURS',
+      DEFAULT_VERIFICATION_ISSUANCE_LIMIT_24_HOURS,
+    );
+  }
+
+  private positiveIntegerConfig(name: string, fallback: number): number {
+    const raw = this.configService.get<string>(name);
+    if (!raw) return fallback;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
   }
 
   private buildVerificationUrl(token: string): string {

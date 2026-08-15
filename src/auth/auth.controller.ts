@@ -11,6 +11,7 @@ import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
 import { LoginDto } from './dto/login.dto';
+import { ResendEmailVerificationDto } from './dto/resend-email-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { SessionAuthGuard } from './guards/session-auth.guard';
 import { SESSION_COOKIE_NAME } from './security/session-security';
@@ -39,6 +40,11 @@ export class AuthController {
     });
 
     return result.response;
+  }
+
+  @Post('resend-email-verification')
+  resendEmailVerification(@Body() dto: ResendEmailVerificationDto) {
+    return this.emailVerificationService.resend(dto.email);
   }
 
   @Post('verify-email')
