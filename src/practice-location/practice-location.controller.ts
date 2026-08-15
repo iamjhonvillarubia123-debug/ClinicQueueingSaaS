@@ -12,9 +12,12 @@ import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
+import { ActivatePracticeLocationDto } from './dto/activate-practice-location.dto';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 import { DisablePracticeLocationDto } from './dto/disable-practice-location.dto';
 import { PermanentlyDeletePracticeLocationDto } from './dto/permanently-delete-practice-location.dto';
+import { ReactivatePracticeLocationDto } from './dto/reactivate-practice-location.dto';
+import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationService } from './practice-location.service';
@@ -23,6 +26,7 @@ import { PracticeLocationService } from './practice-location.service';
 export class PracticeLocationController {
   constructor(
     private readonly practiceLocationService: PracticeLocationService,
+    private readonly practiceLocationActivationService: PracticeLocationActivationService,
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
   ) {}
@@ -36,6 +40,34 @@ export class PracticeLocationController {
     return this.practiceLocationService.create(
       request.user.userId,
       createPracticeLocationDto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('activate')
+  activate(
+    @Body() dto: ActivatePracticeLocationDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationActivationService.activate(
+      request.user.userId,
+      dto,
+      idempotencyKey,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('reactivate')
+  reactivate(
+    @Body() dto: ReactivatePracticeLocationDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationActivationService.reactivate(
+      request.user.userId,
+      dto,
+      idempotencyKey,
     );
   }
 
