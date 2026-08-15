@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CrossLocationScheduleConflictService } from './cross-location-schedule-conflict.service';
 import { DoctorCalendarAvailabilityService } from './doctor-calendar-availability.service';
 import { ScheduleResolutionService } from './schedule-resolution.service';
 import { ScheduleTimeService } from './schedule-time.service';
@@ -10,11 +11,13 @@ import { ScheduleTimeService } from './schedule-time.service';
     ScheduleTimeService,
     ScheduleResolutionService,
     DoctorCalendarAvailabilityService,
+    CrossLocationScheduleConflictService,
   ],
   exports: [
     ScheduleTimeService,
     ScheduleResolutionService,
     DoctorCalendarAvailabilityService,
+    CrossLocationScheduleConflictService,
   ],
 })
 export class ScheduleModule {}
