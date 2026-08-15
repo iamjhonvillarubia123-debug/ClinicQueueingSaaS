@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
@@ -14,41 +15,44 @@ import { PasswordSecurityService } from '../auth/security/password-security.serv
 import { PrismaService } from '../prisma/prisma.service';
 import { PracticeStaffService } from './practice-staff.service';
 
+type MockTransaction = typeof prismaServiceMock;
+
+const prismaServiceMock = {
+  $transaction: jest.fn(),
+  $executeRaw: jest.fn(),
+  $queryRaw: jest.fn(),
+  user: {
+    findUnique: jest.fn(),
+  },
+  commandIdempotency: {
+    findUnique: jest.fn(),
+    create: jest.fn(),
+  },
+  practiceStaff: {
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
+  practiceLocation: {
+    update: jest.fn(),
+  },
+  clinicDay: {
+    update: jest.fn(),
+  },
+  clinicDayOperatingStaffAudit: {
+    create: jest.fn(),
+  },
+  practiceStaffCapability: {
+    updateMany: jest.fn(),
+  },
+};
+
+const passwordSecurityServiceMock = {
+  verify: jest.fn(),
+};
+
 describe('PracticeStaffService', () => {
   let service: PracticeStaffService;
-
-  const prismaServiceMock = {
-    $transaction: jest.fn(),
-    $executeRaw: jest.fn(),
-    $queryRaw: jest.fn(),
-    user: {
-      findUnique: jest.fn(),
-    },
-    commandIdempotency: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-    },
-    practiceStaff: {
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-    },
-    practiceLocation: {
-      update: jest.fn(),
-    },
-    clinicDay: {
-      update: jest.fn(),
-    },
-    clinicDayOperatingStaffAudit: {
-      create: jest.fn(),
-    },
-    practiceStaffCapability: {
-      updateMany: jest.fn(),
-    },
-  };
-  const passwordSecurityServiceMock = {
-    verify: jest.fn(),
-  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -69,9 +73,8 @@ describe('PracticeStaffService', () => {
 
     jest.clearAllMocks();
     prismaServiceMock.$transaction.mockImplementation(
-      async (
-        callback: (transaction: typeof prismaServiceMock) => Promise<unknown>,
-      ) => callback(prismaServiceMock),
+      async (callback: (transaction: MockTransaction) => Promise<unknown>) =>
+        callback(prismaServiceMock),
     );
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
@@ -157,7 +160,7 @@ describe('PracticeStaffService', () => {
         previousOperatingPracticeStaffId: null,
         newOperatingPracticeStaffId: 'staff-new',
         actorUserId: 'doctor-1',
-      }),
+      }) as Record<string, unknown>,
     });
   });
 
@@ -251,7 +254,7 @@ describe('PracticeStaffService', () => {
         changeType: ClinicDayOperatingStaffChangeType.REPLACED,
         previousOperatingPracticeStaffId: 'staff-old',
         newOperatingPracticeStaffId: 'staff-new',
-      }),
+      }) as Record<string, unknown>,
     });
     expect(
       prismaServiceMock.clinicDayOperatingStaffAudit.create,
@@ -260,7 +263,7 @@ describe('PracticeStaffService', () => {
         changeType: ClinicDayOperatingStaffChangeType.CLEARED,
         previousOperatingPracticeStaffId: 'staff-old',
         newOperatingPracticeStaffId: null,
-      }),
+      }) as Record<string, unknown>,
     });
     expect(prismaServiceMock.practiceStaff.update).toHaveBeenCalledWith({
       where: { id: 'staff-old' },
@@ -276,7 +279,7 @@ describe('PracticeStaffService', () => {
       data: expect.objectContaining({
         status: PracticeStaffCapabilityStatus.REVOKED,
         revokedByUserId: 'doctor-1',
-      }),
+      }) as Record<string, unknown>,
     });
   });
 
@@ -343,7 +346,7 @@ describe('PracticeStaffService', () => {
       data: expect.objectContaining({
         changeType: ClinicDayOperatingStaffChangeType.CLEARED,
         actorUserId: 'doctor-1',
-      }),
+      }) as Record<string, unknown>,
     });
   });
 
@@ -413,23 +416,16 @@ describe('PracticeStaffService', () => {
         accountStatus: UserAccountStatus.ACTIVE,
       });
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
-      requestFingerprint: expect.any(String),
+      requestFingerprint: createHash('sha256')
+        .update(
+          'PRACTICE_LOCATION_ASSIGN_REGULAR_SECRETARY|doctor-1|location-1|secretary-1',
+          'utf8',
+        )
+        .digest('hex'),
     });
-
-    const originalFindUnique = prismaServiceMock.commandIdempotency.findUnique;
-    originalFindUnique.mockImplementation(async () => {
-      const crypto = await import('crypto');
-      return {
-        requestFingerprint: crypto
-          .createHash('sha256')
-          .update(
-            `${'PRACTICE_LOCATION_ASSIGN_REGULAR_SECRETARY'}|doctor-1|location-1|secretary-1`,
-            'utf8',
-          )
-          .digest('hex'),
-      };
+    prismaServiceMock.practiceStaff.findFirst.mockResolvedValue({
+      id: 'staff-1',
     });
-    prismaServiceMock.practiceStaff.findFirst.mockResolvedValue({ id: 'staff-1' });
 
     await expect(
       service.assignRegular(
