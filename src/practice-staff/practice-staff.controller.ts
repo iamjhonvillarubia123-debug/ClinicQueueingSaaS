@@ -1,22 +1,17 @@
 import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
 import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
 import { PracticeStaffService } from './practice-staff.service';
-
-interface AuthenticatedRequest {
-  user: {
-    userId: string;
-    role: string;
-  };
-}
 
 @Controller('practice-staff')
 export class PracticeStaffController {
   constructor(private readonly practiceStaffService: PracticeStaffService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('assign')
   assign(
     @Body() assignPracticeStaffDto: AssignPracticeStaffDto,

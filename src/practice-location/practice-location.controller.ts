@@ -7,17 +7,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 import { PracticeLocationService } from './practice-location.service';
-
-interface AuthenticatedRequest {
-  user: {
-    userId: string;
-    role: string;
-  };
-}
 
 @Controller('practice-location')
 export class PracticeLocationController {
@@ -25,7 +20,7 @@ export class PracticeLocationController {
     private readonly practiceLocationService: PracticeLocationService,
   ) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post()
   create(
     @Body() createPracticeLocationDto: CreatePracticeLocationDto,
@@ -37,7 +32,7 @@ export class PracticeLocationController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(SessionAuthGuard)
   @Get()
   findAll(@Request() request: AuthenticatedRequest) {
     return this.practiceLocationService.findAllForDoctor(request.user.userId);
