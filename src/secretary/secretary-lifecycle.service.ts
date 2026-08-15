@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  AccountPermanentClosureType,
   ApplicationNotificationType,
   CommandType,
   PracticeStaffCapabilityStatus,
@@ -82,97 +83,12 @@ export class SecretaryLifecycleService {
         );
       }
 
-      const assignments = await transaction.$queryRaw<
-        ActiveAssignment[]
-      >(Prisma.sql`
-        SELECT
-          ps."id",
-          ps."practiceLocationId",
-          dp."userId" AS "doctorUserId"
-        FROM "PracticeStaff" ps
-        INNER JOIN "PracticeLocation" pl
-          ON pl."id" = ps."practiceLocationId"
-        INNER JOIN "DoctorProfile" dp
-          ON dp."id" = pl."doctorProfileId"
-        WHERE ps."userId" = ${user.id}
-          AND ps."isActive" = TRUE
-        ORDER BY ps."id"
-        FOR UPDATE OF ps, pl
-      `);
-
+      const assignments = await this.lockActiveAssignments(
+        transaction,
+        user.id,
+      );
       const now = new Date();
-      const assignmentIds = assignments.map((assignment) => assignment.id);
-
-      let operatingClinicDays: OperatingClinicDay[] = [];
-      if (assignmentIds.length > 0) {
-        operatingClinicDays = await transaction.$queryRaw<OperatingClinicDay[]>(
-          Prisma.sql`
-            SELECT
-              cd."id",
-              cd."practiceLocationId",
-              cd."serviceDate",
-              cd."operatingPracticeStaffId"
-            FROM "ClinicDay" cd
-            WHERE cd."operatingPracticeStaffId" IN (${Prisma.join(assignmentIds)})
-            ORDER BY cd."id"
-            FOR UPDATE
-          `,
-        );
-
-        for (const clinicDay of operatingClinicDays) {
-          await transaction.$executeRaw(Prisma.sql`
-            INSERT INTO "ClinicDayOperatingStaffAudit" (
-              "id",
-              "clinicDayId",
-              "practiceLocationId",
-              "serviceDate",
-              "changeType",
-              "previousOperatingPracticeStaffId",
-              "newOperatingPracticeStaffId",
-              "actorUserId",
-              "createdAt"
-            ) VALUES (
-              ${randomUUID()},
-              ${clinicDay.id},
-              ${clinicDay.practiceLocationId},
-              ${clinicDay.serviceDate},
-              'CLEARED'::"ClinicDayOperatingStaffChangeType",
-              ${clinicDay.operatingPracticeStaffId},
-              NULL,
-              ${user.id},
-              ${now}
-            )
-          `);
-        }
-
-        await transaction.clinicDay.updateMany({
-          where: { operatingPracticeStaffId: { in: assignmentIds } },
-          data: { operatingPracticeStaffId: null },
-        });
-
-        await transaction.practiceLocation.updateMany({
-          where: { currentRegularPracticeStaffId: { in: assignmentIds } },
-          data: { currentRegularPracticeStaffId: null },
-        });
-
-        await transaction.practiceStaffCapability.updateMany({
-          where: {
-            practiceStaffId: { in: assignmentIds },
-            status: PracticeStaffCapabilityStatus.ACTIVE,
-          },
-          data: {
-            status: PracticeStaffCapabilityStatus.REVOKED,
-            activeCapabilityKey: null,
-            revokedByUserId: user.id,
-            revokedAt: now,
-          },
-        });
-
-        await transaction.practiceStaff.updateMany({
-          where: { id: { in: assignmentIds }, isActive: true },
-          data: { isActive: false },
-        });
-      }
+      await this.removeCurrentAuthority(transaction, user.id, assignments, now);
 
       await transaction.user.update({
         where: { id: user.id },
@@ -199,22 +115,15 @@ export class SecretaryLifecycleService {
         select: { id: true },
       });
 
-      for (const assignment of assignments) {
-        await transaction.applicationNotification.create({
-          data: {
-            recipientUserId: assignment.doctorUserId,
-            notificationType:
-              ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED,
-            affectedSecretaryUserId: user.id,
-            practiceLocationId: assignment.practiceLocationId,
-            notificationIdentityKey: this.hash(
-              `${ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED}|${user.id}|${assignment.practiceLocationId}|${commandIdentityKey}`,
-            ),
-            commandIdempotencyId: command.id,
-            createdAt: now,
-          },
-        });
-      }
+      await this.createAssignmentLossNotifications(
+        transaction,
+        assignments,
+        ApplicationNotificationType.SECRETARY_ACCOUNT_DISABLED,
+        user.id,
+        commandIdentityKey,
+        command.id,
+        now,
+      );
 
       return { disabled: true, replayed: false };
     });
@@ -308,6 +217,272 @@ export class SecretaryLifecycleService {
 
       return { reactivated: true, replayed: false };
     });
+  }
+
+  async permanentlyDelete(
+    email: string,
+    password: string,
+    confirmPermanentDelete: boolean,
+    idempotencyKey: string,
+  ) {
+    if (!confirmPermanentDelete) {
+      throw new BadRequestException(
+        'Explicit irreversible confirmation is required.',
+      );
+    }
+
+    const key = this.normalizeIdempotencyKey(idempotencyKey);
+    const normalizedEmail = normalizeEmail(email);
+
+    const target = await this.prisma.user.findFirst({
+      where: {
+        email: normalizedEmail,
+        role: UserRole.SECRETARY,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!target) {
+      throw new UnauthorizedException('Unable to permanently close account.');
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const commandType = CommandType.SECRETARY_DELETE_ACCOUNT;
+      const commandIdentityKey = this.hash(
+        `${commandType}|${target.id}|${key}`,
+      );
+      const requestFingerprint = this.hash(
+        `${commandType}|${target.id}|confirmed`,
+      );
+
+      await this.acquireCommandLock(transaction, commandIdentityKey);
+      await this.lockUser(transaction, target.id);
+
+      const user = await transaction.user.findUnique({
+        where: { id: target.id },
+        select: {
+          id: true,
+          role: true,
+          accountStatus: true,
+          passwordHash: true,
+        },
+      });
+
+      if (!user || user.role !== UserRole.SECRETARY) {
+        throw new UnauthorizedException('Unable to permanently close account.');
+      }
+
+      const passwordMatches = await this.passwordSecurityService.verify(
+        password,
+        user.passwordHash,
+      );
+      if (!passwordMatches) {
+        throw new UnauthorizedException('Unable to permanently close account.');
+      }
+
+      const replay = await transaction.commandIdempotency.findUnique({
+        where: { commandIdentityKey },
+      });
+      if (replay) {
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
+        return { permanentlyClosed: true, replayed: true };
+      }
+
+      if (
+        user.accountStatus !== UserAccountStatus.ACTIVE &&
+        user.accountStatus !== UserAccountStatus.VOLUNTARILY_DISABLED
+      ) {
+        throw new ConflictException(
+          'Secretary account cannot be permanently closed from its current state.',
+        );
+      }
+
+      const assignments = await this.lockActiveAssignments(
+        transaction,
+        user.id,
+      );
+      const now = new Date();
+      await this.removeCurrentAuthority(transaction, user.id, assignments, now);
+
+      const command = await transaction.commandIdempotency.create({
+        data: {
+          idempotencyKey: key,
+          commandIdentityKey,
+          commandType,
+          requestFingerprint,
+          actorUserId: user.id,
+          accountUserId: user.id,
+          completedAt: now,
+          expiresAt: new Date(now.getTime() + IDEMPOTENCY_RETENTION_MS),
+          createdAt: now,
+        },
+        select: { id: true },
+      });
+
+      await transaction.user.update({
+        where: { id: user.id },
+        data: { accountStatus: UserAccountStatus.PERMANENTLY_CLOSED },
+      });
+
+      await transaction.userSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: now },
+      });
+
+      await transaction.accountPermanentClosureAudit.create({
+        data: {
+          accountUserId: user.id,
+          initiatedByUserId: user.id,
+          closureType: AccountPermanentClosureType.SECRETARY_PERMANENT_CLOSURE,
+          previousAccountStatus: user.accountStatus,
+          occurredAt: now,
+          commandIdempotencyId: command.id,
+        },
+      });
+
+      await this.createAssignmentLossNotifications(
+        transaction,
+        assignments,
+        ApplicationNotificationType.SECRETARY_ACCOUNT_DELETED,
+        user.id,
+        commandIdentityKey,
+        command.id,
+        now,
+      );
+
+      return { permanentlyClosed: true, replayed: false };
+    });
+  }
+
+  private async lockActiveAssignments(
+    transaction: TransactionClient,
+    userId: string,
+  ): Promise<ActiveAssignment[]> {
+    return transaction.$queryRaw<ActiveAssignment[]>(Prisma.sql`
+      SELECT
+        ps."id",
+        ps."practiceLocationId",
+        dp."userId" AS "doctorUserId"
+      FROM "PracticeStaff" ps
+      INNER JOIN "PracticeLocation" pl
+        ON pl."id" = ps."practiceLocationId"
+      INNER JOIN "DoctorProfile" dp
+        ON dp."id" = pl."doctorProfileId"
+      WHERE ps."userId" = ${userId}
+        AND ps."isActive" = TRUE
+      ORDER BY ps."id"
+      FOR UPDATE OF ps, pl
+    `);
+  }
+
+  private async removeCurrentAuthority(
+    transaction: TransactionClient,
+    actorUserId: string,
+    assignments: ActiveAssignment[],
+    now: Date,
+  ): Promise<void> {
+    const assignmentIds = assignments.map((assignment) => assignment.id);
+    if (assignmentIds.length === 0) {
+      return;
+    }
+
+    const operatingClinicDays = await transaction.$queryRaw<
+      OperatingClinicDay[]
+    >(Prisma.sql`
+      SELECT
+        cd."id",
+        cd."practiceLocationId",
+        cd."serviceDate",
+        cd."operatingPracticeStaffId"
+      FROM "ClinicDay" cd
+      WHERE cd."operatingPracticeStaffId" IN (${Prisma.join(assignmentIds)})
+      ORDER BY cd."id"
+      FOR UPDATE
+    `);
+
+    for (const clinicDay of operatingClinicDays) {
+      await transaction.$executeRaw(Prisma.sql`
+        INSERT INTO "ClinicDayOperatingStaffAudit" (
+          "id",
+          "clinicDayId",
+          "practiceLocationId",
+          "serviceDate",
+          "changeType",
+          "previousOperatingPracticeStaffId",
+          "newOperatingPracticeStaffId",
+          "actorUserId",
+          "createdAt"
+        ) VALUES (
+          ${randomUUID()},
+          ${clinicDay.id},
+          ${clinicDay.practiceLocationId},
+          ${clinicDay.serviceDate},
+          'CLEARED'::"ClinicDayOperatingStaffChangeType",
+          ${clinicDay.operatingPracticeStaffId},
+          NULL,
+          ${actorUserId},
+          ${now}
+        )
+      `);
+    }
+
+    await transaction.clinicDay.updateMany({
+      where: { operatingPracticeStaffId: { in: assignmentIds } },
+      data: { operatingPracticeStaffId: null },
+    });
+
+    await transaction.practiceLocation.updateMany({
+      where: { currentRegularPracticeStaffId: { in: assignmentIds } },
+      data: { currentRegularPracticeStaffId: null },
+    });
+
+    await transaction.practiceStaffCapability.updateMany({
+      where: {
+        practiceStaffId: { in: assignmentIds },
+        status: PracticeStaffCapabilityStatus.ACTIVE,
+      },
+      data: {
+        status: PracticeStaffCapabilityStatus.REVOKED,
+        activeCapabilityKey: null,
+        revokedByUserId: actorUserId,
+        revokedAt: now,
+      },
+    });
+
+    await transaction.practiceStaff.updateMany({
+      where: { id: { in: assignmentIds }, isActive: true },
+      data: { isActive: false },
+    });
+  }
+
+  private async createAssignmentLossNotifications(
+    transaction: TransactionClient,
+    assignments: ActiveAssignment[],
+    notificationType: ApplicationNotificationType,
+    affectedSecretaryUserId: string,
+    commandIdentityKey: string,
+    commandIdempotencyId: string,
+    now: Date,
+  ): Promise<void> {
+    for (const assignment of assignments) {
+      await transaction.applicationNotification.create({
+        data: {
+          recipientUserId: assignment.doctorUserId,
+          notificationType,
+          affectedSecretaryUserId,
+          practiceLocationId: assignment.practiceLocationId,
+          notificationIdentityKey: this.hash(
+            `${notificationType}|${affectedSecretaryUserId}|${assignment.practiceLocationId}|${commandIdentityKey}`,
+          ),
+          commandIdempotencyId,
+          createdAt: now,
+        },
+      });
+    }
   }
 
   private normalizeIdempotencyKey(value: string): string {
