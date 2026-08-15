@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   ApplicationNotificationType,
@@ -12,6 +13,8 @@ import {
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
+import { normalizeEmail } from '../auth/security/session-security';
 import { PrismaService } from '../prisma/prisma.service';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -33,7 +36,10 @@ type OperatingClinicDay = {
 
 @Injectable()
 export class SecretaryLifecycleService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordSecurityService: PasswordSecurityService,
+  ) {}
 
   async disable(userId: string, idempotencyKey: string) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
@@ -211,6 +217,96 @@ export class SecretaryLifecycleService {
       }
 
       return { disabled: true, replayed: false };
+    });
+  }
+
+  async reactivate(email: string, password: string, idempotencyKey: string) {
+    const key = this.normalizeIdempotencyKey(idempotencyKey);
+    const normalizedEmail = normalizeEmail(email);
+
+    const currentUser = await this.prisma.user.findFirst({
+      where: {
+        email: normalizedEmail,
+        role: UserRole.SECRETARY,
+        accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+      },
+      select: { id: true },
+    });
+
+    if (!currentUser) {
+      throw new UnauthorizedException('Unable to reactivate account.');
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const commandType = CommandType.SECRETARY_REACTIVATE_ACCOUNT;
+      const commandIdentityKey = this.hash(
+        `${commandType}|${currentUser.id}|${key}`,
+      );
+      const requestFingerprint = this.hash(`${commandType}|${currentUser.id}`);
+
+      await this.acquireCommandLock(transaction, commandIdentityKey);
+      await this.lockUser(transaction, currentUser.id);
+
+      const user = await transaction.user.findUnique({
+        where: { id: currentUser.id },
+        select: {
+          id: true,
+          role: true,
+          accountStatus: true,
+          passwordHash: true,
+        },
+      });
+
+      if (!user || user.role !== UserRole.SECRETARY) {
+        throw new UnauthorizedException('Unable to reactivate account.');
+      }
+
+      const passwordMatches = await this.passwordSecurityService.verify(
+        password,
+        user.passwordHash,
+      );
+      if (!passwordMatches) {
+        throw new UnauthorizedException('Unable to reactivate account.');
+      }
+
+      const replay = await transaction.commandIdempotency.findUnique({
+        where: { commandIdentityKey },
+      });
+      if (replay) {
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
+        return { reactivated: true, replayed: true };
+      }
+
+      if (user.accountStatus !== UserAccountStatus.VOLUNTARILY_DISABLED) {
+        throw new ConflictException(
+          'Secretary account cannot be reactivated from its current state.',
+        );
+      }
+
+      const now = new Date();
+      await transaction.user.update({
+        where: { id: user.id },
+        data: { accountStatus: UserAccountStatus.ACTIVE },
+      });
+
+      await transaction.commandIdempotency.create({
+        data: {
+          idempotencyKey: key,
+          commandIdentityKey,
+          commandType,
+          requestFingerprint,
+          actorUserId: null,
+          accountUserId: user.id,
+          completedAt: now,
+          expiresAt: new Date(now.getTime() + IDEMPOTENCY_RETENTION_MS),
+          createdAt: now,
+        },
+      });
+
+      return { reactivated: true, replayed: false };
     });
   }
 
