@@ -1,7 +1,9 @@
+import { createHash } from 'crypto';
 import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdministrativeRestrictionStatus,
+  CommandType,
   PracticeLocationLifecycleStatus,
   UserAccountStatus,
   UserRole,
@@ -205,18 +207,26 @@ describe('PracticeLocationActivationService', () => {
 
   it('replays a committed activation without repeating schedule effects', async () => {
     arrangeLocation(PracticeLocationLifecycleStatus.ACTIVE);
+    const requestFingerprint = createHash('sha256')
+      .update(
+        `${CommandType.PRACTICE_LOCATION_ACTIVATE}|doctor-1|location-1`,
+        'utf8',
+      )
+      .digest('hex');
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
-      requestFingerprint: expect.any(String),
+      requestFingerprint,
     });
 
-    const firstFingerprint = await service
-      .activate(
+    await expect(
+      service.activate(
         'doctor-1',
         { practiceLocationId: 'location-1' },
         'activate-key',
-      )
-      .catch((error: unknown) => error);
+      ),
+    ).resolves.toEqual({ activated: true, replayed: true });
 
-    expect(firstFingerprint).toBeInstanceOf(ConflictException);
+    expect(prismaServiceMock.practiceSchedule.findMany).not.toHaveBeenCalled();
+    expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
+    expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 });
