@@ -1,4 +1,3 @@
-import * as bcrypt from 'bcrypt';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdministrativeRestrictionStatus,
@@ -7,17 +6,12 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { PasswordSecurityService } from './security/password-security.service';
 import {
   hashSessionToken,
   SESSION_ABSOLUTE_LIFETIME_MS,
   SESSION_IDLE_LIFETIME_MS,
 } from './security/session-security';
-
-jest.mock('bcrypt', () => ({ compare: jest.fn() }));
-
-const bcryptCompare = bcrypt.compare as jest.MockedFunction<
-  typeof bcrypt.compare
->;
 
 type SessionCreateArgs = {
   data: {
@@ -46,6 +40,9 @@ describe('AuthService', () => {
         callback(transactionMock),
     ),
   };
+  const passwordSecurityServiceMock = {
+    verify: jest.fn(),
+  };
 
   const eligibleDoctor = () => ({
     id: 'user-1',
@@ -62,6 +59,10 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prismaServiceMock },
+        {
+          provide: PasswordSecurityService,
+          useValue: passwordSecurityServiceMock,
+        },
       ],
     }).compile();
     service = module.get(AuthService);
@@ -79,6 +80,7 @@ describe('AuthService', () => {
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
     });
+    expect(passwordSecurityServiceMock.verify).not.toHaveBeenCalled();
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
   });
 
@@ -86,13 +88,17 @@ describe('AuthService', () => {
     const user = eligibleDoctor();
     prismaServiceMock.user.findFirst.mockResolvedValue(user);
     transactionMock.user.findUnique.mockResolvedValue(user);
-    bcryptCompare.mockResolvedValue(true as never);
+    passwordSecurityServiceMock.verify.mockResolvedValue(true);
 
     const result = await service.login({
       email: 'doctor@example.com',
       password: 'CorrectPassword123!',
     });
 
+    expect(passwordSecurityServiceMock.verify).toHaveBeenCalledWith(
+      'CorrectPassword123!',
+      'hash',
+    );
     expect(result.sessionToken).toBeTruthy();
     expect(result.sessionToken).not.toBe(
       (result.response as Record<string, unknown>).sessionToken,
@@ -122,7 +128,7 @@ describe('AuthService', () => {
       ...user,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
     });
-    bcryptCompare.mockResolvedValue(true as never);
+    passwordSecurityServiceMock.verify.mockResolvedValue(true);
 
     await expect(
       service.login({ email: user.email, password: 'CorrectPassword123!' }),
@@ -136,7 +142,7 @@ describe('AuthService', () => {
       ...eligibleDoctor(),
       emailVerifiedAt: null,
     });
-    bcryptCompare.mockResolvedValue(true as never);
+    passwordSecurityServiceMock.verify.mockResolvedValue(true);
     await expect(
       service.login({ email: 'doctor@example.com', password: 'x' }),
     ).rejects.toThrow('Invalid email or password.');
