@@ -46,8 +46,8 @@ describe('PracticeLocationActivationService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     prismaServiceMock.$transaction.mockImplementation(
-      async (callback: (transaction: typeof prismaServiceMock) => unknown) =>
-        callback(prismaServiceMock),
+      (callback: (transaction: typeof prismaServiceMock) => unknown) =>
+        Promise.resolve(callback(prismaServiceMock)),
     );
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.user.findUnique.mockResolvedValue({
@@ -56,9 +56,13 @@ describe('PracticeLocationActivationService', () => {
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     });
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.commandIdempotency.create.mockResolvedValue({ id: 'cmd-1' });
+    prismaServiceMock.commandIdempotency.create.mockResolvedValue({
+      id: 'cmd-1',
+    });
     prismaServiceMock.practiceLocation.findFirst.mockResolvedValue(null);
-    prismaServiceMock.practiceLocation.update.mockResolvedValue({ id: 'location-1' });
+    prismaServiceMock.practiceLocation.update.mockResolvedValue({
+      id: 'location-1',
+    });
     prismaServiceMock.practiceSchedule.findMany.mockResolvedValue([
       {
         weekday: Weekday.MONDAY,
