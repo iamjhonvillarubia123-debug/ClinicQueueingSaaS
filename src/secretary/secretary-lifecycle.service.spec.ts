@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   ApplicationNotificationType,
@@ -8,6 +8,7 @@ import {
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
 
@@ -34,9 +35,14 @@ describe('SecretaryLifecycleService', () => {
   };
 
   const prisma = {
+    user: { findFirst: jest.fn() },
     $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
       callback(tx),
     ),
+  };
+
+  const passwordSecurity = {
+    verify: jest.fn().mockResolvedValue(true),
   };
 
   beforeEach(async () => {
@@ -44,12 +50,14 @@ describe('SecretaryLifecycleService', () => {
       providers: [
         SecretaryLifecycleService,
         { provide: PrismaService, useValue: prisma },
+        { provide: PasswordSecurityService, useValue: passwordSecurity },
       ],
     }).compile();
     service = module.get(SecretaryLifecycleService);
     jest.clearAllMocks();
     tx.$executeRaw.mockResolvedValue(1);
     tx.$queryRaw.mockReset();
+    passwordSecurity.verify.mockResolvedValue(true);
   });
 
   it('disables a Secretary and removes current clinic authority atomically', async () => {
@@ -203,6 +211,118 @@ describe('SecretaryLifecycleService', () => {
     await expect(service.disable('doctor-1', 'disable-key')).rejects.toThrow(
       ConflictException,
     );
+    expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('reactivates only the Secretary account and restores no delegated clinic authority', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'secretary-1' }]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
+      passwordHash: 'hash',
+    });
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.reactivate(
+        ' Secretary@Example.com ',
+        'password',
+        'reactivate-key',
+      ),
+    ).resolves.toEqual({ reactivated: true, replayed: false });
+
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        email: 'secretary@example.com',
+        role: UserRole.SECRETARY,
+        accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+      },
+      select: { id: true },
+    });
+    expect(passwordSecurity.verify).toHaveBeenCalledWith('password', 'hash');
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'secretary-1' },
+      data: { accountStatus: UserAccountStatus.ACTIVE },
+    });
+    expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        commandType: CommandType.SECRETARY_REACTIVATE_ACCOUNT,
+        actorUserId: null,
+        accountUserId: 'secretary-1',
+        createdAt: expect.any(Date) as unknown,
+      }) as unknown,
+    });
+    expect(tx.userSession.updateMany).not.toHaveBeenCalled();
+    expect(tx.practiceStaff.updateMany).not.toHaveBeenCalled();
+    expect(tx.practiceStaffCapability.updateMany).not.toHaveBeenCalled();
+    expect(tx.clinicDay.updateMany).not.toHaveBeenCalled();
+    expect(tx.practiceLocation.updateMany).not.toHaveBeenCalled();
+    expect(tx.applicationNotification.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects Secretary reactivation when the current password is invalid', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'secretary-1' }]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
+      passwordHash: 'hash',
+    });
+    passwordSecurity.verify.mockResolvedValue(false);
+
+    await expect(
+      service.reactivate('secretary@example.com', 'bad-password', 'key'),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('replays a committed Secretary Reactivate without creating authority or sessions', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'secretary-1' }]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
+    });
+    const fingerprint = createHash('sha256')
+      .update(`${CommandType.SECRETARY_REACTIVATE_ACCOUNT}|secretary-1`, 'utf8')
+      .digest('hex');
+    tx.commandIdempotency.findUnique.mockResolvedValue({
+      requestFingerprint: fingerprint,
+    });
+
+    await expect(
+      service.reactivate('secretary@example.com', 'password', 'reactivate-key'),
+    ).resolves.toEqual({ reactivated: true, replayed: true });
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.userSession.updateMany).not.toHaveBeenCalled();
+    expect(tx.practiceStaff.updateMany).not.toHaveBeenCalled();
+    expect(tx.practiceStaffCapability.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects Reactivate from any state other than VOLUNTARILY_DISABLED', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'secretary-1' }]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
+    });
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.reactivate('secretary@example.com', 'password', 'key'),
+    ).rejects.toThrow(ConflictException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
   });
 });
