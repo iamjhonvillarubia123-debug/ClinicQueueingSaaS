@@ -6,15 +6,8 @@ import { BookingReferenceGenerator } from './booking-reference.generator';
 import { OtpModule } from '../otp/otp.module';
 
 @Module({
-  imports: [
-  MobileNumberModule,
-  OtpModule,
-],
+  imports: [MobileNumberModule, OtpModule],
   controllers: [BookingController],
-  providers: [
-    BookingService,
-    BookingReferenceGenerator,
-  ],
+  providers: [BookingService, BookingReferenceGenerator],
 })
 export class BookingModule {}
-

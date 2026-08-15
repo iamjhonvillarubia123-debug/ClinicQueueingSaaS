@@ -27,9 +27,7 @@ describe('PracticeLocationService', () => {
       ],
     }).compile();
 
-    service = module.get<PracticeLocationService>(
-      PracticeLocationService,
-    );
+    service = module.get<PracticeLocationService>(PracticeLocationService);
 
     jest.clearAllMocks();
   });

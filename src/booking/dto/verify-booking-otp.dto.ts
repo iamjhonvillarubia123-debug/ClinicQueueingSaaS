@@ -1,9 +1,4 @@
-import {
-  IsNotEmpty,
-  IsString,
-  Length,
-  Matches,
-} from 'class-validator';
+import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
 
 export class VerifyBookingOtpDto {
   @IsString()

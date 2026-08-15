@@ -33,9 +33,7 @@ describe('PracticeStaffService', () => {
       ],
     }).compile();
 
-    service = module.get<PracticeStaffService>(
-      PracticeStaffService,
-    );
+    service = module.get<PracticeStaffService>(PracticeStaffService);
 
     jest.clearAllMocks();
   });

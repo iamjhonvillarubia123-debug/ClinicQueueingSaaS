@@ -10,8 +10,6 @@ describe('BookingReferenceGenerator', () => {
   it('should generate a booking reference in the expected format', () => {
     const reference = generator.generate();
 
-    expect(reference).toMatch(
-      /^CQ-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/,
-    );
+    expect(reference).toMatch(/^CQ-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
   });
 });

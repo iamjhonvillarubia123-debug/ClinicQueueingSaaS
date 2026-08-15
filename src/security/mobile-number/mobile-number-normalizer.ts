@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 
 @Injectable()
 export class MobileNumberNormalizer {
@@ -17,8 +14,6 @@ export class MobileNumberNormalizer {
       return digitsOnly;
     }
 
-    throw new BadRequestException(
-      'Invalid Philippine mobile number.',
-    );
+    throw new BadRequestException('Invalid Philippine mobile number.');
   }
 }

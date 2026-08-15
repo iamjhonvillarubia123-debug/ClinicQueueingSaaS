@@ -40,8 +40,6 @@ export class PracticeLocationController {
   @UseGuards(JwtAuthGuard)
   @Get()
   findAll(@Request() request: AuthenticatedRequest) {
-  return this.practiceLocationService.findAllForDoctor(
-    request.user.userId,
-  );
-}
+    return this.practiceLocationService.findAllForDoctor(request.user.userId);
+  }
 }

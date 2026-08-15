@@ -18,9 +18,7 @@ describe('PracticeStaffController', () => {
       ],
     }).compile();
 
-    controller = module.get<PracticeStaffController>(
-      PracticeStaffController,
-    );
+    controller = module.get<PracticeStaffController>(PracticeStaffController);
   });
 
   it('should be defined', () => {

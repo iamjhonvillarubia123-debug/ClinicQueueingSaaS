@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
+import type { Response } from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
@@ -41,7 +42,7 @@ describe('AppController (e2e)', () => {
       throw new Error('E2E application did not initialize.');
     }
 
-    const response = await request(app.getHttpServer())
+    const response: Response = await request(app.getHttpServer())
       .get('/app/health')
       .expect(200);
 
@@ -49,7 +50,7 @@ describe('AppController (e2e)', () => {
       expect.objectContaining({
         status: 'OK',
         message: 'Clinic Queueing SaaS API is running',
-        userCount: expect.any(Number),
+        userCount: expect.any(Number) as unknown,
       }),
     );
   });

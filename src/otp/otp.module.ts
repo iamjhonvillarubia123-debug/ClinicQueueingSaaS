@@ -6,14 +6,8 @@ import { OtpGenerator } from './otp.generator';
 import { OtpService } from './otp.service';
 
 @Module({
-  imports: [
-    ConfigModule,
-    PrismaModule,
-  ],
-  providers: [
-    OtpGenerator,
-    OtpService,
-  ],
+  imports: [ConfigModule, PrismaModule],
+  providers: [OtpGenerator, OtpService],
   exports: [OtpService],
 })
 export class OtpModule {}

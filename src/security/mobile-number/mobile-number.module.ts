@@ -7,10 +7,7 @@ import { MobileNumberService } from './mobile-number.service';
 @Module({
   imports: [ConfigModule],
 
-  providers: [
-    MobileNumberNormalizer,
-    MobileNumberService,
-  ],
+  providers: [MobileNumberNormalizer, MobileNumberService],
 
   exports: [MobileNumberService],
 })

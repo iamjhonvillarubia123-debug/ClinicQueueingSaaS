@@ -56,8 +56,7 @@ export class PracticeLocationService {
         doctorProfileId: doctorProfile.id,
         name,
         addressLine1,
-        addressLine2:
-          createPracticeLocationDto.addressLine2?.trim() || null,
+        addressLine2: createPracticeLocationDto.addressLine2?.trim() || null,
         cityMunicipality: createPracticeLocationDto.cityMunicipality.trim(),
         province: createPracticeLocationDto.province.trim(),
         postalCode: createPracticeLocationDto.postalCode?.trim() || null,

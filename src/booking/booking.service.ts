@@ -64,8 +64,7 @@ export class BookingService {
       );
     }
 
-    const estimatedServiceMinutes =
-      accountSettings.defaultConsultationMinutes;
+    const estimatedServiceMinutes = accountSettings.defaultConsultationMinutes;
 
     const protectedMobileNumber = this.mobileNumberService.protect(
       createBookingDraftDto.mobileNumber,
@@ -88,11 +87,7 @@ export class BookingService {
         }
       | undefined;
 
-    for (
-      let attempt = 1;
-      attempt <= maximumReferenceAttempts;
-      attempt += 1
-    ) {
+    for (let attempt = 1; attempt <= maximumReferenceAttempts; attempt += 1) {
       const bookingReference = this.bookingReferenceGenerator.generate();
 
       try {

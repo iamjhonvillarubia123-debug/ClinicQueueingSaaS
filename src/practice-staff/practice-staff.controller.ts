@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Post,
-  Request,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -20,9 +14,7 @@ interface AuthenticatedRequest {
 
 @Controller('practice-staff')
 export class PracticeStaffController {
-  constructor(
-    private readonly practiceStaffService: PracticeStaffService,
-  ) {}
+  constructor(private readonly practiceStaffService: PracticeStaffService) {}
 
   @UseGuards(JwtAuthGuard)
   @Post('assign')

@@ -5,10 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  PracticeStaffRole,
-  UserRole,
-} from '../../generated/prisma/client';
+import { PracticeStaffRole, UserRole } from '../../generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -16,39 +13,31 @@ import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
 
 @Injectable()
 export class PracticeStaffService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async assign(
     authenticatedUserId: string,
     assignPracticeStaffDto: AssignPracticeStaffDto,
   ) {
-    const doctorProfile =
-      await this.prisma.doctorProfile.findUnique({
-        where: {
-          userId: authenticatedUserId,
-        },
-      });
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: {
+        userId: authenticatedUserId,
+      },
+    });
 
     if (!doctorProfile) {
-      throw new ForbiddenException(
-        'Only a doctor may assign practice staff.',
-      );
+      throw new ForbiddenException('Only a doctor may assign practice staff.');
     }
 
-    const practiceLocation =
-      await this.prisma.practiceLocation.findFirst({
-        where: {
-          id: assignPracticeStaffDto.practiceLocationId,
-          doctorProfileId: doctorProfile.id,
-        },
-      });
+    const practiceLocation = await this.prisma.practiceLocation.findFirst({
+      where: {
+        id: assignPracticeStaffDto.practiceLocationId,
+        doctorProfileId: doctorProfile.id,
+      },
+    });
 
     if (!practiceLocation) {
-      throw new NotFoundException(
-        'Practice location was not found.',
-      );
+      throw new NotFoundException('Practice location was not found.');
     }
 
     const staffUser = await this.prisma.user.findUnique({
@@ -58,9 +47,7 @@ export class PracticeStaffService {
     });
 
     if (!staffUser) {
-      throw new NotFoundException(
-        'Secretary user was not found.',
-      );
+      throw new NotFoundException('Secretary user was not found.');
     }
 
     if (staffUser.role !== UserRole.SECRETARY) {
@@ -69,13 +56,12 @@ export class PracticeStaffService {
       );
     }
 
-    const existingAssignment =
-      await this.prisma.practiceStaff.findFirst({
-        where: {
-          userId: staffUser.id,
-          practiceLocationId: practiceLocation.id,
-        },
-      });
+    const existingAssignment = await this.prisma.practiceStaff.findFirst({
+      where: {
+        userId: staffUser.id,
+        practiceLocationId: practiceLocation.id,
+      },
+    });
 
     if (existingAssignment) {
       throw new ConflictException(

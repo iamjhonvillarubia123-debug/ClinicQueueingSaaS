@@ -7,11 +7,7 @@ import {
   MaxLength,
 } from 'class-validator';
 
-export const EXISTING_PATIENT_RESPONSES = [
-  'YES',
-  'NO',
-  'UNSURE',
-] as const;
+export const EXISTING_PATIENT_RESPONSES = ['YES', 'NO', 'UNSURE'] as const;
 
 export type ExistingPatientResponse =
   (typeof EXISTING_PATIENT_RESPONSES)[number];
