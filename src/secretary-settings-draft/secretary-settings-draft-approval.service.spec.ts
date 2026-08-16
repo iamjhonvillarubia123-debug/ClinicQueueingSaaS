@@ -44,6 +44,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
     },
   };
   let service: SecretarySettingsDraftApprovalService;
+  let capturedApprovalUpdate: unknown;
 
   const lockedDraft = {
     id: 'draft-1',
@@ -57,6 +58,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    capturedApprovalUpdate = undefined;
     service = new SecretarySettingsDraftApprovalService(
       prismaServiceMock as never,
       scheduleResolutionMock as never,
@@ -77,6 +79,12 @@ describe('SecretarySettingsDraftApprovalService', () => {
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     });
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
+    prismaServiceMock.secretarySettingsDraft.update.mockImplementation(
+      (value: unknown) => {
+        capturedApprovalUpdate = value;
+        return Promise.resolve(value);
+      },
+    );
     prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue(
       [],
     );
@@ -146,15 +154,9 @@ describe('SecretarySettingsDraftApprovalService', () => {
     prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([
       serviceProposal,
     ]);
-    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue([
-      scheduleProposal,
-    ]);
-    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([
-      exceptionProposal,
-    ]);
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([
-      questionProposal,
-    ]);
+    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue([scheduleProposal]);
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([exceptionProposal]);
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([questionProposal]);
     prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([
       { id: 'service-1' },
     ]);
@@ -181,7 +183,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
     expect(
       prismaServiceMock.secretarySettingsDraft.update,
     ).toHaveBeenCalledTimes(1);
-    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledWith(
+    expect(capturedApprovalUpdate).toEqual(
       expect.objectContaining({
         where: { id: 'draft-1' },
         data: expect.objectContaining({
@@ -201,14 +203,16 @@ describe('SecretarySettingsDraftApprovalService', () => {
         isActive: true,
       })),
     );
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([
-      {
-        id: 'proposal-new',
-        bookingQuestionId: null,
-        proposedDisplayOrder: 5,
-        proposedIsActive: true,
-      },
-    ]);
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
+      [
+        {
+          id: 'proposal-new',
+          bookingQuestionId: null,
+          proposedDisplayOrder: 5,
+          proposedIsActive: true,
+        },
+      ],
+    );
 
     await expect(
       service.approve('doctor-1', 'draft-1', 'approve-key'),
