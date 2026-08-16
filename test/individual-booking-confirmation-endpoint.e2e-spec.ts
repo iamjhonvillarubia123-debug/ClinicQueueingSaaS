@@ -1,6 +1,11 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { randomInt, randomUUID } from 'crypto';
+import {
+  createDecipheriv,
+  createHmac,
+  randomInt,
+  randomUUID,
+} from 'crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import {
@@ -17,6 +22,7 @@ import { OtpGenerator } from './../src/otp/otp.generator';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 const KNOWN_BOOKING_OTP = '123456';
+const NOTIFICATION_KEY_PURPOSE = 'notification-outbox-message-v1';
 
 describe('Individual booking confirmation endpoint (e2e)', () => {
   let app: INestApplication<App>;
@@ -71,7 +77,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     }
   });
 
-  it('confirms once, persists the permanent result atomically, and replays without a second token or Queue Number', async () => {
+  it('confirms once, persists current authoritative state, and replays without a second token or Queue Number', async () => {
     const scope = randomUUID().replaceAll('-', '');
     const patientMobile = `0917${String(randomInt(0, 10_000_000)).padStart(7, '0')}`;
     const serviceDate = new Date();
@@ -180,6 +186,13 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       .send({ bookingDraftId, otp: KNOWN_BOOKING_OTP })
       .expect(201);
 
+    // The draft cached 30 minutes, but final confirmation must use current
+    // authoritative Service configuration rather than grandfathering it.
+    await prisma.practiceLocationService.update({
+      where: { id: selectedService.id },
+      data: { durationMinutes: 45 },
+    });
+
     const idempotencyKey = `m6s2-confirm-${scope}`;
     const firstResponse = await request(app.getHttpServer())
       .post(`/booking/draft/${bookingDraftId}/confirm`)
@@ -225,6 +238,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
 
     const [
       appointmentCount,
+      appointment,
       counter,
       draft,
       verifiedOtp,
@@ -237,6 +251,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       prisma.appointment.count({
         where: { bookingReference: firstBody.appointment.bookingReference },
       }),
+      prisma.appointment.findUnique({ where: { id: firstBody.appointment.id } }),
       prisma.queueCounter.findUnique({
         where: {
           practiceLocationId_serviceDate: {
@@ -273,6 +288,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     ]);
 
     expect(appointmentCount).toBe(1);
+    expect(appointment?.estimatedServiceMinutes).toBe(45);
     expect(counter?.lastAllocatedNumber).toBe(1);
     expect(draft).toMatchObject({
       status: 'CONSUMED',
@@ -296,13 +312,27 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     expect(bookedServices[0]).toMatchObject({
       practiceLocationServiceId: selectedService.id,
       serviceNameSnapshot: 'Endpoint Confirmation Service',
-      durationMinutesSnapshot: 30,
+      durationMinutesSnapshot: 45,
     });
     expect(accessTokens).toHaveLength(1);
     expect(accessTokens[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(confirmationOutboxes).toHaveLength(1);
     expect(confirmationOutboxes[0].deliveryIdentityKey).toMatch(
       /^[0-9a-f]{64}$/,
+    );
+    expect(confirmationOutboxes[0].messageBodyEncrypted).not.toContain(
+      firstBody.bookingAccessToken?.token,
+    );
+    const confirmationMessage = decryptNotificationMessage(
+      confirmationOutboxes[0].messageBodyEncrypted,
+      testEnvironment.MOBILE_ENCRYPTION_KEY_V1,
+    );
+    expect(confirmationMessage).toContain(location.name);
+    expect(confirmationMessage).toContain('Queue number: 1.');
+    expect(confirmationMessage).toContain(
+      `https://app.example.test/booking/access#token=${encodeURIComponent(
+        firstBody.bookingAccessToken!.token,
+      )}`,
     );
     expect(commandRows).toHaveLength(1);
     expect(commandRows[0]).toMatchObject({
@@ -321,3 +351,41 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     );
   }, 30_000);
 });
+
+function decryptNotificationMessage(
+  encrypted: string | null,
+  baseKeyBase64: string,
+): string {
+  if (!encrypted) {
+    throw new Error('Expected encrypted notification message payload.');
+  }
+  const [version, , purpose, ivText, tagText, ciphertextText] =
+    encrypted.split('.');
+  if (
+    version !== 'v1' ||
+    purpose !== 'notification-outbox:message' ||
+    !ivText ||
+    !tagText ||
+    !ciphertextText
+  ) {
+    throw new Error('Unexpected encrypted notification payload format.');
+  }
+
+  const encryptionKey = createHmac(
+    'sha256',
+    Buffer.from(baseKeyBase64, 'base64'),
+  )
+    .update(NOTIFICATION_KEY_PURPOSE, 'utf8')
+    .digest();
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    encryptionKey,
+    Buffer.from(ivText, 'base64url'),
+  );
+  decipher.setAAD(Buffer.from(purpose, 'utf8'));
+  decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
+  return Buffer.concat([
+    decipher.update(Buffer.from(ciphertextText, 'base64url')),
+    decipher.final(),
+  ]).toString('utf8');
+}
