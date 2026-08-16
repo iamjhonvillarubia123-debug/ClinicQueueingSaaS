@@ -7,7 +7,7 @@ import {
 } from './../generated/prisma/client';
 import { PrismaService } from './../src/prisma/prisma.service';
 
-describe('BookingQuestion historical type protection (e2e)', () => {
+describe('BookingQuestion historical meaning protection (e2e)', () => {
   let prisma: PrismaService;
 
   beforeAll(async () => {
@@ -24,7 +24,7 @@ describe('BookingQuestion historical type protection (e2e)', () => {
     const shortScope = scope.slice(0, 12);
     const user = await prisma.user.create({
       data: {
-        email: `m3s12-${scope}@example.test`,
+        email: `m4s2a-${scope}@example.test`,
         firstName: 'History',
         lastName: 'Guard',
         mobileNumber: `0917${scope.replaceAll('-', '').slice(0, 7)}`,
@@ -37,13 +37,13 @@ describe('BookingQuestion historical type protection (e2e)', () => {
         userId: user.id,
         professionalTitle: 'Dr.',
         specialization: 'Testing',
-        licenseNumber: `M3S12-${shortScope}`,
+        licenseNumber: `M4S2A-${shortScope}`,
       },
     });
     const location = await prisma.practiceLocation.create({
       data: {
         doctorProfileId: doctor.id,
-        name: `M3S12 Clinic ${shortScope}`,
+        name: `M4S2A Clinic ${shortScope}`,
         countryCode: 'PH',
         timeZone: 'Asia/Manila',
       },
@@ -60,6 +60,27 @@ describe('BookingQuestion historical type protection (e2e)', () => {
     return { user, doctor, location, question, scope };
   }
 
+  async function createDraftAnswer(
+    fixture: Awaited<ReturnType<typeof createFixture>>,
+  ) {
+    const draft = await prisma.bookingDraft.create({
+      data: {
+        bookingReference: `BD-${fixture.scope.slice(0, 12)}`,
+        practiceLocationId: fixture.location.id,
+        serviceDate: new Date('2026-08-17T00:00:00.000Z'),
+        expiresAt: new Date('2026-08-17T01:00:00.000Z'),
+      },
+    });
+    await prisma.bookingDraftAnswer.create({
+      data: {
+        bookingDraftId: draft.id,
+        bookingQuestionId: fixture.question.id,
+        answerText: 'temporary answer',
+      },
+    });
+    return draft;
+  }
+
   async function cleanup(fixture: Awaited<ReturnType<typeof createFixture>>) {
     await prisma.appointmentAnswer.deleteMany({
       where: { bookingQuestionId: fixture.question.id },
@@ -73,7 +94,9 @@ describe('BookingQuestion historical type protection (e2e)', () => {
     await prisma.bookingDraft.deleteMany({
       where: { practiceLocationId: fixture.location.id },
     });
-    await prisma.bookingQuestion.delete({ where: { id: fixture.question.id } });
+    await prisma.bookingQuestion.deleteMany({
+      where: { practiceLocationId: fixture.location.id },
+    });
     await prisma.practiceLocation.delete({
       where: { id: fixture.location.id },
     });
@@ -81,13 +104,17 @@ describe('BookingQuestion historical type protection (e2e)', () => {
     await prisma.user.delete({ where: { id: fixture.user.id } });
   }
 
-  it('permits changing type before any answer history exists', async () => {
+  it('permits changing protected meaning before any answer history exists', async () => {
     const fixture = await createFixture();
     try {
       const changed = await prisma.bookingQuestion.update({
         where: { id: fixture.question.id },
-        data: { type: BookingQuestionType.BOOLEAN },
+        data: {
+          questionText: 'Changed before history?',
+          type: BookingQuestionType.BOOLEAN,
+        },
       });
+      expect(changed.questionText).toBe('Changed before history?');
       expect(changed.type).toBe(BookingQuestionType.BOOLEAN);
     } finally {
       await cleanup(fixture);
@@ -97,21 +124,7 @@ describe('BookingQuestion historical type protection (e2e)', () => {
   it('blocks type changes after BookingDraftAnswer history exists', async () => {
     const fixture = await createFixture();
     try {
-      const draft = await prisma.bookingDraft.create({
-        data: {
-          bookingReference: `BD-${fixture.scope.slice(0, 12)}`,
-          practiceLocationId: fixture.location.id,
-          serviceDate: new Date('2026-08-17T00:00:00.000Z'),
-          expiresAt: new Date('2026-08-17T01:00:00.000Z'),
-        },
-      });
-      await prisma.bookingDraftAnswer.create({
-        data: {
-          bookingDraftId: draft.id,
-          bookingQuestionId: fixture.question.id,
-          answerText: 'temporary answer',
-        },
-      });
+      await createDraftAnswer(fixture);
 
       await expect(
         prisma.bookingQuestion.update({
@@ -130,7 +143,89 @@ describe('BookingQuestion historical type protection (e2e)', () => {
     }
   });
 
-  it('blocks type changes after AppointmentAnswer history exists', async () => {
+  it('blocks question text changes after BookingDraftAnswer history exists', async () => {
+    const fixture = await createFixture();
+    try {
+      await createDraftAnswer(fixture);
+
+      await expect(
+        prisma.bookingQuestion.update({
+          where: { id: fixture.question.id },
+          data: { questionText: 'Rewritten historical question?' },
+        }),
+      ).rejects.toBeDefined();
+
+      const preserved = await prisma.bookingQuestion.findUniqueOrThrow({
+        where: { id: fixture.question.id },
+        select: { questionText: true },
+      });
+      expect(preserved.questionText).toBe('Historical question?');
+    } finally {
+      await cleanup(fixture);
+    }
+  });
+
+  it('blocks select option meaning changes after answer history exists', async () => {
+    const fixture = await createFixture();
+    try {
+      await prisma.bookingQuestion.update({
+        where: { id: fixture.question.id },
+        data: {
+          type: BookingQuestionType.SINGLE_SELECT,
+          selectOptions: [
+            { value: 'a', label: 'Option A' },
+            { value: 'b', label: 'Option B' },
+          ],
+        },
+      });
+      const draft = await prisma.bookingDraft.create({
+        data: {
+          bookingReference: `BD-${fixture.scope.slice(0, 12)}`,
+          practiceLocationId: fixture.location.id,
+          serviceDate: new Date('2026-08-17T00:00:00.000Z'),
+          expiresAt: new Date('2026-08-17T01:00:00.000Z'),
+        },
+      });
+      await prisma.bookingDraftAnswer.create({
+        data: {
+          bookingDraftId: draft.id,
+          bookingQuestionId: fixture.question.id,
+          selectedOptionValue: 'a',
+        },
+      });
+
+      await expect(
+        prisma.bookingQuestion.update({
+          where: { id: fixture.question.id },
+          data: {
+            selectOptions: [
+              { value: 'a', label: 'Option A' },
+              { value: 'c', label: 'Option C' },
+            ],
+          },
+        }),
+      ).rejects.toBeDefined();
+    } finally {
+      await cleanup(fixture);
+    }
+  });
+
+  it('allows non-meaning display changes after answer history exists', async () => {
+    const fixture = await createFixture();
+    try {
+      await createDraftAnswer(fixture);
+      const changed = await prisma.bookingQuestion.update({
+        where: { id: fixture.question.id },
+        data: { displayOrder: 7, helpText: 'Updated operational guidance' },
+      });
+      expect(changed.displayOrder).toBe(7);
+      expect(changed.helpText).toBe('Updated operational guidance');
+    } finally {
+      await cleanup(fixture);
+    }
+  });
+
+  it('blocks protected meaning changes after AppointmentAnswer history exists', async () => {
     const fixture = await createFixture();
     try {
       const appointment = await prisma.appointment.create({
@@ -156,14 +251,18 @@ describe('BookingQuestion historical type protection (e2e)', () => {
       await expect(
         prisma.bookingQuestion.update({
           where: { id: fixture.question.id },
-          data: { type: BookingQuestionType.BOOLEAN },
+          data: {
+            questionText: 'Changed durable meaning?',
+            type: BookingQuestionType.BOOLEAN,
+          },
         }),
       ).rejects.toBeDefined();
 
       const preserved = await prisma.bookingQuestion.findUniqueOrThrow({
         where: { id: fixture.question.id },
-        select: { type: true },
+        select: { questionText: true, type: true },
       });
+      expect(preserved.questionText).toBe('Historical question?');
       expect(preserved.type).toBe(BookingQuestionType.TEXT);
     } finally {
       await cleanup(fixture);
