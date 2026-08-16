@@ -6,6 +6,7 @@ import { ScheduleModule } from '../schedule/schedule.module';
 import { SecretarySettingsDraftController } from './secretary-settings-draft.controller';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
+import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
 
 @Module({
@@ -15,6 +16,7 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
     SecretarySettingsDraftService,
     SecretarySettingsDraftScheduleService,
     SecretarySettingsDraftExceptionService,
+    SecretarySettingsDraftServiceProposalService,
   ],
 })
 export class SecretarySettingsDraftModule {}
