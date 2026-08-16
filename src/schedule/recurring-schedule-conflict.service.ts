@@ -81,7 +81,7 @@ export class RecurringScheduleConflictService {
         continue;
       }
 
-      await this.assertDifferentTimeZoneSchedulesDoNotOverlap(
+      this.assertDifferentTimeZoneSchedulesDoNotOverlap(
         candidateSchedules,
         timeZone,
         otherSchedules,
@@ -146,12 +146,12 @@ export class RecurringScheduleConflictService {
     }
   }
 
-  private async assertDifferentTimeZoneSchedulesDoNotOverlap(
+  private assertDifferentTimeZoneSchedulesDoNotOverlap(
     candidateSchedules: RecurringSchedule[],
     candidateTimeZone: string,
     otherSchedules: RecurringSchedule[],
     otherTimeZone: string,
-  ): Promise<void> {
+  ): void {
     const schedulesByWeekday = new Map<string, RecurringSchedule>();
     for (const schedule of otherSchedules) {
       schedulesByWeekday.set(schedule.weekday, schedule);
