@@ -35,7 +35,7 @@ describe('IndividualBookingConfirmationService', () => {
     };
     const service = new IndividualBookingConfirmationService(
       prisma as never,
-      idempotency as never,
+      idempotency,
       {} as never,
       {} as never,
       accessTokens as never,
@@ -77,7 +77,7 @@ describe('IndividualBookingConfirmationService', () => {
     };
     const service = new IndividualBookingConfirmationService(
       prisma as never,
-      idempotency as never,
+      idempotency,
       {} as never,
       {} as never,
       {} as never,
