@@ -1969,7 +1969,7 @@ model BookingDraft {
   draftControlTokenHash String? @db.VarChar(64)
 
   privacyNoticeAcknowledgedAt DateTime? @db.Timestamptz(3)
-  privacyNoticeVersion        String?   @db.VarChar(30)
+  privacyNoticeVersion String? @db.VarChar(50)
   scheduledReminderOptIn      Boolean   @default(false)
 
   serviceDate DateTime @db.Date
