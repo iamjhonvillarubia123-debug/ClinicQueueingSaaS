@@ -5,14 +5,17 @@ import {
   UserRole,
   WaitingPlacementType,
 } from './../generated/prisma/client';
+import { DoctorDefaultsApplyService } from './../src/doctor/doctor-defaults-apply.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('BookingQuestion historical meaning protection (e2e)', () => {
   let prisma: PrismaService;
+  let defaultsApply: DoctorDefaultsApplyService;
 
   beforeAll(async () => {
     prisma = new PrismaService();
     await prisma.$connect();
+    defaultsApply = new DoctorDefaultsApplyService(prisma);
   });
 
   afterAll(async () => {
@@ -82,11 +85,30 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
   }
 
   async function cleanup(fixture: Awaited<ReturnType<typeof createFixture>>) {
+    await prisma.$executeRawUnsafe(`
+      DELETE FROM "DoctorDefaultsApplyAuditItem"
+      WHERE "doctorDefaultsApplyAuditTargetId" IN (
+        SELECT t."id"
+        FROM "DoctorDefaultsApplyAuditTarget" t
+        WHERE t."practiceLocationId" = '${fixture.location.id}'
+      )
+    `);
+    await prisma.$executeRawUnsafe(`
+      DELETE FROM "DoctorDefaultsApplyAuditTarget"
+      WHERE "practiceLocationId" = '${fixture.location.id}'
+    `);
+    await prisma.$executeRawUnsafe(`
+      DELETE FROM "DoctorDefaultsApplyAudit"
+      WHERE "actorUserId" = '${fixture.user.id}'
+    `);
+    await prisma.commandIdempotency.deleteMany({
+      where: { actorUserId: fixture.user.id },
+    });
     await prisma.appointmentAnswer.deleteMany({
-      where: { bookingQuestionId: fixture.question.id },
+      where: { bookingQuestion: { practiceLocationId: fixture.location.id } },
     });
     await prisma.bookingDraftAnswer.deleteMany({
-      where: { bookingQuestionId: fixture.question.id },
+      where: { bookingQuestion: { practiceLocationId: fixture.location.id } },
     });
     await prisma.appointment.deleteMany({
       where: { practiceLocationId: fixture.location.id },
@@ -96,6 +118,9 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
     });
     await prisma.bookingQuestion.deleteMany({
       where: { practiceLocationId: fixture.location.id },
+    });
+    await prisma.doctorBookingQuestionTemplate.deleteMany({
+      where: { doctorProfileId: fixture.doctor.id },
     });
     await prisma.practiceLocation.delete({
       where: { id: fixture.location.id },
@@ -264,6 +289,60 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
       });
       expect(preserved.questionText).toBe('Historical question?');
       expect(preserved.type).toBe(BookingQuestionType.TEXT);
+    } finally {
+      await cleanup(fixture);
+    }
+  });
+
+  it('re-Apply preserves answered template-derived question history and creates the refreshed replacement', async () => {
+    const fixture = await createFixture();
+    try {
+      const template = await prisma.doctorBookingQuestionTemplate.create({
+        data: {
+          doctorProfileId: fixture.doctor.id,
+          questionText: 'Historical question?',
+          type: BookingQuestionType.TEXT,
+          displayOrder: 0,
+          isActive: true,
+        },
+      });
+      await prisma.bookingQuestion.update({
+        where: { id: fixture.question.id },
+        data: { sourceDoctorBookingQuestionTemplateId: template.id },
+      });
+      await createDraftAnswer(fixture);
+      await prisma.doctorBookingQuestionTemplate.update({
+        where: { id: template.id },
+        data: { questionText: 'Refreshed template question?' },
+      });
+
+      await defaultsApply.apply(
+        fixture.user.id,
+        { practiceLocationIds: [fixture.location.id] },
+        `m4s2a-${fixture.scope}`,
+      );
+
+      const questions = await prisma.bookingQuestion.findMany({
+        where: { practiceLocationId: fixture.location.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(questions).toHaveLength(2);
+      const historical = questions.find(
+        (question) => question.id === fixture.question.id,
+      );
+      const replacement = questions.find(
+        (question) => question.id !== fixture.question.id,
+      );
+      expect(historical).toMatchObject({
+        questionText: 'Historical question?',
+        isActive: false,
+      });
+      expect(replacement).toMatchObject({
+        sourceDoctorBookingQuestionTemplateId: template.id,
+        questionText: 'Refreshed template question?',
+        isActive: true,
+        displayOrder: 0,
+      });
     } finally {
       await cleanup(fixture);
     }
