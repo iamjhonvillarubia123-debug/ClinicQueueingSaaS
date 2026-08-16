@@ -5,7 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
-import { BookingDraftMode, BookingDraftStatus, Prisma } from '../../generated/prisma/client';
+import {
+  BookingDraftMode,
+  BookingDraftStatus,
+  Prisma,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type BookingDraftControlCredential = {

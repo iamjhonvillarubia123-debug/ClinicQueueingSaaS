@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import {
   BookingDraftMode,
-  BookingQuestionType,
   Prisma,
   ServiceAvailabilityStatus,
 } from '../../generated/prisma/client';
@@ -51,10 +50,7 @@ export class BookingDraftEditService {
     private readonly otpService: OtpService,
   ) {}
 
-  async replaceDraft(
-    bookingDraftId: string,
-    dto: ReplaceBookingDraftDto,
-  ) {
+  async replaceDraft(bookingDraftId: string, dto: ReplaceBookingDraftDto) {
     const activeQuestions =
       await this.bookingAnswerValidationService.loadActiveQuestions(
         dto.practiceLocationId,
@@ -203,11 +199,7 @@ export class BookingDraftEditService {
             estimatedServiceMinutes: null,
           },
         });
-        await this.writeMembers(
-          transaction,
-          bookingDraftId,
-          prepared.members,
-        );
+        await this.writeMembers(transaction, bookingDraftId, prepared.members);
       } else {
         await transaction.bookingDraft.update({
           where: { id: bookingDraftId },
@@ -246,10 +238,7 @@ export class BookingDraftEditService {
     });
   }
 
-  async requestBookingOtp(
-    bookingDraftId: string,
-    dto: BookingDraftControlDto,
-  ) {
+  async requestBookingOtp(bookingDraftId: string, dto: BookingDraftControlDto) {
     return this.prisma.$transaction(async (transaction) => {
       await this.bookingDraftControlService.requireEditableDraftForUpdate(
         transaction,
@@ -394,11 +383,10 @@ export class BookingDraftEditService {
     );
 
     return {
-      otpEligible:
-        this.bookingAnswerValidationService.requiredAnswersComplete(
-          activeQuestions,
-          preparedAnswers,
-        ),
+      otpEligible: this.bookingAnswerValidationService.requiredAnswersComplete(
+        activeQuestions,
+        preparedAnswers,
+      ),
       firstName: dto.firstName.trim(),
       middleName: dto.middleName?.trim() || null,
       lastName: dto.lastName.trim(),

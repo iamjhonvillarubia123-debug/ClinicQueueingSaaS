@@ -84,7 +84,9 @@ describe('BookingService', () => {
       rawToken: 'browser-secret',
       tokenHash: 'a'.repeat(64),
     });
-    bookingDraftControlServiceMock.attachCredential.mockResolvedValue(undefined);
+    bookingDraftControlServiceMock.attachCredential.mockResolvedValue(
+      undefined,
+    );
   });
 
   it('should be defined', () => {
@@ -153,11 +155,9 @@ describe('BookingService', () => {
         }) as unknown,
       }),
     );
-    expect(bookingDraftControlServiceMock.attachCredential).toHaveBeenCalledWith(
-      transactionMock,
-      'draft-1',
-      'a'.repeat(64),
-    );
+    expect(
+      bookingDraftControlServiceMock.attachCredential,
+    ).toHaveBeenCalledWith(transactionMock, 'draft-1', 'a'.repeat(64));
     expect(result.draftControlToken).toBe('browser-secret');
   });
 
@@ -265,11 +265,9 @@ describe('BookingService', () => {
         },
       ],
     });
-    expect(bookingDraftControlServiceMock.attachCredential).toHaveBeenCalledWith(
-      transactionMock,
-      'draft-group',
-      'a'.repeat(64),
-    );
+    expect(
+      bookingDraftControlServiceMock.attachCredential,
+    ).toHaveBeenCalledWith(transactionMock, 'draft-group', 'a'.repeat(64));
     expect(otpServiceMock.createBookingOtp).toHaveBeenCalledWith('draft-group');
     expect(result.bookingDraft.mode).toBe('MULTI_PERSON');
     expect(result.draftControlToken).toBe('browser-secret');

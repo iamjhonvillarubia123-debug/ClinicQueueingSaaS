@@ -111,9 +111,9 @@ describe('BookingController', () => {
       materialChanged: true,
     });
 
-    await expect(controller.replaceDraft('draft-1', dto)).resolves.toMatchObject(
-      { materialChanged: true },
-    );
+    await expect(
+      controller.replaceDraft('draft-1', dto),
+    ).resolves.toMatchObject({ materialChanged: true });
     expect(bookingDraftEditServiceMock.replaceDraft).toHaveBeenCalledWith(
       'draft-1',
       dto,

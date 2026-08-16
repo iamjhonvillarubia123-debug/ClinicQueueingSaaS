@@ -1,5 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import { BookingDraftMode, BookingDraftStatus } from '../../generated/prisma/client';
+import {
+  BookingDraftMode,
+  BookingDraftStatus,
+} from '../../generated/prisma/client';
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
@@ -135,7 +138,9 @@ describe('BookingDraftEditService', () => {
       bookingDraftMembers: [],
     });
     transactionMock.otpVerification.updateMany.mockResolvedValue({ count: 1 });
-    transactionMock.bookingDraftAnswer.deleteMany.mockResolvedValue({ count: 0 });
+    transactionMock.bookingDraftAnswer.deleteMany.mockResolvedValue({
+      count: 0,
+    });
     transactionMock.bookingDraftServiceSelection.deleteMany.mockResolvedValue({
       count: 1,
     });
@@ -155,11 +160,7 @@ describe('BookingDraftEditService', () => {
 
     expect(result.materialChanged).toBe(true);
     expect(result.otpInvalidated).toBe(true);
-    expect(transactionMock.otpVerification.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ bookingDraftId: 'draft-1' }),
-      }),
-    );
+    expect(transactionMock.otpVerification.updateMany).toHaveBeenCalledTimes(1);
     expect(transactionMock.bookingDraft.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

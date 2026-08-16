@@ -1,6 +1,9 @@
 import { ForbiddenException, GoneException } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { BookingDraftMode, BookingDraftStatus } from '../../generated/prisma/client';
+import {
+  BookingDraftMode,
+  BookingDraftStatus,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
 
@@ -26,9 +29,7 @@ describe('BookingDraftControlService', () => {
     expect(credential.rawToken.length).toBeGreaterThanOrEqual(40);
     expect(credential.tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(credential.tokenHash).toBe(
-      createHash('sha256')
-        .update(credential.rawToken, 'utf8')
-        .digest('hex'),
+      createHash('sha256').update(credential.rawToken, 'utf8').digest('hex'),
     );
   });
 

@@ -103,8 +103,7 @@ export class BookingService {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const maximumEstimatedServiceMinutesPerPatient =
       accountSettings.maximumEstimatedServiceMinutesPerPatient;
-    const controlCredential =
-      this.bookingDraftControlService.issueCredential();
+    const controlCredential = this.bookingDraftControlService.issueCredential();
 
     const creation =
       createBookingDraftDto.mode === 'MULTI_PERSON'
