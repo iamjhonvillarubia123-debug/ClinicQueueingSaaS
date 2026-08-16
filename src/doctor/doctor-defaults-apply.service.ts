@@ -332,13 +332,14 @@ export class DoctorDefaultsApplyService {
         WHERE q."id" = ${currentId}
       `);
       if (history[0]?.hasHistory && history[0]?.meaningChanged) {
-        await transaction.bookingQuestion.update({
-          where: { id: currentId },
-          data: {
-            isActive: false,
-            sourceDoctorBookingQuestionTemplateId: null,
-          },
-        });
+        await transaction.$executeRaw(Prisma.sql`
+          UPDATE "BookingQuestion"
+          SET
+            "isActive" = false,
+            "sourceDoctorBookingQuestionTemplateId" = NULL,
+            "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "id" = ${currentId}
+        `);
         return this.insertBookingQuestion(
           transaction,
           practiceLocationId,
