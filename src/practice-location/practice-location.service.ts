@@ -64,7 +64,7 @@ export class PracticeLocationService {
         }),
       ]);
 
-      return transaction.practiceLocation.create({
+      const location = await transaction.practiceLocation.create({
         data: {
           doctorProfileId: doctorProfile.id,
           lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
@@ -130,6 +130,17 @@ export class PracticeLocationService {
           createdAt: true,
         },
       });
+
+      for (const template of bookingQuestionTemplates) {
+        await transaction.$executeRaw(Prisma.sql`
+          UPDATE "BookingQuestion"
+          SET "sourceDoctorBookingQuestionTemplateId" = ${template.id}
+          WHERE "practiceLocationId" = ${location.id}
+            AND "displayOrder" = ${template.displayOrder}
+        `);
+      }
+
+      return location;
     });
   }
 
