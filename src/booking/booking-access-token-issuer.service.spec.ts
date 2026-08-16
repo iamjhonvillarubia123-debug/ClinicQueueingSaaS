@@ -4,7 +4,21 @@ describe('BookingAccessTokenIssuerService', () => {
   const service = new BookingAccessTokenIssuerService();
 
   it('stores only a protected token representation and returns the raw credential once', async () => {
-    const create = jest.fn().mockResolvedValue({
+    const create = jest.fn<
+      Promise<{ id: string; expiresAt: Date }>,
+      [
+        {
+          data: {
+            appointmentId: string;
+            purpose: string;
+            tokenHash: string;
+            expiresAt: Date;
+          };
+          select: { id: boolean; expiresAt: boolean };
+        },
+      ]
+    >();
+    create.mockResolvedValue({
       id: 'token-record-1',
       expiresAt: new Date('2026-08-27T00:00:00.000Z'),
     });
@@ -27,6 +41,7 @@ describe('BookingAccessTokenIssuerService', () => {
         }) as unknown,
       }),
     );
-    expect(create.mock.calls[0][0].data.tokenHash).not.toBe(result.rawToken);
+    const firstCreateCall = create.mock.calls[0]?.[0];
+    expect(firstCreateCall?.data.tokenHash).not.toBe(result.rawToken);
   });
 });
