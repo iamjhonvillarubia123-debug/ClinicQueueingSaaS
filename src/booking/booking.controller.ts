@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingService } from './booking.service';
 import { CreateBookingDraftDto } from './dto/create-booking-draft.dto';
@@ -9,12 +10,24 @@ export class BookingController {
   constructor(
     private readonly bookingService: BookingService,
     private readonly bookingConfigurationService: BookingConfigurationService,
+    private readonly publicServiceDateAvailability: PublicServiceDateAvailabilityService,
   ) {}
 
   @Get('configuration/:practiceLocationId')
   getConfiguration(@Param('practiceLocationId') practiceLocationId: string) {
     return this.bookingConfigurationService.getEffectiveConfiguration(
       practiceLocationId,
+    );
+  }
+
+  @Get('availability/:practiceLocationId/:serviceDate')
+  getAvailability(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Param('serviceDate') serviceDate: string,
+  ) {
+    return this.publicServiceDateAvailability.resolve(
+      practiceLocationId,
+      serviceDate,
     );
   }
 
