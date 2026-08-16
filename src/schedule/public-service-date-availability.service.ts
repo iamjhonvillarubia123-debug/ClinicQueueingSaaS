@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   PracticeLocationLifecycleStatus,
   Prisma,
@@ -23,11 +27,7 @@ export type PublicServiceDateAvailability = {
   serviceDate: string;
   availableForPublicBooking: boolean;
   reason: PublicServiceDateAvailabilityReason;
-  scheduleSource:
-    | 'SCHEDULE_EXCEPTION'
-    | 'PRACTICE_SCHEDULE'
-    | 'NO_SCHEDULE'
-    | null;
+  scheduleSource: 'SCHEDULE_EXCEPTION' | 'PRACTICE_SCHEDULE' | 'NO_SCHEDULE' | null;
   opensAt: Date | null;
   closesAt: Date | null;
   maximumOnlineBookingUntilAt: Date | null;
@@ -163,10 +163,7 @@ export class PublicServiceDateAvailabilityService {
         maximumOnlineBookingUntilAt: true,
       },
     });
-    if (
-      clinicDay?.status === 'CANCELLED' ||
-      clinicDay?.status === 'CLOSED'
-    ) {
+    if (clinicDay?.status === 'CANCELLED' || clinicDay?.status === 'CLOSED') {
       return this.fromSchedule(
         schedule,
         false,
