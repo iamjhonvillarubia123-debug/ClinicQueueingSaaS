@@ -5,6 +5,7 @@ import { MobileNumberModule } from '../security/mobile-number/mobile-number.modu
 import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingController } from './booking.controller';
+import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 
@@ -15,6 +16,7 @@ import { BookingService } from './booking.service';
     BookingService,
     BookingConfigurationService,
     BookingAnswerValidationService,
+    BookingDraftControlService,
     BookingReferenceGenerator,
   ],
 })
