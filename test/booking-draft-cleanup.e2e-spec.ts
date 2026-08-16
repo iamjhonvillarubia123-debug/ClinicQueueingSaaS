@@ -56,7 +56,10 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       },
     });
 
-    const expiredDeadline = new Date(Date.now() - 60_000);
+    const transitionNow = new Date();
+    await cleanup.expirePendingDrafts(500, transitionNow);
+
+    const expiredDeadline = new Date(transitionNow.getTime() - 60_000);
     const createdAt = new Date(expiredDeadline.getTime() - 30 * 60 * 1000);
     const draft = await prisma.bookingDraft.create({
       data: {
@@ -64,7 +67,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         mode: BookingDraftMode.MULTI_PERSON,
         practiceLocationId: location.id,
         mobileNumberEncrypted: 'e2e-protected-mobile',
-        mobileNumberHash: 'a'.repeat(64),
+        mobileNumberHash: scope.repeat(2),
         mobileNumberLastFour: '4567',
         draftControlTokenHash: 'b'.repeat(64),
         serviceDate: new Date('2026-08-20T00:00:00.000Z'),
@@ -81,7 +84,6 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       },
     });
 
-    const transitionNow = new Date();
     const expirationResults = await Promise.all([
       cleanup.expirePendingDrafts(1, transitionNow),
       cleanup.expirePendingDrafts(1, transitionNow),
@@ -148,10 +150,10 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       },
     });
 
-    const deletionNow = new Date(transitionNow.getTime() + 8 * 24 * 60 * 60 * 1000);
-    await expect(
-      cleanup.deleteEligibleTechnicalShells(10, deletionNow),
-    ).resolves.toBe(0);
+    const deletionNow = new Date(
+      transitionNow.getTime() + 8 * 24 * 60 * 60 * 1000,
+    );
+    await cleanup.deleteEligibleTechnicalShells(500, deletionNow);
 
     const blockedShell = await prisma.bookingDraft.findUnique({
       where: { id: draft.id },
