@@ -51,7 +51,9 @@ describe('DoctorDefaultsService', () => {
 
   it('creates a bounded Service template for the owning Doctor', async () => {
     prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
-    prismaMock.doctorServiceTemplate.create.mockResolvedValue({ id: 'service-1' });
+    prismaMock.doctorServiceTemplate.create.mockResolvedValue({
+      id: 'service-1',
+    });
 
     await service.createServiceTemplate('doctor-user', {
       name: '  Consultation  ',
@@ -101,7 +103,9 @@ describe('DoctorDefaultsService', () => {
     prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
     prismaMock.doctorBookingQuestionTemplate.findFirst.mockResolvedValue(null);
     prismaMock.doctorBookingQuestionTemplate.count.mockResolvedValue(0);
-    prismaMock.doctorBookingQuestionTemplate.create.mockResolvedValue({ id: 'question-1' });
+    prismaMock.doctorBookingQuestionTemplate.create.mockResolvedValue({
+      id: 'question-1',
+    });
 
     await service.createBookingQuestionTemplate('doctor-user', {
       questionText: 'Visit type?',
@@ -116,7 +120,9 @@ describe('DoctorDefaultsService', () => {
       ],
     });
 
-    expect(prismaMock.doctorBookingQuestionTemplate.create).toHaveBeenCalledWith(
+    expect(
+      prismaMock.doctorBookingQuestionTemplate.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           doctorProfileId: 'doctor-1',
