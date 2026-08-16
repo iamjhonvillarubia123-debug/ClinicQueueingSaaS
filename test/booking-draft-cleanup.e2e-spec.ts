@@ -24,7 +24,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
     await prisma.$disconnect();
   });
 
-  it('serializes expiration, clears protected identity, and deletes only after retained dependencies are gone', async () => {
+  it('serializes expiration, clears protected identity and acknowledgement, and deletes only after retained dependencies are gone', async () => {
     const scope = randomUUID().replaceAll('-', '');
     const doctorUser = await prisma.user.create({
       data: {
@@ -71,6 +71,9 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         mobileNumberLastFour: '4567',
         draftControlTokenHash: 'b'.repeat(64),
         serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+        privacyNoticeAcknowledgedAt: createdAt,
+        privacyNoticeVersion: '2026-08',
+        scheduledReminderOptIn: true,
         createdAt,
         expiresAt: expiredDeadline,
       },
@@ -112,6 +115,9 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         firstName: string | null;
         mobileNumberHash: string | null;
         draftControlTokenHash: string | null;
+        privacyNoticeAcknowledgedAt: Date | null;
+        privacyNoticeVersion: string | null;
+        scheduledReminderOptIn: boolean;
         protectedDataClearedAt: Date | null;
       }>
     >`
@@ -120,6 +126,9 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         "firstName",
         "mobileNumberHash",
         "draftControlTokenHash",
+        "privacyNoticeAcknowledgedAt",
+        "privacyNoticeVersion",
+        "scheduledReminderOptIn",
         "protectedDataClearedAt"
       FROM "BookingDraft"
       WHERE "id" = ${draft.id}
@@ -129,6 +138,9 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       firstName: null,
       mobileNumberHash: null,
       draftControlTokenHash: null,
+      privacyNoticeAcknowledgedAt: null,
+      privacyNoticeVersion: null,
+      scheduledReminderOptIn: false,
     });
     expect(cleanedRows[0]?.protectedDataClearedAt).not.toBeNull();
 
