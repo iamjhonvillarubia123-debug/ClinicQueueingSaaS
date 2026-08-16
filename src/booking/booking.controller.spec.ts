@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingController } from './booking.controller';
 import { BookingService } from './booking.service';
@@ -13,6 +14,9 @@ describe('BookingController', () => {
   const bookingConfigurationServiceMock = {
     getEffectiveConfiguration: jest.fn(),
   };
+  const publicServiceDateAvailabilityMock = {
+    resolve: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -25,6 +29,10 @@ describe('BookingController', () => {
         {
           provide: BookingConfigurationService,
           useValue: bookingConfigurationServiceMock,
+        },
+        {
+          provide: PublicServiceDateAvailabilityService,
+          useValue: publicServiceDateAvailabilityMock,
         },
       ],
     }).compile();
@@ -55,6 +63,26 @@ describe('BookingController', () => {
     expect(
       bookingConfigurationServiceMock.getEffectiveConfiguration,
     ).toHaveBeenCalledWith('location-1');
+  });
+
+  it('should delegate public Service Date availability reads', async () => {
+    publicServiceDateAvailabilityMock.resolve.mockResolvedValue({
+      practiceLocationId: 'location-1',
+      serviceDate: '2026-08-17',
+      availableForPublicBooking: true,
+      reason: 'AVAILABLE',
+    });
+
+    await expect(
+      controller.getAvailability('location-1', '2026-08-17'),
+    ).resolves.toMatchObject({
+      availableForPublicBooking: true,
+      reason: 'AVAILABLE',
+    });
+    expect(publicServiceDateAvailabilityMock.resolve).toHaveBeenCalledWith(
+      'location-1',
+      '2026-08-17',
+    );
   });
 
   it('should delegate OTP verification to BookingService', async () => {
