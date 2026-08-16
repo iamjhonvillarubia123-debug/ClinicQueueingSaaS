@@ -56,6 +56,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
     });
 
     const expiredDeadline = new Date(Date.now() - 60_000);
+    const createdAt = new Date(expiredDeadline.getTime() - 30 * 60 * 1000);
     const draft = await prisma.bookingDraft.create({
       data: {
         bookingReference: `M5S5A${scope.slice(0, 10)}`,
@@ -68,6 +69,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         mobileNumberLastFour: '4567',
         draftControlTokenHash: 'b'.repeat(64),
         serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+        createdAt,
         expiresAt: expiredDeadline,
       },
     });
