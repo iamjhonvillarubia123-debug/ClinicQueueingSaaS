@@ -22,14 +22,17 @@ export type PublicServiceDateAvailabilityReason =
   | 'CLINIC_DAY_NOT_ACCEPTING_PUBLIC_BOOKING'
   | 'PUBLIC_BOOKING_CUTOFF_REACHED';
 
+type PublicServiceDateScheduleSource =
+  | 'SCHEDULE_EXCEPTION'
+  | 'PRACTICE_SCHEDULE'
+  | 'NO_SCHEDULE';
+
 export type PublicServiceDateAvailability = {
   practiceLocationId: string;
   serviceDate: string;
   availableForPublicBooking: boolean;
   reason: PublicServiceDateAvailabilityReason;
-  scheduleSource:
-    | ('SCHEDULE_EXCEPTION' | 'PRACTICE_SCHEDULE' | 'NO_SCHEDULE')
-    | null;
+  scheduleSource: PublicServiceDateScheduleSource | null;
   opensAt: Date | null;
   closesAt: Date | null;
   maximumOnlineBookingUntilAt: Date | null;
