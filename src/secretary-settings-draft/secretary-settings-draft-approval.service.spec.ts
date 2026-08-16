@@ -18,6 +18,9 @@ describe('SecretarySettingsDraftApprovalService', () => {
   };
   const doctorCalendarMock = { isAvailableForInterval: jest.fn() };
   const crossLocationConflictMock = { assertNoConflictForInterval: jest.fn() };
+  const recurringScheduleConflictMock = {
+    assertNoConflictForLocation: jest.fn(),
+  };
   const prismaServiceMock = {
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
@@ -64,6 +67,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
       scheduleResolutionMock as never,
       doctorCalendarMock as never,
       crossLocationConflictMock as never,
+      recurringScheduleConflictMock as never,
     );
     prismaServiceMock.$transaction.mockImplementation(
       (callback: (transaction: typeof prismaServiceMock) => unknown) =>
@@ -102,6 +106,9 @@ describe('SecretarySettingsDraftApprovalService', () => {
     prismaServiceMock.bookingQuestion.aggregate.mockResolvedValue({
       _max: { displayOrder: null },
     });
+    recurringScheduleConflictMock.assertNoConflictForLocation.mockResolvedValue(
+      undefined,
+    );
   });
 
   it('atomically applies all proposal families and marks the submitted draft approved', async () => {
@@ -274,9 +281,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('blocks ACTIVE-location approval when current cross-location schedule validation conflicts', async () => {
-    const opensAt = new Date('2026-08-17T01:00:00.000Z');
-    const closesAt = new Date('2026-08-17T09:00:00.000Z');
+  it('blocks ACTIVE-location approval when recurring schedule validation conflicts', async () => {
     prismaServiceMock.$queryRaw.mockReset();
     prismaServiceMock.$queryRaw
       .mockResolvedValueOnce([
@@ -286,9 +291,51 @@ describe('SecretarySettingsDraftApprovalService', () => {
         },
       ])
       .mockResolvedValueOnce([{ id: 'doctor-1' }]);
-    prismaServiceMock.practiceSchedule.findMany.mockResolvedValue([
-      { weekday: Weekday.MONDAY },
-    ]);
+    recurringScheduleConflictMock.assertNoConflictForLocation.mockRejectedValue(
+      new ConflictException('Recurring schedule conflict.'),
+    );
+
+    await expect(
+      service.approve('doctor-1', 'draft-1', 'approve-recurring-conflict-key'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(recurringScheduleConflictMock.assertNoConflictForLocation).toHaveBeenCalledWith(
+      'doctor-profile-1',
+      'location-1',
+      'Asia/Manila',
+      prismaServiceMock,
+    );
+    expect(scheduleResolutionMock.resolveConfiguredSchedule).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
+    expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('blocks ACTIVE-location approval when a proposed exception conflicts', async () => {
+    const opensAt = new Date('2026-08-20T01:00:00.000Z');
+    const closesAt = new Date('2026-08-20T09:00:00.000Z');
+    prismaServiceMock.$queryRaw.mockReset();
+    prismaServiceMock.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          ...lockedDraft,
+          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: 'doctor-1' }]);
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue(
+      [
+        {
+          serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+          proposedIsOpen: true,
+          proposedOpensAtLocal: new Date('1970-01-01T09:00:00.000Z'),
+          proposedClosesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
+          proposedMaximumOnlineBookingUntilLocal: null,
+          proposedMaximumOperatingUntilLocal: null,
+        },
+      ],
+    );
     scheduleResolutionMock.resolveConfiguredSchedule.mockResolvedValue({
       isOpen: true,
       opensAt,
@@ -300,10 +347,14 @@ describe('SecretarySettingsDraftApprovalService', () => {
     );
 
     await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-conflict-key'),
+      service.approve('doctor-1', 'draft-1', 'approve-exception-conflict-key'),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(scheduleResolutionMock.resolveConfiguredSchedule).toHaveBeenCalled();
+    expect(scheduleResolutionMock.resolveConfiguredSchedule).toHaveBeenCalledWith(
+      'location-1',
+      '2026-08-20',
+      prismaServiceMock,
+    );
     expect(doctorCalendarMock.isAvailableForInterval).toHaveBeenCalledWith(
       'doctor-profile-1',
       opensAt,
