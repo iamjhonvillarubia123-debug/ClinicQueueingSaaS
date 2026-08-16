@@ -4,6 +4,7 @@ import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingController } from './booking.controller';
 import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
+import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 
 describe('BookingController', () => {
   let controller: BookingController;
@@ -21,6 +22,9 @@ describe('BookingController', () => {
   };
   const publicServiceDateAvailabilityMock = {
     resolve: jest.fn(),
+  };
+  const individualBookingConfirmationServiceMock = {
+    confirm: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -42,6 +46,10 @@ describe('BookingController', () => {
         {
           provide: PublicServiceDateAvailabilityService,
           useValue: publicServiceDateAvailabilityMock,
+        },
+        {
+          provide: IndividualBookingConfirmationService,
+          useValue: individualBookingConfirmationServiceMock,
         },
       ],
     }).compile();
@@ -165,5 +173,32 @@ describe('BookingController', () => {
         verifiedAt: new Date('2026-08-06T05:00:00.000Z'),
       },
     });
+  });
+
+  it('should delegate individual confirmation with the Idempotency-Key header', async () => {
+    individualBookingConfirmationServiceMock.confirm.mockResolvedValue({
+      appointment: {
+        id: 'appointment-1',
+        queueNumber: 7,
+      },
+      bookingAccessToken: {
+        token: 'one-time-raw-token',
+        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+      },
+      replayed: false,
+    });
+
+    await expect(
+      controller.confirmIndividualBooking('draft-1', 'idem-1'),
+    ).resolves.toMatchObject({
+      appointment: { id: 'appointment-1', queueNumber: 7 },
+      replayed: false,
+    });
+    expect(individualBookingConfirmationServiceMock.confirm).toHaveBeenCalledWith(
+      {
+        bookingDraftId: 'draft-1',
+        idempotencyKey: 'idem-1',
+      },
+    );
   });
 });
