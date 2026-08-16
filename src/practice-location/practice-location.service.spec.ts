@@ -32,7 +32,7 @@ describe('PracticeLocationService', () => {
       findMany: jest.fn(),
     },
     $transaction: jest.fn(
-      async (callback: (transaction: typeof transactionMock) => unknown) =>
+      (callback: (transaction: typeof transactionMock) => unknown) =>
         callback(transactionMock),
     ),
   };
@@ -48,11 +48,15 @@ describe('PracticeLocationService', () => {
     service = module.get<PracticeLocationService>(PracticeLocationService);
     jest.clearAllMocks();
     transactionMock.doctorServiceTemplate.findMany.mockResolvedValue([]);
-    transactionMock.doctorBookingQuestionTemplate.findMany.mockResolvedValue([]);
+    transactionMock.doctorBookingQuestionTemplate.findMany.mockResolvedValue(
+      [],
+    );
   });
 
   it('creates an intentionally blank PracticeLocation as DRAFT', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     transactionMock.practiceLocation.create.mockResolvedValue({
       id: 'location-1',
       lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
@@ -76,7 +80,9 @@ describe('PracticeLocationService', () => {
   });
 
   it('copies current Doctor-wide defaults into a new location without synchronization relations', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     transactionMock.doctorServiceTemplate.findMany.mockResolvedValue([
       {
         id: 'service-template-1',
@@ -101,7 +107,9 @@ describe('PracticeLocationService', () => {
         selectOptions: null,
       },
     ]);
-    transactionMock.practiceLocation.create.mockResolvedValue({ id: 'location-1' });
+    transactionMock.practiceLocation.create.mockResolvedValue({
+      id: 'location-1',
+    });
 
     await service.create('doctor-user-1', {});
 
@@ -135,9 +143,13 @@ describe('PracticeLocationService', () => {
   });
 
   it('normalizes optional draft fields without requiring full configuration', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     transactionMock.practiceLocation.findFirst.mockResolvedValue(null);
-    transactionMock.practiceLocation.create.mockResolvedValue({ id: 'location-1' });
+    transactionMock.practiceLocation.create.mockResolvedValue({
+      id: 'location-1',
+    });
 
     await service.create('doctor-user-1', {
       name: '  Sample Clinic  ',
