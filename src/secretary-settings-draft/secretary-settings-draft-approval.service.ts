@@ -446,8 +446,7 @@ export class SecretarySettingsDraftApprovalService {
         isRequired: proposal.proposedIsRequired,
         displayOrder: proposal.proposedDisplayOrder,
         isActive: proposal.proposedIsActive,
-        estimatedMinutesAdjustment:
-          proposal.proposedEstimatedMinutesAdjustment,
+        estimatedMinutesAdjustment: proposal.proposedEstimatedMinutesAdjustment,
         textMaximumLength: proposal.proposedTextMaximumLength,
         numberMinimum: proposal.proposedNumberMinimum,
         numberMaximum: proposal.proposedNumberMaximum,
