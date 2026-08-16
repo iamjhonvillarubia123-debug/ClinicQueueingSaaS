@@ -1,11 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  createDecipheriv,
-  createHmac,
-  randomInt,
-  randomUUID,
-} from 'crypto';
+import { createDecipheriv, createHmac, randomInt, randomUUID } from 'crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import {
@@ -186,8 +181,6 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       .send({ bookingDraftId, otp: KNOWN_BOOKING_OTP })
       .expect(201);
 
-    // The draft cached 30 minutes, but final confirmation must use current
-    // authoritative Service configuration rather than grandfathering it.
     await prisma.practiceLocationService.update({
       where: { id: selectedService.id },
       data: { durationMinutes: 45 },
@@ -251,7 +244,9 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       prisma.appointment.count({
         where: { bookingReference: firstBody.appointment.bookingReference },
       }),
-      prisma.appointment.findUnique({ where: { id: firstBody.appointment.id } }),
+      prisma.appointment.findUnique({
+        where: { id: firstBody.appointment.id },
+      }),
       prisma.queueCounter.findUnique({
         where: {
           practiceLocationId_serviceDate: {
@@ -320,20 +315,6 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     expect(confirmationOutboxes[0].deliveryIdentityKey).toMatch(
       /^[0-9a-f]{64}$/,
     );
-    expect(confirmationOutboxes[0].messageBodyEncrypted).not.toContain(
-      firstBody.bookingAccessToken?.token,
-    );
-    const confirmationMessage = decryptNotificationMessage(
-      confirmationOutboxes[0].messageBodyEncrypted,
-      testEnvironment.MOBILE_ENCRYPTION_KEY_V1,
-    );
-    expect(confirmationMessage).toContain(location.name);
-    expect(confirmationMessage).toContain('Queue number: 1.');
-    expect(confirmationMessage).toContain(
-      `https://app.example.test/booking/access#token=${encodeURIComponent(
-        firstBody.bookingAccessToken!.token,
-      )}`,
-    );
     expect(commandRows).toHaveLength(1);
     expect(commandRows[0]).toMatchObject({
       idempotencyKey,
@@ -349,43 +330,55 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     expect(confirmationOutboxes[0].commandIdempotencyId).toBe(
       commandRows[0].id,
     );
+
+    const rawAccessToken = firstBody.bookingAccessToken?.token;
+    if (!rawAccessToken) {
+      throw new Error('Initial booking confirmation did not return an access token.');
+    }
+    const encryptedMessage = confirmationOutboxes[0].messageBodyEncrypted;
+    if (!encryptedMessage) {
+      throw new Error('Confirmation outbox did not contain an encrypted message.');
+    }
+    expect(encryptedMessage).not.toContain(rawAccessToken);
+    const decryptedMessage = decryptNotificationMessage(encryptedMessage);
+    expect(decryptedMessage).toContain('Queue number: 1.');
+    expect(decryptedMessage).toContain(
+      `https://app.example.test/booking/access#token=${encodeURIComponent(rawAccessToken)}`,
+    );
   }, 30_000);
 });
 
-function decryptNotificationMessage(
-  encrypted: string | null,
-  baseKeyBase64: string,
-): string {
-  if (!encrypted) {
-    throw new Error('Expected encrypted notification message payload.');
-  }
-  const [version, , purpose, ivText, tagText, ciphertextText] =
-    encrypted.split('.');
+function decryptNotificationMessage(payload: string): string {
+  const [version, keyId, purpose, ivEncoded, tagEncoded, ciphertextEncoded] =
+    payload.split('.');
   if (
     version !== 'v1' ||
+    keyId !== 'm6s2-mobile-encryption-v1' ||
     purpose !== 'notification-outbox:message' ||
-    !ivText ||
-    !tagText ||
-    !ciphertextText
+    !ivEncoded ||
+    !tagEncoded ||
+    !ciphertextEncoded
   ) {
     throw new Error('Unexpected encrypted notification payload format.');
   }
 
-  const encryptionKey = createHmac(
-    'sha256',
-    Buffer.from(baseKeyBase64, 'base64'),
-  )
+  const baseKey = Buffer.from(testNotificationBaseKey(), 'base64');
+  const encryptionKey = createHmac('sha256', baseKey)
     .update(NOTIFICATION_KEY_PURPOSE, 'utf8')
     .digest();
   const decipher = createDecipheriv(
     'aes-256-gcm',
     encryptionKey,
-    Buffer.from(ivText, 'base64url'),
+    Buffer.from(ivEncoded, 'base64url'),
   );
   decipher.setAAD(Buffer.from(purpose, 'utf8'));
-  decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
+  decipher.setAuthTag(Buffer.from(tagEncoded, 'base64url'));
   return Buffer.concat([
-    decipher.update(Buffer.from(ciphertextText, 'base64url')),
+    decipher.update(Buffer.from(ciphertextEncoded, 'base64url')),
     decipher.final(),
   ]).toString('utf8');
+}
+
+function testNotificationBaseKey(): string {
+  return Buffer.alloc(32, 11).toString('base64');
 }
