@@ -14,9 +14,11 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { CreateSecretarySettingsDraftDto } from './dto/create-secretary-settings-draft.dto';
 import { ReviewSecretarySettingsDraftDto } from './dto/review-secretary-settings-draft.dto';
+import { SaveSecretarySettingsDraftBookingQuestionDto } from './dto/save-secretary-settings-draft-booking-question.dto';
 import { SaveSecretarySettingsDraftServiceDto } from './dto/save-secretary-settings-draft-service.dto';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
 import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-secretary-settings-draft-schedule-exception.dto';
+import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
 import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
@@ -30,6 +32,7 @@ export class SecretarySettingsDraftController {
     private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
     private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
     private readonly secretarySettingsDraftServiceProposalService: SecretarySettingsDraftServiceProposalService,
+    private readonly secretarySettingsDraftBookingQuestionService: SecretarySettingsDraftBookingQuestionService,
   ) {}
 
   @Post()
@@ -76,6 +79,49 @@ export class SecretarySettingsDraftController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.secretarySettingsDraftServiceProposalService.updateProposal(
+      request.user.userId,
+      draftId,
+      proposalId,
+      dto,
+    );
+  }
+
+  @Post(':draftId/booking-questions')
+  createBookingQuestionProposal(
+    @Param('draftId') draftId: string,
+    @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftBookingQuestionService.createProposal(
+      request.user.userId,
+      draftId,
+      dto,
+    );
+  }
+
+  @Put(':draftId/booking-questions/effective/:bookingQuestionId')
+  upsertExistingBookingQuestionProposal(
+    @Param('draftId') draftId: string,
+    @Param('bookingQuestionId') bookingQuestionId: string,
+    @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftBookingQuestionService.upsertExistingQuestionProposal(
+      request.user.userId,
+      draftId,
+      bookingQuestionId,
+      dto,
+    );
+  }
+
+  @Put(':draftId/booking-questions/proposals/:proposalId')
+  updateBookingQuestionProposal(
+    @Param('draftId') draftId: string,
+    @Param('proposalId') proposalId: string,
+    @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftBookingQuestionService.updateProposal(
       request.user.userId,
       draftId,
       proposalId,
