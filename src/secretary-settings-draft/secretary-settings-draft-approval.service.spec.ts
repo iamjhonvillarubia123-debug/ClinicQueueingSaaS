@@ -82,7 +82,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
     prismaServiceMock.secretarySettingsDraft.update.mockImplementation(
       (value: unknown) => {
         capturedApprovalUpdate = value;
-        return Promise.resolve(value);
+        return Promise.resolve(undefined);
       },
     );
     prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue(
@@ -189,15 +189,13 @@ describe('SecretarySettingsDraftApprovalService', () => {
     expect(
       prismaServiceMock.secretarySettingsDraft.update,
     ).toHaveBeenCalledTimes(1);
-    expect(capturedApprovalUpdate).toEqual(
-      expect.objectContaining({
-        where: { id: 'draft-1' },
-        data: expect.objectContaining({
-          status: SecretarySettingsDraftStatus.APPROVED,
-          reviewedByUserId: 'doctor-1',
-        }),
-      }),
-    );
+    expect(capturedApprovalUpdate).toEqual({
+      where: { id: 'draft-1' },
+      data: expect.objectContaining({
+        status: SecretarySettingsDraftStatus.APPROVED,
+        reviewedByUserId: 'doctor-1',
+      }) as unknown,
+    });
     expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(
       1,
     );
