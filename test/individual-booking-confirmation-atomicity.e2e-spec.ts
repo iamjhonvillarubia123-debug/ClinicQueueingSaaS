@@ -61,7 +61,9 @@ describe('Individual booking confirmation atomicity (e2e)', () => {
     const serviceDate = new Date('2026-08-24T00:00:00.000Z');
     const bookingReference = `M6A-${scope.slice(0, 8)}-ROLLBACK`;
     const activeAppointmentKey = createHash('sha256')
-      .update(`atomicity|${scope}|${practiceLocationId}|${serviceDate.toISOString()}`)
+      .update(
+        `atomicity|${scope}|${practiceLocationId}|${serviceDate.toISOString()}`,
+      )
       .digest('hex');
 
     await expect(
