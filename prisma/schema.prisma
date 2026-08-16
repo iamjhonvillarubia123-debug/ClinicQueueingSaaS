@@ -1966,6 +1966,8 @@ model BookingDraft {
   mobileNumberHash      String? @db.VarChar(128)
   mobileNumberLastFour  String? @db.Char(4)
 
+  draftControlTokenHash String? @db.VarChar(64)
+
   serviceDate DateTime @db.Date
 
   estimatedServiceMinutes Int?
