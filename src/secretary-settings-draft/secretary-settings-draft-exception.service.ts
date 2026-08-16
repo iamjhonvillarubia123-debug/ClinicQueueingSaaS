@@ -42,7 +42,9 @@ export class SecretarySettingsDraftExceptionService {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
 
-      const dateParts = this.scheduleTimeService.parseServiceDate(dto.serviceDate);
+      const dateParts = this.scheduleTimeService.parseServiceDate(
+        dto.serviceDate,
+      );
       const serviceDate = new Date(
         Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day),
       );
