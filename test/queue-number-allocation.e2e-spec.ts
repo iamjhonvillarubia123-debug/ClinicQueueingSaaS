@@ -4,6 +4,7 @@ import {
   PracticeLocationLifecycleStatus,
   UserAccountStatus,
   UserRole,
+  WaitingPlacementType,
 } from './../generated/prisma/client';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { QueueNumberAllocationService } from './../src/queue/queue-number-allocation.service';
@@ -93,6 +94,8 @@ describe('Queue Number allocation controls (e2e)', () => {
             serviceDate,
             estimatedServiceMinutes: 30,
             queueNumber,
+            servingOrderKey: queueNumber,
+            waitingPlacementType: WaitingPlacementType.ORDINARY,
             firstName: 'Rollback',
             lastName: 'Patient',
           },
@@ -145,9 +148,9 @@ describe('Queue Number allocation controls (e2e)', () => {
     ]);
 
     expect(counter.lastAllocatedNumber).toBe(2);
-    expect(appointments.map((item) => item.queueNumber).sort((a, b) => a - b)).toEqual([
-      1, 2,
-    ]);
+    expect(
+      appointments.map((item) => item.queueNumber).sort((a, b) => a - b),
+    ).toEqual([1, 2]);
   });
 
   async function createCommittedAppointment(
@@ -167,6 +170,8 @@ describe('Queue Number allocation controls (e2e)', () => {
           serviceDate,
           estimatedServiceMinutes: 30,
           queueNumber,
+          servingOrderKey: queueNumber,
+          waitingPlacementType: WaitingPlacementType.ORDINARY,
           firstName: 'Queue',
           lastName: `Patient${discriminator}`,
         },
