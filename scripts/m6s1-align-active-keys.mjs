@@ -1,16 +1,29 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+function normalize(value) {
+  return value.replace(/\r\n/g, '\n');
+}
+
 async function replaceRequired(path, search, replacement, label) {
   const original = await readFile(path, 'utf8');
-  if (original.includes(replacement)) {
+  const newline = original.includes('\r\n') ? '\r\n' : '\n';
+  const normalizedOriginal = normalize(original);
+  const normalizedSearch = normalize(search);
+  const normalizedReplacement = normalize(replacement);
+
+  if (normalizedOriginal.includes(normalizedReplacement)) {
     console.log(`${label}: already aligned`);
     return;
   }
-  if (!original.includes(search)) {
+  if (!normalizedOriginal.includes(normalizedSearch)) {
     throw new Error(`${label}: expected source pattern was not found`);
   }
-  const updated = original.replace(search, replacement);
-  await writeFile(path, updated, 'utf8');
+
+  const updated = normalizedOriginal.replace(
+    normalizedSearch,
+    normalizedReplacement,
+  );
+  await writeFile(path, updated.replace(/\n/g, newline), 'utf8');
   console.log(`${label}: aligned`);
 }
 
@@ -71,20 +84,18 @@ await replaceRequired(
 );
 
 const servicePath = 'src/booking/booking.service.ts';
-let service = await readFile(servicePath, 'utf8');
+let service = normalize(await readFile(servicePath, 'utf8'));
 const signatureNeedle = `    draftControlTokenHash: string,\n    acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,\n  ) {`;
+const signatureReplacement = `    draftControlTokenHash: string,\n    acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,\n    activeDraftKey: string,\n  ) {`;
 if (service.includes(signatureNeedle)) {
-  service = service.replace(
-    signatureNeedle,
-    `    draftControlTokenHash: string,\n    acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,\n    activeDraftKey: string,\n  ) {`,
-  );
-  await writeFile(servicePath, service, 'utf8');
+  service = service.replace(signatureNeedle, signatureReplacement);
   console.log('BookingService multi-person signature: aligned');
-} else {
+} else if (service.includes(signatureReplacement)) {
   console.log('BookingService multi-person signature: already aligned');
+} else {
+  throw new Error('BookingService multi-person signature pattern was not found');
 }
 
-service = await readFile(servicePath, 'utf8');
 const transactionNeedle = `        const bookingDraft = await this.prisma.$transaction(\n          async (transaction) => {\n            const created = await transaction.bookingDraft.create({`;
 const transactionReplacement = `        const bookingDraft = await this.prisma.$transaction(\n          async (transaction) => {\n            await this.activeBookingIdentityService.acquireDraftScopeLock(\n              transaction,\n              activeDraftKey,\n            );\n            await this.activeBookingIdentityService.assertNoActiveDraft(\n              transaction,\n              activeDraftKey,\n            );\n\n            const created = await transaction.bookingDraft.create({`;
 if (service.includes(transactionNeedle)) {
@@ -116,7 +127,10 @@ if (service.includes(parentAttachNeedle)) {
 } else if (!service.includes(parentAttachReplacement)) {
   throw new Error('BookingService multi-person key attachment pattern was not found');
 }
-await writeFile(servicePath, service, 'utf8');
+
+const serviceOriginal = await readFile(servicePath, 'utf8');
+const serviceNewline = serviceOriginal.includes('\r\n') ? '\r\n' : '\n';
+await writeFile(servicePath, service.replace(/\n/g, serviceNewline), 'utf8');
 console.log('BookingService draft concurrency transaction wiring: aligned');
 
 await replaceRequired(
