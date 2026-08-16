@@ -28,9 +28,7 @@ export type PublicServiceDateAvailability = {
   availableForPublicBooking: boolean;
   reason: PublicServiceDateAvailabilityReason;
   scheduleSource:
-    | 'SCHEDULE_EXCEPTION'
-    | 'PRACTICE_SCHEDULE'
-    | 'NO_SCHEDULE'
+    | ('SCHEDULE_EXCEPTION' | 'PRACTICE_SCHEDULE' | 'NO_SCHEDULE')
     | null;
   opensAt: Date | null;
   closesAt: Date | null;
