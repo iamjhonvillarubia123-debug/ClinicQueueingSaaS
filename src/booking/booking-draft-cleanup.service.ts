@@ -48,6 +48,7 @@ export class BookingDraftCleanupService {
         SET
           "status" = 'EXPIRED',
           "expiredAt" = ${now},
+          "activeDraftKey" = NULL,
           "draftControlTokenHash" = NULL
         WHERE "id" IN (${Prisma.join(ids)})
           AND "status" = 'PENDING_OTP'
@@ -123,6 +124,7 @@ export class BookingDraftCleanupService {
           "mobileNumberEncrypted" = NULL,
           "mobileNumberHash" = NULL,
           "mobileNumberLastFour" = NULL,
+          "activeDraftKey" = NULL,
           "draftControlTokenHash" = NULL,
           "privacyNoticeAcknowledgedAt" = NULL,
           "privacyNoticeVersion" = NULL,

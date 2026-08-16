@@ -1235,6 +1235,8 @@ model Appointment {
   mobileNumberHash      String?
   mobileNumberLastFour  String? @db.VarChar(4)
 
+  activeAppointmentKey String? @unique @db.VarChar(64)
+
   calledAt     DateTime? @db.Timestamptz(3)
   completedAt  DateTime? @db.Timestamptz(3)
   cancelledAt  DateTime? @db.Timestamptz(3)
@@ -1965,6 +1967,8 @@ model BookingDraft {
   mobileNumberEncrypted String?
   mobileNumberHash      String? @db.VarChar(128)
   mobileNumberLastFour  String? @db.Char(4)
+
+  activeDraftKey String? @unique @db.VarChar(64)
 
   draftControlTokenHash String? @db.VarChar(64)
 

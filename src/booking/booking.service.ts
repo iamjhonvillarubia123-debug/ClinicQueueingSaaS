@@ -17,6 +17,7 @@ import {
   BookingAnswerValidationService,
   PreparedBookingDraftAnswer,
 } from './booking-answer-validation.service';
+import { ActiveBookingIdentityService } from './active-booking-identity.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
@@ -48,6 +49,7 @@ export class BookingService {
     private readonly bookingConfigurationService: BookingConfigurationService,
     private readonly bookingAnswerValidationService: BookingAnswerValidationService,
     private readonly bookingDraftControlService: BookingDraftControlService,
+    private readonly activeBookingIdentityService: ActiveBookingIdentityService,
   ) {}
 
   async createDraft(createBookingDraftDto: CreateBookingDraftDto) {
@@ -105,6 +107,11 @@ export class BookingService {
       accountSettings.maximumEstimatedServiceMinutesPerPatient;
     const controlCredential = this.bookingDraftControlService.issueCredential();
     const acknowledgement = this.prepareAcknowledgement(createBookingDraftDto);
+    const activeDraftKey = this.activeBookingIdentityService.deriveDraftKey(
+      protectedMobileNumber.hash,
+      createBookingDraftDto.practiceLocationId,
+      serviceDate,
+    );
 
     const creation =
       createBookingDraftDto.mode === 'MULTI_PERSON'
@@ -117,6 +124,7 @@ export class BookingService {
             activeQuestions,
             controlCredential.tokenHash,
             acknowledgement,
+            activeDraftKey,
           )
         : await this.createIndividualDraft(
             createBookingDraftDto,
@@ -127,6 +135,7 @@ export class BookingService {
             activeQuestions,
             controlCredential.tokenHash,
             acknowledgement,
+            activeDraftKey,
           );
 
     if (!creation.otpEligible) {
@@ -168,6 +177,7 @@ export class BookingService {
     activeQuestions: ActiveBookingQuestion[],
     draftControlTokenHash: string,
     acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,
+    activeDraftKey: string,
   ) {
     if (
       !dto.firstName ||
@@ -206,6 +216,15 @@ export class BookingService {
       try {
         const bookingDraft = await this.prisma.$transaction(
           async (transaction) => {
+            await this.activeBookingIdentityService.acquireDraftScopeLock(
+              transaction,
+              activeDraftKey,
+            );
+            await this.activeBookingIdentityService.assertNoActiveDraft(
+              transaction,
+              activeDraftKey,
+            );
+
             const created = await transaction.bookingDraft.create({
               data: {
                 bookingReference,
@@ -245,6 +264,11 @@ export class BookingService {
               created.id,
               draftControlTokenHash,
             );
+            await this.activeBookingIdentityService.attachDraftKey(
+              transaction,
+              created.id,
+              activeDraftKey,
+            );
 
             return created;
           },
@@ -277,6 +301,7 @@ export class BookingService {
     activeQuestions: ActiveBookingQuestion[],
     draftControlTokenHash: string,
     acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,
+    activeDraftKey: string,
   ) {
     const members = dto.members;
     if (!members || members.length < 1 || members.length > 5) {
@@ -308,6 +333,15 @@ export class BookingService {
       try {
         const bookingDraft = await this.prisma.$transaction(
           async (transaction) => {
+            await this.activeBookingIdentityService.acquireDraftScopeLock(
+              transaction,
+              activeDraftKey,
+            );
+            await this.activeBookingIdentityService.assertNoActiveDraft(
+              transaction,
+              activeDraftKey,
+            );
+
             const parent = await transaction.bookingDraft.create({
               data: {
                 bookingReference,
@@ -336,6 +370,11 @@ export class BookingService {
               transaction,
               parent.id,
               draftControlTokenHash,
+            );
+            await this.activeBookingIdentityService.attachDraftKey(
+              transaction,
+              parent.id,
+              activeDraftKey,
             );
 
             for (const preparedMember of preparedMembers) {

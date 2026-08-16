@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import { ActiveBookingIdentityService } from './active-booking-identity.service';
 import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
@@ -40,6 +41,12 @@ describe('BookingService', () => {
   };
   const mobileNumberServiceMock = { protect: jest.fn() };
   const bookingReferenceGeneratorMock = { generate: jest.fn() };
+  const activeBookingIdentityServiceMock = {
+    deriveDraftKey: jest.fn(() => 'd'.repeat(64)),
+    acquireDraftScopeLock: jest.fn(),
+    assertNoActiveDraft: jest.fn(),
+    attachDraftKey: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -63,6 +70,10 @@ describe('BookingService', () => {
         {
           provide: BookingDraftControlService,
           useValue: bookingDraftControlServiceMock,
+        },
+        {
+          provide: ActiveBookingIdentityService,
+          useValue: activeBookingIdentityServiceMock,
         },
       ],
     }).compile();
