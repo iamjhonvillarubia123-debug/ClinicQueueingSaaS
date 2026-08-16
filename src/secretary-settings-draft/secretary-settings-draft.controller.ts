@@ -14,10 +14,12 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { CreateSecretarySettingsDraftDto } from './dto/create-secretary-settings-draft.dto';
 import { ReviewSecretarySettingsDraftDto } from './dto/review-secretary-settings-draft.dto';
+import { SaveSecretarySettingsDraftServiceDto } from './dto/save-secretary-settings-draft-service.dto';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
 import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-secretary-settings-draft-schedule-exception.dto';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
+import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
 
 @Controller('secretary-settings-drafts')
@@ -27,6 +29,7 @@ export class SecretarySettingsDraftController {
     private readonly secretarySettingsDraftService: SecretarySettingsDraftService,
     private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
     private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
+    private readonly secretarySettingsDraftServiceProposalService: SecretarySettingsDraftServiceProposalService,
   ) {}
 
   @Post()
@@ -35,6 +38,49 @@ export class SecretarySettingsDraftController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.secretarySettingsDraftService.create(request.user.userId, dto);
+  }
+
+  @Post(':draftId/services')
+  createServiceProposal(
+    @Param('draftId') draftId: string,
+    @Body() dto: SaveSecretarySettingsDraftServiceDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftServiceProposalService.createProposal(
+      request.user.userId,
+      draftId,
+      dto,
+    );
+  }
+
+  @Put(':draftId/services/effective/:practiceLocationServiceId')
+  upsertExistingServiceProposal(
+    @Param('draftId') draftId: string,
+    @Param('practiceLocationServiceId') practiceLocationServiceId: string,
+    @Body() dto: SaveSecretarySettingsDraftServiceDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftServiceProposalService.upsertExistingServiceProposal(
+      request.user.userId,
+      draftId,
+      practiceLocationServiceId,
+      dto,
+    );
+  }
+
+  @Put(':draftId/services/proposals/:proposalId')
+  updateServiceProposal(
+    @Param('draftId') draftId: string,
+    @Param('proposalId') proposalId: string,
+    @Body() dto: SaveSecretarySettingsDraftServiceDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftServiceProposalService.updateProposal(
+      request.user.userId,
+      draftId,
+      proposalId,
+      dto,
+    );
   }
 
   @Put(':draftId/practice-schedule')
