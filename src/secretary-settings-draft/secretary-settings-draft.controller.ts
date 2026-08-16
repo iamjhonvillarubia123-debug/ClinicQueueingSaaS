@@ -18,6 +18,7 @@ import { SaveSecretarySettingsDraftBookingQuestionDto } from './dto/save-secreta
 import { SaveSecretarySettingsDraftServiceDto } from './dto/save-secretary-settings-draft-service.dto';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
 import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-secretary-settings-draft-schedule-exception.dto';
+import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
@@ -33,6 +34,7 @@ export class SecretarySettingsDraftController {
     private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
     private readonly secretarySettingsDraftServiceProposalService: SecretarySettingsDraftServiceProposalService,
     private readonly secretarySettingsDraftBookingQuestionService: SecretarySettingsDraftBookingQuestionService,
+    private readonly secretarySettingsDraftApprovalService: SecretarySettingsDraftApprovalService,
   ) {}
 
   @Post()
@@ -163,6 +165,19 @@ export class SecretarySettingsDraftController {
     return this.secretarySettingsDraftService.submit(
       request.user.userId,
       draftId,
+    );
+  }
+
+  @Post(':draftId/approve')
+  approve(
+    @Param('draftId') draftId: string,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftApprovalService.approve(
+      request.user.userId,
+      draftId,
+      idempotencyKey,
     );
   }
 
