@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   AdministrativeRestrictionStatus,
   PracticeLocationLifecycleStatus,
@@ -60,7 +60,9 @@ describe('Individual booking confirmation atomicity (e2e)', () => {
   it('rolls back QueueCounter and permanent booking artifacts when confirmation fails after queue allocation', async () => {
     const serviceDate = new Date('2026-08-24T00:00:00.000Z');
     const bookingReference = `M6A-${scope.slice(0, 8)}-ROLLBACK`;
-    const activeAppointmentKey = `atomicity-${scope.slice(0, 24)}`;
+    const activeAppointmentKey = createHash('sha256')
+      .update(`atomicity|${scope}|${practiceLocationId}|${serviceDate.toISOString()}`)
+      .digest('hex');
 
     await expect(
       prisma.$transaction(async (transaction) => {
