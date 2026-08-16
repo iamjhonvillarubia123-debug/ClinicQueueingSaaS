@@ -274,6 +274,57 @@ describe('SecretarySettingsDraftApprovalService', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('blocks ACTIVE-location approval when current cross-location schedule validation conflicts', async () => {
+    const opensAt = new Date('2026-08-17T01:00:00.000Z');
+    const closesAt = new Date('2026-08-17T09:00:00.000Z');
+    prismaServiceMock.$queryRaw.mockReset();
+    prismaServiceMock.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          ...lockedDraft,
+          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: 'doctor-1' }]);
+    prismaServiceMock.practiceSchedule.findMany.mockResolvedValue([
+      { weekday: Weekday.MONDAY },
+    ]);
+    scheduleResolutionMock.resolveConfiguredSchedule.mockResolvedValue({
+      isOpen: true,
+      opensAt,
+      closesAt,
+    });
+    doctorCalendarMock.isAvailableForInterval.mockResolvedValue(true);
+    crossLocationConflictMock.assertNoConflictForInterval.mockRejectedValue(
+      new ConflictException('Schedule conflict.'),
+    );
+
+    await expect(
+      service.approve('doctor-1', 'draft-1', 'approve-conflict-key'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(scheduleResolutionMock.resolveConfiguredSchedule).toHaveBeenCalled();
+    expect(doctorCalendarMock.isAvailableForInterval).toHaveBeenCalledWith(
+      'doctor-profile-1',
+      opensAt,
+      closesAt,
+      prismaServiceMock,
+    );
+    expect(
+      crossLocationConflictMock.assertNoConflictForInterval,
+    ).toHaveBeenCalledWith(
+      'doctor-profile-1',
+      'location-1',
+      opensAt,
+      closesAt,
+      prismaServiceMock,
+    );
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
+    expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
   it('replays a committed approval without applying settings twice', async () => {
     const fingerprint = createHash('sha256')
       .update(
