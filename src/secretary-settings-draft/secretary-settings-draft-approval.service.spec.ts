@@ -174,18 +174,14 @@ describe('SecretarySettingsDraftApprovalService', () => {
       status: SecretarySettingsDraftStatus.APPROVED,
     });
 
-    expect(
-      prismaServiceMock.practiceLocationService.update,
-    ).toHaveBeenCalled();
+    expect(prismaServiceMock.practiceLocationService.update).toHaveBeenCalled();
     expect(prismaServiceMock.practiceSchedule.upsert).toHaveBeenCalled();
     expect(prismaServiceMock.scheduleException.upsert).toHaveBeenCalled();
     expect(prismaServiceMock.bookingQuestion.update).toHaveBeenCalled();
-    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledTimes(
-      1,
-    );
-    const approvalUpdate: unknown =
-      prismaServiceMock.secretarySettingsDraft.update.mock.calls[0]?.[0];
-    expect(approvalUpdate).toEqual(
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).toHaveBeenCalledTimes(1);
+    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'draft-1' },
         data: expect.objectContaining({
@@ -194,9 +190,7 @@ describe('SecretarySettingsDraftApprovalService', () => {
         }),
       }),
     );
-    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(1);
   });
 
   it('rejects approval when the resulting active BookingQuestion count exceeds five', async () => {
@@ -207,16 +201,14 @@ describe('SecretarySettingsDraftApprovalService', () => {
         isActive: true,
       })),
     );
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
-      [
-        {
-          id: 'proposal-new',
-          bookingQuestionId: null,
-          proposedDisplayOrder: 5,
-          proposedIsActive: true,
-        },
-      ],
-    );
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([
+      {
+        id: 'proposal-new',
+        bookingQuestionId: null,
+        proposedDisplayOrder: 5,
+        proposedIsActive: true,
+      },
+    ]);
 
     await expect(
       service.approve('doctor-1', 'draft-1', 'approve-key'),
@@ -298,8 +290,6 @@ describe('SecretarySettingsDraftApprovalService', () => {
     expect(
       prismaServiceMock.secretarySettingsDraft.update,
     ).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.commandIdempotency.create,
-    ).not.toHaveBeenCalled();
+    expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 });
