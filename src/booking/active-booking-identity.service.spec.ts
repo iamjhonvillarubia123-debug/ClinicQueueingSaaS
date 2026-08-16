@@ -5,8 +5,16 @@ describe('ActiveBookingIdentityService', () => {
   const serviceDate = new Date('2026-08-20T00:00:00.000Z');
 
   it('derives stable 64-character draft and appointment keys', () => {
-    const draftA = service.deriveDraftKey('mobile-hash', 'practice-1', serviceDate);
-    const draftB = service.deriveDraftKey('mobile-hash', 'practice-1', serviceDate);
+    const draftA = service.deriveDraftKey(
+      'mobile-hash',
+      'practice-1',
+      serviceDate,
+    );
+    const draftB = service.deriveDraftKey(
+      'mobile-hash',
+      'practice-1',
+      serviceDate,
+    );
     const appointment = service.deriveAppointmentKey(
       'mobile-hash',
       'practice-1',
