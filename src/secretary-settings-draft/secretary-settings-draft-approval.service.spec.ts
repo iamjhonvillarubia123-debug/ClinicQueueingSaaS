@@ -154,9 +154,15 @@ describe('SecretarySettingsDraftApprovalService', () => {
     prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([
       serviceProposal,
     ]);
-    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue([scheduleProposal]);
-    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([exceptionProposal]);
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([questionProposal]);
+    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue(
+      [scheduleProposal],
+    );
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue(
+      [exceptionProposal],
+    );
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
+      [questionProposal],
+    );
     prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([
       { id: 'service-1' },
     ]);
@@ -192,7 +198,9 @@ describe('SecretarySettingsDraftApprovalService', () => {
         }),
       }),
     );
-    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(1);
+    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('rejects approval when the resulting active BookingQuestion count exceeds five', async () => {
