@@ -22,7 +22,9 @@ export class DoctorDefaultsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(authenticatedUserId: string) {
-    const doctorProfileId = await this.requireDoctorProfileId(authenticatedUserId);
+    const doctorProfileId = await this.requireDoctorProfileId(
+      authenticatedUserId,
+    );
     const [services, bookingQuestions] = await Promise.all([
       this.prisma.doctorServiceTemplate.findMany({
         where: { doctorProfileId },
@@ -40,7 +42,9 @@ export class DoctorDefaultsService {
     authenticatedUserId: string,
     dto: SaveDoctorServiceTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(authenticatedUserId);
+    const doctorProfileId = await this.requireDoctorProfileId(
+      authenticatedUserId,
+    );
     const data = this.normalizeService(dto);
     return this.prisma.doctorServiceTemplate.create({
       data: { doctorProfileId, ...data },
@@ -52,7 +56,9 @@ export class DoctorDefaultsService {
     templateId: string,
     dto: SaveDoctorServiceTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(authenticatedUserId);
+    const doctorProfileId = await this.requireDoctorProfileId(
+      authenticatedUserId,
+    );
     const template = await this.prisma.doctorServiceTemplate.findFirst({
       where: { id: templateId, doctorProfileId },
       select: { id: true },
@@ -70,7 +76,9 @@ export class DoctorDefaultsService {
     authenticatedUserId: string,
     dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(authenticatedUserId);
+    const doctorProfileId = await this.requireDoctorProfileId(
+      authenticatedUserId,
+    );
     const data = this.normalizeBookingQuestion(dto);
     await this.assertBookingQuestionTemplateState(
       doctorProfileId,
@@ -101,13 +109,17 @@ export class DoctorDefaultsService {
     templateId: string,
     dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(authenticatedUserId);
+    const doctorProfileId = await this.requireDoctorProfileId(
+      authenticatedUserId,
+    );
     const template = await this.prisma.doctorBookingQuestionTemplate.findFirst({
       where: { id: templateId, doctorProfileId },
       select: { id: true },
     });
     if (!template) {
-      throw new NotFoundException('Doctor BookingQuestion template was not found.');
+      throw new NotFoundException(
+        'Doctor BookingQuestion template was not found.',
+      );
     }
     const data = this.normalizeBookingQuestion(dto);
     await this.assertBookingQuestionTemplateState(
@@ -140,7 +152,9 @@ export class DoctorDefaultsService {
       select: { id: true },
     });
     if (!doctor) {
-      throw new ForbiddenException('Only a Doctor may manage Doctor-wide defaults.');
+      throw new ForbiddenException(
+        'Only a Doctor may manage Doctor-wide defaults.',
+      );
     }
     return doctor.id;
   }
@@ -151,14 +165,18 @@ export class DoctorDefaultsService {
       throw new BadRequestException('Service name is required.');
     }
     if (name.length > 150) {
-      throw new BadRequestException('Service name must not exceed 150 characters.');
+      throw new BadRequestException(
+        'Service name must not exceed 150 characters.',
+      );
     }
     if (
       !Number.isInteger(dto.durationMinutes) ||
       dto.durationMinutes <= 0 ||
       dto.durationMinutes > MAX_SERVICE_DURATION_MINUTES
     ) {
-      throw new BadRequestException('Service duration must be between 1 and 1440 whole minutes.');
+      throw new BadRequestException(
+        'Service duration must be between 1 and 1440 whole minutes.',
+      );
     }
     if (
       dto.status !== ServiceAvailabilityStatus.ACTIVE &&
@@ -175,16 +193,19 @@ export class DoctorDefaultsService {
     displayOrder: number,
     isActive: boolean,
   ) {
-    const orderConflict = await this.prisma.doctorBookingQuestionTemplate.findFirst({
-      where: {
-        doctorProfileId,
-        displayOrder,
-        ...(currentTemplateId ? { id: { not: currentTemplateId } } : {}),
-      },
-      select: { id: true },
-    });
+    const orderConflict =
+      await this.prisma.doctorBookingQuestionTemplate.findFirst({
+        where: {
+          doctorProfileId,
+          displayOrder,
+          ...(currentTemplateId ? { id: { not: currentTemplateId } } : {}),
+        },
+        select: { id: true },
+      });
     if (orderConflict) {
-      throw new ConflictException('Doctor BookingQuestion display order must be unique.');
+      throw new ConflictException(
+        'Doctor BookingQuestion display order must be unique.',
+      );
     }
     if (!isActive) return;
     const activeCount = await this.prisma.doctorBookingQuestionTemplate.count({
@@ -195,7 +216,9 @@ export class DoctorDefaultsService {
       },
     });
     if (activeCount >= MAX_ACTIVE_BOOKING_QUESTIONS) {
-      throw new ConflictException('A Doctor-wide default may contain at most five active BookingQuestions.');
+      throw new ConflictException(
+        'A Doctor-wide default may contain at most five active BookingQuestions.',
+      );
     }
   }
 
@@ -212,7 +235,9 @@ export class DoctorDefaultsService {
       throw new BadRequestException('Display order must be zero or greater.');
     }
     if (!Number.isInteger(dto.estimatedMinutesAdjustment)) {
-      throw new BadRequestException('Estimated minutes adjustment must be a whole number.');
+      throw new BadRequestException(
+        'Estimated minutes adjustment must be a whole number.',
+      );
     }
 
     const typeFields = this.normalizeTypeFields(dto);
@@ -230,8 +255,14 @@ export class DoctorDefaultsService {
 
   private normalizeTypeFields(dto: SaveDoctorBookingQuestionTemplateDto) {
     if (dto.type === BookingQuestionType.TEXT) {
-      if (dto.numberMinimum !== undefined || dto.numberMaximum !== undefined || dto.selectOptions !== undefined) {
-        throw new BadRequestException('TEXT questions may only use textMaximumLength.');
+      if (
+        dto.numberMinimum !== undefined ||
+        dto.numberMaximum !== undefined ||
+        dto.selectOptions !== undefined
+      ) {
+        throw new BadRequestException(
+          'TEXT questions may only use textMaximumLength.',
+        );
       }
       return {
         proposedTextMaximumLength: dto.textMaximumLength ?? null,
@@ -240,12 +271,24 @@ export class DoctorDefaultsService {
         proposedSelectOptions: Prisma.JsonNull,
       };
     }
+
     if (dto.type === BookingQuestionType.NUMBER) {
-      if (dto.textMaximumLength !== undefined || dto.selectOptions !== undefined) {
-        throw new BadRequestException('NUMBER questions may only use numeric limits.');
+      if (
+        dto.textMaximumLength !== undefined ||
+        dto.selectOptions !== undefined
+      ) {
+        throw new BadRequestException(
+          'NUMBER questions may only use numeric limits.',
+        );
       }
-      if (dto.numberMinimum !== undefined && dto.numberMaximum !== undefined && dto.numberMinimum > dto.numberMaximum) {
-        throw new BadRequestException('Number minimum must not exceed number maximum.');
+      if (
+        dto.numberMinimum !== undefined &&
+        dto.numberMaximum !== undefined &&
+        dto.numberMinimum > dto.numberMaximum
+      ) {
+        throw new BadRequestException(
+          'Number minimum must not exceed number maximum.',
+        );
       }
       return {
         proposedTextMaximumLength: null,
@@ -254,9 +297,17 @@ export class DoctorDefaultsService {
         proposedSelectOptions: Prisma.JsonNull,
       };
     }
+
     if (dto.type === BookingQuestionType.BOOLEAN) {
-      if (dto.textMaximumLength !== undefined || dto.numberMinimum !== undefined || dto.numberMaximum !== undefined || dto.selectOptions !== undefined) {
-        throw new BadRequestException('BOOLEAN questions do not accept validation fields.');
+      if (
+        dto.textMaximumLength !== undefined ||
+        dto.numberMinimum !== undefined ||
+        dto.numberMaximum !== undefined ||
+        dto.selectOptions !== undefined
+      ) {
+        throw new BadRequestException(
+          'BOOLEAN questions do not accept validation fields.',
+        );
       }
       return {
         proposedTextMaximumLength: null,
@@ -265,24 +316,40 @@ export class DoctorDefaultsService {
         proposedSelectOptions: Prisma.JsonNull,
       };
     }
+
     if (dto.type !== BookingQuestionType.SINGLE_SELECT) {
       throw new BadRequestException('Booking question type is invalid.');
     }
-    if (dto.textMaximumLength !== undefined || dto.numberMinimum !== undefined || dto.numberMaximum !== undefined) {
-      throw new BadRequestException('SINGLE_SELECT questions may only use selectOptions.');
+    if (
+      dto.textMaximumLength !== undefined ||
+      dto.numberMinimum !== undefined ||
+      dto.numberMaximum !== undefined
+    ) {
+      throw new BadRequestException(
+        'SINGLE_SELECT questions may only use selectOptions.',
+      );
     }
     const options = dto.selectOptions;
     if (!options || options.length < 2) {
-      throw new BadRequestException('SINGLE_SELECT questions require at least two options.');
+      throw new BadRequestException(
+        'SINGLE_SELECT questions require at least two options.',
+      );
     }
-    const normalized = options.map((option) => ({ value: option.value.trim(), label: option.label.trim() }));
+    const normalized = options.map((option) => ({
+      value: option.value.trim(),
+      label: option.label.trim(),
+    }));
     const values = new Set<string>();
     for (const option of normalized) {
       if (!option.value || !option.label) {
-        throw new BadRequestException('Select option values and labels are required.');
+        throw new BadRequestException(
+          'Select option values and labels are required.',
+        );
       }
       if (option.value.length > 100 || option.label.length > 200) {
-        throw new BadRequestException('Select option value or label is too long.');
+        throw new BadRequestException(
+          'Select option value or label is too long.',
+        );
       }
       if (values.has(option.value)) {
         throw new BadRequestException('Select option values must be unique.');
