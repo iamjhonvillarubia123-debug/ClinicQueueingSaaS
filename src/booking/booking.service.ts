@@ -10,6 +10,7 @@ import {
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { CreateBookingDraftDto } from './dto/create-booking-draft.dto';
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
@@ -21,6 +22,7 @@ export class BookingService {
     private readonly mobileNumberService: MobileNumberService,
     private readonly bookingReferenceGenerator: BookingReferenceGenerator,
     private readonly otpService: OtpService,
+    private readonly bookingConfigurationService: BookingConfigurationService,
   ) {}
 
   async createDraft(createBookingDraftDto: CreateBookingDraftDto) {
@@ -42,7 +44,7 @@ export class BookingService {
           select: {
             accountSettings: {
               select: {
-                defaultConsultationMinutes: true,
+                maximumEstimatedServiceMinutesPerPatient: true,
               },
             },
           },
@@ -64,7 +66,25 @@ export class BookingService {
       );
     }
 
-    const estimatedServiceMinutes = accountSettings.defaultConsultationMinutes;
+    const selectedServices =
+      await this.bookingConfigurationService.validateSelectedServices(
+        createBookingDraftDto.practiceLocationId,
+        createBookingDraftDto.selectedServiceIds,
+      );
+
+    const selectedServiceMinutes = selectedServices.reduce(
+      (total, service) => total + service.durationMinutes,
+      0,
+    );
+    const maximumEstimatedServiceMinutesPerPatient =
+      accountSettings.maximumEstimatedServiceMinutesPerPatient;
+    const estimatedServiceMinutes =
+      maximumEstimatedServiceMinutesPerPatient === null
+        ? selectedServiceMinutes
+        : Math.min(
+            selectedServiceMinutes,
+            maximumEstimatedServiceMinutesPerPatient,
+          );
 
     const protectedMobileNumber = this.mobileNumberService.protect(
       createBookingDraftDto.mobileNumber,
@@ -109,6 +129,11 @@ export class BookingService {
             ),
             estimatedServiceMinutes,
             expiresAt,
+            serviceSelections: {
+              create: selectedServices.map((service) => ({
+                practiceLocationServiceId: service.id,
+              })),
+            },
           },
           select: {
             id: true,
