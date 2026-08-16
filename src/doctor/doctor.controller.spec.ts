@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
 import { DoctorController } from './doctor.controller';
+import { DoctorDefaultsService } from './doctor-defaults.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
 import { DoctorService } from './doctor.service';
 
@@ -10,6 +11,7 @@ describe('DoctorController', () => {
 
   const doctorServiceMock = {};
   const doctorLifecycleServiceMock = {};
+  const doctorDefaultsServiceMock = {};
   const authenticationServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
@@ -19,22 +21,11 @@ describe('DoctorController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DoctorController],
       providers: [
-        {
-          provide: DoctorService,
-          useValue: doctorServiceMock,
-        },
-        {
-          provide: DoctorLifecycleService,
-          useValue: doctorLifecycleServiceMock,
-        },
-        {
-          provide: AuthenticationService,
-          useValue: authenticationServiceMock,
-        },
-        {
-          provide: ConfigService,
-          useValue: configServiceMock,
-        },
+        { provide: DoctorService, useValue: doctorServiceMock },
+        { provide: DoctorLifecycleService, useValue: doctorLifecycleServiceMock },
+        { provide: DoctorDefaultsService, useValue: doctorDefaultsServiceMock },
+        { provide: AuthenticationService, useValue: authenticationServiceMock },
+        { provide: ConfigService, useValue: configServiceMock },
       ],
     }).compile();
 
