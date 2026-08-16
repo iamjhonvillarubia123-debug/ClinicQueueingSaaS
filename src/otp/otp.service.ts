@@ -51,7 +51,7 @@ type LockedBookingOtp = {
 export class OtpService {
   private readonly otpHmacKey: Buffer;
   private readonly activeKeyId: string;
-  private readonly activeKeyVersion: number;
+  private readonly activeKeyVersion = 1;
 
   constructor(
     private readonly otpGenerator: OtpGenerator,
@@ -72,14 +72,8 @@ export class OtpService {
       throw new Error('OTP_HMAC_ACTIVE_KEY_ID must not be blank.');
     }
 
-    const keyMatch = /^v([1-9][0-9]*)$/.exec(activeKeyId.trim());
-    if (!keyMatch) {
-      throw new Error('OTP_HMAC_ACTIVE_KEY_ID must use the v<number> format.');
-    }
-
     this.otpHmacKey = otpKey;
     this.activeKeyId = activeKeyId.trim();
-    this.activeKeyVersion = Number(keyMatch[1]);
   }
 
   hashOtp(bookingDraftId: string, purpose: string, otp: string): string {
