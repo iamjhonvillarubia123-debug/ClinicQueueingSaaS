@@ -333,11 +333,15 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
 
     const rawAccessToken = firstBody.bookingAccessToken?.token;
     if (!rawAccessToken) {
-      throw new Error('Initial booking confirmation did not return an access token.');
+      throw new Error(
+        'Initial booking confirmation did not return an access token.',
+      );
     }
     const encryptedMessage = confirmationOutboxes[0].messageBodyEncrypted;
     if (!encryptedMessage) {
-      throw new Error('Confirmation outbox did not contain an encrypted message.');
+      throw new Error(
+        'Confirmation outbox did not contain an encrypted message.',
+      );
     }
     expect(encryptedMessage).not.toContain(rawAccessToken);
     const decryptedMessage = decryptNotificationMessage(encryptedMessage);
