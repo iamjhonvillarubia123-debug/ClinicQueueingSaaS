@@ -4,15 +4,15 @@ import { IndividualBookingConfirmationService } from './individual-booking-confi
 
 describe('IndividualBookingConfirmationService', () => {
   const createIdempotencyDouble = (resultAppointmentId: string) => {
-    const service = Object.create(
-      CommandIdempotencyService.prototype,
-    ) as CommandIdempotencyService;
+    const service = new CommandIdempotencyService();
 
-    service.normalizeKey = jest.fn().mockReturnValue('idem-1');
-    service.deriveIdentity = jest.fn().mockReturnValue('identity-1');
-    service.fingerprint = jest.fn().mockReturnValue('fingerprint-1');
-    service.acquireCommandLock = jest.fn().mockResolvedValue(undefined);
-    service.findReplay = jest.fn().mockResolvedValue({ resultAppointmentId });
+    jest.spyOn(service, 'normalizeKey').mockReturnValue('idem-1');
+    jest.spyOn(service, 'deriveIdentity').mockReturnValue('identity-1');
+    jest.spyOn(service, 'fingerprint').mockReturnValue('fingerprint-1');
+    jest.spyOn(service, 'acquireCommandLock').mockResolvedValue(undefined);
+    jest.spyOn(service, 'findReplay').mockResolvedValue({
+      resultAppointmentId,
+    } as never);
 
     return service;
   };
