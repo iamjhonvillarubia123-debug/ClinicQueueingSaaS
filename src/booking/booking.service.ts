@@ -12,6 +12,11 @@ import {
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import {
+  ActiveBookingQuestion,
+  BookingAnswerValidationService,
+  PreparedBookingDraftAnswer,
+} from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import {
@@ -26,6 +31,12 @@ type SelectedService = {
   durationMinutes: number;
 };
 
+type ProtectedMobileNumber = {
+  encrypted: string;
+  hash: string;
+  lastFour: string;
+};
+
 @Injectable()
 export class BookingService {
   constructor(
@@ -34,6 +45,7 @@ export class BookingService {
     private readonly bookingReferenceGenerator: BookingReferenceGenerator,
     private readonly otpService: OtpService,
     private readonly bookingConfigurationService: BookingConfigurationService,
+    private readonly bookingAnswerValidationService: BookingAnswerValidationService,
   ) {}
 
   async createDraft(createBookingDraftDto: CreateBookingDraftDto) {
@@ -70,16 +82,16 @@ export class BookingService {
     }
 
     const accountSettings = practiceLocation.doctorProfile.accountSettings;
-
     if (!accountSettings) {
       throw new InternalServerErrorException(
         'Practice location configuration is incomplete.',
       );
     }
 
-    const maximumEstimatedServiceMinutesPerPatient =
-      accountSettings.maximumEstimatedServiceMinutesPerPatient;
-
+    const activeQuestions =
+      await this.bookingAnswerValidationService.loadActiveQuestions(
+        createBookingDraftDto.practiceLocationId,
+      );
     const protectedMobileNumber = this.mobileNumberService.protect(
       createBookingDraftDto.mobileNumber,
     );
@@ -87,8 +99,10 @@ export class BookingService {
       `${createBookingDraftDto.serviceDate}T00:00:00.000Z`,
     );
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const maximumEstimatedServiceMinutesPerPatient =
+      accountSettings.maximumEstimatedServiceMinutesPerPatient;
 
-    const bookingDraft =
+    const creation =
       createBookingDraftDto.mode === 'MULTI_PERSON'
         ? await this.createMultiPersonDraft(
             createBookingDraftDto,
@@ -96,6 +110,7 @@ export class BookingService {
             serviceDate,
             expiresAt,
             maximumEstimatedServiceMinutesPerPatient,
+            activeQuestions,
           )
         : await this.createIndividualDraft(
             createBookingDraftDto,
@@ -103,12 +118,22 @@ export class BookingService {
             serviceDate,
             expiresAt,
             maximumEstimatedServiceMinutesPerPatient,
+            activeQuestions,
           );
 
-    const otpResult = await this.otpService.createBookingOtp(bookingDraft.id);
+    if (!creation.otpEligible) {
+      return {
+        bookingDraft: creation.bookingDraft,
+        otpVerification: null,
+      };
+    }
+
+    const otpResult = await this.otpService.createBookingOtp(
+      creation.bookingDraft.id,
+    );
 
     return {
-      bookingDraft,
+      bookingDraft: creation.bookingDraft,
       otpVerification: {
         id: otpResult.otpVerification.id,
         expiresAt: otpResult.otpVerification.expiresAt,
@@ -126,14 +151,11 @@ export class BookingService {
 
   private async createIndividualDraft(
     dto: CreateBookingDraftDto,
-    protectedMobileNumber: {
-      encrypted: string;
-      hash: string;
-      lastFour: string;
-    },
+    protectedMobileNumber: ProtectedMobileNumber,
     serviceDate: Date,
     expiresAt: Date,
     maximumEstimatedServiceMinutesPerPatient: number | null,
+    activeQuestions: ActiveBookingQuestion[],
   ) {
     if (
       !dto.firstName ||
@@ -155,13 +177,22 @@ export class BookingService {
       selectedServices,
       maximumEstimatedServiceMinutesPerPatient,
     );
+    const preparedAnswers = this.bookingAnswerValidationService.prepareAnswers(
+      activeQuestions,
+      dto.answers,
+    );
+    const requiredAnswersComplete =
+      this.bookingAnswerValidationService.requiredAnswersComplete(
+        activeQuestions,
+        preparedAnswers,
+      );
 
     const maximumReferenceAttempts = 3;
     for (let attempt = 1; attempt <= maximumReferenceAttempts; attempt += 1) {
       const bookingReference = this.bookingReferenceGenerator.generate();
 
       try {
-        return await this.prisma.bookingDraft.create({
+        const bookingDraft = await this.prisma.bookingDraft.create({
           data: {
             bookingReference,
             mode: BookingDraftMode.INDIVIDUAL,
@@ -182,9 +213,19 @@ export class BookingService {
                 practiceLocationServiceId: service.id,
               })),
             },
+            bookingDraftAnswers: {
+              create: preparedAnswers.map((answer) =>
+                this.answerCreateData(answer),
+              ),
+            },
           },
           select: this.bookingDraftResultSelect,
         });
+
+        return {
+          bookingDraft,
+          otpEligible: requiredAnswersComplete,
+        };
       } catch (error) {
         if (this.isUniqueConflict(error)) {
           continue;
@@ -200,14 +241,11 @@ export class BookingService {
 
   private async createMultiPersonDraft(
     dto: CreateBookingDraftDto,
-    protectedMobileNumber: {
-      encrypted: string;
-      hash: string;
-      lastFour: string;
-    },
+    protectedMobileNumber: ProtectedMobileNumber,
     serviceDate: Date,
     expiresAt: Date,
     maximumEstimatedServiceMinutesPerPatient: number | null,
+    activeQuestions: ActiveBookingQuestion[],
   ) {
     const members = dto.members;
     if (!members || members.length < 1 || members.length > 5) {
@@ -223,63 +261,82 @@ export class BookingService {
           member,
           index + 1,
           maximumEstimatedServiceMinutesPerPatient,
+          activeQuestions,
         ),
       ),
     );
+    const otpEligible =
+      members.length >= 2 &&
+      preparedMembers.every((member) => member.requiredAnswersComplete);
 
     const maximumReferenceAttempts = 3;
     for (let attempt = 1; attempt <= maximumReferenceAttempts; attempt += 1) {
       const bookingReference = this.bookingReferenceGenerator.generate();
 
       try {
-        return await this.prisma.$transaction(async (transaction) => {
-          const parent = await transaction.bookingDraft.create({
-            data: {
-              bookingReference,
-              mode: BookingDraftMode.MULTI_PERSON,
-              practiceLocationId: dto.practiceLocationId,
-              firstName: null,
-              middleName: null,
-              lastName: null,
-              suffix: null,
-              existingPatientResponse: null,
-              mobileNumberEncrypted: protectedMobileNumber.encrypted,
-              mobileNumberHash: protectedMobileNumber.hash,
-              mobileNumberLastFour: protectedMobileNumber.lastFour,
-              serviceDate,
-              estimatedServiceMinutes: null,
-              expiresAt,
-            },
-            select: this.bookingDraftResultSelect,
-          });
-
-          for (const preparedMember of preparedMembers) {
-            const createdMember = await transaction.bookingDraftMember.create({
+        const bookingDraft = await this.prisma.$transaction(
+          async (transaction) => {
+            const parent = await transaction.bookingDraft.create({
               data: {
-                bookingDraftId: parent.id,
-                memberOrder: preparedMember.memberOrder,
-                firstName: preparedMember.member.firstName.trim(),
-                middleName: preparedMember.member.middleName?.trim() || null,
-                lastName: preparedMember.member.lastName.trim(),
-                suffix: preparedMember.member.suffix?.trim() || null,
-                existingPatientResponse:
-                  preparedMember.member.existingPatientResponse,
-                estimatedServiceMinutes: preparedMember.estimatedServiceMinutes,
+                bookingReference,
+                mode: BookingDraftMode.MULTI_PERSON,
+                practiceLocationId: dto.practiceLocationId,
+                firstName: null,
+                middleName: null,
+                lastName: null,
+                suffix: null,
+                existingPatientResponse: null,
+                mobileNumberEncrypted: protectedMobileNumber.encrypted,
+                mobileNumberHash: protectedMobileNumber.hash,
+                mobileNumberLastFour: protectedMobileNumber.lastFour,
+                serviceDate,
+                estimatedServiceMinutes: null,
+                expiresAt,
               },
-              select: { id: true },
+              select: this.bookingDraftResultSelect,
             });
 
-            await transaction.bookingDraftServiceSelection.createMany({
-              data: preparedMember.selectedServices.map((service) => ({
-                bookingDraftId: parent.id,
-                bookingDraftMemberId: createdMember.id,
-                practiceLocationServiceId: service.id,
-              })),
-            });
-          }
+            for (const preparedMember of preparedMembers) {
+              const createdMember = await transaction.bookingDraftMember.create({
+                data: {
+                  bookingDraftId: parent.id,
+                  memberOrder: preparedMember.memberOrder,
+                  firstName: preparedMember.member.firstName.trim(),
+                  middleName: preparedMember.member.middleName?.trim() || null,
+                  lastName: preparedMember.member.lastName.trim(),
+                  suffix: preparedMember.member.suffix?.trim() || null,
+                  existingPatientResponse:
+                    preparedMember.member.existingPatientResponse,
+                  estimatedServiceMinutes:
+                    preparedMember.estimatedServiceMinutes,
+                },
+                select: { id: true },
+              });
 
-          return parent;
-        });
+              await transaction.bookingDraftServiceSelection.createMany({
+                data: preparedMember.selectedServices.map((service) => ({
+                  bookingDraftId: parent.id,
+                  bookingDraftMemberId: createdMember.id,
+                  practiceLocationServiceId: service.id,
+                })),
+              });
+
+              if (preparedMember.preparedAnswers.length > 0) {
+                await transaction.bookingDraftAnswer.createMany({
+                  data: preparedMember.preparedAnswers.map((answer) => ({
+                    bookingDraftId: parent.id,
+                    bookingDraftMemberId: createdMember.id,
+                    ...this.answerCreateData(answer),
+                  })),
+                });
+              }
+            }
+
+            return parent;
+          },
+        );
+
+        return { bookingDraft, otpEligible };
       } catch (error) {
         if (this.isUniqueConflict(error)) {
           continue;
@@ -298,21 +355,42 @@ export class BookingService {
     member: CreateBookingDraftMemberDto,
     memberOrder: number,
     maximumEstimatedServiceMinutesPerPatient: number | null,
+    activeQuestions: ActiveBookingQuestion[],
   ) {
     const selectedServices =
       await this.bookingConfigurationService.validateSelectedServices(
         practiceLocationId,
         member.selectedServiceIds,
       );
+    const preparedAnswers = this.bookingAnswerValidationService.prepareAnswers(
+      activeQuestions,
+      member.answers,
+    );
 
     return {
       member,
       memberOrder,
       selectedServices,
+      preparedAnswers,
+      requiredAnswersComplete:
+        this.bookingAnswerValidationService.requiredAnswersComplete(
+          activeQuestions,
+          preparedAnswers,
+        ),
       estimatedServiceMinutes: this.calculateEstimatedServiceMinutes(
         selectedServices,
         maximumEstimatedServiceMinutesPerPatient,
       ),
+    };
+  }
+
+  private answerCreateData(answer: PreparedBookingDraftAnswer) {
+    return {
+      bookingQuestionId: answer.bookingQuestionId,
+      answerText: answer.answerText,
+      answerNumber: answer.answerNumber,
+      answerBoolean: answer.answerBoolean,
+      selectedOptionValue: answer.selectedOptionValue,
     };
   }
 
