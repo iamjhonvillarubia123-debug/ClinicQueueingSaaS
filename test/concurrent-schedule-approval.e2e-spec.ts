@@ -202,17 +202,20 @@ describe('Concurrent schedule approval serialization (e2e)', () => {
         ),
       ]);
 
-      const fulfilled = results.filter(
-        (result): result is PromiseFulfilledResult<unknown> =>
-          result.status === 'fulfilled',
-      );
-      const rejected = results.filter(
-        (result): result is PromiseRejectedResult => result.status === 'rejected',
-      );
+      expect(
+        results.filter((result) => result.status === 'fulfilled'),
+      ).toHaveLength(1);
+      expect(
+        results.filter((result) => result.status === 'rejected'),
+      ).toHaveLength(1);
 
-      expect(fulfilled).toHaveLength(1);
-      expect(rejected).toHaveLength(1);
-      expect(rejected[0]?.reason).toBeInstanceOf(ConflictException);
+      const rejectedResult = results.find(
+        (result) => result.status === 'rejected',
+      );
+      if (!rejectedResult || rejectedResult.status !== 'rejected') {
+        throw new Error('Expected one concurrent approval to be rejected.');
+      }
+      expect(rejectedResult.reason).toBeInstanceOf(ConflictException);
 
       const [effectiveA, effectiveB] = await Promise.all([
         prisma.practiceSchedule.findUniqueOrThrow({
@@ -235,25 +238,23 @@ describe('Concurrent schedule approval serialization (e2e)', () => {
         }),
       ]);
 
-      const effectiveHours = [
-        [
-          effectiveA.opensAtLocal?.getUTCHours(),
-          effectiveA.closesAtLocal?.getUTCHours(),
-        ],
-        [
-          effectiveB.opensAtLocal?.getUTCHours(),
-          effectiveB.closesAtLocal?.getUTCHours(),
-        ],
-      ];
-      expect(effectiveHours).toEqual(
-        expect.arrayContaining([
-          expect.arrayContaining([9]),
-          expect.arrayContaining([17]),
-        ]),
-      );
+      const aWon =
+        effectiveA.opensAtLocal?.getUTCHours() === 9 &&
+        effectiveA.closesAtLocal?.getUTCHours() === 13 &&
+        effectiveB.opensAtLocal?.getUTCHours() === 15 &&
+        effectiveB.closesAtLocal?.getUTCHours() === 17;
+      const bWon =
+        effectiveA.opensAtLocal?.getUTCHours() === 9 &&
+        effectiveA.closesAtLocal?.getUTCHours() === 11 &&
+        effectiveB.opensAtLocal?.getUTCHours() === 12 &&
+        effectiveB.closesAtLocal?.getUTCHours() === 17;
+      expect(aWon || bWon).toBe(true);
+
       expect(
-        effectiveA.closesAtLocal!.getTime() <= effectiveB.opensAtLocal!.getTime() ||
-          effectiveB.closesAtLocal!.getTime() <= effectiveA.opensAtLocal!.getTime(),
+        effectiveA.closesAtLocal!.getTime() <=
+          effectiveB.opensAtLocal!.getTime() ||
+          effectiveB.closesAtLocal!.getTime() <=
+            effectiveA.opensAtLocal!.getTime(),
       ).toBe(true);
 
       const drafts = await prisma.secretarySettingsDraft.findMany({
