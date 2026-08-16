@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
@@ -18,10 +22,7 @@ export type LockedConfirmationDraft = {
   cancelledAt: Date | null;
   doctorUserId: string;
   doctorAccountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED';
-  doctorAdministrativeRestrictionStatus:
-    | 'NONE'
-    | 'SUSPENDED'
-    | 'EMERGENCY_SUSPENDED';
+  doctorAdministrativeRestrictionStatus: 'NONE' | 'SUSPENDED' | 'EMERGENCY_SUSPENDED';
   entitlementGraceEndsAt: Date | null;
 };
 
@@ -67,7 +68,9 @@ export class BookingConfirmationAdmissionService {
     }
 
     if (!draft.mobileNumberHash) {
-      throw new ConflictException('Booking confirmation identity is incomplete.');
+      throw new ConflictException(
+        'Booking confirmation identity is incomplete.',
+      );
     }
 
     const activeAppointmentKey =
@@ -113,8 +116,13 @@ export class BookingConfirmationAdmissionService {
     maximumOperatingUntilAt: Date | null,
     requestedEstimatedMinutes: number,
   ): Promise<void> {
-    if (!Number.isInteger(requestedEstimatedMinutes) || requestedEstimatedMinutes < 1) {
-      throw new ConflictException('Booking duration is invalid for confirmation.');
+    if (
+      !Number.isInteger(requestedEstimatedMinutes) ||
+      requestedEstimatedMinutes < 1
+    ) {
+      throw new ConflictException(
+        'Booking duration is invalid for confirmation.',
+      );
     }
     if (!maximumOperatingUntilAt) {
       return;
@@ -148,7 +156,9 @@ export class BookingConfirmationAdmissionService {
         (existingMinutes + requestedEstimatedMinutes) * 60_000,
     );
     if (projectedFinish.getTime() > maximumOperatingUntilAt.getTime()) {
-      throw new ConflictException('Online booking is full for this Service Date.');
+      throw new ConflictException(
+        'Online booking is full for this Service Date.',
+      );
     }
   }
 
@@ -156,36 +166,40 @@ export class BookingConfirmationAdmissionService {
     transaction: TransactionClient,
     bookingDraftId: string,
   ): Promise<LockedConfirmationDraft> {
-    const rows = await transaction.$queryRaw<LockedConfirmationDraft[]>(Prisma.sql`
-      SELECT
-        bd."id",
-        bd."mode",
-        bd."status",
-        bd."practiceLocationId",
-        bd."serviceDate",
-        bd."mobileNumberHash",
-        bd."activeDraftKey",
-        bd."expiresAt",
-        bd."consumedAt",
-        bd."cancelledAt",
-        u."id" AS "doctorUserId",
-        u."accountStatus" AS "doctorAccountStatus",
-        u."administrativeRestrictionStatus" AS "doctorAdministrativeRestrictionStatus",
-        dse."graceEndsAt" AS "entitlementGraceEndsAt"
-      FROM "BookingDraft" bd
-      INNER JOIN "PracticeLocation" pl ON pl."id" = bd."practiceLocationId"
-      INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
-      INNER JOIN "User" u ON u."id" = dp."userId"
-      LEFT JOIN "DoctorFinancialAccount" dfa ON dfa."doctorUserId" = u."id"
-      LEFT JOIN "DoctorSubscriptionEntitlement" dse
-        ON dse."doctorFinancialAccountId" = dfa."id"
-      WHERE bd."id" = ${bookingDraftId}
-      LIMIT 1
-      FOR UPDATE OF bd, pl, u
-    `);
+    const rows = await transaction.$queryRaw<LockedConfirmationDraft[]>(
+      Prisma.sql`
+        SELECT
+          bd."id",
+          bd."mode",
+          bd."status",
+          bd."practiceLocationId",
+          bd."serviceDate",
+          bd."mobileNumberHash",
+          bd."activeDraftKey",
+          bd."expiresAt",
+          bd."consumedAt",
+          bd."cancelledAt",
+          u."id" AS "doctorUserId",
+          u."accountStatus" AS "doctorAccountStatus",
+          u."administrativeRestrictionStatus" AS "doctorAdministrativeRestrictionStatus",
+          dse."graceEndsAt" AS "entitlementGraceEndsAt"
+        FROM "BookingDraft" bd
+        INNER JOIN "PracticeLocation" pl ON pl."id" = bd."practiceLocationId"
+        INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
+        INNER JOIN "User" u ON u."id" = dp."userId"
+        LEFT JOIN "DoctorFinancialAccount" dfa ON dfa."doctorUserId" = u."id"
+        LEFT JOIN "DoctorSubscriptionEntitlement" dse
+          ON dse."doctorFinancialAccountId" = dfa."id"
+        WHERE bd."id" = ${bookingDraftId}
+        LIMIT 1
+        FOR UPDATE OF bd, pl, u
+      `,
+    );
     const draft = rows[0];
     if (!draft) {
-      throw new NotFoundException('Booking draft is not available for confirmation.');
+      throw new NotFoundException(
+        'Booking draft is not available for confirmation.',
+      );
     }
     return draft;
   }
@@ -219,7 +233,9 @@ export class BookingConfirmationAdmissionService {
       otp.invalidatedAt ||
       !otp.activeContextKey
     ) {
-      throw new ConflictException('Booking OTP is not verified for confirmation.');
+      throw new ConflictException(
+        'Booking OTP is not verified for confirmation.',
+      );
     }
     return { id: otp.id, verifiedAt: otp.verifiedAt };
   }
@@ -235,7 +251,9 @@ export class BookingConfirmationAdmissionService {
       draft.expiresAt.getTime() <= now.getTime() ||
       !draft.activeDraftKey
     ) {
-      throw new ConflictException('Booking draft is not eligible for confirmation.');
+      throw new ConflictException(
+        'Booking draft is not eligible for confirmation.',
+      );
     }
   }
 
@@ -247,13 +265,17 @@ export class BookingConfirmationAdmissionService {
       draft.doctorAccountStatus !== 'ACTIVE' ||
       draft.doctorAdministrativeRestrictionStatus !== 'NONE'
     ) {
-      throw new ConflictException('Booking confirmation is currently unavailable.');
+      throw new ConflictException(
+        'Booking confirmation is currently unavailable.',
+      );
     }
     if (
       !draft.entitlementGraceEndsAt ||
       draft.entitlementGraceEndsAt.getTime() <= now.getTime()
     ) {
-      throw new ConflictException('Booking confirmation is currently unavailable.');
+      throw new ConflictException(
+        'Booking confirmation is currently unavailable.',
+      );
     }
   }
 }
