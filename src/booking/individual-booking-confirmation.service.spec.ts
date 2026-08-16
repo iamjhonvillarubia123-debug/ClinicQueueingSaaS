@@ -10,9 +10,9 @@ describe('IndividualBookingConfirmationService', () => {
     jest.spyOn(service, 'deriveIdentity').mockReturnValue('identity-1');
     jest.spyOn(service, 'fingerprint').mockReturnValue('fingerprint-1');
     jest.spyOn(service, 'acquireCommandLock').mockResolvedValue(undefined);
-    jest.spyOn(service, 'findReplay').mockResolvedValue({
-      resultAppointmentId,
-    } as never);
+    jest
+      .spyOn(service, 'findReplay')
+      .mockResolvedValue({ resultAppointmentId } as never);
 
     return service;
   };
@@ -45,7 +45,7 @@ describe('IndividualBookingConfirmationService', () => {
       idempotency,
       {} as never,
       {} as never,
-      accessTokens as never,
+      accessTokens,
       {} as never,
     );
 
