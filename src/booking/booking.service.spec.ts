@@ -224,6 +224,8 @@ describe('BookingService', () => {
       mode: 'MULTI_PERSON',
       mobileNumber: '+639171234567',
       serviceDate: '2026-08-10',
+      privacyNoticeVersion: 'v1',
+      privacyNoticeAcknowledged: true,
       members: [
         {
           firstName: 'Ana',

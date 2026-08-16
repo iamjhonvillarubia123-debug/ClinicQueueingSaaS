@@ -104,6 +104,7 @@ export class BookingService {
     const maximumEstimatedServiceMinutesPerPatient =
       accountSettings.maximumEstimatedServiceMinutesPerPatient;
     const controlCredential = this.bookingDraftControlService.issueCredential();
+    const acknowledgement = this.prepareAcknowledgement(createBookingDraftDto);
 
     const creation =
       createBookingDraftDto.mode === 'MULTI_PERSON'
@@ -115,6 +116,7 @@ export class BookingService {
             maximumEstimatedServiceMinutesPerPatient,
             activeQuestions,
             controlCredential.tokenHash,
+            acknowledgement,
           )
         : await this.createIndividualDraft(
             createBookingDraftDto,
@@ -124,6 +126,7 @@ export class BookingService {
             maximumEstimatedServiceMinutesPerPatient,
             activeQuestions,
             controlCredential.tokenHash,
+            acknowledgement,
           );
 
     if (!creation.otpEligible) {
@@ -164,6 +167,7 @@ export class BookingService {
     maximumEstimatedServiceMinutesPerPatient: number | null,
     activeQuestions: ActiveBookingQuestion[],
     draftControlTokenHash: string,
+    acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,
   ) {
     if (
       !dto.firstName ||
@@ -217,6 +221,10 @@ export class BookingService {
                 mobileNumberLastFour: protectedMobileNumber.lastFour,
                 serviceDate,
                 estimatedServiceMinutes,
+                privacyNoticeAcknowledgedAt:
+                  acknowledgement.privacyNoticeAcknowledgedAt,
+                privacyNoticeVersion: acknowledgement.privacyNoticeVersion,
+                scheduledReminderOptIn: acknowledgement.scheduledReminderOptIn,
                 expiresAt,
                 serviceSelections: {
                   create: selectedServices.map((service) => ({
@@ -244,7 +252,8 @@ export class BookingService {
 
         return {
           bookingDraft,
-          otpEligible: requiredAnswersComplete,
+          otpEligible:
+            requiredAnswersComplete && acknowledgement.isAcknowledged,
         };
       } catch (error) {
         if (this.isUniqueConflict(error)) {
@@ -267,6 +276,7 @@ export class BookingService {
     maximumEstimatedServiceMinutesPerPatient: number | null,
     activeQuestions: ActiveBookingQuestion[],
     draftControlTokenHash: string,
+    acknowledgement: ReturnType<BookingService['prepareAcknowledgement']>,
   ) {
     const members = dto.members;
     if (!members || members.length < 1 || members.length > 5) {
@@ -287,6 +297,7 @@ export class BookingService {
       ),
     );
     const otpEligible =
+      acknowledgement.isAcknowledged &&
       members.length >= 2 &&
       preparedMembers.every((member) => member.requiredAnswersComplete);
 
@@ -312,6 +323,10 @@ export class BookingService {
                 mobileNumberLastFour: protectedMobileNumber.lastFour,
                 serviceDate,
                 estimatedServiceMinutes: null,
+                privacyNoticeAcknowledgedAt:
+                  acknowledgement.privacyNoticeAcknowledgedAt,
+                privacyNoticeVersion: acknowledgement.privacyNoticeVersion,
+                scheduledReminderOptIn: acknowledgement.scheduledReminderOptIn,
                 expiresAt,
               },
               select: this.bookingDraftResultSelect,
@@ -414,6 +429,31 @@ export class BookingService {
     };
   }
 
+  private prepareAcknowledgement(dto: CreateBookingDraftDto) {
+    const isAcknowledged = dto.privacyNoticeAcknowledged === true;
+    const privacyNoticeVersion = isAcknowledged
+      ? dto.privacyNoticeVersion?.trim() || null
+      : null;
+
+    if (isAcknowledged && !privacyNoticeVersion) {
+      throw new BadRequestException(
+        'Privacy Notice version is required when acknowledgement is provided.',
+      );
+    }
+    if (!isAcknowledged && dto.privacyNoticeVersion) {
+      throw new BadRequestException(
+        'Privacy Notice version cannot be stored without acknowledgement.',
+      );
+    }
+
+    return {
+      isAcknowledged,
+      privacyNoticeAcknowledgedAt: isAcknowledged ? new Date() : null,
+      privacyNoticeVersion,
+      scheduledReminderOptIn: dto.scheduledReminderOptIn === true,
+    };
+  }
+
   private answerCreateData(answer: PreparedBookingDraftAnswer) {
     return {
       bookingQuestionId: answer.bookingQuestionId,
@@ -457,6 +497,9 @@ export class BookingService {
     existingPatientResponse: true,
     serviceDate: true,
     estimatedServiceMinutes: true,
+    privacyNoticeAcknowledgedAt: true,
+    privacyNoticeVersion: true,
+    scheduledReminderOptIn: true,
     expiresAt: true,
     createdAt: true,
   } satisfies Prisma.BookingDraftSelect;

@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsNotEmpty,
@@ -99,6 +100,20 @@ export class CreateBookingDraftDto {
 
   @IsDateString()
   serviceDate!: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  privacyNoticeVersion?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  privacyNoticeAcknowledged?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  scheduledReminderOptIn?: boolean;
 
   @ValidateIf((dto: CreateBookingDraftDto) => dto.mode === 'INDIVIDUAL')
   @IsArray()

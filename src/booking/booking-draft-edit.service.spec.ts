@@ -99,6 +99,9 @@ describe('BookingDraftEditService', () => {
       existingPatientResponse: 'NO',
       mobileNumberHash: 'mobile-hash',
       serviceDate: new Date('2026-08-17T00:00:00.000Z'),
+      privacyNoticeAcknowledgedAt: new Date('2026-08-16T12:00:00.000Z'),
+      privacyNoticeVersion: '2026-08',
+      scheduledReminderOptIn: false,
       serviceSelections: [{ practiceLocationServiceId: 'service-1' }],
       bookingDraftAnswers: [],
       bookingDraftMembers: [],
@@ -112,6 +115,9 @@ describe('BookingDraftEditService', () => {
       existingPatientResponse: 'NO',
       mobileNumber: '+639171234567',
       serviceDate: '2026-08-17',
+      privacyNoticeAcknowledged: true,
+      privacyNoticeVersion: '2026-08',
+      scheduledReminderOptIn: false,
       selectedServiceIds: ['service-1'],
       draftControlToken: 'browser-secret',
     });
@@ -133,6 +139,9 @@ describe('BookingDraftEditService', () => {
       existingPatientResponse: 'NO',
       mobileNumberHash: 'mobile-hash',
       serviceDate: new Date('2026-08-17T00:00:00.000Z'),
+      privacyNoticeAcknowledgedAt: new Date('2026-08-16T12:00:00.000Z'),
+      privacyNoticeVersion: '2026-08',
+      scheduledReminderOptIn: false,
       serviceSelections: [{ practiceLocationServiceId: 'service-1' }],
       bookingDraftAnswers: [],
       bookingDraftMembers: [],
@@ -154,21 +163,102 @@ describe('BookingDraftEditService', () => {
       existingPatientResponse: 'NO',
       mobileNumber: '+639171234567',
       serviceDate: '2026-08-18',
+      privacyNoticeAcknowledged: true,
+      privacyNoticeVersion: '2026-08',
+      scheduledReminderOptIn: true,
       selectedServiceIds: ['service-1'],
       draftControlToken: 'browser-secret',
     });
 
     expect(result.materialChanged).toBe(true);
     expect(result.otpInvalidated).toBe(true);
-    expect(transactionMock.otpVerification.updateMany).toHaveBeenCalledTimes(1);
+    expect(transactionMock.otpVerification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          invalidatedAt: expect.any(Date) as unknown,
+          activeContextKey: null,
+          otpHash: null,
+        }) as unknown,
+      }),
+    );
     expect(transactionMock.bookingDraft.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           firstName: 'Maria Updated',
           serviceDate: new Date('2026-08-18T00:00:00.000Z'),
+          privacyNoticeVersion: '2026-08',
+          scheduledReminderOptIn: true,
         }) as unknown,
       }),
     );
+  });
+
+  it('treats a reminder preference change as a material edit', async () => {
+    transactionMock.bookingDraft.findUniqueOrThrow.mockResolvedValue({
+      id: 'draft-1',
+      mode: BookingDraftMode.INDIVIDUAL,
+      practiceLocationId: 'location-1',
+      firstName: 'Maria',
+      middleName: null,
+      lastName: 'Reyes',
+      suffix: null,
+      existingPatientResponse: 'NO',
+      mobileNumberHash: 'mobile-hash',
+      serviceDate: new Date('2026-08-17T00:00:00.000Z'),
+      privacyNoticeAcknowledgedAt: new Date('2026-08-16T12:00:00.000Z'),
+      privacyNoticeVersion: '2026-08',
+      scheduledReminderOptIn: false,
+      serviceSelections: [{ practiceLocationServiceId: 'service-1' }],
+      bookingDraftAnswers: [],
+      bookingDraftMembers: [],
+    });
+    transactionMock.otpVerification.updateMany.mockResolvedValue({ count: 1 });
+    transactionMock.bookingDraftAnswer.deleteMany.mockResolvedValue({
+      count: 0,
+    });
+    transactionMock.bookingDraftServiceSelection.deleteMany.mockResolvedValue({
+      count: 1,
+    });
+    transactionMock.bookingDraft.update.mockResolvedValue({ id: 'draft-1' });
+
+    const result = await service.replaceDraft('draft-1', {
+      practiceLocationId: 'location-1',
+      mode: 'INDIVIDUAL',
+      firstName: 'Maria',
+      lastName: 'Reyes',
+      existingPatientResponse: 'NO',
+      mobileNumber: '+639171234567',
+      serviceDate: '2026-08-17',
+      privacyNoticeAcknowledged: true,
+      privacyNoticeVersion: '2026-08',
+      scheduledReminderOptIn: true,
+      selectedServiceIds: ['service-1'],
+      draftControlToken: 'browser-secret',
+    });
+
+    expect(result.materialChanged).toBe(true);
+    expect(result.otpInvalidated).toBe(true);
+  });
+
+  it('refuses OTP request without Privacy Notice acknowledgement', async () => {
+    transactionMock.bookingDraft.findUniqueOrThrow.mockResolvedValue({
+      id: 'draft-1',
+      mode: BookingDraftMode.INDIVIDUAL,
+      practiceLocationId: 'location-1',
+      privacyNoticeAcknowledgedAt: null,
+      privacyNoticeVersion: null,
+      serviceSelections: [{ practiceLocationServiceId: 'service-1' }],
+      bookingDraftAnswers: [],
+      bookingDraftMembers: [],
+      otpVerifications: [],
+    });
+
+    await expect(
+      service.requestBookingOtp('draft-1', {
+        draftControlToken: 'browser-secret',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(otpMock.createBookingOtpInTransaction).not.toHaveBeenCalled();
   });
 
   it('refuses OTP request for a one-member multi-person construction state', async () => {
@@ -187,6 +277,8 @@ describe('BookingDraftEditService', () => {
       id: 'draft-group',
       mode: BookingDraftMode.MULTI_PERSON,
       practiceLocationId: 'location-1',
+      privacyNoticeAcknowledgedAt: new Date('2026-08-16T12:00:00.000Z'),
+      privacyNoticeVersion: '2026-08',
       serviceSelections: [],
       bookingDraftAnswers: [],
       bookingDraftMembers: [

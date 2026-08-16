@@ -124,6 +124,9 @@ export class BookingDraftCleanupService {
           "mobileNumberHash" = NULL,
           "mobileNumberLastFour" = NULL,
           "draftControlTokenHash" = NULL,
+          "privacyNoticeAcknowledgedAt" = NULL,
+          "privacyNoticeVersion" = NULL,
+          "scheduledReminderOptIn" = false,
           "protectedDataClearedAt" = ${now}
         WHERE "id" IN (${Prisma.join(ids)})
           AND "protectedDataClearedAt" IS NULL
