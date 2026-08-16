@@ -133,4 +133,25 @@ await replaceRequired(
   'BookingDraft protected cleanup active key clearing',
 );
 
+await replaceRequired(
+  'src/booking/booking.service.spec.ts',
+  `import { BookingAnswerValidationService } from './booking-answer-validation.service';`,
+  `import { ActiveBookingIdentityService } from './active-booking-identity.service';\nimport { BookingAnswerValidationService } from './booking-answer-validation.service';`,
+  'BookingService spec active identity import',
+);
+
+await replaceRequired(
+  'src/booking/booking.service.spec.ts',
+  `  const bookingReferenceGeneratorMock = { generate: jest.fn() };`,
+  `  const bookingReferenceGeneratorMock = { generate: jest.fn() };\n  const activeBookingIdentityServiceMock = {\n    deriveDraftKey: jest.fn(() => 'd'.repeat(64)),\n    acquireDraftScopeLock: jest.fn(),\n    assertNoActiveDraft: jest.fn(),\n    attachDraftKey: jest.fn(),\n  };`,
+  'BookingService spec active identity mock',
+);
+
+await replaceRequired(
+  'src/booking/booking.service.spec.ts',
+  `        {\n          provide: BookingDraftControlService,\n          useValue: bookingDraftControlServiceMock,\n        },\n      ],`,
+  `        {\n          provide: BookingDraftControlService,\n          useValue: bookingDraftControlServiceMock,\n        },\n        {\n          provide: ActiveBookingIdentityService,\n          useValue: activeBookingIdentityServiceMock,\n        },\n      ],`,
+  'BookingService spec active identity provider',
+);
+
 console.log('M6S1 active-key alignment complete.');
