@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
+import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 
@@ -19,7 +20,6 @@ describe('BookingService', () => {
   };
   const prismaServiceMock = {
     practiceLocation: { findFirst: jest.fn() },
-    bookingDraft: { create: jest.fn() },
     $transaction: jest.fn(),
   };
   const bookingConfigurationServiceMock = {
@@ -29,6 +29,10 @@ describe('BookingService', () => {
     loadActiveQuestions: jest.fn(),
     prepareAnswers: jest.fn(),
     requiredAnswersComplete: jest.fn(),
+  };
+  const bookingDraftControlServiceMock = {
+    issueCredential: jest.fn(),
+    attachCredential: jest.fn(),
   };
   const otpServiceMock = {
     createBookingOtp: jest.fn(),
@@ -56,6 +60,10 @@ describe('BookingService', () => {
           provide: BookingAnswerValidationService,
           useValue: bookingAnswerValidationServiceMock,
         },
+        {
+          provide: BookingDraftControlService,
+          useValue: bookingDraftControlServiceMock,
+        },
       ],
     }).compile();
 
@@ -72,13 +80,20 @@ describe('BookingService', () => {
     bookingAnswerValidationServiceMock.requiredAnswersComplete.mockReturnValue(
       true,
     );
+    bookingDraftControlServiceMock.issueCredential.mockReturnValue({
+      rawToken: 'browser-secret',
+      tokenHash: 'a'.repeat(64),
+    });
+    bookingDraftControlServiceMock.attachCredential.mockResolvedValue(
+      undefined,
+    );
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('persists individual selected Services and applies the Doctor per-patient cap', async () => {
+  it('persists individual selected Services, applies the Doctor cap, and returns browser-local draft control', async () => {
     prismaServiceMock.practiceLocation.findFirst.mockResolvedValue({
       id: 'practice-1',
       name: 'Clinic',
@@ -96,7 +111,7 @@ describe('BookingService', () => {
       lastFour: '4567',
     });
     bookingReferenceGeneratorMock.generate.mockReturnValue('CQ-ONE');
-    prismaServiceMock.bookingDraft.create.mockResolvedValue({
+    transactionMock.bookingDraft.create.mockResolvedValue({
       id: 'draft-1',
       bookingReference: 'CQ-ONE',
       mode: 'INDIVIDUAL',
@@ -112,7 +127,7 @@ describe('BookingService', () => {
       otpVerification: { id: 'otp-1', expiresAt: new Date(), maxAttempts: 5 },
     });
 
-    await service.createDraft({
+    const result = await service.createDraft({
       practiceLocationId: 'practice-1',
       mode: 'INDIVIDUAL',
       firstName: 'Maria',
@@ -125,7 +140,7 @@ describe('BookingService', () => {
       selectedServiceIds: ['service-a', 'service-b'],
     });
 
-    expect(prismaServiceMock.bookingDraft.create).toHaveBeenCalledWith(
+    expect(transactionMock.bookingDraft.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           mode: 'INDIVIDUAL',
@@ -140,6 +155,10 @@ describe('BookingService', () => {
         }) as unknown,
       }),
     );
+    expect(
+      bookingDraftControlServiceMock.attachCredential,
+    ).toHaveBeenCalledWith(transactionMock, 'draft-1', 'a'.repeat(64));
+    expect(result.draftControlToken).toBe('browser-secret');
   });
 
   it('creates a multi-person parent with member-specific identity, Services, answers, and capped duration', async () => {
@@ -246,8 +265,12 @@ describe('BookingService', () => {
         },
       ],
     });
+    expect(
+      bookingDraftControlServiceMock.attachCredential,
+    ).toHaveBeenCalledWith(transactionMock, 'draft-group', 'a'.repeat(64));
     expect(otpServiceMock.createBookingOtp).toHaveBeenCalledWith('draft-group');
     expect(result.bookingDraft.mode).toBe('MULTI_PERSON');
+    expect(result.draftControlToken).toBe('browser-secret');
   });
 
   it('does not request booking OTP for an incomplete editable multi-person draft', async () => {
@@ -306,6 +329,7 @@ describe('BookingService', () => {
 
     expect(otpServiceMock.createBookingOtp).not.toHaveBeenCalled();
     expect(result.otpVerification).toBeNull();
+    expect(result.draftControlToken).toBe('browser-secret');
   });
 
   it('uses the full individual Service-duration sum when the Doctor cap is unset', async () => {
@@ -326,7 +350,7 @@ describe('BookingService', () => {
       lastFour: '4567',
     });
     bookingReferenceGeneratorMock.generate.mockReturnValue('CQ-SUM');
-    prismaServiceMock.bookingDraft.create.mockResolvedValue({
+    transactionMock.bookingDraft.create.mockResolvedValue({
       id: 'draft-1',
       bookingReference: 'CQ-SUM',
       mode: 'INDIVIDUAL',
@@ -353,7 +377,7 @@ describe('BookingService', () => {
       selectedServiceIds: ['service-a', 'service-b'],
     });
 
-    expect(prismaServiceMock.bookingDraft.create).toHaveBeenCalledWith(
+    expect(transactionMock.bookingDraft.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           estimatedServiceMinutes: 60,
@@ -385,7 +409,7 @@ describe('BookingService', () => {
       'Unique constraint failed',
       { code: 'P2002', clientVersion: 'test' },
     );
-    prismaServiceMock.bookingDraft.create
+    transactionMock.bookingDraft.create
       .mockRejectedValueOnce(uniqueError)
       .mockResolvedValueOnce({
         id: 'draft-1',

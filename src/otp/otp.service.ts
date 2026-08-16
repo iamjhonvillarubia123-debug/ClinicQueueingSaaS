@@ -6,6 +6,7 @@ import {
 
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { Prisma } from '../../generated/prisma/client';
 
 import { OtpGenerator } from './otp.generator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -74,74 +75,80 @@ export class OtpService {
       return false;
     }
   }
-  async createBookingOtp(bookingDraftId: string) {
-    const now = new Date();
 
+  async createBookingOtp(bookingDraftId: string) {
+    return this.prisma.$transaction((transaction) =>
+      this.createBookingOtpInTransaction(transaction, bookingDraftId),
+    );
+  }
+
+  async createBookingOtpInTransaction(
+    transaction: Prisma.TransactionClient,
+    bookingDraftId: string,
+  ) {
+    const now = new Date();
     const otpExpiresAt = new Date(now.getTime() + 5 * 60 * 1000);
 
-    return this.prisma.$transaction(async (transaction) => {
-      const bookingDraft = await transaction.bookingDraft.findFirst({
-        where: {
-          id: bookingDraftId,
-          status: 'PENDING_OTP',
-          expiresAt: {
-            gt: now,
-          },
-          consumedAt: null,
-          cancelledAt: null,
+    const bookingDraft = await transaction.bookingDraft.findFirst({
+      where: {
+        id: bookingDraftId,
+        status: 'PENDING_OTP',
+        expiresAt: {
+          gt: now,
         },
-        select: {
-          id: true,
-          mobileNumberHash: true,
-        },
-      });
-
-      if (!bookingDraft?.mobileNumberHash) {
-        throw new NotFoundException(
-          'Booking draft is not available for OTP verification.',
-        );
-      }
-
-      await transaction.otpVerification.updateMany({
-        where: {
-          bookingDraftId: bookingDraft.id,
-          purpose: 'BOOKING',
-          verifiedAt: null,
-          consumedAt: null,
-          invalidatedAt: null,
-        },
-        data: {
-          invalidatedAt: now,
-        },
-      });
-
-      const otp = this.otpGenerator.generate();
-
-      const otpHash = this.hashOtp(bookingDraft.id, 'BOOKING', otp);
-
-      const otpVerification = await transaction.otpVerification.create({
-        data: {
-          bookingDraftId: bookingDraft.id,
-          mobileNumberHash: bookingDraft.mobileNumberHash,
-          otpHash,
-          purpose: 'BOOKING',
-          expiresAt: otpExpiresAt,
-        },
-        select: {
-          id: true,
-          bookingDraftId: true,
-          purpose: true,
-          expiresAt: true,
-          attemptCount: true,
-          createdAt: true,
-        },
-      });
-
-      return {
-        otp,
-        otpVerification,
-      };
+        consumedAt: null,
+        cancelledAt: null,
+      },
+      select: {
+        id: true,
+        mobileNumberHash: true,
+      },
     });
+
+    if (!bookingDraft?.mobileNumberHash) {
+      throw new NotFoundException(
+        'Booking draft is not available for OTP verification.',
+      );
+    }
+
+    await transaction.otpVerification.updateMany({
+      where: {
+        bookingDraftId: bookingDraft.id,
+        purpose: 'BOOKING',
+        verifiedAt: null,
+        consumedAt: null,
+        invalidatedAt: null,
+      },
+      data: {
+        invalidatedAt: now,
+      },
+    });
+
+    const otp = this.otpGenerator.generate();
+    const otpHash = this.hashOtp(bookingDraft.id, 'BOOKING', otp);
+
+    const otpVerification = await transaction.otpVerification.create({
+      data: {
+        bookingDraftId: bookingDraft.id,
+        mobileNumberHash: bookingDraft.mobileNumberHash,
+        otpHash,
+        purpose: 'BOOKING',
+        expiresAt: otpExpiresAt,
+      },
+      select: {
+        id: true,
+        bookingDraftId: true,
+        purpose: true,
+        expiresAt: true,
+        attemptCount: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      otp,
+      otpVerification,
+    };
   }
 
   async verifyBookingOtp(bookingDraftId: string, submittedOtp: string) {
