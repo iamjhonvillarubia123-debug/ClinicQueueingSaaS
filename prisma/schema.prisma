@@ -520,6 +520,7 @@ model DoctorAccountSettings {
   doctorProfileId            String   @unique
   defaultTimeZone            String   @default("Asia/Manila") @db.VarChar(100)
   defaultConsultationMinutes Int      @default(30)
+  maximumEstimatedServiceMinutesPerPatient Int?
   maximumAdvanceBookingDays  Int      @default(30)
   allowOnlineBooking         Boolean  @default(true)
   noClinicOnRegularHolidays  Boolean  @default(false)

@@ -39,6 +39,7 @@ describe('DoctorService', () => {
   const prismaServiceMock = {
     user: { findFirst: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   };
   const mobileNumberServiceMock = {
     normalize: jest.fn(() => ({
@@ -170,6 +171,50 @@ describe('DoctorService', () => {
       emailVerificationExpiresAt: new Date('2026-08-16T00:00:00.000Z'),
     });
     expect(JSON.stringify(result)).not.toContain('transient-password');
+  });
+
+  it('reads the Doctor-wide per-patient duration cap', async () => {
+    prismaServiceMock.$queryRaw.mockResolvedValue([
+      { maximumEstimatedServiceMinutesPerPatient: 60 },
+    ]);
+
+    await expect(service.getAccountSettings('doctor-user')).resolves.toEqual({
+      maximumEstimatedServiceMinutesPerPatient: 60,
+    });
+  });
+
+  it('sets or clears the Doctor-wide per-patient duration cap', async () => {
+    prismaServiceMock.$queryRaw
+      .mockResolvedValueOnce([{ maximumEstimatedServiceMinutesPerPatient: 45 }])
+      .mockResolvedValueOnce([
+        { maximumEstimatedServiceMinutesPerPatient: null },
+      ]);
+
+    const setResult = await service.updateAccountSettings('doctor-user', {
+      maximumEstimatedServiceMinutesPerPatient: 45,
+    });
+    expect(setResult).toEqual({
+      maximumEstimatedServiceMinutesPerPatient: 45,
+    });
+
+    const clearResult = await service.updateAccountSettings('doctor-user', {
+      maximumEstimatedServiceMinutesPerPatient: null,
+    });
+    expect(clearResult).toEqual({
+      maximumEstimatedServiceMinutesPerPatient: null,
+    });
+  });
+
+  it('rejects an out-of-range per-patient duration cap before writing', async () => {
+    await expect(
+      service.updateAccountSettings('doctor-user', {
+        maximumEstimatedServiceMinutesPerPatient: 4321,
+      }),
+    ).rejects.toThrow(
+      'Maximum estimated service minutes per patient must be between 1 and 4320 minutes, or null for no cap.',
+    );
+
+    expect(prismaServiceMock.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid Doctor-wide IANA time zone before writing', async () => {

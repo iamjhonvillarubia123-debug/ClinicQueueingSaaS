@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 import {
@@ -15,6 +16,13 @@ import { normalizeEmail } from '../auth/security/session-security';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { RegisterDoctorDto } from './dto/register-doctor.dto';
+import { UpdateDoctorAccountSettingsDto } from './dto/update-doctor-account-settings.dto';
+
+const MAX_PATIENT_ESTIMATED_SERVICE_MINUTES = 3 * 24 * 60;
+
+type DoctorDurationSettingsRow = {
+  maximumEstimatedServiceMinutesPerPatient: number | null;
+};
 
 @Injectable()
 export class DoctorService {
@@ -126,6 +134,69 @@ export class DoctorService {
 
       throw error;
     }
+  }
+
+  async getAccountSettings(authenticatedUserId: string) {
+    const rows = await this.prisma.$queryRaw<DoctorDurationSettingsRow[]>(
+      Prisma.sql`
+        SELECT s."maximumEstimatedServiceMinutesPerPatient"
+        FROM "DoctorAccountSettings" s
+        INNER JOIN "DoctorProfile" d ON d."id" = s."doctorProfileId"
+        WHERE d."userId" = ${authenticatedUserId}
+        LIMIT 1
+      `,
+    );
+    const settings = rows[0];
+    if (!settings) {
+      throw new ForbiddenException(
+        'Only a Doctor may manage Doctor account settings.',
+      );
+    }
+    return settings;
+  }
+
+  async updateAccountSettings(
+    authenticatedUserId: string,
+    dto: UpdateDoctorAccountSettingsDto,
+  ) {
+    if (dto.maximumEstimatedServiceMinutesPerPatient === undefined) {
+      throw new BadRequestException(
+        'maximumEstimatedServiceMinutesPerPatient is required.',
+      );
+    }
+    const maximumEstimatedServiceMinutesPerPatient =
+      dto.maximumEstimatedServiceMinutesPerPatient;
+    if (
+      maximumEstimatedServiceMinutesPerPatient !== null &&
+      (!Number.isInteger(maximumEstimatedServiceMinutesPerPatient) ||
+        maximumEstimatedServiceMinutesPerPatient < 1 ||
+        maximumEstimatedServiceMinutesPerPatient >
+          MAX_PATIENT_ESTIMATED_SERVICE_MINUTES)
+    ) {
+      throw new BadRequestException(
+        'Maximum estimated service minutes per patient must be between 1 and 4320 minutes, or null for no cap.',
+      );
+    }
+
+    const rows = await this.prisma.$queryRaw<DoctorDurationSettingsRow[]>(
+      Prisma.sql`
+        UPDATE "DoctorAccountSettings" s
+        SET
+          "maximumEstimatedServiceMinutesPerPatient" = ${maximumEstimatedServiceMinutesPerPatient},
+          "updatedAt" = CURRENT_TIMESTAMP
+        FROM "DoctorProfile" d
+        WHERE s."doctorProfileId" = d."id"
+          AND d."userId" = ${authenticatedUserId}
+        RETURNING s."maximumEstimatedServiceMinutesPerPatient"
+      `,
+    );
+    const settings = rows[0];
+    if (!settings) {
+      throw new ForbiddenException(
+        'Only a Doctor may manage Doctor account settings.',
+      );
+    }
+    return settings;
   }
 
   private assertValidTimeZone(value: string): void {
