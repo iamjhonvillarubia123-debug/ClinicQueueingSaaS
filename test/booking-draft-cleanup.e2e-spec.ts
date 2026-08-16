@@ -145,6 +145,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       data: {
         purpose: OtpPurpose.BOOKING,
         bookingDraftId: draft.id,
+        createdAt: new Date(transitionNow.getTime() - 60_000),
         expiresAt: new Date(transitionNow.getTime() + 5 * 60 * 1000),
         invalidatedAt: transitionNow,
       },
