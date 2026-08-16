@@ -5,7 +5,7 @@ import { BookingDraftAnswerDto } from './dto/booking-draft-answer.dto';
 
 const ABSOLUTE_TEXT_ANSWER_MAX_LENGTH = 10_000;
 
-type ActiveBookingQuestion = {
+export type ActiveBookingQuestion = {
   id: string;
   type: BookingQuestionType;
   isRequired: boolean;
@@ -54,8 +54,13 @@ export class BookingAnswerValidationService {
   ): PreparedBookingDraftAnswer[] {
     const answers = submittedAnswers ?? [];
     const seenQuestionIds = new Set<string>();
-    const questionById = new Map(questions.map((question) => [question.id, question]));
-    const preparedByQuestionId = new Map<string, PreparedBookingDraftAnswer>();
+    const questionById = new Map(
+      questions.map((question) => [question.id, question]),
+    );
+    const preparedByQuestionId = new Map<
+      string,
+      PreparedBookingDraftAnswer
+    >();
 
     for (const answer of answers) {
       if (!answer.bookingQuestionId?.trim()) {
@@ -141,7 +146,9 @@ export class BookingAnswerValidationService {
     const value = answer.answerText?.trim() ?? '';
     if (!value) {
       if (question.isRequired) {
-        throw new BadRequestException('Required TEXT BookingQuestion answers must not be blank.');
+        throw new BadRequestException(
+          'Required TEXT BookingQuestion answers must not be blank.',
+        );
       }
       return null;
     }
@@ -151,7 +158,9 @@ export class BookingAnswerValidationService {
       ABSOLUTE_TEXT_ANSWER_MAX_LENGTH,
     );
     if (value.length > maximumLength) {
-      throw new BadRequestException('TEXT BookingQuestion answer exceeds the allowed length.');
+      throw new BadRequestException(
+        'TEXT BookingQuestion answer exceeds the allowed length.',
+      );
     }
 
     return this.prepared(question.id, { answerText: value });
@@ -166,21 +175,29 @@ export class BookingAnswerValidationService {
       answer.answerBoolean !== undefined ||
       answer.selectedOptionValue !== undefined
     ) {
-      throw new BadRequestException('NUMBER BookingQuestions require answerNumber only.');
+      throw new BadRequestException(
+        'NUMBER BookingQuestions require answerNumber only.',
+      );
     }
     if (answer.answerNumber === undefined) {
       if (question.isRequired) {
-        throw new BadRequestException('Required NUMBER BookingQuestions must be answered.');
+        throw new BadRequestException(
+          'Required NUMBER BookingQuestions must be answered.',
+        );
       }
       return null;
     }
 
     const value = new Prisma.Decimal(answer.answerNumber);
     if (question.numberMinimum && value.lessThan(question.numberMinimum)) {
-      throw new BadRequestException('NUMBER BookingQuestion answer is below the allowed minimum.');
+      throw new BadRequestException(
+        'NUMBER BookingQuestion answer is below the allowed minimum.',
+      );
     }
     if (question.numberMaximum && value.greaterThan(question.numberMaximum)) {
-      throw new BadRequestException('NUMBER BookingQuestion answer exceeds the allowed maximum.');
+      throw new BadRequestException(
+        'NUMBER BookingQuestion answer exceeds the allowed maximum.',
+      );
     }
 
     return this.prepared(question.id, { answerNumber: value });
@@ -195,11 +212,15 @@ export class BookingAnswerValidationService {
       answer.answerNumber !== undefined ||
       answer.selectedOptionValue !== undefined
     ) {
-      throw new BadRequestException('BOOLEAN BookingQuestions require answerBoolean only.');
+      throw new BadRequestException(
+        'BOOLEAN BookingQuestions require answerBoolean only.',
+      );
     }
     if (answer.answerBoolean === undefined) {
       if (question.isRequired) {
-        throw new BadRequestException('Required BOOLEAN BookingQuestions must be answered.');
+        throw new BadRequestException(
+          'Required BOOLEAN BookingQuestions must be answered.',
+        );
       }
       return null;
     }
@@ -224,7 +245,9 @@ export class BookingAnswerValidationService {
     const value = answer.selectedOptionValue?.trim() ?? '';
     if (!value) {
       if (question.isRequired) {
-        throw new BadRequestException('Required SINGLE_SELECT BookingQuestions must be answered.');
+        throw new BadRequestException(
+          'Required SINGLE_SELECT BookingQuestions must be answered.',
+        );
       }
       return null;
     }
@@ -239,7 +262,9 @@ export class BookingAnswerValidationService {
     return this.prepared(question.id, { selectedOptionValue: value });
   }
 
-  private readSelectOptionValues(selectOptions: Prisma.JsonValue | null): Set<string> {
+  private readSelectOptionValues(
+    selectOptions: Prisma.JsonValue | null,
+  ): Set<string> {
     if (!Array.isArray(selectOptions)) {
       return new Set();
     }
