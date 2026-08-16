@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   PracticeLocationLifecycleStatus,
@@ -87,13 +88,20 @@ describe('ScheduleResolutionService', () => {
     });
   });
 
-  it('treats a closed exception as a complete replacement', async () => {
+  it('treats a closed holiday exception as a complete replacement of an otherwise-open weekday', async () => {
     prismaServiceMock.scheduleException.findUnique.mockResolvedValue({
       isOpen: false,
       opensAtLocal: null,
       closesAtLocal: null,
       maximumOnlineBookingUntilLocal: null,
       maximumOperatingUntilLocal: null,
+    });
+    prismaServiceMock.practiceSchedule.findUnique.mockResolvedValue({
+      isOpen: true,
+      opensAtLocal: time(9),
+      closesAtLocal: time(17),
+      maximumOnlineBookingUntilLocal: time(15),
+      maximumOperatingUntilLocal: time(19),
     });
 
     const result = await service.resolveConfiguredSchedule(
@@ -106,6 +114,73 @@ describe('ScheduleResolutionService', () => {
     expect(
       prismaServiceMock.practiceSchedule.findUnique,
     ).not.toHaveBeenCalled();
+  });
+
+  it('uses an open special-date exception as the complete schedule rather than inheriting recurring values', async () => {
+    prismaServiceMock.scheduleException.findUnique.mockResolvedValue({
+      isOpen: true,
+      opensAtLocal: time(11),
+      closesAtLocal: time(14),
+      maximumOnlineBookingUntilLocal: null,
+      maximumOperatingUntilLocal: time(18),
+    });
+    prismaServiceMock.practiceSchedule.findUnique.mockResolvedValue({
+      isOpen: true,
+      opensAtLocal: time(9),
+      closesAtLocal: time(17),
+      maximumOnlineBookingUntilLocal: time(15),
+      maximumOperatingUntilLocal: time(20),
+    });
+
+    const result = await service.resolveConfiguredSchedule(
+      'location-1',
+      '2026-08-17',
+    );
+
+    expect(result.source).toBe('SCHEDULE_EXCEPTION');
+    expect(result.opensAt?.toISOString()).toBe('2026-08-17T03:00:00.000Z');
+    expect(result.closesAt?.toISOString()).toBe('2026-08-17T06:00:00.000Z');
+    expect(result.maximumOnlineBookingUntilAt).toBeNull();
+    expect(result.maximumOperatingUntilAt?.toISOString()).toBe(
+      '2026-08-17T10:00:00.000Z',
+    );
+    expect(
+      prismaServiceMock.practiceSchedule.findUnique,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('rejects an effective public cutoff outside the planned clinic interval', async () => {
+    prismaServiceMock.practiceSchedule.findUnique.mockResolvedValue({
+      isOpen: true,
+      opensAtLocal: time(9),
+      closesAtLocal: time(17),
+      maximumOnlineBookingUntilLocal: time(18),
+      maximumOperatingUntilLocal: null,
+    });
+
+    await expect(
+      service.resolveConfiguredSchedule('location-1', '2026-08-17'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows maximum operating time to extend beyond planned clinic closing', async () => {
+    prismaServiceMock.practiceSchedule.findUnique.mockResolvedValue({
+      isOpen: true,
+      opensAtLocal: time(9),
+      closesAtLocal: time(17),
+      maximumOnlineBookingUntilLocal: time(16),
+      maximumOperatingUntilLocal: time(20),
+    });
+
+    const result = await service.resolveConfiguredSchedule(
+      'location-1',
+      '2026-08-17',
+    );
+
+    expect(result.closesAt?.toISOString()).toBe('2026-08-17T09:00:00.000Z');
+    expect(result.maximumOperatingUntilAt?.toISOString()).toBe(
+      '2026-08-17T12:00:00.000Z',
+    );
   });
 
   it('returns no planned schedule when neither exception nor recurring row exists', async () => {

@@ -197,6 +197,21 @@ export class ScheduleResolutionService {
       );
     }
 
+    const maximumOnlineBookingUntilAt = this.optionalInstant(
+      row.maximumOnlineBookingUntilLocal,
+      date,
+      timeZone,
+    );
+    if (
+      maximumOnlineBookingUntilAt &&
+      (maximumOnlineBookingUntilAt.getTime() < opensAt.getTime() ||
+        maximumOnlineBookingUntilAt.getTime() > closesAt.getTime())
+    ) {
+      throw new BadRequestException(
+        'Public booking cutoff must fall within the planned clinic interval.',
+      );
+    }
+
     return {
       practiceLocationId,
       serviceDate,
@@ -205,11 +220,7 @@ export class ScheduleResolutionService {
       source,
       opensAt,
       closesAt,
-      maximumOnlineBookingUntilAt: this.optionalInstant(
-        row.maximumOnlineBookingUntilLocal,
-        date,
-        timeZone,
-      ),
+      maximumOnlineBookingUntilAt,
       maximumOperatingUntilAt: this.optionalInstant(
         row.maximumOperatingUntilLocal,
         date,
