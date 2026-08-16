@@ -12,9 +12,11 @@ import {
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
 import { DoctorService } from './doctor.service';
+import { ApplyDoctorDefaultsDto } from './dto/apply-doctor-defaults.dto';
 import { PermanentlyDeleteDoctorDto } from './dto/permanently-delete-doctor.dto';
 import { ReactivateDoctorDto } from './dto/reactivate-doctor.dto';
 import { RegisterDoctorDto } from './dto/register-doctor.dto';
@@ -27,6 +29,7 @@ export class DoctorController {
     private readonly doctorService: DoctorService,
     private readonly doctorLifecycleService: DoctorLifecycleService,
     private readonly doctorDefaultsService: DoctorDefaultsService,
+    private readonly doctorDefaultsApplyService: DoctorDefaultsApplyService,
   ) {}
 
   @Post('register')
@@ -89,6 +92,20 @@ export class DoctorController {
       request.user.userId,
       templateId,
       dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('defaults/apply')
+  applyDefaults(
+    @Request() request: AuthenticatedRequest,
+    @Body() dto: ApplyDoctorDefaultsDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+  ) {
+    return this.doctorDefaultsApplyService.apply(
+      request.user.userId,
+      dto,
+      idempotencyKey,
     );
   }
 
