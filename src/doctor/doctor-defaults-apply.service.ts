@@ -339,7 +339,8 @@ export class DoctorDefaultsApplyService {
           FROM "BookingQuestion"
           WHERE "practiceLocationId" = ${practiceLocationId}
         `);
-        const historicalDisplayOrder = temporaryOrderRows[0]?.displayOrder ?? 1000;
+        const historicalDisplayOrder =
+          temporaryOrderRows[0]?.displayOrder ?? 1000;
         await transaction.$executeRaw(Prisma.sql`
           UPDATE "BookingQuestion"
           SET
