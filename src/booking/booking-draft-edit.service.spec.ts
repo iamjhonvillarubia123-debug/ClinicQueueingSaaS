@@ -213,8 +213,12 @@ describe('BookingDraftEditService', () => {
       bookingDraftMembers: [],
     });
     transactionMock.otpVerification.updateMany.mockResolvedValue({ count: 1 });
-    transactionMock.bookingDraftAnswer.deleteMany.mockResolvedValue({ count: 0 });
-    transactionMock.bookingDraftServiceSelection.deleteMany.mockResolvedValue({ count: 1 });
+    transactionMock.bookingDraftAnswer.deleteMany.mockResolvedValue({
+      count: 0,
+    });
+    transactionMock.bookingDraftServiceSelection.deleteMany.mockResolvedValue({
+      count: 1,
+    });
     transactionMock.bookingDraft.update.mockResolvedValue({ id: 'draft-1' });
 
     const result = await service.replaceDraft('draft-1', {

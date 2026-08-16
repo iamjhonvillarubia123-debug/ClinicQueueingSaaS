@@ -495,7 +495,9 @@ export class BookingDraftEditService {
     };
   }
 
-  private prepareAcknowledgement(dto: ReplaceBookingDraftDto): PreparedAcknowledgement {
+  private prepareAcknowledgement(
+    dto: ReplaceBookingDraftDto,
+  ): PreparedAcknowledgement {
     const isAcknowledged = dto.privacyNoticeAcknowledged === true;
     const privacyNoticeVersion = isAcknowledged
       ? dto.privacyNoticeVersion?.trim() || null
