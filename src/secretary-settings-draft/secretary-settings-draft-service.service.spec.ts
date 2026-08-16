@@ -134,9 +134,11 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
       id: 'service-1',
       sourceDoctorServiceTemplateId: null,
     });
-    prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue({
-      id: 'proposal-1',
-    });
+    prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue(
+      {
+        id: 'proposal-1',
+      },
+    );
     prismaServiceMock.secretarySettingsDraftService.update.mockResolvedValue({
       id: 'proposal-1',
       proposedStatus: ServiceAvailabilityStatus.INACTIVE,
@@ -174,10 +176,12 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
   });
 
   it('updates a newly created proposal by proposal identity', async () => {
-    prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue({
-      id: 'proposal-new',
-      practiceLocationServiceId: null,
-    });
+    prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue(
+      {
+        id: 'proposal-new',
+        practiceLocationServiceId: null,
+      },
+    );
     prismaServiceMock.secretarySettingsDraftService.update.mockResolvedValue({
       id: 'proposal-new',
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
