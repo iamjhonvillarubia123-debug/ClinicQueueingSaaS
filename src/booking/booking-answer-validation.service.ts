@@ -86,18 +86,22 @@ export class BookingAnswerValidationService {
       }
     }
 
-    for (const question of questions) {
-      if (question.isRequired && !preparedByQuestionId.has(question.id)) {
-        throw new BadRequestException(
-          'All required BookingQuestions must be answered before booking OTP is requested.',
-        );
-      }
-    }
-
     return questions.flatMap((question) => {
       const prepared = preparedByQuestionId.get(question.id);
       return prepared ? [prepared] : [];
     });
+  }
+
+  requiredAnswersComplete(
+    questions: ActiveBookingQuestion[],
+    preparedAnswers: PreparedBookingDraftAnswer[],
+  ): boolean {
+    const answeredQuestionIds = new Set(
+      preparedAnswers.map((answer) => answer.bookingQuestionId),
+    );
+    return questions.every(
+      (question) => !question.isRequired || answeredQuestionIds.has(question.id),
+    );
   }
 
   private prepareOne(
@@ -145,11 +149,6 @@ export class BookingAnswerValidationService {
 
     const value = answer.answerText?.trim() ?? '';
     if (!value) {
-      if (question.isRequired) {
-        throw new BadRequestException(
-          'Required TEXT BookingQuestion answers must not be blank.',
-        );
-      }
       return null;
     }
 
@@ -180,11 +179,6 @@ export class BookingAnswerValidationService {
       );
     }
     if (answer.answerNumber === undefined) {
-      if (question.isRequired) {
-        throw new BadRequestException(
-          'Required NUMBER BookingQuestions must be answered.',
-        );
-      }
       return null;
     }
 
@@ -217,11 +211,6 @@ export class BookingAnswerValidationService {
       );
     }
     if (answer.answerBoolean === undefined) {
-      if (question.isRequired) {
-        throw new BadRequestException(
-          'Required BOOLEAN BookingQuestions must be answered.',
-        );
-      }
       return null;
     }
 
@@ -244,11 +233,6 @@ export class BookingAnswerValidationService {
 
     const value = answer.selectedOptionValue?.trim() ?? '';
     if (!value) {
-      if (question.isRequired) {
-        throw new BadRequestException(
-          'Required SINGLE_SELECT BookingQuestions must be answered.',
-        );
-      }
       return null;
     }
 
