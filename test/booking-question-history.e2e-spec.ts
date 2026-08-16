@@ -306,10 +306,11 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
           isActive: true,
         },
       });
-      await prisma.bookingQuestion.update({
-        where: { id: fixture.question.id },
-        data: { sourceDoctorBookingQuestionTemplateId: template.id },
-      });
+      await prisma.$executeRaw`
+        UPDATE "BookingQuestion"
+        SET "sourceDoctorBookingQuestionTemplateId" = ${template.id}
+        WHERE "id" = ${fixture.question.id}
+      `;
       await createDraftAnswer(fixture);
       await prisma.doctorBookingQuestionTemplate.update({
         where: { id: template.id },
@@ -338,11 +339,20 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
         isActive: false,
       });
       expect(replacement).toMatchObject({
-        sourceDoctorBookingQuestionTemplateId: template.id,
         questionText: 'Refreshed template question?',
         isActive: true,
         displayOrder: 0,
       });
+      const replacementSource = await prisma.$queryRaw<
+        Array<{ sourceDoctorBookingQuestionTemplateId: string | null }>
+      >`
+        SELECT "sourceDoctorBookingQuestionTemplateId"
+        FROM "BookingQuestion"
+        WHERE "id" = ${replacement!.id}
+      `;
+      expect(replacementSource[0]?.sourceDoctorBookingQuestionTemplateId).toBe(
+        template.id,
+      );
     } finally {
       await cleanup(fixture);
     }
