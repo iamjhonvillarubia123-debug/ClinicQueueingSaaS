@@ -241,11 +241,6 @@ export class SecretarySettingsDraftBookingQuestionService {
     if (!Number.isInteger(dto.displayOrder) || dto.displayOrder < 0) {
       throw new BadRequestException('Display order must be zero or greater.');
     }
-    if (!Number.isInteger(dto.estimatedMinutesAdjustment)) {
-      throw new BadRequestException(
-        'Estimated minutes adjustment must be a whole number.',
-      );
-    }
 
     const typeFields = this.normalizeTypeFields(dto);
     return {
@@ -255,7 +250,7 @@ export class SecretarySettingsDraftBookingQuestionService {
       proposedIsRequired: dto.isRequired,
       proposedDisplayOrder: dto.displayOrder,
       proposedIsActive: dto.isActive,
-      proposedEstimatedMinutesAdjustment: dto.estimatedMinutesAdjustment,
+      proposedEstimatedMinutesAdjustment: 0,
       ...typeFields,
     };
   }
