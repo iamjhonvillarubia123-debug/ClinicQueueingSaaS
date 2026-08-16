@@ -309,7 +309,9 @@ describe('Concurrent schedule approval serialization (e2e)', () => {
       await prisma.practiceLocation.deleteMany({
         where: { id: { in: [locationA.id, locationB.id] } },
       });
-      await prisma.doctorProfile.deleteMany({ where: { id: doctorProfile.id } });
+      await prisma.doctorProfile.deleteMany({
+        where: { id: doctorProfile.id },
+      });
       await prisma.user.deleteMany({
         where: { id: { in: [doctorUser.id, secretaryUser.id] } },
       });
