@@ -101,8 +101,7 @@ export class PracticeLocationService {
               isRequired: template.isRequired,
               displayOrder: template.displayOrder,
               isActive: template.isActive,
-              estimatedMinutesAdjustment:
-                template.estimatedMinutesAdjustment,
+              estimatedMinutesAdjustment: template.estimatedMinutesAdjustment,
               textMaximumLength: template.textMaximumLength,
               numberMinimum: template.numberMinimum,
               numberMaximum: template.numberMaximum,
