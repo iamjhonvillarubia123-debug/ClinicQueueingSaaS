@@ -227,6 +227,25 @@ export class IndividualBookingConfirmationService {
         draft.serviceDate,
       );
 
+      const completedAt = new Date();
+      const times = this.idempotency.completionTimes(completedAt);
+      const command = await transaction.commandIdempotency.create({
+        data: {
+          idempotencyKey,
+          commandIdentityKey,
+          commandType: CommandType.CONVERT_BOOKING_DRAFT,
+          requestFingerprint,
+          practiceLocationId: draft.practiceLocationId,
+          serviceDate: draft.serviceDate,
+          bookingDraftId: draft.id,
+          resultAppointmentId: appointment.id,
+          completedAt: times.completedAt,
+          expiresAt: times.expiresAt,
+          createdAt: times.completedAt,
+        },
+        select: { id: true },
+      });
+
       const confirmationMessage = [
         `Booking confirmed: ${draft.bookingReference}.`,
         `Queue number: ${queueNumber}.`,
@@ -241,22 +260,25 @@ export class IndividualBookingConfirmationService {
           status: NotificationOutboxStatus.PENDING,
           practiceLocationId: draft.practiceLocationId,
           appointmentId: appointment.id,
+          commandIdempotencyId: command.id,
           recipientMobileEncrypted: draft.mobileNumberEncrypted,
           recipientEmailEncrypted: null,
           messageBodyEncrypted:
             this.notificationPayload.encryptMessage(confirmationMessage),
           providerIdempotencyKey: `booking-confirmation:${commandIdentityKey}`,
           attemptCount: 0,
-          nextAttemptAt: now,
-          expiresAt: new Date(now.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS),
-          createdAt: now,
+          nextAttemptAt: completedAt,
+          expiresAt: new Date(
+            completedAt.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS,
+          ),
+          createdAt: completedAt,
         },
       });
 
       await transaction.otpVerification.update({
         where: { id: admission.otp.id },
         data: {
-          consumedAt: now,
+          consumedAt: completedAt,
           activeContextKey: null,
           otpHash: null,
           otpHashKeyVersion: null,
@@ -266,25 +288,9 @@ export class IndividualBookingConfirmationService {
         where: { id: draft.id },
         data: {
           status: 'CONSUMED',
-          consumedAt: now,
+          consumedAt: completedAt,
           activeDraftKey: null,
           draftControlTokenHash: null,
-        },
-      });
-
-      const times = this.idempotency.completionTimes(now);
-      await transaction.commandIdempotency.create({
-        data: {
-          idempotencyKey,
-          commandIdentityKey,
-          commandType: CommandType.CONVERT_BOOKING_DRAFT,
-          requestFingerprint,
-          practiceLocationId: draft.practiceLocationId,
-          serviceDate: draft.serviceDate,
-          bookingDraftId: draft.id,
-          resultAppointmentId: appointment.id,
-          completedAt: times.completedAt,
-          expiresAt: times.expiresAt,
         },
       });
 
