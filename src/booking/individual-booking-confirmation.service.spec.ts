@@ -17,8 +17,8 @@ describe('IndividualBookingConfirmationService', () => {
       },
     };
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
-        callback(transaction),
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+        Promise.resolve(callback(transaction)),
       ),
     };
     const idempotency = {
@@ -62,8 +62,8 @@ describe('IndividualBookingConfirmationService', () => {
       },
     };
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
-        callback(transaction),
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+        Promise.resolve(callback(transaction)),
       ),
     };
     const idempotency = {
