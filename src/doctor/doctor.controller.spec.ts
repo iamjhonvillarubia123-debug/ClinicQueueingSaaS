@@ -22,7 +22,10 @@ describe('DoctorController', () => {
       controllers: [DoctorController],
       providers: [
         { provide: DoctorService, useValue: doctorServiceMock },
-        { provide: DoctorLifecycleService, useValue: doctorLifecycleServiceMock },
+        {
+          provide: DoctorLifecycleService,
+          useValue: doctorLifecycleServiceMock,
+        },
         { provide: DoctorDefaultsService, useValue: doctorDefaultsServiceMock },
         { provide: AuthenticationService, useValue: authenticationServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
