@@ -147,7 +147,9 @@ export class BookingDraftCleanupService {
 
   private assertBatchSize(batchSize: number): void {
     if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 500) {
-      throw new RangeError('BookingDraft cleanup batch size must be 1 through 500.');
+      throw new RangeError(
+        'BookingDraft cleanup batch size must be 1 through 500.',
+      );
     }
   }
 }
