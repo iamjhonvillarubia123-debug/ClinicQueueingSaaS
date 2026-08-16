@@ -347,8 +347,7 @@ export class SecretarySettingsDraftApprovalService {
         closesAtLocal: proposal.proposedClosesAtLocal,
         maximumOnlineBookingUntilLocal:
           proposal.proposedMaximumOnlineBookingUntilLocal,
-        maximumOperatingUntilLocal:
-          proposal.proposedMaximumOperatingUntilLocal,
+        maximumOperatingUntilLocal: proposal.proposedMaximumOperatingUntilLocal,
       };
       await transaction.practiceSchedule.upsert({
         where: {
@@ -382,8 +381,7 @@ export class SecretarySettingsDraftApprovalService {
         closesAtLocal: proposal.proposedClosesAtLocal,
         maximumOnlineBookingUntilLocal:
           proposal.proposedMaximumOnlineBookingUntilLocal,
-        maximumOperatingUntilLocal:
-          proposal.proposedMaximumOperatingUntilLocal,
+        maximumOperatingUntilLocal: proposal.proposedMaximumOperatingUntilLocal,
       };
       await transaction.scheduleException.upsert({
         where: {
