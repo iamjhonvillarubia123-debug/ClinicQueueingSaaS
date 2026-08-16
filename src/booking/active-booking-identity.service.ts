@@ -37,10 +37,7 @@ export class ActiveBookingIdentityService {
     transaction: TransactionClient,
     activeAppointmentKey: string,
   ): Promise<void> {
-    await this.acquireLock(
-      transaction,
-      `APPOINTMENT:${activeAppointmentKey}`,
-    );
+    await this.acquireLock(transaction, `APPOINTMENT:${activeAppointmentKey}`);
   }
 
   async assertNoActiveDraft(
