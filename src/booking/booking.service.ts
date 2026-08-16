@@ -18,6 +18,7 @@ import {
   PreparedBookingDraftAnswer,
 } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
+import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import {
   CreateBookingDraftDto,
@@ -46,6 +47,7 @@ export class BookingService {
     private readonly otpService: OtpService,
     private readonly bookingConfigurationService: BookingConfigurationService,
     private readonly bookingAnswerValidationService: BookingAnswerValidationService,
+    private readonly bookingDraftControlService: BookingDraftControlService,
   ) {}
 
   async createDraft(createBookingDraftDto: CreateBookingDraftDto) {
@@ -101,6 +103,8 @@ export class BookingService {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const maximumEstimatedServiceMinutesPerPatient =
       accountSettings.maximumEstimatedServiceMinutesPerPatient;
+    const controlCredential =
+      this.bookingDraftControlService.issueCredential();
 
     const creation =
       createBookingDraftDto.mode === 'MULTI_PERSON'
@@ -111,6 +115,7 @@ export class BookingService {
             expiresAt,
             maximumEstimatedServiceMinutesPerPatient,
             activeQuestions,
+            controlCredential.tokenHash,
           )
         : await this.createIndividualDraft(
             createBookingDraftDto,
@@ -119,11 +124,13 @@ export class BookingService {
             expiresAt,
             maximumEstimatedServiceMinutesPerPatient,
             activeQuestions,
+            controlCredential.tokenHash,
           );
 
     if (!creation.otpEligible) {
       return {
         bookingDraft: creation.bookingDraft,
+        draftControlToken: controlCredential.rawToken,
         otpVerification: null,
       };
     }
@@ -134,6 +141,7 @@ export class BookingService {
 
     return {
       bookingDraft: creation.bookingDraft,
+      draftControlToken: controlCredential.rawToken,
       otpVerification: {
         id: otpResult.otpVerification.id,
         expiresAt: otpResult.otpVerification.expiresAt,
@@ -156,6 +164,7 @@ export class BookingService {
     expiresAt: Date,
     maximumEstimatedServiceMinutesPerPatient: number | null,
     activeQuestions: ActiveBookingQuestion[],
+    draftControlTokenHash: string,
   ) {
     if (
       !dto.firstName ||
@@ -192,35 +201,47 @@ export class BookingService {
       const bookingReference = this.bookingReferenceGenerator.generate();
 
       try {
-        const bookingDraft = await this.prisma.bookingDraft.create({
-          data: {
-            bookingReference,
-            mode: BookingDraftMode.INDIVIDUAL,
-            practiceLocationId: dto.practiceLocationId,
-            existingPatientResponse: dto.existingPatientResponse,
-            firstName: dto.firstName.trim(),
-            middleName: dto.middleName?.trim() || null,
-            lastName: dto.lastName.trim(),
-            suffix: dto.suffix?.trim() || null,
-            mobileNumberEncrypted: protectedMobileNumber.encrypted,
-            mobileNumberHash: protectedMobileNumber.hash,
-            mobileNumberLastFour: protectedMobileNumber.lastFour,
-            serviceDate,
-            estimatedServiceMinutes,
-            expiresAt,
-            serviceSelections: {
-              create: selectedServices.map((service) => ({
-                practiceLocationServiceId: service.id,
-              })),
-            },
-            bookingDraftAnswers: {
-              create: preparedAnswers.map((answer) =>
-                this.answerCreateData(answer),
-              ),
-            },
+        const bookingDraft = await this.prisma.$transaction(
+          async (transaction) => {
+            const created = await transaction.bookingDraft.create({
+              data: {
+                bookingReference,
+                mode: BookingDraftMode.INDIVIDUAL,
+                practiceLocationId: dto.practiceLocationId,
+                existingPatientResponse: dto.existingPatientResponse,
+                firstName: dto.firstName.trim(),
+                middleName: dto.middleName?.trim() || null,
+                lastName: dto.lastName.trim(),
+                suffix: dto.suffix?.trim() || null,
+                mobileNumberEncrypted: protectedMobileNumber.encrypted,
+                mobileNumberHash: protectedMobileNumber.hash,
+                mobileNumberLastFour: protectedMobileNumber.lastFour,
+                serviceDate,
+                estimatedServiceMinutes,
+                expiresAt,
+                serviceSelections: {
+                  create: selectedServices.map((service) => ({
+                    practiceLocationServiceId: service.id,
+                  })),
+                },
+                bookingDraftAnswers: {
+                  create: preparedAnswers.map((answer) =>
+                    this.answerCreateData(answer),
+                  ),
+                },
+              },
+              select: this.bookingDraftResultSelect,
+            });
+
+            await this.bookingDraftControlService.attachCredential(
+              transaction,
+              created.id,
+              draftControlTokenHash,
+            );
+
+            return created;
           },
-          select: this.bookingDraftResultSelect,
-        });
+        );
 
         return {
           bookingDraft,
@@ -246,6 +267,7 @@ export class BookingService {
     expiresAt: Date,
     maximumEstimatedServiceMinutesPerPatient: number | null,
     activeQuestions: ActiveBookingQuestion[],
+    draftControlTokenHash: string,
   ) {
     const members = dto.members;
     if (!members || members.length < 1 || members.length > 5) {
@@ -295,6 +317,12 @@ export class BookingService {
               },
               select: this.bookingDraftResultSelect,
             });
+
+            await this.bookingDraftControlService.attachCredential(
+              transaction,
+              parent.id,
+              draftControlTokenHash,
+            );
 
             for (const preparedMember of preparedMembers) {
               const createdMember = await transaction.bookingDraftMember.create(
