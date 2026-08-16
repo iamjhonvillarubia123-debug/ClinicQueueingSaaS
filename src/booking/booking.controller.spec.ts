@@ -194,11 +194,11 @@ describe('BookingController', () => {
       appointment: { id: 'appointment-1', queueNumber: 7 },
       replayed: false,
     });
-    expect(individualBookingConfirmationServiceMock.confirm).toHaveBeenCalledWith(
-      {
-        bookingDraftId: 'draft-1',
-        idempotencyKey: 'idem-1',
-      },
-    );
+    expect(
+      individualBookingConfirmationServiceMock.confirm,
+    ).toHaveBeenCalledWith({
+      bookingDraftId: 'draft-1',
+      idempotencyKey: 'idem-1',
+    });
   });
 });
