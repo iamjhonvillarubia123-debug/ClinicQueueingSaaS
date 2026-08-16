@@ -3,6 +3,7 @@ import { OtpModule } from '../otp/otp.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
+import { BookingAccessTokenIssuerService } from './booking-access-token-issuer.service';
 import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
@@ -26,7 +27,12 @@ import { BookingService } from './booking.service';
     BookingReferenceGenerator,
     ActiveBookingIdentityService,
     BookingConfirmationAdmissionService,
+    BookingAccessTokenIssuerService,
   ],
-  exports: [ActiveBookingIdentityService, BookingConfirmationAdmissionService],
+  exports: [
+    ActiveBookingIdentityService,
+    BookingConfirmationAdmissionService,
+    BookingAccessTokenIssuerService,
+  ],
 })
 export class BookingModule {}
