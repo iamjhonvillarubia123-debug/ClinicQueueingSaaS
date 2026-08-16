@@ -32,7 +32,6 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
     isRequired: true,
     displayOrder: 0,
     isActive: true,
-    estimatedMinutesAdjustment: 0,
     textMaximumLength: 200,
   };
 
@@ -94,7 +93,13 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
 
     expect(
       prismaServiceMock.secretarySettingsDraftBookingQuestion.create,
-    ).toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          proposedEstimatedMinutesAdjustment: 0,
+        }) as unknown,
+      }),
+    );
     expect(prismaServiceMock.bookingQuestion.findFirst).not.toHaveBeenCalled();
   });
 
