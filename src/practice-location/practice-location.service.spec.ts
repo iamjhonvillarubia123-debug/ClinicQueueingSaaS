@@ -22,6 +22,7 @@ describe('PracticeLocationService', () => {
     doctorBookingQuestionTemplate: {
       findMany: jest.fn(),
     },
+    $executeRaw: jest.fn(),
   };
 
   const prismaServiceMock = {
@@ -51,6 +52,7 @@ describe('PracticeLocationService', () => {
     transactionMock.doctorBookingQuestionTemplate.findMany.mockResolvedValue(
       [],
     );
+    transactionMock.$executeRaw.mockResolvedValue(1);
   });
 
   it('creates an intentionally blank PracticeLocation as DRAFT', async () => {
@@ -77,9 +79,10 @@ describe('PracticeLocationService', () => {
         }) as unknown,
       }),
     );
+    expect(transactionMock.$executeRaw).not.toHaveBeenCalled();
   });
 
-  it('copies current Doctor-wide defaults into a new location without synchronization relations', async () => {
+  it('copies current Doctor-wide defaults into a new location and stamps BookingQuestion provenance', async () => {
     prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
       id: 'doctor-profile-1',
     });
@@ -140,6 +143,7 @@ describe('PracticeLocationService', () => {
         }) as unknown,
       }),
     );
+    expect(transactionMock.$executeRaw).toHaveBeenCalledTimes(1);
   });
 
   it('normalizes optional draft fields without requiring full configuration', async () => {
