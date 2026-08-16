@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/client';
 import { OtpService } from '../otp/otp.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
@@ -14,6 +15,7 @@ describe('BookingService', () => {
     bookingDraft: { create: jest.fn() },
     bookingDraftMember: { create: jest.fn() },
     bookingDraftServiceSelection: { createMany: jest.fn() },
+    bookingDraftAnswer: { createMany: jest.fn() },
   };
   const prismaServiceMock = {
     practiceLocation: { findFirst: jest.fn() },
@@ -22,6 +24,11 @@ describe('BookingService', () => {
   };
   const bookingConfigurationServiceMock = {
     validateSelectedServices: jest.fn(),
+  };
+  const bookingAnswerValidationServiceMock = {
+    loadActiveQuestions: jest.fn(),
+    prepareAnswers: jest.fn(),
+    requiredAnswersComplete: jest.fn(),
   };
   const otpServiceMock = {
     createBookingOtp: jest.fn(),
@@ -45,6 +52,10 @@ describe('BookingService', () => {
           provide: BookingConfigurationService,
           useValue: bookingConfigurationServiceMock,
         },
+        {
+          provide: BookingAnswerValidationService,
+          useValue: bookingAnswerValidationServiceMock,
+        },
       ],
     }).compile();
 
@@ -53,6 +64,11 @@ describe('BookingService', () => {
     prismaServiceMock.$transaction.mockImplementation(
       (callback: (transaction: typeof transactionMock) => Promise<unknown>) =>
         callback(transactionMock),
+    );
+    bookingAnswerValidationServiceMock.loadActiveQuestions.mockResolvedValue([]);
+    bookingAnswerValidationServiceMock.prepareAnswers.mockReturnValue([]);
+    bookingAnswerValidationServiceMock.requiredAnswersComplete.mockReturnValue(
+      true,
     );
   });
 
@@ -118,12 +134,13 @@ describe('BookingService', () => {
               { practiceLocationServiceId: 'service-b' },
             ],
           },
+          bookingDraftAnswers: { create: [] },
         }) as unknown,
       }),
     );
   });
 
-  it('creates a multi-person parent with member-specific identity, Services, and capped duration', async () => {
+  it('creates a multi-person parent with member-specific identity, Services, answers, and capped duration', async () => {
     prismaServiceMock.practiceLocation.findFirst.mockResolvedValue({
       id: 'practice-1',
       name: 'Clinic',
@@ -139,6 +156,17 @@ describe('BookingService', () => {
       .mockResolvedValueOnce([
         { id: 'service-c', name: 'C', durationMinutes: 30 },
       ]);
+    bookingAnswerValidationServiceMock.prepareAnswers
+      .mockReturnValueOnce([
+        {
+          bookingQuestionId: 'question-1',
+          answerText: 'Yes',
+          answerNumber: null,
+          answerBoolean: null,
+          selectedOptionValue: null,
+        },
+      ])
+      .mockReturnValueOnce([]);
     mobileNumberServiceMock.protect.mockReturnValue({
       encrypted: 'encrypted-controller-mobile',
       hash: 'controller-mobile-hash',
@@ -163,6 +191,7 @@ describe('BookingService', () => {
     transactionMock.bookingDraftServiceSelection.createMany.mockResolvedValue({
       count: 1,
     });
+    transactionMock.bookingDraftAnswer.createMany.mockResolvedValue({ count: 1 });
     otpServiceMock.createBookingOtp.mockResolvedValue({
       otpVerification: { id: 'otp-group', expiresAt: new Date() },
     });
@@ -178,6 +207,7 @@ describe('BookingService', () => {
           lastName: 'Reyes',
           existingPatientResponse: 'YES',
           selectedServiceIds: ['service-a', 'service-b'],
+          answers: [{ bookingQuestionId: 'question-1', answerText: 'Yes' }],
         },
         {
           firstName: 'Ben',
@@ -188,18 +218,6 @@ describe('BookingService', () => {
       ],
     });
 
-    expect(transactionMock.bookingDraft.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          mode: 'MULTI_PERSON',
-          firstName: null,
-          lastName: null,
-          existingPatientResponse: null,
-          estimatedServiceMinutes: null,
-          mobileNumberHash: 'controller-mobile-hash',
-        }) as unknown,
-      }),
-    );
     expect(transactionMock.bookingDraftMember.create).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -211,35 +229,79 @@ describe('BookingService', () => {
         }) as unknown,
       }),
     );
-    expect(transactionMock.bookingDraftMember.create).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        data: expect.objectContaining({
-          bookingDraftId: 'draft-group',
-          memberOrder: 2,
-          firstName: 'Ben',
-          estimatedServiceMinutes: 30,
-        }) as unknown,
-      }),
-    );
-    expect(
-      transactionMock.bookingDraftServiceSelection.createMany,
-    ).toHaveBeenNthCalledWith(1, {
+    expect(transactionMock.bookingDraftAnswer.createMany).toHaveBeenCalledWith({
       data: [
         {
           bookingDraftId: 'draft-group',
           bookingDraftMemberId: 'member-1',
-          practiceLocationServiceId: 'service-a',
-        },
-        {
-          bookingDraftId: 'draft-group',
-          bookingDraftMemberId: 'member-1',
-          practiceLocationServiceId: 'service-b',
+          bookingQuestionId: 'question-1',
+          answerText: 'Yes',
+          answerNumber: null,
+          answerBoolean: null,
+          selectedOptionValue: null,
         },
       ],
     });
     expect(otpServiceMock.createBookingOtp).toHaveBeenCalledWith('draft-group');
     expect(result.bookingDraft.mode).toBe('MULTI_PERSON');
+  });
+
+  it('does not request booking OTP for an incomplete editable multi-person draft', async () => {
+    prismaServiceMock.practiceLocation.findFirst.mockResolvedValue({
+      id: 'practice-1',
+      name: 'Clinic',
+      doctorProfile: {
+        accountSettings: { maximumEstimatedServiceMinutesPerPatient: null },
+      },
+    });
+    bookingConfigurationServiceMock.validateSelectedServices.mockResolvedValue([
+      { id: 'service-a', name: 'A', durationMinutes: 30 },
+    ]);
+    bookingAnswerValidationServiceMock.requiredAnswersComplete.mockReturnValue(
+      false,
+    );
+    mobileNumberServiceMock.protect.mockReturnValue({
+      encrypted: 'encrypted-controller-mobile',
+      hash: 'controller-mobile-hash',
+      lastFour: '4567',
+    });
+    bookingReferenceGeneratorMock.generate.mockReturnValue('CQ-EDIT');
+    transactionMock.bookingDraft.create.mockResolvedValue({
+      id: 'draft-edit',
+      bookingReference: 'CQ-EDIT',
+      mode: 'MULTI_PERSON',
+      status: 'PENDING_OTP',
+      practiceLocationId: 'practice-1',
+      existingPatientResponse: null,
+      serviceDate: new Date('2026-08-10'),
+      estimatedServiceMinutes: null,
+      expiresAt: new Date(),
+      createdAt: new Date(),
+    });
+    transactionMock.bookingDraftMember.create.mockResolvedValue({
+      id: 'member-1',
+    });
+    transactionMock.bookingDraftServiceSelection.createMany.mockResolvedValue({
+      count: 1,
+    });
+
+    const result = await service.createDraft({
+      practiceLocationId: 'practice-1',
+      mode: 'MULTI_PERSON',
+      mobileNumber: '+639171234567',
+      serviceDate: '2026-08-10',
+      members: [
+        {
+          firstName: 'Ana',
+          lastName: 'Reyes',
+          existingPatientResponse: 'YES',
+          selectedServiceIds: ['service-a'],
+        },
+      ],
+    });
+
+    expect(otpServiceMock.createBookingOtp).not.toHaveBeenCalled();
+    expect(result.otpVerification).toBeNull();
   });
 
   it('uses the full individual Service-duration sum when the Doctor cap is unset', async () => {
