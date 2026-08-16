@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
   BookingDraftMode,
@@ -15,6 +16,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QueueNumberAllocationService } from '../queue/queue-number-allocation.service';
 import { BookingAccessTokenIssuerService } from './booking-access-token-issuer.service';
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
+
+const OUTBOX_PROVISIONAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 type ConfirmIndividualBookingInput = {
   bookingDraftId: string;
@@ -119,7 +122,10 @@ export class IndividualBookingConfirmationService {
         );
       }
 
-      const draft = await this.loadDraftSnapshot(transaction, input.bookingDraftId);
+      const draft = await this.loadDraftSnapshot(
+        transaction,
+        input.bookingDraftId,
+      );
       const services = await this.loadAndValidateServices(
         transaction,
         draft.practiceLocationId,
@@ -227,16 +233,25 @@ export class IndividualBookingConfirmationService {
       ].join(' ');
       await transaction.notificationOutbox.create({
         data: {
+          deliveryIdentityKey: this.hash(
+            `${NotificationType.BOOKING_CONFIRMATION}|${commandIdentityKey}|${appointment.id}`,
+          ),
           channel: NotificationChannel.SMS,
           notificationType: NotificationType.BOOKING_CONFIRMATION,
           status: NotificationOutboxStatus.PENDING,
           practiceLocationId: draft.practiceLocationId,
           appointmentId: appointment.id,
           recipientMobileEncrypted: draft.mobileNumberEncrypted,
-          recipientMobileLastFour: draft.mobileNumberLastFour,
+          recipientEmailEncrypted: null,
           messageBodyEncrypted:
             this.notificationPayload.encryptMessage(confirmationMessage),
+          providerIdempotencyKey: `booking-confirmation:${commandIdentityKey}`,
+          attemptCount: 0,
           nextAttemptAt: now,
+          expiresAt: new Date(
+            now.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS,
+          ),
+          createdAt: now,
         },
       });
 
@@ -336,20 +351,21 @@ export class IndividualBookingConfirmationService {
     practiceLocationId: string,
     bookingDraftId: string,
   ): Promise<ServiceSnapshot[]> {
-    const selections = await transaction.bookingDraftServiceSelection.findMany({
-      where: { bookingDraftId, bookingDraftMemberId: null },
-      select: {
-        practiceLocationServiceId: true,
-        practiceLocationService: {
-          select: {
-            practiceLocationId: true,
-            name: true,
-            durationMinutes: true,
-            status: true,
+    const selections =
+      await transaction.bookingDraftServiceSelection.findMany({
+        where: { bookingDraftId, bookingDraftMemberId: null },
+        select: {
+          practiceLocationServiceId: true,
+          practiceLocationService: {
+            select: {
+              practiceLocationId: true,
+              name: true,
+              durationMinutes: true,
+              status: true,
+            },
           },
         },
-      },
-    });
+      });
     if (selections.length < 1 || selections.length > 3) {
       throw new ConflictException(
         'Selected Services are no longer valid for confirmation.',
@@ -400,7 +416,8 @@ export class IndividualBookingConfirmationService {
     );
     if (
       questions.some(
-        (question) => question.isRequired && !answeredQuestionIds.has(question.id),
+        (question) =>
+          question.isRequired && !answeredQuestionIds.has(question.id),
       )
     ) {
       throw new ConflictException(
@@ -410,5 +427,9 @@ export class IndividualBookingConfirmationService {
     return answers.filter((answer) =>
       questions.some((question) => question.id === answer.bookingQuestionId),
     );
+  }
+
+  private hash(value: string): string {
+    return createHash('sha256').update(value, 'utf8').digest('hex');
   }
 }
