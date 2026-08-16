@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto';
-import { BookingQuestionType, UserRole } from './../generated/prisma/client';
+import {
+  AppointmentStatus,
+  BookingQuestionType,
+  UserRole,
+  WaitingPlacementType,
+} from './../generated/prisma/client';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('BookingQuestion historical type protection (e2e)', () => {
@@ -135,6 +140,9 @@ describe('BookingQuestion historical type protection (e2e)', () => {
           serviceDate: new Date('2026-08-17T00:00:00.000Z'),
           estimatedServiceMinutes: 30,
           queueNumber: 1,
+          status: AppointmentStatus.WAITING,
+          servingOrderKey: '1',
+          waitingPlacementType: WaitingPlacementType.ORDINARY,
         },
       });
       await prisma.appointmentAnswer.create({
