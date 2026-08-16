@@ -22,7 +22,10 @@ export type LockedConfirmationDraft = {
   cancelledAt: Date | null;
   doctorUserId: string;
   doctorAccountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED';
-  doctorAdministrativeRestrictionStatus: 'NONE' | 'SUSPENDED' | 'EMERGENCY_SUSPENDED';
+  doctorAdministrativeRestrictionStatus:
+    | 'NONE'
+    | 'SUSPENDED'
+    | 'EMERGENCY_SUSPENDED';
   entitlementGraceEndsAt: Date | null;
 };
 
