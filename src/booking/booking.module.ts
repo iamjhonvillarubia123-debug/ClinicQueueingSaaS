@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { OtpModule } from '../otp/otp.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
+import { ActiveBookingIdentityService } from './active-booking-identity.service';
 import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingController } from './booking.controller';
@@ -22,6 +23,8 @@ import { BookingService } from './booking.service';
     BookingDraftControlService,
     BookingDraftEditService,
     BookingReferenceGenerator,
+    ActiveBookingIdentityService,
   ],
+  exports: [ActiveBookingIdentityService],
 })
 export class BookingModule {}
