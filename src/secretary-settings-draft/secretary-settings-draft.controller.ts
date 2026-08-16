@@ -15,6 +15,8 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { CreateSecretarySettingsDraftDto } from './dto/create-secretary-settings-draft.dto';
 import { ReviewSecretarySettingsDraftDto } from './dto/review-secretary-settings-draft.dto';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
+import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-secretary-settings-draft-schedule-exception.dto';
+import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
 
@@ -24,6 +26,7 @@ export class SecretarySettingsDraftController {
   constructor(
     private readonly secretarySettingsDraftService: SecretarySettingsDraftService,
     private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
+    private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
   ) {}
 
   @Post()
@@ -41,6 +44,19 @@ export class SecretarySettingsDraftController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.secretarySettingsDraftScheduleService.upsertPracticeSchedule(
+      request.user.userId,
+      draftId,
+      dto,
+    );
+  }
+
+  @Put(':draftId/schedule-exception')
+  upsertScheduleException(
+    @Param('draftId') draftId: string,
+    @Body() dto: UpsertSecretarySettingsDraftScheduleExceptionDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftExceptionService.upsertScheduleException(
       request.user.userId,
       draftId,
       dto,
