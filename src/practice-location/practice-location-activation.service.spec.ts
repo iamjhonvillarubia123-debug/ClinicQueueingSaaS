@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CrossLocationScheduleConflictService } from '../schedule/cross-location-schedule-conflict.service';
 import { DoctorCalendarAvailabilityService } from '../schedule/doctor-calendar-availability.service';
+import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ScheduleResolutionService } from '../schedule/schedule-resolution.service';
 import { ScheduleTimeService } from '../schedule/schedule-time.service';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
@@ -39,6 +40,9 @@ describe('PracticeLocationActivationService', () => {
   };
   const crossLocationConflictMock = {
     assertNoConflictForInterval: jest.fn(),
+  };
+  const recurringScheduleConflictMock = {
+    assertNoConflictForLocation: jest.fn(),
   };
 
   const time = (hour: number) => new Date(Date.UTC(1970, 0, 1, hour));
@@ -86,6 +90,9 @@ describe('PracticeLocationActivationService', () => {
     crossLocationConflictMock.assertNoConflictForInterval.mockResolvedValue(
       undefined,
     );
+    recurringScheduleConflictMock.assertNoConflictForLocation.mockResolvedValue(
+      undefined,
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -103,6 +110,10 @@ describe('PracticeLocationActivationService', () => {
         {
           provide: CrossLocationScheduleConflictService,
           useValue: crossLocationConflictMock,
+        },
+        {
+          provide: RecurringScheduleConflictService,
+          useValue: recurringScheduleConflictMock,
         },
       ],
     }).compile();
@@ -125,7 +136,7 @@ describe('PracticeLocationActivationService', () => {
       .mockResolvedValueOnce([{ id: 'doctor-1' }]);
   }
 
-  it('activates a DRAFT location after schedule and conflict validation', async () => {
+  it('activates a DRAFT location after recurring and concrete conflict validation', async () => {
     arrangeLocation(PracticeLocationLifecycleStatus.DRAFT);
 
     await expect(
@@ -136,6 +147,12 @@ describe('PracticeLocationActivationService', () => {
       ),
     ).resolves.toEqual({ activated: true, replayed: false });
 
+    expect(recurringScheduleConflictMock.assertNoConflictForLocation).toHaveBeenCalledWith(
+      'doctor-profile-1',
+      'location-1',
+      'Asia/Manila',
+      prismaServiceMock,
+    );
     expect(prismaServiceMock.practiceLocation.update).toHaveBeenCalledWith({
       where: { id: 'location-1' },
       data: { lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE },
@@ -143,6 +160,25 @@ describe('PracticeLocationActivationService', () => {
     expect(
       crossLocationConflictMock.assertNoConflictForInterval,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks activation when recurring schedule validation conflicts', async () => {
+    arrangeLocation(PracticeLocationLifecycleStatus.DRAFT);
+    recurringScheduleConflictMock.assertNoConflictForLocation.mockRejectedValue(
+      new ConflictException('Recurring schedule conflict.'),
+    );
+
+    await expect(
+      service.activate(
+        'doctor-1',
+        { practiceLocationId: 'location-1' },
+        'activate-recurring-conflict-key',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(scheduleResolutionMock.resolveConfiguredSchedule).not.toHaveBeenCalled();
+    expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
+    expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 
   it('reactivates only location eligibility from DISABLED', async () => {
