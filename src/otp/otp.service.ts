@@ -3,18 +3,55 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Prisma } from '../../generated/prisma/client';
-
-import { OtpGenerator } from './otp.generator';
 import { PrismaService } from '../prisma/prisma.service';
+import { OtpGenerator } from './otp.generator';
+
+const OTP_LIFETIME_MS = 5 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const CONTEXT_WINDOW_MS = 30 * 60 * 1000;
+const MOBILE_HOURLY_WINDOW_MS = 60 * 60 * 1000;
+const MOBILE_DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_ATTEMPTS_PER_CHALLENGE = 5;
+const MAX_FAILED_SUBMISSIONS_PER_CONTEXT = 10;
+const MAX_CHALLENGES_PER_CONTEXT = 5;
+const MAX_CHALLENGES_PER_MOBILE_HOUR = 10;
+const MAX_CHALLENGES_PER_MOBILE_DAY = 20;
+
+const BOOKING_PURPOSE = 'BOOKING';
+const OTP_REQUEST_UNAVAILABLE =
+  'OTP request is unavailable. Please try again later.';
+const OTP_VERIFICATION_FAILED = 'OTP verification failed.';
+
+type LockedBookingDraft = {
+  id: string;
+  status: string;
+  mobileNumberHash: string | null;
+  expiresAt: Date;
+  consumedAt: Date | null;
+  cancelledAt: Date | null;
+};
+
+type LockedBookingOtp = {
+  id: string;
+  bookingDraftId: string | null;
+  otpHash: string | null;
+  purpose: string;
+  activeContextKey: string | null;
+  attemptCount: number;
+  expiresAt: Date;
+  verifiedAt: Date | null;
+  consumedAt: Date | null;
+  invalidatedAt: Date | null;
+};
 
 @Injectable()
 export class OtpService {
   private readonly otpHmacKey: Buffer;
   private readonly activeKeyId: string;
+  private readonly activeKeyVersion: number;
 
   constructor(
     private readonly otpGenerator: OtpGenerator,
@@ -23,23 +60,26 @@ export class OtpService {
   ) {
     const otpKeyBase64 =
       this.configService.getOrThrow<string>('OTP_HMAC_KEY_V1');
-
     const activeKeyId = this.configService.getOrThrow<string>(
       'OTP_HMAC_ACTIVE_KEY_ID',
     );
-
     const otpKey = Buffer.from(otpKeyBase64, 'base64');
 
     if (otpKey.length !== 32) {
       throw new Error('OTP_HMAC_KEY_V1 must decode to exactly 32 bytes.');
     }
-
     if (!activeKeyId.trim()) {
       throw new Error('OTP_HMAC_ACTIVE_KEY_ID must not be blank.');
     }
 
+    const keyMatch = /^v([1-9][0-9]*)$/.exec(activeKeyId.trim());
+    if (!keyMatch) {
+      throw new Error('OTP_HMAC_ACTIVE_KEY_ID must use the v<number> format.');
+    }
+
     this.otpHmacKey = otpKey;
     this.activeKeyId = activeKeyId.trim();
+    this.activeKeyVersion = Number(keyMatch[1]);
   }
 
   hashOtp(bookingDraftId: string, purpose: string, otp: string): string {
@@ -60,7 +100,6 @@ export class OtpService {
 
     try {
       const calculatedBuffer = Buffer.from(calculatedHash, 'hex');
-
       const storedBuffer = Buffer.from(storedHash, 'hex');
 
       if (
@@ -87,52 +126,59 @@ export class OtpService {
     bookingDraftId: string,
   ) {
     const now = new Date();
-    const otpExpiresAt = new Date(now.getTime() + 5 * 60 * 1000);
+    const bookingDraft = await this.lockActiveBookingDraft(
+      transaction,
+      bookingDraftId,
+      now,
+    );
 
-    const bookingDraft = await transaction.bookingDraft.findFirst({
-      where: {
-        id: bookingDraftId,
-        status: 'PENDING_OTP',
-        expiresAt: {
-          gt: now,
-        },
-        consumedAt: null,
-        cancelledAt: null,
-      },
+    await this.assertBookingIssueLimits(transaction, bookingDraft, now);
+
+    const activeContextKey = this.bookingActiveContextKey(bookingDraft.id);
+    const activeChallenge = await transaction.otpVerification.findFirst({
+      where: { activeContextKey },
       select: {
         id: true,
-        mobileNumberHash: true,
+        verifiedAt: true,
+        invalidatedAt: true,
+        consumedAt: true,
       },
     });
 
-    if (!bookingDraft?.mobileNumberHash) {
-      throw new NotFoundException(
-        'Booking draft is not available for OTP verification.',
-      );
+    if (
+      activeChallenge?.verifiedAt &&
+      !activeChallenge.invalidatedAt &&
+      !activeChallenge.consumedAt
+    ) {
+      throw new BadRequestException(OTP_REQUEST_UNAVAILABLE);
     }
 
     await transaction.otpVerification.updateMany({
       where: {
         bookingDraftId: bookingDraft.id,
-        purpose: 'BOOKING',
-        verifiedAt: null,
-        consumedAt: null,
-        invalidatedAt: null,
+        purpose: BOOKING_PURPOSE,
+        activeContextKey,
       },
       data: {
         invalidatedAt: now,
+        activeContextKey: null,
+        otpHash: null,
       },
     });
 
     const otp = this.otpGenerator.generate();
-    const otpHash = this.hashOtp(bookingDraft.id, 'BOOKING', otp);
+    const otpHash = this.hashOtp(bookingDraft.id, BOOKING_PURPOSE, otp);
+    const otpExpiresAt = new Date(now.getTime() + OTP_LIFETIME_MS);
 
     const otpVerification = await transaction.otpVerification.create({
       data: {
         bookingDraftId: bookingDraft.id,
         mobileNumberHash: bookingDraft.mobileNumberHash,
+        mobileHashKeyVersion: 1,
         otpHash,
-        purpose: 'BOOKING',
+        otpHashKeyVersion: this.activeKeyVersion,
+        purpose: BOOKING_PURPOSE,
+        activeContextKey,
         expiresAt: otpExpiresAt,
       },
       select: {
@@ -145,91 +191,109 @@ export class OtpService {
       },
     });
 
-    return {
-      otp,
-      otpVerification,
-    };
+    return { otp, otpVerification };
   }
 
   async verifyBookingOtp(bookingDraftId: string, submittedOtp: string) {
     const now = new Date();
 
     return this.prisma.$transaction(async (transaction) => {
-      const otpVerification = await transaction.otpVerification.findFirst({
-        where: {
-          bookingDraftId,
-          purpose: 'BOOKING',
-          verifiedAt: null,
-          consumedAt: null,
-          invalidatedAt: null,
-          expiresAt: {
-            gt: now,
-          },
-          attemptCount: {
-            lt: 5,
-          },
-          bookingDraft: {
-            status: 'PENDING_OTP',
-            expiresAt: {
-              gt: now,
-            },
-            consumedAt: null,
-            cancelledAt: null,
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        select: {
-          id: true,
-          bookingDraftId: true,
-          otpHash: true,
-          purpose: true,
-          attemptCount: true,
-        },
-      });
+      await this.lockActiveBookingDraft(transaction, bookingDraftId, now);
 
+      const activeContextKey = this.bookingActiveContextKey(bookingDraftId);
+      const rows = await transaction.$queryRaw<LockedBookingOtp[]>(Prisma.sql`
+        SELECT
+          "id",
+          "bookingDraftId",
+          "otpHash",
+          "purpose",
+          "activeContextKey",
+          "attemptCount",
+          "expiresAt",
+          "verifiedAt",
+          "consumedAt",
+          "invalidatedAt"
+        FROM "OtpVerification"
+        WHERE "activeContextKey" = ${activeContextKey}
+        FOR UPDATE
+      `);
+
+      const otpVerification = rows[0];
       if (
         !otpVerification ||
-        otpVerification.purpose !== 'BOOKING' ||
-        !otpVerification.bookingDraftId ||
-        !otpVerification.otpHash
+        otpVerification.purpose !== BOOKING_PURPOSE ||
+        otpVerification.bookingDraftId !== bookingDraftId ||
+        otpVerification.verifiedAt ||
+        otpVerification.consumedAt ||
+        otpVerification.invalidatedAt ||
+        !otpVerification.otpHash ||
+        otpVerification.attemptCount >= MAX_ATTEMPTS_PER_CHALLENGE
       ) {
-        throw new BadRequestException('OTP verification failed.');
+        throw new BadRequestException(OTP_VERIFICATION_FAILED);
+      }
+
+      if (otpVerification.expiresAt.getTime() <= now.getTime()) {
+        await transaction.otpVerification.update({
+          where: { id: otpVerification.id },
+          data: {
+            activeContextKey: null,
+            otpHash: null,
+          },
+        });
+        throw new BadRequestException(OTP_VERIFICATION_FAILED);
+      }
+
+      const contextFailureCount = await this.contextFailureCount(
+        transaction,
+        bookingDraftId,
+        now,
+      );
+      if (contextFailureCount >= MAX_FAILED_SUBMISSIONS_PER_CONTEXT) {
+        await transaction.otpVerification.update({
+          where: { id: otpVerification.id },
+          data: {
+            invalidatedAt: now,
+            activeContextKey: null,
+            otpHash: null,
+          },
+        });
+        throw new BadRequestException(OTP_VERIFICATION_FAILED);
       }
 
       const matches = this.verifyOtpHash(
-        otpVerification.bookingDraftId,
-        otpVerification.purpose,
+        bookingDraftId,
+        BOOKING_PURPOSE,
         submittedOtp,
         otpVerification.otpHash,
       );
 
       if (!matches) {
         const nextAttemptCount = otpVerification.attemptCount + 1;
+        const nextContextFailureCount = contextFailureCount + 1;
+        const invalidate =
+          nextAttemptCount >= MAX_ATTEMPTS_PER_CHALLENGE ||
+          nextContextFailureCount >= MAX_FAILED_SUBMISSIONS_PER_CONTEXT;
 
         await transaction.otpVerification.update({
-          where: {
-            id: otpVerification.id,
-          },
+          where: { id: otpVerification.id },
           data: {
-            attemptCount: {
-              increment: 1,
-            },
-            invalidatedAt: nextAttemptCount >= 5 ? now : null,
+            attemptCount: { increment: 1 },
+            ...(invalidate
+              ? {
+                  invalidatedAt: now,
+                  activeContextKey: null,
+                  otpHash: null,
+                }
+              : {}),
           },
         });
 
-        throw new BadRequestException('OTP verification failed.');
+        throw new BadRequestException(OTP_VERIFICATION_FAILED);
       }
 
       const verifiedOtp = await transaction.otpVerification.update({
-        where: {
-          id: otpVerification.id,
-        },
-        data: {
-          verifiedAt: now,
-        },
+        where: { id: otpVerification.id },
+        data: { verifiedAt: now },
         select: {
           id: true,
           bookingDraftId: true,
@@ -243,5 +307,128 @@ export class OtpService {
         otpVerification: verifiedOtp,
       };
     });
+  }
+
+  private async lockActiveBookingDraft(
+    transaction: Prisma.TransactionClient,
+    bookingDraftId: string,
+    now: Date,
+  ): Promise<LockedBookingDraft> {
+    const rows = await transaction.$queryRaw<LockedBookingDraft[]>(Prisma.sql`
+      SELECT
+        "id",
+        "status",
+        "mobileNumberHash",
+        "expiresAt",
+        "consumedAt",
+        "cancelledAt"
+      FROM "BookingDraft"
+      WHERE "id" = ${bookingDraftId}
+      FOR UPDATE
+    `);
+
+    const bookingDraft = rows[0];
+    if (
+      !bookingDraft ||
+      bookingDraft.status !== 'PENDING_OTP' ||
+      !bookingDraft.mobileNumberHash ||
+      bookingDraft.expiresAt.getTime() <= now.getTime() ||
+      bookingDraft.consumedAt ||
+      bookingDraft.cancelledAt
+    ) {
+      throw new NotFoundException(
+        'Booking draft is not available for OTP verification.',
+      );
+    }
+
+    return bookingDraft;
+  }
+
+  private async assertBookingIssueLimits(
+    transaction: Prisma.TransactionClient,
+    bookingDraft: LockedBookingDraft,
+    now: Date,
+  ): Promise<void> {
+    const contextWindowStart = new Date(now.getTime() - CONTEXT_WINDOW_MS);
+    const mobileHourStart = new Date(now.getTime() - MOBILE_HOURLY_WINDOW_MS);
+    const mobileDayStart = new Date(now.getTime() - MOBILE_DAILY_WINDOW_MS);
+
+    const latestChallenge = await transaction.otpVerification.findFirst({
+      where: {
+        bookingDraftId: bookingDraft.id,
+        purpose: BOOKING_PURPOSE,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (
+      latestChallenge &&
+      now.getTime() - latestChallenge.createdAt.getTime() < RESEND_COOLDOWN_MS
+    ) {
+      throw new BadRequestException(OTP_REQUEST_UNAVAILABLE);
+    }
+
+    const contextChallengeCount = await transaction.otpVerification.count({
+      where: {
+        bookingDraftId: bookingDraft.id,
+        purpose: BOOKING_PURPOSE,
+        createdAt: { gte: contextWindowStart },
+      },
+    });
+    if (contextChallengeCount >= MAX_CHALLENGES_PER_CONTEXT) {
+      throw new BadRequestException(OTP_REQUEST_UNAVAILABLE);
+    }
+
+    const mobileHourCount = await transaction.otpVerification.count({
+      where: {
+        mobileNumberHash: bookingDraft.mobileNumberHash,
+        createdAt: { gte: mobileHourStart },
+      },
+    });
+    if (mobileHourCount >= MAX_CHALLENGES_PER_MOBILE_HOUR) {
+      throw new BadRequestException(OTP_REQUEST_UNAVAILABLE);
+    }
+
+    const mobileDayCount = await transaction.otpVerification.count({
+      where: {
+        mobileNumberHash: bookingDraft.mobileNumberHash,
+        createdAt: { gte: mobileDayStart },
+      },
+    });
+    if (mobileDayCount >= MAX_CHALLENGES_PER_MOBILE_DAY) {
+      throw new BadRequestException(OTP_REQUEST_UNAVAILABLE);
+    }
+
+    const failures = await this.contextFailureCount(
+      transaction,
+      bookingDraft.id,
+      now,
+    );
+    if (failures >= MAX_FAILED_SUBMISSIONS_PER_CONTEXT) {
+      throw new BadRequestException(OTP_REQUEST_UNAVAILABLE);
+    }
+  }
+
+  private async contextFailureCount(
+    transaction: Prisma.TransactionClient,
+    bookingDraftId: string,
+    now: Date,
+  ): Promise<number> {
+    const result = await transaction.otpVerification.aggregate({
+      where: {
+        bookingDraftId,
+        purpose: BOOKING_PURPOSE,
+        createdAt: {
+          gte: new Date(now.getTime() - CONTEXT_WINDOW_MS),
+        },
+      },
+      _sum: { attemptCount: true },
+    });
+
+    return result._sum.attemptCount ?? 0;
+  }
+
+  private bookingActiveContextKey(bookingDraftId: string): string {
+    return `BOOKING:${bookingDraftId}`;
   }
 }
