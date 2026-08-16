@@ -1,7 +1,22 @@
 import { ConflictException } from '@nestjs/common';
+import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 
 describe('IndividualBookingConfirmationService', () => {
+  const createIdempotencyDouble = (resultAppointmentId: string) => {
+    const service = Object.create(
+      CommandIdempotencyService.prototype,
+    ) as CommandIdempotencyService;
+
+    service.normalizeKey = jest.fn().mockReturnValue('idem-1');
+    service.deriveIdentity = jest.fn().mockReturnValue('identity-1');
+    service.fingerprint = jest.fn().mockReturnValue('fingerprint-1');
+    service.acquireCommandLock = jest.fn().mockResolvedValue(undefined);
+    service.findReplay = jest.fn().mockResolvedValue({ resultAppointmentId });
+
+    return service;
+  };
+
   it('replays a committed result without minting another access token', async () => {
     const appointment = {
       id: 'appointment-1',
@@ -21,15 +36,7 @@ describe('IndividualBookingConfirmationService', () => {
         Promise.resolve(callback(transaction)),
       ),
     };
-    const idempotency = {
-      normalizeKey: jest.fn().mockReturnValue('idem-1'),
-      deriveIdentity: jest.fn().mockReturnValue('identity-1'),
-      fingerprint: jest.fn().mockReturnValue('fingerprint-1'),
-      acquireCommandLock: jest.fn().mockResolvedValue(undefined),
-      findReplay: jest.fn().mockResolvedValue({
-        resultAppointmentId: 'appointment-1',
-      }),
-    };
+    const idempotency = createIdempotencyDouble('appointment-1');
     const accessTokens = {
       issueInitialToken: jest.fn(),
     };
@@ -66,15 +73,7 @@ describe('IndividualBookingConfirmationService', () => {
         Promise.resolve(callback(transaction)),
       ),
     };
-    const idempotency = {
-      normalizeKey: jest.fn().mockReturnValue('idem-1'),
-      deriveIdentity: jest.fn().mockReturnValue('identity-1'),
-      fingerprint: jest.fn().mockReturnValue('fingerprint-1'),
-      acquireCommandLock: jest.fn().mockResolvedValue(undefined),
-      findReplay: jest.fn().mockResolvedValue({
-        resultAppointmentId: 'appointment-missing',
-      }),
-    };
+    const idempotency = createIdempotencyDouble('appointment-missing');
     const service = new IndividualBookingConfirmationService(
       prisma as never,
       idempotency,
