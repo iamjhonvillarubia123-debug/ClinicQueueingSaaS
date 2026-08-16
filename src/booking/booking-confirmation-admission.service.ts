@@ -8,6 +8,10 @@ import { PublicServiceDateAvailabilityService } from '../schedule/public-service
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
 
 type TransactionClient = Prisma.TransactionClient;
+type DoctorAdministrativeRestrictionStatus =
+  | 'NONE'
+  | 'SUSPENDED'
+  | 'EMERGENCY_SUSPENDED';
 
 export type LockedConfirmationDraft = {
   id: string;
@@ -22,7 +26,7 @@ export type LockedConfirmationDraft = {
   cancelledAt: Date | null;
   doctorUserId: string;
   doctorAccountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED';
-  doctorAdministrativeRestrictionStatus: 'NONE' | 'SUSPENDED' | 'EMERGENCY_SUSPENDED';
+  doctorAdministrativeRestrictionStatus: DoctorAdministrativeRestrictionStatus;
   entitlementGraceEndsAt: Date | null;
 };
 
