@@ -147,7 +147,9 @@ describe('PracticeLocationActivationService', () => {
       ),
     ).resolves.toEqual({ activated: true, replayed: false });
 
-    expect(recurringScheduleConflictMock.assertNoConflictForLocation).toHaveBeenCalledWith(
+    expect(
+      recurringScheduleConflictMock.assertNoConflictForLocation,
+    ).toHaveBeenCalledWith(
       'doctor-profile-1',
       'location-1',
       'Asia/Manila',
@@ -176,7 +178,9 @@ describe('PracticeLocationActivationService', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(scheduleResolutionMock.resolveConfiguredSchedule).not.toHaveBeenCalled();
+    expect(
+      scheduleResolutionMock.resolveConfiguredSchedule,
+    ).not.toHaveBeenCalled();
     expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
     expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
