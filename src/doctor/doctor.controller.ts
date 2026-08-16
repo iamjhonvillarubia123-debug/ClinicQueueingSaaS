@@ -46,7 +46,10 @@ export class DoctorController {
     @Request() request: AuthenticatedRequest,
     @Body() dto: SaveDoctorServiceTemplateDto,
   ) {
-    return this.doctorDefaultsService.createServiceTemplate(request.user.userId, dto);
+    return this.doctorDefaultsService.createServiceTemplate(
+      request.user.userId,
+      dto,
+    );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -56,7 +59,11 @@ export class DoctorController {
     @Param('templateId') templateId: string,
     @Body() dto: SaveDoctorServiceTemplateDto,
   ) {
-    return this.doctorDefaultsService.updateServiceTemplate(request.user.userId, templateId, dto);
+    return this.doctorDefaultsService.updateServiceTemplate(
+      request.user.userId,
+      templateId,
+      dto,
+    );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -65,7 +72,10 @@ export class DoctorController {
     @Request() request: AuthenticatedRequest,
     @Body() dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    return this.doctorDefaultsService.createBookingQuestionTemplate(request.user.userId, dto);
+    return this.doctorDefaultsService.createBookingQuestionTemplate(
+      request.user.userId,
+      dto,
+    );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -75,7 +85,11 @@ export class DoctorController {
     @Param('templateId') templateId: string,
     @Body() dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    return this.doctorDefaultsService.updateBookingQuestionTemplate(request.user.userId, templateId, dto);
+    return this.doctorDefaultsService.updateBookingQuestionTemplate(
+      request.user.userId,
+      templateId,
+      dto,
+    );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
