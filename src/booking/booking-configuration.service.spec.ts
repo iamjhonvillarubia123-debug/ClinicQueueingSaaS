@@ -44,7 +44,9 @@ describe('BookingConfigurationService', () => {
       ],
     });
 
-    await expect(service.getEffectiveConfiguration('location-1')).resolves.toEqual(
+    await expect(
+      service.getEffectiveConfiguration('location-1'),
+    ).resolves.toEqual(
       expect.objectContaining({
         practiceLocation: {
           id: 'location-1',
@@ -96,7 +98,9 @@ describe('BookingConfigurationService', () => {
       service.validateSelectedServices('location-1', ['a', 'a']),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(prismaServiceMock.practiceLocationService.findMany).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceLocationService.findMany,
+    ).not.toHaveBeenCalled();
   });
 
   it('accepts only active selected Services owned by the selected location', async () => {
@@ -118,7 +122,9 @@ describe('BookingConfigurationService', () => {
       { id: 'service-b', name: 'B', durationMinutes: 40 },
     ]);
 
-    expect(prismaServiceMock.practiceLocationService.findMany).toHaveBeenCalledWith({
+    expect(
+      prismaServiceMock.practiceLocationService.findMany,
+    ).toHaveBeenCalledWith({
       where: {
         id: { in: ['service-b', 'service-a'] },
         practiceLocationId: 'location-1',
