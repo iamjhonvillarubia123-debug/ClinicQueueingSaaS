@@ -102,7 +102,7 @@ export class CreateBookingDraftDto {
 
   @ValidateIf((dto: CreateBookingDraftDto) => dto.mode === 'MULTI_PERSON')
   @IsArray()
-  @ArrayMinSize(2)
+  @ArrayMinSize(1)
   @ArrayMaxSize(5)
   @ValidateNested({ each: true })
   @Type(() => CreateBookingDraftMemberDto)
