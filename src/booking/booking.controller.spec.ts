@@ -39,11 +39,13 @@ describe('BookingController', () => {
   });
 
   it('should delegate public effective configuration reads', async () => {
-    bookingConfigurationServiceMock.getEffectiveConfiguration.mockResolvedValue({
-      practiceLocation: { id: 'location-1' },
-      services: [],
-      bookingQuestions: [],
-    });
+    bookingConfigurationServiceMock.getEffectiveConfiguration.mockResolvedValue(
+      {
+        practiceLocation: { id: 'location-1' },
+        services: [],
+        bookingQuestions: [],
+      },
+    );
 
     await expect(controller.getConfiguration('location-1')).resolves.toEqual({
       practiceLocation: { id: 'location-1' },
