@@ -193,9 +193,7 @@ describe('DoctorService', () => {
       ]);
 
     await expect(
-      service.updateAccountSettings('doctor-user', {
-        maximumEstimatedServiceMinutesPerPatient: 45,
-      }),
+      service.updateAccountSettings('doctor-user', { maximumEstimatedServiceMinutesPerPatient: 45 }),
     ).resolves.toEqual({ maximumEstimatedServiceMinutesPerPatient: 45 });
 
     await expect(
