@@ -27,7 +27,11 @@ export type PublicServiceDateAvailability = {
   serviceDate: string;
   availableForPublicBooking: boolean;
   reason: PublicServiceDateAvailabilityReason;
-  scheduleSource: 'SCHEDULE_EXCEPTION' | 'PRACTICE_SCHEDULE' | 'NO_SCHEDULE' | null;
+  scheduleSource:
+    | 'SCHEDULE_EXCEPTION'
+    | 'PRACTICE_SCHEDULE'
+    | 'NO_SCHEDULE'
+    | null;
   opensAt: Date | null;
   closesAt: Date | null;
   maximumOnlineBookingUntilAt: Date | null;
