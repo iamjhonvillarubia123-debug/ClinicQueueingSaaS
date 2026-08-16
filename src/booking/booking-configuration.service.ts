@@ -51,7 +51,6 @@ export class BookingConfigurationService {
             type: true,
             isRequired: true,
             displayOrder: true,
-            estimatedMinutesAdjustment: true,
             textMaximumLength: true,
             numberMinimum: true,
             numberMaximum: true,
@@ -64,6 +63,18 @@ export class BookingConfigurationService {
     if (!location) {
       throw new NotFoundException(
         'Practice location is not available for online booking.',
+      );
+    }
+
+    if (location.services.length === 0) {
+      throw new BadRequestException(
+        'Practice location must have at least one active Service with a valid duration before online booking is available.',
+      );
+    }
+
+    if (location.services.some((service) => service.durationMinutes < 1)) {
+      throw new BadRequestException(
+        'Practice location has an active Service with an invalid duration.',
       );
     }
 
@@ -98,6 +109,11 @@ export class BookingConfigurationService {
     if (ids.some((value) => !value)) {
       throw new BadRequestException('Selected Service ids must be valid.');
     }
+    if (ids.length === 0) {
+      throw new BadRequestException(
+        'At least one Service must be selected for online booking.',
+      );
+    }
     if (ids.length > MAX_SELECTED_SERVICES) {
       throw new BadRequestException(
         'At most three Services may be selected for one prospective Appointment.',
@@ -108,10 +124,6 @@ export class BookingConfigurationService {
     }
 
     await this.assertLocationAvailable(practiceLocationId);
-
-    if (ids.length === 0) {
-      return [];
-    }
 
     const services = await this.prisma.practiceLocationService.findMany({
       where: {
@@ -130,6 +142,12 @@ export class BookingConfigurationService {
     if (services.length !== ids.length) {
       throw new BadRequestException(
         'One or more selected Services are inactive or do not belong to the selected PracticeLocation.',
+      );
+    }
+
+    if (services.some((service) => service.durationMinutes < 1)) {
+      throw new BadRequestException(
+        'One or more selected Services have an invalid duration.',
       );
     }
 
