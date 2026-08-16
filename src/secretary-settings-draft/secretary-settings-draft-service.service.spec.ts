@@ -4,13 +4,11 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
 import {
   PracticeLocationLifecycleStatus,
   SecretarySettingsDraftStatus,
   ServiceAvailabilityStatus,
 } from '../../generated/prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
 import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
 
 describe('SecretarySettingsDraftServiceProposalService', () => {
@@ -27,8 +25,11 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
     },
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
+    service = new SecretarySettingsDraftServiceProposalService(
+      prismaServiceMock as never,
+    );
     prismaServiceMock.$transaction.mockImplementation(
       (callback: (transaction: typeof prismaServiceMock) => unknown) =>
         callback(prismaServiceMock),
@@ -84,7 +85,9 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         proposedStatus: ServiceAvailabilityStatus.ACTIVE,
       },
     });
-    expect(prismaServiceMock.practiceLocationService.findFirst).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceLocationService.findFirst,
+    ).not.toHaveBeenCalled();
   });
 
   it('creates an edit proposal for an existing Service owned by the same location', async () => {
