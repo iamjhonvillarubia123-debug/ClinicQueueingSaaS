@@ -70,16 +70,17 @@ export class SecretarySettingsDraftServiceProposalService {
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
       const proposed = this.normalizeProposal(dto);
 
-      const effectiveService = await transaction.practiceLocationService.findFirst({
-        where: {
-          id: practiceLocationServiceId,
-          practiceLocationId: draft.practiceLocationId,
-        },
-        select: {
-          id: true,
-          sourceDoctorServiceTemplateId: true,
-        },
-      });
+      const effectiveService =
+        await transaction.practiceLocationService.findFirst({
+          where: {
+            id: practiceLocationServiceId,
+            practiceLocationId: draft.practiceLocationId,
+          },
+          select: {
+            id: true,
+            sourceDoctorServiceTemplateId: true,
+          },
+        });
       if (!effectiveService) {
         throw new NotFoundException(
           'Practice location service was not found for this draft location.',
@@ -131,16 +132,17 @@ export class SecretarySettingsDraftServiceProposalService {
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
       const proposed = this.normalizeProposal(dto);
 
-      const proposal = await transaction.secretarySettingsDraftService.findFirst({
-        where: {
-          id: proposalId,
-          secretarySettingsDraftId: draft.id,
-        },
-        select: {
-          id: true,
-          practiceLocationServiceId: true,
-        },
-      });
+      const proposal =
+        await transaction.secretarySettingsDraftService.findFirst({
+          where: {
+            id: proposalId,
+            secretarySettingsDraftId: draft.id,
+          },
+          select: {
+            id: true,
+            practiceLocationServiceId: true,
+          },
+        });
       if (!proposal) {
         throw new NotFoundException('Service proposal was not found.');
       }
