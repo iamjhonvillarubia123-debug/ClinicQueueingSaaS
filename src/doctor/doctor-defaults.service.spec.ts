@@ -94,12 +94,11 @@ describe('DoctorDefaultsService', () => {
         isRequired: false,
         displayOrder: 5,
         isActive: true,
-        estimatedMinutesAdjustment: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('accepts a valid SINGLE_SELECT template and normalizes option text', async () => {
+  it('accepts a valid SINGLE_SELECT template and forces zero duration adjustment', async () => {
     prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
     prismaMock.doctorBookingQuestionTemplate.findFirst.mockResolvedValue(null);
     prismaMock.doctorBookingQuestionTemplate.count.mockResolvedValue(0);
@@ -113,7 +112,6 @@ describe('DoctorDefaultsService', () => {
       isRequired: true,
       displayOrder: 0,
       isActive: true,
-      estimatedMinutesAdjustment: 0,
       selectOptions: [
         { value: ' new ', label: ' New patient ' },
         { value: 'return', label: 'Returning patient' },
@@ -126,6 +124,7 @@ describe('DoctorDefaultsService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           doctorProfileId: 'doctor-1',
+          estimatedMinutesAdjustment: 0,
           selectOptions: [
             { value: 'new', label: 'New patient' },
             { value: 'return', label: 'Returning patient' },
