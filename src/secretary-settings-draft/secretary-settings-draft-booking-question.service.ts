@@ -184,7 +184,9 @@ export class SecretarySettingsDraftBookingQuestionService {
     };
   }
 
-  private normalizeTypeFields(dto: SaveSecretarySettingsDraftBookingQuestionDto) {
+  private normalizeTypeFields(
+    dto: SaveSecretarySettingsDraftBookingQuestionDto,
+  ) {
     if (dto.type === BookingQuestionType.TEXT) {
       if (
         dto.numberMinimum !== undefined ||
