@@ -62,8 +62,6 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         bookingReference: `M5S5A${scope.slice(0, 10)}`,
         mode: BookingDraftMode.MULTI_PERSON,
         practiceLocationId: location.id,
-        firstName: 'Temporary',
-        lastName: 'Controller',
         mobileNumberEncrypted: 'e2e-protected-mobile',
         mobileNumberHash: 'a'.repeat(64),
         mobileNumberLastFour: '4567',
