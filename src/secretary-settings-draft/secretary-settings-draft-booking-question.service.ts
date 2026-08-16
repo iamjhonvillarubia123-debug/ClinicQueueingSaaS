@@ -37,17 +37,21 @@ export class SecretarySettingsDraftBookingQuestionService {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
-      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      this.assertEditableByCurrentRegularSecretary(
+        draft,
+        authenticatedUserId,
+      );
       const proposed = this.normalizeProposal(dto);
 
-      const saved = await transaction.secretarySettingsDraftBookingQuestion.create({
-        data: {
-          secretarySettingsDraftId: draft.id,
-          bookingQuestionId: null,
-          sourceDoctorBookingQuestionTemplateId: null,
-          ...proposed,
-        },
-      });
+      const saved =
+        await transaction.secretarySettingsDraftBookingQuestion.create({
+          data: {
+            secretarySettingsDraftId: draft.id,
+            bookingQuestionId: null,
+            sourceDoctorBookingQuestionTemplateId: null,
+            ...proposed,
+          },
+        });
 
       return {
         saved: true,
@@ -67,7 +71,10 @@ export class SecretarySettingsDraftBookingQuestionService {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
-      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      this.assertEditableByCurrentRegularSecretary(
+        draft,
+        authenticatedUserId,
+      );
       const proposed = this.normalizeProposal(dto);
 
       const effectiveQuestion = await transaction.bookingQuestion.findFirst({
@@ -124,7 +131,10 @@ export class SecretarySettingsDraftBookingQuestionService {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
-      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      this.assertEditableByCurrentRegularSecretary(
+        draft,
+        authenticatedUserId,
+      );
       const proposed = this.normalizeProposal(dto);
 
       const proposal =
@@ -136,10 +146,11 @@ export class SecretarySettingsDraftBookingQuestionService {
         throw new NotFoundException('Booking question proposal was not found.');
       }
 
-      const saved = await transaction.secretarySettingsDraftBookingQuestion.update({
-        where: { id: proposal.id },
-        data: proposed,
-      });
+      const saved =
+        await transaction.secretarySettingsDraftBookingQuestion.update({
+          where: { id: proposal.id },
+          data: proposed,
+        });
 
       return {
         saved: true,
@@ -151,7 +162,9 @@ export class SecretarySettingsDraftBookingQuestionService {
     });
   }
 
-  private normalizeProposal(dto: SaveSecretarySettingsDraftBookingQuestionDto) {
+  private normalizeProposal(
+    dto: SaveSecretarySettingsDraftBookingQuestionDto,
+  ) {
     const questionText = dto.questionText.trim();
     const helpText = dto.helpText?.trim() || null;
     if (!questionText) {
@@ -182,10 +195,18 @@ export class SecretarySettingsDraftBookingQuestionService {
     };
   }
 
-  private normalizeTypeFields(dto: SaveSecretarySettingsDraftBookingQuestionDto) {
+  private normalizeTypeFields(
+    dto: SaveSecretarySettingsDraftBookingQuestionDto,
+  ) {
     if (dto.type === BookingQuestionType.TEXT) {
-      if (dto.numberMinimum !== undefined || dto.numberMaximum !== undefined || dto.selectOptions !== undefined) {
-        throw new BadRequestException('TEXT questions may only use textMaximumLength.');
+      if (
+        dto.numberMinimum !== undefined ||
+        dto.numberMaximum !== undefined ||
+        dto.selectOptions !== undefined
+      ) {
+        throw new BadRequestException(
+          'TEXT questions may only use textMaximumLength.',
+        );
       }
       return {
         proposedTextMaximumLength: dto.textMaximumLength ?? null,
@@ -196,8 +217,13 @@ export class SecretarySettingsDraftBookingQuestionService {
     }
 
     if (dto.type === BookingQuestionType.NUMBER) {
-      if (dto.textMaximumLength !== undefined || dto.selectOptions !== undefined) {
-        throw new BadRequestException('NUMBER questions may only use numeric limits.');
+      if (
+        dto.textMaximumLength !== undefined ||
+        dto.selectOptions !== undefined
+      ) {
+        throw new BadRequestException(
+          'NUMBER questions may only use numeric limits.',
+        );
       }
       if (
         dto.numberMinimum !== undefined &&
@@ -223,7 +249,9 @@ export class SecretarySettingsDraftBookingQuestionService {
         dto.numberMaximum !== undefined ||
         dto.selectOptions !== undefined
       ) {
-        throw new BadRequestException('BOOLEAN questions do not accept validation fields.');
+        throw new BadRequestException(
+          'BOOLEAN questions do not accept validation fields.',
+        );
       }
       return {
         proposedTextMaximumLength: null,
@@ -258,10 +286,14 @@ export class SecretarySettingsDraftBookingQuestionService {
     const values = new Set<string>();
     for (const option of normalized) {
       if (!option.value || !option.label) {
-        throw new BadRequestException('Select option values and labels are required.');
+        throw new BadRequestException(
+          'Select option values and labels are required.',
+        );
       }
       if (option.value.length > 100 || option.label.length > 200) {
-        throw new BadRequestException('Select option value or label is too long.');
+        throw new BadRequestException(
+          'Select option value or label is too long.',
+        );
       }
       if (values.has(option.value)) {
         throw new BadRequestException('Select option values must be unique.');
@@ -313,7 +345,8 @@ export class SecretarySettingsDraftBookingQuestionService {
       );
     }
     if (
-      draft.lifecycleStatus === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED ||
+      draft.lifecycleStatus ===
+        PracticeLocationLifecycleStatus.PERMANENTLY_DELETED ||
       !draft.currentRegularPracticeStaffId ||
       !draft.currentAssignmentActive ||
       draft.currentSecretaryUserId !== authenticatedUserId
