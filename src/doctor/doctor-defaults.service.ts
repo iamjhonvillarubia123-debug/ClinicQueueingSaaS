@@ -22,9 +22,8 @@ export class DoctorDefaultsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list(authenticatedUserId: string) {
-    const doctorProfileId = await this.requireDoctorProfileId(
-      authenticatedUserId,
-    );
+    const doctorProfileId =
+      await this.requireDoctorProfileId(authenticatedUserId);
     const [services, bookingQuestions] = await Promise.all([
       this.prisma.doctorServiceTemplate.findMany({
         where: { doctorProfileId },
@@ -42,9 +41,8 @@ export class DoctorDefaultsService {
     authenticatedUserId: string,
     dto: SaveDoctorServiceTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(
-      authenticatedUserId,
-    );
+    const doctorProfileId =
+      await this.requireDoctorProfileId(authenticatedUserId);
     const data = this.normalizeService(dto);
     return this.prisma.doctorServiceTemplate.create({
       data: { doctorProfileId, ...data },
@@ -56,9 +54,8 @@ export class DoctorDefaultsService {
     templateId: string,
     dto: SaveDoctorServiceTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(
-      authenticatedUserId,
-    );
+    const doctorProfileId =
+      await this.requireDoctorProfileId(authenticatedUserId);
     const template = await this.prisma.doctorServiceTemplate.findFirst({
       where: { id: templateId, doctorProfileId },
       select: { id: true },
@@ -76,9 +73,8 @@ export class DoctorDefaultsService {
     authenticatedUserId: string,
     dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(
-      authenticatedUserId,
-    );
+    const doctorProfileId =
+      await this.requireDoctorProfileId(authenticatedUserId);
     const data = this.normalizeBookingQuestion(dto);
     await this.assertBookingQuestionTemplateState(
       doctorProfileId,
@@ -109,9 +105,8 @@ export class DoctorDefaultsService {
     templateId: string,
     dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    const doctorProfileId = await this.requireDoctorProfileId(
-      authenticatedUserId,
-    );
+    const doctorProfileId =
+      await this.requireDoctorProfileId(authenticatedUserId);
     const template = await this.prisma.doctorBookingQuestionTemplate.findFirst({
       where: { id: templateId, doctorProfileId },
       select: { id: true },
