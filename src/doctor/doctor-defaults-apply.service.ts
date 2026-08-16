@@ -404,14 +404,12 @@ export class DoctorDefaultsApplyService {
   }
 
   private assertEligibleDoctor(
-    actor:
-      | {
-          role: UserRole;
-          accountStatus: UserAccountStatus;
-          administrativeRestrictionStatus: AdministrativeRestrictionStatus;
-          doctorProfile: { id: string } | null;
-        }
-      | null,
+    actor: {
+      role: UserRole;
+      accountStatus: UserAccountStatus;
+      administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+      doctorProfile: { id: string } | null;
+    } | null,
   ) {
     if (
       !actor ||
