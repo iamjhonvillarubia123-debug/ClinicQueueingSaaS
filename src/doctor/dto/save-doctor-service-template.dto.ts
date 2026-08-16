@@ -1,4 +1,12 @@
-import { IsEnum, IsInt, IsNotEmpty, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ServiceAvailabilityStatus } from '../../../generated/prisma/client';
 
 export class SaveDoctorServiceTemplateDto {
