@@ -30,15 +30,6 @@ type ExistingQuestion = {
   isActive: boolean;
 };
 
-type ExistingTemplateQuestion = {
-  id: string;
-  questionText: string;
-  type: string;
-  selectOptions: Prisma.JsonValue | null;
-  displayOrder: number;
-  hasHistory: boolean;
-};
-
 @Injectable()
 export class DoctorDefaultsApplyService {
   constructor(private readonly prisma: PrismaService) {}
@@ -303,14 +294,24 @@ export class DoctorDefaultsApplyService {
       selectOptions: Prisma.JsonValue | null;
     },
   ): Promise<string> {
-    const existing = await transaction.$queryRaw<ExistingTemplateQuestion[]>(
+    const existing = await transaction.$queryRaw<Array<{ id: string }>>(
       Prisma.sql`
+        SELECT "id"
+        FROM "BookingQuestion"
+        WHERE "practiceLocationId" = ${practiceLocationId}
+          AND "sourceDoctorBookingQuestionTemplateId" = ${template.id}
+        ORDER BY "createdAt" DESC, "id" DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+    );
+    const currentId = existing[0]?.id;
+    const selectOptions = JSON.stringify(template.selectOptions);
+    if (currentId) {
+      const history = await transaction.$queryRaw<
+        Array<{ hasHistory: boolean; meaningChanged: boolean }>
+      >(Prisma.sql`
         SELECT
-          q."id",
-          q."questionText",
-          q."type"::text AS "type",
-          q."selectOptions",
-          q."displayOrder",
           (
             EXISTS (
               SELECT 1 FROM "BookingDraftAnswer" bda
@@ -320,52 +321,30 @@ export class DoctorDefaultsApplyService {
               SELECT 1 FROM "AppointmentAnswer" aa
               WHERE aa."bookingQuestionId" = q."id"
             )
-          ) AS "hasHistory"
+          ) AS "hasHistory",
+          (
+            q."questionText" IS DISTINCT FROM ${template.questionText}
+            OR q."type" IS DISTINCT FROM ${template.type}::"BookingQuestionType"
+            OR COALESCE(q."selectOptions", 'null'::jsonb)
+              IS DISTINCT FROM COALESCE(${selectOptions}::jsonb, 'null'::jsonb)
+          ) AS "meaningChanged"
         FROM "BookingQuestion" q
-        WHERE q."practiceLocationId" = ${practiceLocationId}
-          AND q."sourceDoctorBookingQuestionTemplateId" = ${template.id}
-        ORDER BY q."isActive" DESC, q."createdAt" DESC, q."id" DESC
-        LIMIT 1
-        FOR UPDATE
-      `,
-    );
-    const current = existing[0];
-    const selectOptions = JSON.stringify(template.selectOptions);
-
-    if (current) {
-      const protectedMeaningChanged =
-        current.questionText !== template.questionText ||
-        current.type !== template.type ||
-        JSON.stringify(current.selectOptions ?? null) !==
-          JSON.stringify(template.selectOptions ?? null);
-
-      if (current.hasHistory && protectedMeaningChanged) {
-        const nextOrderRows = await transaction.$queryRaw<
-          Array<{ nextOrder: number }>
-        >(Prisma.sql`
-          SELECT COALESCE(MAX("displayOrder"), -1) + 1 AS "nextOrder"
-          FROM "BookingQuestion"
-          WHERE "practiceLocationId" = ${practiceLocationId}
-        `);
-        const historicalDisplayOrder = nextOrderRows[0]?.nextOrder ?? 0;
-        await transaction.$executeRaw(Prisma.sql`
-          UPDATE "BookingQuestion"
-          SET
-            "isActive" = FALSE,
-            "displayOrder" = ${historicalDisplayOrder},
-            "updatedAt" = CURRENT_TIMESTAMP
-          WHERE "id" = ${current.id}
-        `);
-
-        const replacementId = randomUUID();
-        await this.insertBookingQuestion(
+        WHERE q."id" = ${currentId}
+      `);
+      if (history[0]?.hasHistory && history[0]?.meaningChanged) {
+        await transaction.bookingQuestion.update({
+          where: { id: currentId },
+          data: {
+            isActive: false,
+            sourceDoctorBookingQuestionTemplateId: null,
+          },
+        });
+        return this.insertBookingQuestion(
           transaction,
-          replacementId,
           practiceLocationId,
           template,
           selectOptions,
         );
-        return replacementId;
       }
 
       await transaction.$executeRaw(Prisma.sql`
@@ -383,25 +362,21 @@ export class DoctorDefaultsApplyService {
           "numberMaximum" = ${template.numberMaximum},
           "selectOptions" = ${selectOptions}::jsonb,
           "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "id" = ${current.id}
+        WHERE "id" = ${currentId}
       `);
-      return current.id;
+      return currentId;
     }
 
-    const id = randomUUID();
-    await this.insertBookingQuestion(
+    return this.insertBookingQuestion(
       transaction,
-      id,
       practiceLocationId,
       template,
       selectOptions,
     );
-    return id;
   }
 
   private async insertBookingQuestion(
     transaction: TransactionClient,
-    id: string,
     practiceLocationId: string,
     template: {
       id: string;
@@ -417,7 +392,8 @@ export class DoctorDefaultsApplyService {
       numberMaximum: Prisma.Decimal | null;
     },
     selectOptions: string,
-  ): Promise<void> {
+  ): Promise<string> {
+    const id = randomUUID();
     await transaction.$executeRaw(Prisma.sql`
       INSERT INTO "BookingQuestion" (
         "id",
@@ -455,6 +431,7 @@ export class DoctorDefaultsApplyService {
         CURRENT_TIMESTAMP
       )
     `);
+    return id;
   }
 
   private async insertAuditItem(
@@ -489,7 +466,7 @@ export class DoctorDefaultsApplyService {
     transaction: TransactionClient,
     commandIdentityKey: string,
   ) {
-    await transaction.$queryRaw(
+    await transaction.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${commandIdentityKey}))`,
     );
   }
