@@ -332,9 +332,18 @@ export class DoctorDefaultsApplyService {
         WHERE q."id" = ${currentId}
       `);
       if (history[0]?.hasHistory && history[0]?.meaningChanged) {
+        const temporaryOrderRows = await transaction.$queryRaw<
+          Array<{ displayOrder: number }>
+        >(Prisma.sql`
+          SELECT COALESCE(MAX("displayOrder"), 0) + 1000 AS "displayOrder"
+          FROM "BookingQuestion"
+          WHERE "practiceLocationId" = ${practiceLocationId}
+        `);
+        const historicalDisplayOrder = temporaryOrderRows[0]?.displayOrder ?? 1000;
         await transaction.$executeRaw(Prisma.sql`
           UPDATE "BookingQuestion"
           SET
+            "displayOrder" = ${historicalDisplayOrder},
             "isActive" = false,
             "sourceDoctorBookingQuestionTemplateId" = NULL,
             "updatedAt" = CURRENT_TIMESTAMP
