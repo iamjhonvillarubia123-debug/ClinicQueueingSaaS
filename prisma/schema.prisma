@@ -1949,7 +1949,7 @@ model CommandIdempotency {
 
 model BookingDraft {
   id               String             @id @default(uuid())
-  bookingReference String             @unique @db.VarChar(20)
+  bookingReference String? @unique @db.VarChar(20)
   mode             BookingDraftMode   @default(INDIVIDUAL)
   status           BookingDraftStatus @default(PENDING_OTP)
 
@@ -1972,9 +1972,11 @@ model BookingDraft {
 
   estimatedServiceMinutes Int?
 
-  expiresAt   DateTime  @db.Timestamptz(3)
-  consumedAt  DateTime? @db.Timestamptz(3)
-  cancelledAt DateTime? @db.Timestamptz(3)
+  expiresAt              DateTime  @db.Timestamptz(3)
+  consumedAt             DateTime? @db.Timestamptz(3)
+  cancelledAt            DateTime? @db.Timestamptz(3)
+  expiredAt              DateTime? @db.Timestamptz(3)
+  protectedDataClearedAt DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -1990,6 +1992,7 @@ model BookingDraft {
   @@index([mobileNumberHash, practiceLocationId, serviceDate, status])
   @@index([mode, status, expiresAt])
   @@index([status, expiresAt])
+  @@index([status, protectedDataClearedAt, consumedAt, expiredAt, cancelledAt], map: "BookingDraft_terminal_cleanup_idx")
 }
 
 model BookingDraftMember {
