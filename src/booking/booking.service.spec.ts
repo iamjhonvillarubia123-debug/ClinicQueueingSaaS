@@ -289,7 +289,9 @@ describe('BookingService', () => {
 
     expect(prismaServiceMock.bookingDraft.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ estimatedServiceMinutes: 60 }) as unknown,
+        data: expect.objectContaining({
+          estimatedServiceMinutes: 60,
+        }) as unknown,
       }),
     );
   });
