@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingController } from './booking.controller';
+import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
 
 describe('BookingController', () => {
@@ -10,6 +11,10 @@ describe('BookingController', () => {
   const bookingServiceMock = {
     createDraft: jest.fn(),
     verifyBookingOtp: jest.fn(),
+  };
+  const bookingDraftEditServiceMock = {
+    replaceDraft: jest.fn(),
+    requestBookingOtp: jest.fn(),
   };
   const bookingConfigurationServiceMock = {
     getEffectiveConfiguration: jest.fn(),
@@ -25,6 +30,10 @@ describe('BookingController', () => {
         {
           provide: BookingService,
           useValue: bookingServiceMock,
+        },
+        {
+          provide: BookingDraftEditService,
+          useValue: bookingDraftEditServiceMock,
         },
         {
           provide: BookingConfigurationService,
@@ -85,6 +94,48 @@ describe('BookingController', () => {
     );
   });
 
+  it('should delegate controlled draft replacement', async () => {
+    const dto = {
+      practiceLocationId: 'location-1',
+      mode: 'INDIVIDUAL' as const,
+      firstName: 'Maria',
+      lastName: 'Reyes',
+      existingPatientResponse: 'NO' as const,
+      mobileNumber: '+639171234567',
+      serviceDate: '2026-08-17',
+      selectedServiceIds: ['service-1'],
+      draftControlToken: 'browser-secret',
+    };
+    bookingDraftEditServiceMock.replaceDraft.mockResolvedValue({
+      bookingDraftId: 'draft-1',
+      materialChanged: true,
+    });
+
+    await expect(controller.replaceDraft('draft-1', dto)).resolves.toMatchObject(
+      { materialChanged: true },
+    );
+    expect(bookingDraftEditServiceMock.replaceDraft).toHaveBeenCalledWith(
+      'draft-1',
+      dto,
+    );
+  });
+
+  it('should delegate controlled booking OTP requests', async () => {
+    const dto = { draftControlToken: 'browser-secret' };
+    bookingDraftEditServiceMock.requestBookingOtp.mockResolvedValue({
+      bookingDraftId: 'draft-1',
+      otpVerification: { id: 'otp-1' },
+    });
+
+    await expect(
+      controller.requestBookingOtp('draft-1', dto),
+    ).resolves.toMatchObject({ bookingDraftId: 'draft-1' });
+    expect(bookingDraftEditServiceMock.requestBookingOtp).toHaveBeenCalledWith(
+      'draft-1',
+      dto,
+    );
+  });
+
   it('should delegate OTP verification to BookingService', async () => {
     const dto = {
       bookingDraftId: 'draft-1',
@@ -104,9 +155,7 @@ describe('BookingController', () => {
     const result = await controller.verifyOtp(dto);
 
     expect(bookingServiceMock.verifyBookingOtp).toHaveBeenCalledTimes(1);
-
     expect(bookingServiceMock.verifyBookingOtp).toHaveBeenCalledWith(dto);
-
     expect(result).toEqual({
       message: 'OTP verified successfully.',
       otpVerification: {
