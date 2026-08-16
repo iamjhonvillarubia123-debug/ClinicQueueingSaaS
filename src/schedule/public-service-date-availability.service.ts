@@ -22,10 +22,7 @@ export type PublicServiceDateAvailabilityReason =
   | 'CLINIC_DAY_NOT_ACCEPTING_PUBLIC_BOOKING'
   | 'PUBLIC_BOOKING_CUTOFF_REACHED';
 
-type PublicServiceDateScheduleSource =
-  | 'SCHEDULE_EXCEPTION'
-  | 'PRACTICE_SCHEDULE'
-  | 'NO_SCHEDULE';
+type PublicServiceDateScheduleSource = 'SCHEDULE_EXCEPTION' | 'PRACTICE_SCHEDULE' | 'NO_SCHEDULE';
 
 export type PublicServiceDateAvailability = {
   practiceLocationId: string;
