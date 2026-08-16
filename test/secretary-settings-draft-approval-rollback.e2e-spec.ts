@@ -25,15 +25,23 @@ describe('SecretarySettingsDraft approval rollback atomicity (e2e)', () => {
     prisma = new PrismaService();
     await prisma.$connect();
     const scheduleTime = new ScheduleTimeService();
-    const scheduleResolution = new ScheduleResolutionService(prisma, scheduleTime);
-    const doctorCalendar = new DoctorCalendarAvailabilityService(prisma, scheduleTime);
+    const scheduleResolution = new ScheduleResolutionService(
+      prisma,
+      scheduleTime,
+    );
+    const doctorCalendar = new DoctorCalendarAvailabilityService(
+      prisma,
+      scheduleTime,
+    );
     const crossLocation = new CrossLocationScheduleConflictService(
       prisma,
       scheduleResolution,
       doctorCalendar,
+    );
+    const recurring = new RecurringScheduleConflictService(
+      prisma,
       scheduleTime,
     );
-    const recurring = new RecurringScheduleConflictService(prisma, scheduleTime);
     approval = new SecretarySettingsDraftApprovalService(
       prisma,
       scheduleResolution,
@@ -175,10 +183,11 @@ describe('SecretarySettingsDraft approval rollback atomicity (e2e)', () => {
         approval.approve(doctorUser.id, draft.id, idempotencyKey),
       ).rejects.toBeInstanceOf(ConflictException);
 
-      const preservedService = await prisma.practiceLocationService.findUniqueOrThrow({
-        where: { id: service.id },
-        select: { name: true, durationMinutes: true },
-      });
+      const preservedService =
+        await prisma.practiceLocationService.findUniqueOrThrow({
+          where: { id: service.id },
+          select: { name: true, durationMinutes: true },
+        });
       expect(preservedService).toEqual({
         name: 'Original Service',
         durationMinutes: 30,
@@ -194,10 +203,11 @@ describe('SecretarySettingsDraft approval rollback atomicity (e2e)', () => {
       });
       expect(effectiveException).toBeNull();
 
-      const preservedDraft = await prisma.secretarySettingsDraft.findUniqueOrThrow({
-        where: { id: draft.id },
-        select: { status: true, reviewedAt: true, reviewedByUserId: true },
-      });
+      const preservedDraft =
+        await prisma.secretarySettingsDraft.findUniqueOrThrow({
+          where: { id: draft.id },
+          select: { status: true, reviewedAt: true, reviewedByUserId: true },
+        });
       expect(preservedDraft).toEqual({
         status: SecretarySettingsDraftStatus.SUBMITTED,
         reviewedAt: null,
@@ -219,8 +229,12 @@ describe('SecretarySettingsDraft approval rollback atomicity (e2e)', () => {
       await prisma.secretarySettingsDraftService.deleteMany({
         where: { secretarySettingsDraftId: draft.id },
       });
-      await prisma.secretarySettingsDraft.deleteMany({ where: { id: draft.id } });
-      await prisma.practiceLocationService.deleteMany({ where: { id: service.id } });
+      await prisma.secretarySettingsDraft.deleteMany({
+        where: { id: draft.id },
+      });
+      await prisma.practiceLocationService.deleteMany({
+        where: { id: service.id },
+      });
       await prisma.practiceSchedule.deleteMany({
         where: { practiceLocationId: { in: [locationA.id, locationB.id] } },
       });
@@ -228,11 +242,15 @@ describe('SecretarySettingsDraft approval rollback atomicity (e2e)', () => {
         where: { id: locationA.id },
         data: { currentRegularPracticeStaffId: null },
       });
-      await prisma.practiceStaff.deleteMany({ where: { id: practiceStaff.id } });
+      await prisma.practiceStaff.deleteMany({
+        where: { id: practiceStaff.id },
+      });
       await prisma.practiceLocation.deleteMany({
         where: { id: { in: [locationA.id, locationB.id] } },
       });
-      await prisma.doctorProfile.deleteMany({ where: { id: doctorProfile.id } });
+      await prisma.doctorProfile.deleteMany({
+        where: { id: doctorProfile.id },
+      });
       await prisma.user.deleteMany({
         where: { id: { in: [doctorUser.id, secretaryUser.id] } },
       });
