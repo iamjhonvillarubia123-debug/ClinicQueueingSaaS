@@ -297,21 +297,24 @@ export class BookingService {
             });
 
             for (const preparedMember of preparedMembers) {
-              const createdMember = await transaction.bookingDraftMember.create({
-                data: {
-                  bookingDraftId: parent.id,
-                  memberOrder: preparedMember.memberOrder,
-                  firstName: preparedMember.member.firstName.trim(),
-                  middleName: preparedMember.member.middleName?.trim() || null,
-                  lastName: preparedMember.member.lastName.trim(),
-                  suffix: preparedMember.member.suffix?.trim() || null,
-                  existingPatientResponse:
-                    preparedMember.member.existingPatientResponse,
-                  estimatedServiceMinutes:
-                    preparedMember.estimatedServiceMinutes,
+              const createdMember = await transaction.bookingDraftMember.create(
+                {
+                  data: {
+                    bookingDraftId: parent.id,
+                    memberOrder: preparedMember.memberOrder,
+                    firstName: preparedMember.member.firstName.trim(),
+                    middleName:
+                      preparedMember.member.middleName?.trim() || null,
+                    lastName: preparedMember.member.lastName.trim(),
+                    suffix: preparedMember.member.suffix?.trim() || null,
+                    existingPatientResponse:
+                      preparedMember.member.existingPatientResponse,
+                    estimatedServiceMinutes:
+                      preparedMember.estimatedServiceMinutes,
+                  },
+                  select: { id: true },
                 },
-                select: { id: true },
-              });
+              );
 
               await transaction.bookingDraftServiceSelection.createMany({
                 data: preparedMember.selectedServices.map((service) => ({

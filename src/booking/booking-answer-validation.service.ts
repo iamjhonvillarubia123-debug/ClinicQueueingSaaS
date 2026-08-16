@@ -57,10 +57,7 @@ export class BookingAnswerValidationService {
     const questionById = new Map(
       questions.map((question) => [question.id, question]),
     );
-    const preparedByQuestionId = new Map<
-      string,
-      PreparedBookingDraftAnswer
-    >();
+    const preparedByQuestionId = new Map<string, PreparedBookingDraftAnswer>();
 
     for (const answer of answers) {
       if (!answer.bookingQuestionId?.trim()) {
@@ -100,7 +97,8 @@ export class BookingAnswerValidationService {
       preparedAnswers.map((answer) => answer.bookingQuestionId),
     );
     return questions.every(
-      (question) => !question.isRequired || answeredQuestionIds.has(question.id),
+      (question) =>
+        !question.isRequired || answeredQuestionIds.has(question.id),
     );
   }
 
@@ -144,7 +142,9 @@ export class BookingAnswerValidationService {
       answer.answerBoolean !== undefined ||
       answer.selectedOptionValue !== undefined
     ) {
-      throw new BadRequestException('TEXT BookingQuestions require answerText only.');
+      throw new BadRequestException(
+        'TEXT BookingQuestions require answerText only.',
+      );
     }
 
     const value = answer.answerText?.trim() ?? '';

@@ -65,7 +65,9 @@ describe('BookingService', () => {
       (callback: (transaction: typeof transactionMock) => Promise<unknown>) =>
         callback(transactionMock),
     );
-    bookingAnswerValidationServiceMock.loadActiveQuestions.mockResolvedValue([]);
+    bookingAnswerValidationServiceMock.loadActiveQuestions.mockResolvedValue(
+      [],
+    );
     bookingAnswerValidationServiceMock.prepareAnswers.mockReturnValue([]);
     bookingAnswerValidationServiceMock.requiredAnswersComplete.mockReturnValue(
       true,
@@ -191,7 +193,9 @@ describe('BookingService', () => {
     transactionMock.bookingDraftServiceSelection.createMany.mockResolvedValue({
       count: 1,
     });
-    transactionMock.bookingDraftAnswer.createMany.mockResolvedValue({ count: 1 });
+    transactionMock.bookingDraftAnswer.createMany.mockResolvedValue({
+      count: 1,
+    });
     otpServiceMock.createBookingOtp.mockResolvedValue({
       otpVerification: { id: 'otp-group', expiresAt: new Date() },
     });
