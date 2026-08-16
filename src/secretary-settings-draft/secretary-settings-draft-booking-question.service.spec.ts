@@ -36,6 +36,17 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
     textMaximumLength: 200,
   };
 
+  const effectiveTextQuestion = {
+    id: 'question-1',
+    questionText: 'Reason for visit?',
+    type: BookingQuestionType.TEXT,
+    selectOptions: null,
+    _count: {
+      bookingDraftAnswers: 0,
+      appointmentAnswers: 0,
+    },
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     service = new SecretarySettingsDraftBookingQuestionService(
@@ -56,6 +67,9 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
         currentAssignmentActive: true,
       },
     ]);
+    prismaServiceMock.bookingQuestion.findFirst.mockResolvedValue(
+      effectiveTextQuestion,
+    );
     prismaServiceMock.secretarySettingsDraftBookingQuestion.findFirst.mockResolvedValue(
       null,
     );
@@ -85,10 +99,6 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
   });
 
   it('creates an edit proposal only for an effective question owned by the draft location', async () => {
-    prismaServiceMock.bookingQuestion.findFirst.mockResolvedValue({
-      id: 'question-1',
-    });
-
     await expect(
       service.upsertExistingQuestionProposal(
         'secretary-1',
@@ -106,9 +116,6 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
   });
 
   it('reuses the existing draft proposal when proposing deactivation', async () => {
-    prismaServiceMock.bookingQuestion.findFirst.mockResolvedValue({
-      id: 'question-1',
-    });
     prismaServiceMock.secretarySettingsDraftBookingQuestion.findFirst.mockResolvedValue(
       { id: 'proposal-1' },
     );
@@ -131,6 +138,58 @@ describe('SecretarySettingsDraftBookingQuestionService', () => {
     expect(
       prismaServiceMock.secretarySettingsDraftBookingQuestion.update,
     ).toHaveBeenCalled();
+  });
+
+  it('rejects protected meaning changes after answer history exists', async () => {
+    prismaServiceMock.bookingQuestion.findFirst.mockResolvedValue({
+      ...effectiveTextQuestion,
+      _count: {
+        bookingDraftAnswers: 1,
+        appointmentAnswers: 0,
+      },
+    });
+
+    await expect(
+      service.upsertExistingQuestionProposal(
+        'secretary-1',
+        'draft-1',
+        'question-1',
+        { ...textProposal, questionText: 'Different historical meaning?' },
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(
+      prismaServiceMock.secretarySettingsDraftBookingQuestion.create,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('allows deactivation and operational edits after answer history exists when meaning is unchanged', async () => {
+    prismaServiceMock.bookingQuestion.findFirst.mockResolvedValue({
+      ...effectiveTextQuestion,
+      _count: {
+        bookingDraftAnswers: 0,
+        appointmentAnswers: 1,
+      },
+    });
+
+    await expect(
+      service.upsertExistingQuestionProposal(
+        'secretary-1',
+        'draft-1',
+        'question-1',
+        {
+          ...textProposal,
+          helpText: 'Updated guidance.',
+          displayOrder: 4,
+          isActive: false,
+        },
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        saved: true,
+        bookingQuestionId: 'question-1',
+      }),
+    );
   });
 
   it('validates SINGLE_SELECT option shape and unique values', async () => {
