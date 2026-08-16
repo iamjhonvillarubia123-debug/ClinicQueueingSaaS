@@ -1,13 +1,18 @@
 import { Module } from '@nestjs/common';
-import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
-import { BookingController } from './booking.controller';
-import { BookingService } from './booking.service';
-import { BookingReferenceGenerator } from './booking-reference.generator';
 import { OtpModule } from '../otp/otp.module';
+import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
+import { BookingConfigurationService } from './booking-configuration.service';
+import { BookingController } from './booking.controller';
+import { BookingReferenceGenerator } from './booking-reference.generator';
+import { BookingService } from './booking.service';
 
 @Module({
   imports: [MobileNumberModule, OtpModule],
   controllers: [BookingController],
-  providers: [BookingService, BookingReferenceGenerator],
+  providers: [
+    BookingService,
+    BookingConfigurationService,
+    BookingReferenceGenerator,
+  ],
 })
 export class BookingModule {}
