@@ -94,7 +94,6 @@ export class SecretarySettingsDraftBookingQuestionService {
           'Booking question was not found for this draft location.',
         );
       }
-
       this.assertHistoricalMeaningUnchanged(effectiveQuestion, proposed);
 
       const existingProposal =
@@ -203,7 +202,7 @@ export class SecretarySettingsDraftBookingQuestionService {
     proposed: {
       proposedQuestionText: string;
       proposedType: BookingQuestionType;
-      proposedSelectOptions: Prisma.JsonValue | Prisma.NullTypes.JsonNull;
+      proposedSelectOptions: Prisma.JsonValue;
     },
   ): void {
     const hasHistory =
