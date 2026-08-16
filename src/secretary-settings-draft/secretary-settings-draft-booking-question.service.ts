@@ -76,13 +76,26 @@ export class SecretarySettingsDraftBookingQuestionService {
           id: bookingQuestionId,
           practiceLocationId: draft.practiceLocationId,
         },
-        select: { id: true },
+        select: {
+          id: true,
+          questionText: true,
+          type: true,
+          selectOptions: true,
+          _count: {
+            select: {
+              bookingDraftAnswers: true,
+              appointmentAnswers: true,
+            },
+          },
+        },
       });
       if (!effectiveQuestion) {
         throw new NotFoundException(
           'Booking question was not found for this draft location.',
         );
       }
+
+      this.assertHistoricalMeaningUnchanged(effectiveQuestion, proposed);
 
       const existingProposal =
         await transaction.secretarySettingsDraftBookingQuestion.findFirst({
@@ -137,6 +150,33 @@ export class SecretarySettingsDraftBookingQuestionService {
         throw new NotFoundException('Booking question proposal was not found.');
       }
 
+      if (proposal.bookingQuestionId) {
+        const effectiveQuestion = await transaction.bookingQuestion.findFirst({
+          where: {
+            id: proposal.bookingQuestionId,
+            practiceLocationId: draft.practiceLocationId,
+          },
+          select: {
+            id: true,
+            questionText: true,
+            type: true,
+            selectOptions: true,
+            _count: {
+              select: {
+                bookingDraftAnswers: true,
+                appointmentAnswers: true,
+              },
+            },
+          },
+        });
+        if (!effectiveQuestion) {
+          throw new NotFoundException(
+            'Booking question was not found for this draft location.',
+          );
+        }
+        this.assertHistoricalMeaningUnchanged(effectiveQuestion, proposed);
+      }
+
       const saved =
         await transaction.secretarySettingsDraftBookingQuestion.update({
           where: { id: proposal.id },
@@ -151,6 +191,43 @@ export class SecretarySettingsDraftBookingQuestionService {
         proposedIsActive: saved.proposedIsActive,
       };
     });
+  }
+
+  private assertHistoricalMeaningUnchanged(
+    effectiveQuestion: {
+      questionText: string;
+      type: BookingQuestionType;
+      selectOptions: Prisma.JsonValue | null;
+      _count: { bookingDraftAnswers: number; appointmentAnswers: number };
+    },
+    proposed: {
+      proposedQuestionText: string;
+      proposedType: BookingQuestionType;
+      proposedSelectOptions: Prisma.JsonValue | Prisma.NullTypes.JsonNull;
+    },
+  ): void {
+    const hasHistory =
+      effectiveQuestion._count.bookingDraftAnswers > 0 ||
+      effectiveQuestion._count.appointmentAnswers > 0;
+    if (!hasHistory) {
+      return;
+    }
+
+    const currentOptions = effectiveQuestion.selectOptions ?? null;
+    const proposedOptions =
+      proposed.proposedSelectOptions === Prisma.JsonNull
+        ? null
+        : proposed.proposedSelectOptions;
+    const protectedMeaningChanged =
+      effectiveQuestion.questionText !== proposed.proposedQuestionText ||
+      effectiveQuestion.type !== proposed.proposedType ||
+      JSON.stringify(currentOptions) !== JSON.stringify(proposedOptions);
+
+    if (protectedMeaningChanged) {
+      throw new ConflictException(
+        'Answered BookingQuestion meaning cannot be changed. Deactivate the existing question and create a replacement instead.',
+      );
+    }
   }
 
   private normalizeProposal(dto: SaveSecretarySettingsDraftBookingQuestionDto) {
