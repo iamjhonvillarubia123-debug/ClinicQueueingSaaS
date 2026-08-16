@@ -185,9 +185,7 @@ describe('DoctorService', () => {
 
   it('sets or clears the Doctor-wide per-patient duration cap', async () => {
     prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([
-        { maximumEstimatedServiceMinutesPerPatient: 45 },
-      ])
+      .mockResolvedValueOnce([{ maximumEstimatedServiceMinutesPerPatient: 45 }])
       .mockResolvedValueOnce([
         { maximumEstimatedServiceMinutesPerPatient: null },
       ]);
