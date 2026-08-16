@@ -112,17 +112,30 @@ describe('SecretarySettingsDraftExceptionService', () => {
 
     expect(
       prismaServiceMock.secretarySettingsDraftScheduleException.upsert,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          proposedIsOpen: false,
-          proposedOpensAtLocal: null,
-          proposedClosesAtLocal: null,
-          proposedMaximumOnlineBookingUntilLocal: null,
-          proposedMaximumOperatingUntilLocal: null,
-        }),
-      }),
-    );
+    ).toHaveBeenCalledWith({
+      where: {
+        secretarySettingsDraftId_serviceDate: {
+          secretarySettingsDraftId: 'draft-1',
+          serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+        },
+      },
+      create: {
+        secretarySettingsDraftId: 'draft-1',
+        serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+        proposedIsOpen: false,
+        proposedOpensAtLocal: null,
+        proposedClosesAtLocal: null,
+        proposedMaximumOnlineBookingUntilLocal: null,
+        proposedMaximumOperatingUntilLocal: null,
+      },
+      update: {
+        proposedIsOpen: false,
+        proposedOpensAtLocal: null,
+        proposedClosesAtLocal: null,
+        proposedMaximumOnlineBookingUntilLocal: null,
+        proposedMaximumOperatingUntilLocal: null,
+      },
+    });
   });
 
   it('rejects an invalid Service Date', async () => {
