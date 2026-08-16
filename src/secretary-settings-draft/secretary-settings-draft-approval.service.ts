@@ -111,25 +111,29 @@ export class SecretarySettingsDraftApprovalService {
         );
       }
 
-      const [serviceProposals, scheduleProposals, exceptionProposals, questionProposals] =
-        await Promise.all([
-          transaction.secretarySettingsDraftService.findMany({
-            where: { secretarySettingsDraftId: draft.id },
-            orderBy: { id: 'asc' },
-          }),
-          transaction.secretarySettingsDraftPracticeSchedule.findMany({
-            where: { secretarySettingsDraftId: draft.id },
-            orderBy: { weekday: 'asc' },
-          }),
-          transaction.secretarySettingsDraftScheduleException.findMany({
-            where: { secretarySettingsDraftId: draft.id },
-            orderBy: { serviceDate: 'asc' },
-          }),
-          transaction.secretarySettingsDraftBookingQuestion.findMany({
-            where: { secretarySettingsDraftId: draft.id },
-            orderBy: { id: 'asc' },
-          }),
-        ]);
+      const [
+        serviceProposals,
+        scheduleProposals,
+        exceptionProposals,
+        questionProposals,
+      ] = await Promise.all([
+        transaction.secretarySettingsDraftService.findMany({
+          where: { secretarySettingsDraftId: draft.id },
+          orderBy: { id: 'asc' },
+        }),
+        transaction.secretarySettingsDraftPracticeSchedule.findMany({
+          where: { secretarySettingsDraftId: draft.id },
+          orderBy: { weekday: 'asc' },
+        }),
+        transaction.secretarySettingsDraftScheduleException.findMany({
+          where: { secretarySettingsDraftId: draft.id },
+          orderBy: { serviceDate: 'asc' },
+        }),
+        transaction.secretarySettingsDraftBookingQuestion.findMany({
+          where: { secretarySettingsDraftId: draft.id },
+          orderBy: { id: 'asc' },
+        }),
+      ]);
 
       await this.validateServiceTargets(
         transaction,
@@ -405,7 +409,9 @@ export class SecretarySettingsDraftApprovalService {
       bookingQuestionId: string | null;
       proposedQuestionText: string;
       proposedHelpText: string | null;
-      proposedType: Parameters<TransactionClient['bookingQuestion']['create']>[0]['data']['type'];
+      proposedType: Parameters<
+        TransactionClient['bookingQuestion']['create']
+      >[0]['data']['type'];
       proposedIsRequired: boolean;
       proposedDisplayOrder: number;
       proposedIsActive: boolean;
