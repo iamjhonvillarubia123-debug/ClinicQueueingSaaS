@@ -4,13 +4,18 @@ import { ActiveBookingIdentityService } from './active-booking-identity.service'
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
 
 describe('BookingConfirmationAdmissionService', () => {
+  const resolveAvailability = jest.fn();
+  const deriveAppointmentKey = jest.fn(() => 'a'.repeat(64));
+  const acquireAppointmentScopeLock = jest.fn();
+  const assertNoActiveAppointment = jest.fn();
+
   const availability = {
-    resolve: jest.fn(),
+    resolve: resolveAvailability,
   } as unknown as PublicServiceDateAvailabilityService;
   const activeBookingIdentity = {
-    deriveAppointmentKey: jest.fn(() => 'a'.repeat(64)),
-    acquireAppointmentScopeLock: jest.fn(),
-    assertNoActiveAppointment: jest.fn(),
+    deriveAppointmentKey,
+    acquireAppointmentScopeLock,
+    assertNoActiveAppointment,
   } as unknown as ActiveBookingIdentityService;
   const service = new BookingConfirmationAdmissionService(
     availability,
@@ -52,7 +57,7 @@ describe('BookingConfirmationAdmissionService', () => {
         },
       ],
     ]);
-    jest.mocked(availability.resolve).mockResolvedValue({
+    resolveAvailability.mockResolvedValue({
       practiceLocationId: 'practice-1',
       serviceDate: '2026-08-20',
       availableForPublicBooking: true,
@@ -71,10 +76,8 @@ describe('BookingConfirmationAdmissionService', () => {
     );
 
     expect(result.activeAppointmentKey).toBe('a'.repeat(64));
-    expect(
-      activeBookingIdentity.acquireAppointmentScopeLock,
-    ).toHaveBeenCalled();
-    expect(activeBookingIdentity.assertNoActiveAppointment).toHaveBeenCalled();
+    expect(acquireAppointmentScopeLock).toHaveBeenCalled();
+    expect(assertNoActiveAppointment).toHaveBeenCalled();
   });
 
   it('rejects unresolved subscription grace expiry before duplicate and queue work', async () => {
@@ -116,7 +119,7 @@ describe('BookingConfirmationAdmissionService', () => {
         now,
       ),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(availability.resolve).not.toHaveBeenCalled();
+    expect(resolveAvailability).not.toHaveBeenCalled();
   });
 
   it('rejects a stale or unverified booking OTP', async () => {
@@ -155,8 +158,8 @@ describe('BookingConfirmationAdmissionService', () => {
   function transactionWithRows(rowBatches: unknown[][]) {
     const batches = [...rowBatches];
     return {
-      $queryRaw: jest.fn(async () => batches.shift() ?? []),
-      $executeRaw: jest.fn(async () => 1),
+      $queryRaw: jest.fn(() => Promise.resolve(batches.shift() ?? [])),
+      $executeRaw: jest.fn(() => Promise.resolve(1)),
     };
   }
 });
