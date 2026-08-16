@@ -248,9 +248,7 @@ export class IndividualBookingConfirmationService {
           providerIdempotencyKey: `booking-confirmation:${commandIdentityKey}`,
           attemptCount: 0,
           nextAttemptAt: now,
-          expiresAt: new Date(
-            now.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS,
-          ),
+          expiresAt: new Date(now.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS),
           createdAt: now,
         },
       });
@@ -351,21 +349,20 @@ export class IndividualBookingConfirmationService {
     practiceLocationId: string,
     bookingDraftId: string,
   ): Promise<ServiceSnapshot[]> {
-    const selections =
-      await transaction.bookingDraftServiceSelection.findMany({
-        where: { bookingDraftId, bookingDraftMemberId: null },
-        select: {
-          practiceLocationServiceId: true,
-          practiceLocationService: {
-            select: {
-              practiceLocationId: true,
-              name: true,
-              durationMinutes: true,
-              status: true,
-            },
+    const selections = await transaction.bookingDraftServiceSelection.findMany({
+      where: { bookingDraftId, bookingDraftMemberId: null },
+      select: {
+        practiceLocationServiceId: true,
+        practiceLocationService: {
+          select: {
+            practiceLocationId: true,
+            name: true,
+            durationMinutes: true,
+            status: true,
           },
         },
-      });
+      },
+    });
     if (selections.length < 1 || selections.length > 3) {
       throw new ConflictException(
         'Selected Services are no longer valid for confirmation.',
