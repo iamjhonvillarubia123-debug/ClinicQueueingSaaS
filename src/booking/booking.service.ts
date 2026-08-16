@@ -259,14 +259,12 @@ export class BookingService {
                 bookingDraftId: parent.id,
                 memberOrder: preparedMember.memberOrder,
                 firstName: preparedMember.member.firstName.trim(),
-                middleName:
-                  preparedMember.member.middleName?.trim() || null,
+                middleName: preparedMember.member.middleName?.trim() || null,
                 lastName: preparedMember.member.lastName.trim(),
                 suffix: preparedMember.member.suffix?.trim() || null,
                 existingPatientResponse:
                   preparedMember.member.existingPatientResponse,
-                estimatedServiceMinutes:
-                  preparedMember.estimatedServiceMinutes,
+                estimatedServiceMinutes: preparedMember.estimatedServiceMinutes,
               },
               select: { id: true },
             });
