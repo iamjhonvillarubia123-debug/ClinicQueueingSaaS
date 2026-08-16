@@ -50,9 +50,6 @@ export class SaveSecretarySettingsDraftBookingQuestionDto {
   @IsBoolean()
   isActive!: boolean;
 
-  @IsInt()
-  estimatedMinutesAdjustment!: number;
-
   @IsOptional()
   @IsInt()
   @Min(1)
