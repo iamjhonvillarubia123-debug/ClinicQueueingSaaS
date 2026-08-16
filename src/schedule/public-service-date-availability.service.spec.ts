@@ -75,12 +75,14 @@ describe('PublicServiceDateAvailabilityService', () => {
     prismaMock.practiceLocation.findUnique.mockResolvedValue({
       id: 'location-1',
       doctorProfileId: 'doctor-1',
-      lifecycleStatus: PracticeLocationLifecycleStatus.INACTIVE,
+      lifecycleStatus: PracticeLocationLifecycleStatus.DISABLED,
       isBookingEnabled: true,
       doctorProfile: { accountSettings: { allowOnlineBooking: true } },
     });
 
-    await expect(service.resolve('location-1', '2026-08-17')).resolves.toMatchObject({
+    await expect(
+      service.resolve('location-1', '2026-08-17'),
+    ).resolves.toMatchObject({
       availableForPublicBooking: false,
       reason: 'LOCATION_UNAVAILABLE',
     });
@@ -100,7 +102,9 @@ describe('PublicServiceDateAvailabilityService', () => {
       maximumOperatingUntilAt: null,
     });
 
-    await expect(service.resolve('location-1', '2026-08-17')).resolves.toMatchObject({
+    await expect(
+      service.resolve('location-1', '2026-08-17'),
+    ).resolves.toMatchObject({
       availableForPublicBooking: false,
       reason: 'NO_OPEN_SCHEDULE',
       scheduleSource: 'SCHEDULE_EXCEPTION',
@@ -111,7 +115,9 @@ describe('PublicServiceDateAvailabilityService', () => {
   it('applies Doctor Calendar unavailability before cross-location conflict checks', async () => {
     doctorCalendarMock.isAvailableForInterval.mockResolvedValue(false);
 
-    await expect(service.resolve('location-1', '2026-08-17')).resolves.toMatchObject({
+    await expect(
+      service.resolve('location-1', '2026-08-17'),
+    ).resolves.toMatchObject({
       availableForPublicBooking: false,
       reason: 'DOCTOR_CALENDAR_UNAVAILABLE',
     });
@@ -125,7 +131,9 @@ describe('PublicServiceDateAvailabilityService', () => {
       new ConflictException('conflict'),
     );
 
-    await expect(service.resolve('location-1', '2026-08-17')).resolves.toMatchObject({
+    await expect(
+      service.resolve('location-1', '2026-08-17'),
+    ).resolves.toMatchObject({
       availableForPublicBooking: false,
       reason: 'CROSS_LOCATION_CONFLICT',
     });
@@ -178,7 +186,9 @@ describe('PublicServiceDateAvailabilityService', () => {
       maximumOnlineBookingUntilAt: null,
     });
 
-    await expect(service.resolve('location-1', '2026-08-17')).resolves.toMatchObject({
+    await expect(
+      service.resolve('location-1', '2026-08-17'),
+    ).resolves.toMatchObject({
       availableForPublicBooking: false,
       reason: 'CLINIC_DAY_NOT_ACCEPTING_PUBLIC_BOOKING',
       opensAt: openSchedule.opensAt,
