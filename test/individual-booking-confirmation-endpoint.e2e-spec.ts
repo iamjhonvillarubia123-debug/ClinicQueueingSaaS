@@ -68,119 +68,128 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     }
   });
 
-  it('confirms once, persists the permanent result atomically, and replays without a second token or Queue Number', async () => {
-    const scope = randomUUID().replaceAll('-', '');
-    const patientMobile = `0917${String(randomInt(0, 10_000_000)).padStart(7, '0')}`;
-    const serviceDate = new Date();
-    serviceDate.setUTCDate(serviceDate.getUTCDate() + 3);
-    serviceDate.setUTCHours(0, 0, 0, 0);
-    const serviceDateText = serviceDate.toISOString().slice(0, 10);
-    const localTime = (hour: number, minute = 0) =>
-      new Date(Date.UTC(1970, 0, 1, hour, minute));
+  it(
+    'confirms once, persists the permanent result atomically, and replays without a second token or Queue Number',
+    async () => {
+      const scope = randomUUID().replaceAll('-', '');
+      const patientMobile = `0917${String(randomInt(0, 10_000_000)).padStart(7, '0')}`;
+      const serviceDate = new Date();
+      serviceDate.setUTCDate(serviceDate.getUTCDate() + 3);
+      serviceDate.setUTCHours(0, 0, 0, 0);
+      const serviceDateText = serviceDate.toISOString().slice(0, 10);
+      const localTime = (hour: number, minute = 0) =>
+        new Date(Date.UTC(1970, 0, 1, hour, minute));
 
-    const doctorUser = await prisma.user.create({
-      data: {
-        email: `m6s2-confirm-${scope.slice(0, 12)}@example.test`,
-        firstName: 'Confirm',
-        lastName: 'Doctor',
-        mobileNumber: `0918${String(randomInt(0, 10_000_000)).padStart(7, '0')}`,
-        passwordHash: 'e2e-only-not-a-real-password-hash',
-        role: UserRole.DOCTOR,
-        accountStatus: UserAccountStatus.ACTIVE,
-        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
-      },
-    });
-    const doctorProfile = await prisma.doctorProfile.create({
-      data: {
-        userId: doctorUser.id,
-        professionalTitle: 'Dr.',
-        specialization: 'Confirmation Testing',
-        licenseNumber: `M6C-${scope.slice(0, 12)}`,
-      },
-    });
-    await prisma.doctorAccountSettings.create({
-      data: {
-        doctorProfileId: doctorProfile.id,
-        allowOnlineBooking: true,
-        maximumAdvanceBookingDays: 30,
-        maximumEstimatedServiceMinutesPerPatient: 120,
-      },
-    });
-    const financialAccount = await prisma.doctorFinancialAccount.create({
-      data: { doctorUserId: doctorUser.id },
-    });
-    await prisma.doctorSubscriptionEntitlement.create({
-      data: {
-        doctorFinancialAccountId: financialAccount.id,
-        paidThrough: new Date(serviceDate.getTime() + 20 * 24 * 60 * 60 * 1000),
-        graceEndsAt: new Date(serviceDate.getTime() + 27 * 24 * 60 * 60 * 1000),
-      },
-    });
-    const location = await prisma.practiceLocation.create({
-      data: {
-        doctorProfileId: doctorProfile.id,
-        lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
-        isBookingEnabled: true,
-        name: `M6 Confirmation ${scope.slice(0, 8)}`,
-        countryCode: 'PH',
-        timeZone: 'Asia/Manila',
-      },
-    });
-    const selectedService = await prisma.practiceLocationService.create({
-      data: {
-        practiceLocationId: location.id,
-        name: 'Endpoint Confirmation Service',
-        durationMinutes: 30,
-        status: ServiceAvailabilityStatus.ACTIVE,
-      },
-    });
-    await prisma.scheduleException.create({
-      data: {
-        practiceLocationId: location.id,
-        serviceDate,
-        isOpen: true,
-        opensAtLocal: localTime(8),
-        closesAtLocal: localTime(17),
-        maximumOperatingUntilLocal: localTime(18),
-      },
-    });
-
-    const draftResponse = await request(app.getHttpServer())
-      .post('/booking/draft')
-      .send({
-        practiceLocationId: location.id,
-        mode: 'INDIVIDUAL',
-        firstName: 'Maria',
-        middleName: 'Santos',
-        lastName: 'Reyes',
-        existingPatientResponse: 'NO',
-        mobileNumber: patientMobile,
-        serviceDate: serviceDateText,
-        privacyNoticeVersion: 'm6s2-e2e-v1',
-        privacyNoticeAcknowledged: true,
-        scheduledReminderOptIn: true,
-        selectedServiceIds: [selectedService.id],
-      })
-      .expect(201);
-
-    const draftBody = draftResponse.body as unknown as {
-      bookingDraft: { id: string; bookingReference: string };
-      otpVerification: { id: string } | null;
-    };
-    const bookingDraftId = draftBody.bookingDraft.id;
-    expect(draftBody.otpVerification).not.toBeNull();
-
-    const issuedOtp = await otpService.createBookingOtpInTransaction(
-      prisma,
-      bookingDraftId,
-    ).catch(async () => {
-      const verification = await prisma.otpVerification.findUniqueOrThrow({
-        where: { id: draftBody.otpVerification!.id },
+      const doctorUser = await prisma.user.create({
+        data: {
+          email: `m6s2-confirm-${scope.slice(0, 12)}@example.test`,
+          firstName: 'Confirm',
+          lastName: 'Doctor',
+          mobileNumber: `0918${String(randomInt(0, 10_000_000)).padStart(7, '0')}`,
+          passwordHash: 'e2e-only-not-a-real-password-hash',
+          role: UserRole.DOCTOR,
+          accountStatus: UserAccountStatus.ACTIVE,
+          administrativeRestrictionStatus:
+            AdministrativeRestrictionStatus.NONE,
+        },
       });
+      const doctorProfile = await prisma.doctorProfile.create({
+        data: {
+          userId: doctorUser.id,
+          professionalTitle: 'Dr.',
+          specialization: 'Confirmation Testing',
+          licenseNumber: `M6C-${scope.slice(0, 12)}`,
+        },
+      });
+      await prisma.doctorAccountSettings.create({
+        data: {
+          doctorProfileId: doctorProfile.id,
+          allowOnlineBooking: true,
+          maximumAdvanceBookingDays: 30,
+          maximumEstimatedServiceMinutesPerPatient: 120,
+        },
+      });
+      const financialAccount = await prisma.doctorFinancialAccount.create({
+        data: { doctorUserId: doctorUser.id },
+      });
+      await prisma.doctorSubscriptionEntitlement.create({
+        data: {
+          doctorFinancialAccountId: financialAccount.id,
+          paidThrough: new Date(
+            serviceDate.getTime() + 20 * 24 * 60 * 60 * 1000,
+          ),
+          graceEndsAt: new Date(
+            serviceDate.getTime() + 27 * 24 * 60 * 60 * 1000,
+          ),
+        },
+      });
+      const location = await prisma.practiceLocation.create({
+        data: {
+          doctorProfileId: doctorProfile.id,
+          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+          isBookingEnabled: true,
+          name: `M6 Confirmation ${scope.slice(0, 8)}`,
+          countryCode: 'PH',
+          timeZone: 'Asia/Manila',
+        },
+      });
+      const selectedService = await prisma.practiceLocationService.create({
+        data: {
+          practiceLocationId: location.id,
+          name: 'Endpoint Confirmation Service',
+          durationMinutes: 30,
+          status: ServiceAvailabilityStatus.ACTIVE,
+        },
+      });
+      await prisma.scheduleException.create({
+        data: {
+          practiceLocationId: location.id,
+          serviceDate,
+          isOpen: true,
+          opensAtLocal: localTime(8),
+          closesAtLocal: localTime(17),
+          maximumOperatingUntilLocal: localTime(18),
+        },
+      });
+
+      const draftResponse = await request(app.getHttpServer())
+        .post('/booking/draft')
+        .send({
+          practiceLocationId: location.id,
+          mode: 'INDIVIDUAL',
+          firstName: 'Maria',
+          middleName: 'Santos',
+          lastName: 'Reyes',
+          existingPatientResponse: 'NO',
+          mobileNumber: patientMobile,
+          serviceDate: serviceDateText,
+          privacyNoticeVersion: 'm6s2-e2e-v1',
+          privacyNoticeAcknowledged: true,
+          scheduledReminderOptIn: true,
+          selectedServiceIds: [selectedService.id],
+        })
+        .expect(201);
+
+      const draftBody = draftResponse.body as unknown as {
+        bookingDraft: { id: string; bookingReference: string };
+        otpVerification: { id: string } | null;
+      };
+      const bookingDraftId = draftBody.bookingDraft.id;
+      if (!draftBody.otpVerification) {
+        throw new Error('Booking draft did not issue an OTP challenge.');
+      }
+
+      const verification = await prisma.otpVerification.findUniqueOrThrow({
+        where: { id: draftBody.otpVerification.id },
+      });
+      if (!verification.otpHash) {
+        throw new Error('Booking OTP challenge did not retain a verifiable hash.');
+      }
+
+      let issuedOtp: string | null = null;
       for (let candidate = 0; candidate <= 999999; candidate += 1) {
         const otp = String(candidate).padStart(6, '0');
         if (
-          verification.otpHash &&
           otpService.verifyOtpHash(
             bookingDraftId,
             verification.purpose,
@@ -188,146 +197,150 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
             verification.otpHash,
           )
         ) {
-          return { otp, otpVerification: verification };
+          issuedOtp = otp;
+          break;
         }
       }
-      throw new Error('Unable to recover e2e booking OTP.');
-    });
+      if (!issuedOtp) {
+        throw new Error('Unable to recover e2e booking OTP.');
+      }
 
-    await request(app.getHttpServer())
-      .post('/booking/verify-otp')
-      .send({ bookingDraftId, otp: issuedOtp.otp })
-      .expect(201);
+      await request(app.getHttpServer())
+        .post('/booking/verify-otp')
+        .send({ bookingDraftId, otp: issuedOtp })
+        .expect(201);
 
-    const idempotencyKey = `m6s2-confirm-${scope}`;
-    const firstResponse = await request(app.getHttpServer())
-      .post(`/booking/draft/${bookingDraftId}/confirm`)
-      .set('Idempotency-Key', idempotencyKey)
-      .expect(201);
-    const firstBody = firstResponse.body as unknown as {
-      appointment: {
-        id: string;
-        bookingReference: string;
-        queueNumber: number;
-        status: string;
+      const idempotencyKey = `m6s2-confirm-${scope}`;
+      const firstResponse = await request(app.getHttpServer())
+        .post(`/booking/draft/${bookingDraftId}/confirm`)
+        .set('Idempotency-Key', idempotencyKey)
+        .expect(201);
+      const firstBody = firstResponse.body as unknown as {
+        appointment: {
+          id: string;
+          bookingReference: string;
+          queueNumber: number;
+          status: string;
+        };
+        bookingAccessToken: { token: string; expiresAt: string } | null;
+        replayed: boolean;
       };
-      bookingAccessToken: { token: string; expiresAt: string } | null;
-      replayed: boolean;
-    };
 
-    expect(firstBody.replayed).toBe(false);
-    expect(firstBody.appointment.bookingReference).toBe(
-      draftBody.bookingDraft.bookingReference,
-    );
-    expect(firstBody.appointment.queueNumber).toBe(1);
-    expect(firstBody.appointment.status).toBe('WAITING');
-    expect(firstBody.bookingAccessToken?.token).toEqual(expect.any(String));
+      expect(firstBody.replayed).toBe(false);
+      expect(firstBody.appointment.bookingReference).toBe(
+        draftBody.bookingDraft.bookingReference,
+      );
+      expect(firstBody.appointment.queueNumber).toBe(1);
+      expect(firstBody.appointment.status).toBe('WAITING');
+      expect(firstBody.bookingAccessToken?.token).toEqual(expect.any(String));
 
-    const replayResponse = await request(app.getHttpServer())
-      .post(`/booking/draft/${bookingDraftId}/confirm`)
-      .set('Idempotency-Key', idempotencyKey)
-      .expect(201);
-    const replayBody = replayResponse.body as unknown as {
-      appointment: { id: string; queueNumber: number };
-      bookingAccessToken: null;
-      replayed: boolean;
-    };
+      const replayResponse = await request(app.getHttpServer())
+        .post(`/booking/draft/${bookingDraftId}/confirm`)
+        .set('Idempotency-Key', idempotencyKey)
+        .expect(201);
+      const replayBody = replayResponse.body as unknown as {
+        appointment: { id: string; queueNumber: number };
+        bookingAccessToken: null;
+        replayed: boolean;
+      };
 
-    expect(replayBody).toMatchObject({
-      appointment: {
-        id: firstBody.appointment.id,
-        queueNumber: 1,
-      },
-      bookingAccessToken: null,
-      replayed: true,
-    });
+      expect(replayBody).toMatchObject({
+        appointment: {
+          id: firstBody.appointment.id,
+          queueNumber: 1,
+        },
+        bookingAccessToken: null,
+        replayed: true,
+      });
 
-    const [
-      appointmentCount,
-      counter,
-      draft,
-      verifiedOtp,
-      contactPreference,
-      bookedServices,
-      accessTokens,
-      confirmationOutboxes,
-      commandRows,
-    ] = await Promise.all([
-      prisma.appointment.count({
-        where: { bookingReference: firstBody.appointment.bookingReference },
-      }),
-      prisma.queueCounter.findUnique({
-        where: {
-          practiceLocationId_serviceDate: {
-            practiceLocationId: location.id,
-            serviceDate,
+      const [
+        appointmentCount,
+        counter,
+        draft,
+        verifiedOtp,
+        contactPreference,
+        bookedServices,
+        accessTokens,
+        confirmationOutboxes,
+        commandRows,
+      ] = await Promise.all([
+        prisma.appointment.count({
+          where: { bookingReference: firstBody.appointment.bookingReference },
+        }),
+        prisma.queueCounter.findUnique({
+          where: {
+            practiceLocationId_serviceDate: {
+              practiceLocationId: location.id,
+              serviceDate,
+            },
           },
-        },
-      }),
-      prisma.bookingDraft.findUnique({ where: { id: bookingDraftId } }),
-      prisma.otpVerification.findUnique({
-        where: { id: issuedOtp.otpVerification.id },
-      }),
-      prisma.contactPreference.findUnique({
-        where: { appointmentId: firstBody.appointment.id },
-      }),
-      prisma.appointmentBookedService.findMany({
-        where: { appointmentId: firstBody.appointment.id },
-      }),
-      prisma.bookingAccessToken.findMany({
-        where: { appointmentId: firstBody.appointment.id },
-      }),
-      prisma.notificationOutbox.findMany({
-        where: {
-          appointmentId: firstBody.appointment.id,
-          notificationType: NotificationType.BOOKING_CONFIRMATION,
-        },
-      }),
-      prisma.commandIdempotency.findMany({
-        where: {
-          commandType: CommandType.CONVERT_BOOKING_DRAFT,
-          bookingDraftId,
-        },
-      }),
-    ]);
+        }),
+        prisma.bookingDraft.findUnique({ where: { id: bookingDraftId } }),
+        prisma.otpVerification.findUnique({
+          where: { id: verification.id },
+        }),
+        prisma.contactPreference.findUnique({
+          where: { appointmentId: firstBody.appointment.id },
+        }),
+        prisma.appointmentBookedService.findMany({
+          where: { appointmentId: firstBody.appointment.id },
+        }),
+        prisma.bookingAccessToken.findMany({
+          where: { appointmentId: firstBody.appointment.id },
+        }),
+        prisma.notificationOutbox.findMany({
+          where: {
+            appointmentId: firstBody.appointment.id,
+            notificationType: NotificationType.BOOKING_CONFIRMATION,
+          },
+        }),
+        prisma.commandIdempotency.findMany({
+          where: {
+            commandType: CommandType.CONVERT_BOOKING_DRAFT,
+            bookingDraftId,
+          },
+        }),
+      ]);
 
-    expect(appointmentCount).toBe(1);
-    expect(counter?.lastAllocatedNumber).toBe(1);
-    expect(draft).toMatchObject({
-      status: 'CONSUMED',
-      activeDraftKey: null,
-      draftControlTokenHash: null,
-    });
-    expect(draft?.consumedAt).not.toBeNull();
-    expect(verifiedOtp).toMatchObject({
-      activeContextKey: null,
-      otpHash: null,
-      otpHashKeyVersion: null,
-    });
-    expect(verifiedOtp?.consumedAt).not.toBeNull();
-    expect(contactPreference).toMatchObject({
-      allowOperationalMessages: true,
-      allowFollowUpReminder: true,
-      allowMarketingMessages: false,
-      privacyNoticeVersion: 'm6s2-e2e-v1',
-    });
-    expect(bookedServices).toHaveLength(1);
-    expect(bookedServices[0]).toMatchObject({
-      practiceLocationServiceId: selectedService.id,
-      serviceNameSnapshot: 'Endpoint Confirmation Service',
-      durationMinutesSnapshot: 30,
-    });
-    expect(accessTokens).toHaveLength(1);
-    expect(accessTokens[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(confirmationOutboxes).toHaveLength(1);
-    expect(confirmationOutboxes[0].deliveryIdentityKey).toMatch(
-      /^[0-9a-f]{64}$/,
-    );
-    expect(commandRows).toHaveLength(1);
-    expect(commandRows[0]).toMatchObject({
-      idempotencyKey,
-      resultAppointmentId: firstBody.appointment.id,
-      practiceLocationId: location.id,
-    });
-  });
+      expect(appointmentCount).toBe(1);
+      expect(counter?.lastAllocatedNumber).toBe(1);
+      expect(draft).toMatchObject({
+        status: 'CONSUMED',
+        activeDraftKey: null,
+        draftControlTokenHash: null,
+      });
+      expect(draft?.consumedAt).not.toBeNull();
+      expect(verifiedOtp).toMatchObject({
+        activeContextKey: null,
+        otpHash: null,
+        otpHashKeyVersion: null,
+      });
+      expect(verifiedOtp?.consumedAt).not.toBeNull();
+      expect(contactPreference).toMatchObject({
+        allowOperationalMessages: true,
+        allowFollowUpReminder: true,
+        allowMarketingMessages: false,
+        privacyNoticeVersion: 'm6s2-e2e-v1',
+      });
+      expect(bookedServices).toHaveLength(1);
+      expect(bookedServices[0]).toMatchObject({
+        practiceLocationServiceId: selectedService.id,
+        serviceNameSnapshot: 'Endpoint Confirmation Service',
+        durationMinutesSnapshot: 30,
+      });
+      expect(accessTokens).toHaveLength(1);
+      expect(accessTokens[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(confirmationOutboxes).toHaveLength(1);
+      expect(confirmationOutboxes[0].deliveryIdentityKey).toMatch(
+        /^[0-9a-f]{64}$/,
+      );
+      expect(commandRows).toHaveLength(1);
+      expect(commandRows[0]).toMatchObject({
+        idempotencyKey,
+        resultAppointmentId: firstBody.appointment.id,
+        practiceLocationId: location.id,
+      });
+    },
+    30_000,
+  );
 });
