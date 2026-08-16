@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsDateString,
   IsIn,
   IsNotEmpty,
@@ -47,4 +50,10 @@ export class CreateBookingDraftDto {
 
   @IsDateString()
   serviceDate!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(3)
+  @IsString({ each: true })
+  selectedServiceIds!: string[];
 }
