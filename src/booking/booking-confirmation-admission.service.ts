@@ -3,15 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client';
+import {
+  AdministrativeRestrictionStatus,
+  Prisma,
+} from '../../generated/prisma/client';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
 
 type TransactionClient = Prisma.TransactionClient;
-type DoctorAdministrativeRestrictionStatus =
-  | 'NONE'
-  | 'SUSPENDED'
-  | 'EMERGENCY_SUSPENDED';
 
 export type LockedConfirmationDraft = {
   id: string;
@@ -26,7 +25,7 @@ export type LockedConfirmationDraft = {
   cancelledAt: Date | null;
   doctorUserId: string;
   doctorAccountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED';
-  doctorAdministrativeRestrictionStatus: DoctorAdministrativeRestrictionStatus;
+  doctorAdministrativeRestrictionStatus: AdministrativeRestrictionStatus;
   entitlementGraceEndsAt: Date | null;
 };
 
@@ -267,7 +266,8 @@ export class BookingConfirmationAdmissionService {
   ): void {
     if (
       draft.doctorAccountStatus !== 'ACTIVE' ||
-      draft.doctorAdministrativeRestrictionStatus !== 'NONE'
+      draft.doctorAdministrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ConflictException(
         'Booking confirmation is currently unavailable.',
