@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
@@ -9,6 +17,7 @@ import {
   ReplaceBookingDraftDto,
 } from './dto/replace-booking-draft.dto';
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
+import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 
 @Controller('booking')
 export class BookingController {
@@ -17,6 +26,7 @@ export class BookingController {
     private readonly bookingConfigurationService: BookingConfigurationService,
     private readonly publicServiceDateAvailability: PublicServiceDateAvailabilityService,
     private readonly bookingDraftEditService: BookingDraftEditService,
+    private readonly individualBookingConfirmationService: IndividualBookingConfirmationService,
   ) {}
 
   @Get('configuration/:practiceLocationId')
@@ -67,5 +77,16 @@ export class BookingController {
   @Post('verify-otp')
   verifyOtp(@Body() verifyBookingOtpDto: VerifyBookingOtpDto) {
     return this.bookingService.verifyBookingOtp(verifyBookingOtpDto);
+  }
+
+  @Post('draft/:bookingDraftId/confirm')
+  confirmIndividualBooking(
+    @Param('bookingDraftId') bookingDraftId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ) {
+    return this.individualBookingConfirmationService.confirm({
+      bookingDraftId,
+      idempotencyKey,
+    });
   }
 }
