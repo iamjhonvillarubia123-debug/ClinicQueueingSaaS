@@ -198,14 +198,16 @@ export class IndividualBookingConfirmationService {
         },
       });
 
-      await transaction.appointmentBookedService.createMany({
-        data: currentServices.services.map((service) => ({
-          appointmentId: appointment.id,
-          practiceLocationServiceId: service.practiceLocationServiceId,
-          serviceNameSnapshot: service.name,
-          durationMinutesSnapshot: service.durationMinutes,
-        })),
-      });
+      if (currentServices.services.length > 0) {
+        await transaction.appointmentBookedService.createMany({
+          data: currentServices.services.map((service) => ({
+            appointmentId: appointment.id,
+            practiceLocationServiceId: service.practiceLocationServiceId,
+            serviceNameSnapshot: service.name,
+            durationMinutesSnapshot: service.durationMinutes,
+          })),
+        });
+      }
 
       if (answers.length > 0) {
         await transaction.appointmentAnswer.createMany({
@@ -422,7 +424,11 @@ export class IndividualBookingConfirmationService {
     const maximumEstimatedServiceMinutesPerPatient =
       location?.doctorProfile.accountSettings
         ?.maximumEstimatedServiceMinutesPerPatient;
-    if (!location || maximumEstimatedServiceMinutesPerPatient === undefined) {
+    if (
+      !location ||
+      !location.name?.trim() ||
+      maximumEstimatedServiceMinutesPerPatient === undefined
+    ) {
       throw new ConflictException(
         'Practice location configuration is incomplete for confirmation.',
       );
@@ -487,7 +493,12 @@ export class IndividualBookingConfirmationService {
     );
 
     for (const answer of currentAnswers) {
-      const question = currentQuestionById.get(answer.bookingQuestionId)!;
+      const question = currentQuestionById.get(answer.bookingQuestionId);
+      if (!question) {
+        throw new ConflictException(
+          'BookingQuestion answers are no longer valid for confirmation.',
+        );
+      }
       this.assertCurrentAnswerValid(question, answer);
     }
 
@@ -565,7 +576,10 @@ export class IndividualBookingConfirmationService {
         return;
       case BookingQuestionType.SINGLE_SELECT: {
         const value = answer.selectedOptionValue?.trim() ?? '';
-        if (!value || !this.readSelectOptionValues(question.selectOptions).has(value)) {
+        if (
+          !value ||
+          !this.readSelectOptionValues(question.selectOptions).has(value)
+        ) {
           throw new ConflictException(
             'BookingQuestion answers are no longer valid for confirmation.',
           );
