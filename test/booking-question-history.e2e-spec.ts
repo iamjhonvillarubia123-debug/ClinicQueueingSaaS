@@ -1,8 +1,5 @@
 import { randomUUID } from 'crypto';
-import {
-  BookingQuestionType,
-  UserRole,
-} from './../generated/prisma/client';
+import { BookingQuestionType, UserRole } from './../generated/prisma/client';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('BookingQuestion historical type protection (e2e)', () => {
@@ -19,12 +16,13 @@ describe('BookingQuestion historical type protection (e2e)', () => {
 
   async function createFixture() {
     const scope = randomUUID();
+    const shortScope = scope.slice(0, 12);
     const user = await prisma.user.create({
       data: {
         email: `m3s12-${scope}@example.test`,
         firstName: 'History',
         lastName: 'Guard',
-        mobileNumber: `m3s12-${scope}`,
+        mobileNumber: `0917${scope.replaceAll('-', '').slice(0, 7)}`,
         passwordHash: 'e2e-only-not-a-real-password-hash',
         role: UserRole.DOCTOR,
       },
@@ -34,13 +32,13 @@ describe('BookingQuestion historical type protection (e2e)', () => {
         userId: user.id,
         professionalTitle: 'Dr.',
         specialization: 'Testing',
-        licenseNumber: `M3S12-${scope}`,
+        licenseNumber: `M3S12-${shortScope}`,
       },
     });
     const location = await prisma.practiceLocation.create({
       data: {
         doctorProfileId: doctor.id,
-        name: `M3S12 Clinic ${scope}`,
+        name: `M3S12 Clinic ${shortScope}`,
         countryCode: 'PH',
         timeZone: 'Asia/Manila',
       },
@@ -71,7 +69,9 @@ describe('BookingQuestion historical type protection (e2e)', () => {
       where: { practiceLocationId: fixture.location.id },
     });
     await prisma.bookingQuestion.delete({ where: { id: fixture.question.id } });
-    await prisma.practiceLocation.delete({ where: { id: fixture.location.id } });
+    await prisma.practiceLocation.delete({
+      where: { id: fixture.location.id },
+    });
     await prisma.doctorProfile.delete({ where: { id: fixture.doctor.id } });
     await prisma.user.delete({ where: { id: fixture.user.id } });
   }
