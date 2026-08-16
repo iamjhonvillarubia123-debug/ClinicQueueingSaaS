@@ -300,13 +300,64 @@ export class DoctorDefaultsApplyService {
         FROM "BookingQuestion"
         WHERE "practiceLocationId" = ${practiceLocationId}
           AND "sourceDoctorBookingQuestionTemplateId" = ${template.id}
+        ORDER BY "createdAt" DESC, "id" DESC
         LIMIT 1
         FOR UPDATE
       `,
     );
-    const id = existing[0]?.id ?? randomUUID();
+    const currentId = existing[0]?.id;
     const selectOptions = JSON.stringify(template.selectOptions);
-    if (existing.length > 0) {
+    if (currentId) {
+      const history = await transaction.$queryRaw<
+        Array<{ hasHistory: boolean; meaningChanged: boolean }>
+      >(Prisma.sql`
+        SELECT
+          (
+            EXISTS (
+              SELECT 1 FROM "BookingDraftAnswer" bda
+              WHERE bda."bookingQuestionId" = q."id"
+            )
+            OR EXISTS (
+              SELECT 1 FROM "AppointmentAnswer" aa
+              WHERE aa."bookingQuestionId" = q."id"
+            )
+          ) AS "hasHistory",
+          (
+            q."questionText" IS DISTINCT FROM ${template.questionText}
+            OR q."type" IS DISTINCT FROM ${template.type}::"BookingQuestionType"
+            OR COALESCE(q."selectOptions", 'null'::jsonb)
+              IS DISTINCT FROM COALESCE(${selectOptions}::jsonb, 'null'::jsonb)
+          ) AS "meaningChanged"
+        FROM "BookingQuestion" q
+        WHERE q."id" = ${currentId}
+      `);
+      if (history[0]?.hasHistory && history[0]?.meaningChanged) {
+        const temporaryOrderRows = await transaction.$queryRaw<
+          Array<{ displayOrder: number }>
+        >(Prisma.sql`
+          SELECT COALESCE(MAX("displayOrder"), 0) + 1000 AS "displayOrder"
+          FROM "BookingQuestion"
+          WHERE "practiceLocationId" = ${practiceLocationId}
+        `);
+        const historicalDisplayOrder =
+          temporaryOrderRows[0]?.displayOrder ?? 1000;
+        await transaction.$executeRaw(Prisma.sql`
+          UPDATE "BookingQuestion"
+          SET
+            "displayOrder" = ${historicalDisplayOrder},
+            "isActive" = false,
+            "sourceDoctorBookingQuestionTemplateId" = NULL,
+            "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "id" = ${currentId}
+        `);
+        return this.insertBookingQuestion(
+          transaction,
+          practiceLocationId,
+          template,
+          selectOptions,
+        );
+      }
+
       await transaction.$executeRaw(Prisma.sql`
         UPDATE "BookingQuestion"
         SET
@@ -322,47 +373,75 @@ export class DoctorDefaultsApplyService {
           "numberMaximum" = ${template.numberMaximum},
           "selectOptions" = ${selectOptions}::jsonb,
           "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "id" = ${id}
+        WHERE "id" = ${currentId}
       `);
-    } else {
-      await transaction.$executeRaw(Prisma.sql`
-        INSERT INTO "BookingQuestion" (
-          "id",
-          "practiceLocationId",
-          "sourceDoctorBookingQuestionTemplateId",
-          "questionText",
-          "helpText",
-          "type",
-          "isRequired",
-          "displayOrder",
-          "isActive",
-          "estimatedMinutesAdjustment",
-          "textMaximumLength",
-          "numberMinimum",
-          "numberMaximum",
-          "selectOptions",
-          "createdAt",
-          "updatedAt"
-        ) VALUES (
-          ${id},
-          ${practiceLocationId},
-          ${template.id},
-          ${template.questionText},
-          ${template.helpText},
-          ${template.type}::"BookingQuestionType",
-          ${template.isRequired},
-          ${template.displayOrder},
-          ${template.isActive},
-          ${template.estimatedMinutesAdjustment},
-          ${template.textMaximumLength},
-          ${template.numberMinimum},
-          ${template.numberMaximum},
-          ${selectOptions}::jsonb,
-          CURRENT_TIMESTAMP,
-          CURRENT_TIMESTAMP
-        )
-      `);
+      return currentId;
     }
+
+    return this.insertBookingQuestion(
+      transaction,
+      practiceLocationId,
+      template,
+      selectOptions,
+    );
+  }
+
+  private async insertBookingQuestion(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+    template: {
+      id: string;
+      questionText: string;
+      helpText: string | null;
+      type: string;
+      isRequired: boolean;
+      displayOrder: number;
+      isActive: boolean;
+      estimatedMinutesAdjustment: number;
+      textMaximumLength: number | null;
+      numberMinimum: Prisma.Decimal | null;
+      numberMaximum: Prisma.Decimal | null;
+    },
+    selectOptions: string,
+  ): Promise<string> {
+    const id = randomUUID();
+    await transaction.$executeRaw(Prisma.sql`
+      INSERT INTO "BookingQuestion" (
+        "id",
+        "practiceLocationId",
+        "sourceDoctorBookingQuestionTemplateId",
+        "questionText",
+        "helpText",
+        "type",
+        "isRequired",
+        "displayOrder",
+        "isActive",
+        "estimatedMinutesAdjustment",
+        "textMaximumLength",
+        "numberMinimum",
+        "numberMaximum",
+        "selectOptions",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${id},
+        ${practiceLocationId},
+        ${template.id},
+        ${template.questionText},
+        ${template.helpText},
+        ${template.type}::"BookingQuestionType",
+        ${template.isRequired},
+        ${template.displayOrder},
+        ${template.isActive},
+        ${template.estimatedMinutesAdjustment},
+        ${template.textMaximumLength},
+        ${template.numberMinimum},
+        ${template.numberMaximum},
+        ${selectOptions}::jsonb,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+    `);
     return id;
   }
 
@@ -398,7 +477,7 @@ export class DoctorDefaultsApplyService {
     transaction: TransactionClient,
     commandIdentityKey: string,
   ) {
-    await transaction.$queryRaw(
+    await transaction.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${commandIdentityKey}))`,
     );
   }
