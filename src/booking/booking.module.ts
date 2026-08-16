@@ -6,6 +6,7 @@ import { BookingAnswerValidationService } from './booking-answer-validation.serv
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingController } from './booking.controller';
 import { BookingDraftControlService } from './booking-draft-control.service';
+import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 
@@ -17,6 +18,7 @@ import { BookingService } from './booking.service';
     BookingConfigurationService,
     BookingAnswerValidationService,
     BookingDraftControlService,
+    BookingDraftEditService,
     BookingReferenceGenerator,
   ],
 })
