@@ -1,7 +1,12 @@
 import { createHash } from 'crypto';
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import {
   BookingDraftMode,
+  BookingQuestionType,
   CommandType,
   NotificationChannel,
   NotificationOutboxStatus,
@@ -18,6 +23,7 @@ import { BookingAccessTokenIssuerService } from './booking-access-token-issuer.s
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
 
 const OUTBOX_PROVISIONAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const ABSOLUTE_TEXT_ANSWER_MAX_LENGTH = 10_000;
 
 type ConfirmIndividualBookingInput = {
   bookingDraftId: string;
@@ -47,6 +53,12 @@ type ServiceSnapshot = {
   practiceLocationServiceId: string;
   name: string;
   durationMinutes: number;
+};
+
+type CurrentServiceValidation = {
+  services: ServiceSnapshot[];
+  authoritativeEstimatedServiceMinutes: number;
+  practiceLocationName: string;
 };
 
 type AnswerSnapshot = {
@@ -126,7 +138,7 @@ export class IndividualBookingConfirmationService {
         transaction,
         input.bookingDraftId,
       );
-      const services = await this.loadAndValidateServices(
+      const currentServices = await this.loadAndValidateServices(
         transaction,
         draft.practiceLocationId,
         draft.id,
@@ -147,7 +159,7 @@ export class IndividualBookingConfirmationService {
         draft.practiceLocationId,
         draft.serviceDate,
         admission.maximumOperatingUntilAt,
-        draft.estimatedServiceMinutes,
+        currentServices.authoritativeEstimatedServiceMinutes,
       );
 
       const queueNumber = await this.queueNumbers.allocateNext(
@@ -161,7 +173,8 @@ export class IndividualBookingConfirmationService {
           bookingReference: draft.bookingReference,
           practiceLocationId: draft.practiceLocationId,
           serviceDate: draft.serviceDate,
-          estimatedServiceMinutes: draft.estimatedServiceMinutes,
+          estimatedServiceMinutes:
+            currentServices.authoritativeEstimatedServiceMinutes,
           queueNumber,
           servingOrderKey: new Prisma.Decimal(queueNumber),
           waitingPlacementType: WaitingPlacementType.ORDINARY,
@@ -185,16 +198,14 @@ export class IndividualBookingConfirmationService {
         },
       });
 
-      if (services.length > 0) {
-        await transaction.appointmentBookedService.createMany({
-          data: services.map((service) => ({
-            appointmentId: appointment.id,
-            practiceLocationServiceId: service.practiceLocationServiceId,
-            serviceNameSnapshot: service.name,
-            durationMinutesSnapshot: service.durationMinutes,
-          })),
-        });
-      }
+      await transaction.appointmentBookedService.createMany({
+        data: currentServices.services.map((service) => ({
+          appointmentId: appointment.id,
+          practiceLocationServiceId: service.practiceLocationServiceId,
+          serviceNameSnapshot: service.name,
+          durationMinutesSnapshot: service.durationMinutes,
+        })),
+      });
 
       if (answers.length > 0) {
         await transaction.appointmentAnswer.createMany({
@@ -246,10 +257,12 @@ export class IndividualBookingConfirmationService {
         select: { id: true },
       });
 
-      const confirmationMessage = [
-        `Booking confirmed: ${draft.bookingReference}.`,
-        `Queue number: ${queueNumber}.`,
-      ].join(' ');
+      const confirmationMessage = this.buildConfirmationMessage(
+        draft,
+        currentServices.practiceLocationName,
+        queueNumber,
+        issuedToken.rawToken,
+      );
       await transaction.notificationOutbox.create({
         data: {
           deliveryIdentityKey: this.hash(
@@ -354,21 +367,39 @@ export class IndividualBookingConfirmationService {
     transaction: Prisma.TransactionClient,
     practiceLocationId: string,
     bookingDraftId: string,
-  ): Promise<ServiceSnapshot[]> {
-    const selections = await transaction.bookingDraftServiceSelection.findMany({
-      where: { bookingDraftId, bookingDraftMemberId: null },
-      select: {
-        practiceLocationServiceId: true,
-        practiceLocationService: {
-          select: {
-            practiceLocationId: true,
-            name: true,
-            durationMinutes: true,
-            status: true,
+  ): Promise<CurrentServiceValidation> {
+    const [selections, location] = await Promise.all([
+      transaction.bookingDraftServiceSelection.findMany({
+        where: { bookingDraftId, bookingDraftMemberId: null },
+        select: {
+          practiceLocationServiceId: true,
+          practiceLocationService: {
+            select: {
+              practiceLocationId: true,
+              name: true,
+              durationMinutes: true,
+              status: true,
+            },
           },
         },
-      },
-    });
+      }),
+      transaction.practiceLocation.findUnique({
+        where: { id: practiceLocationId },
+        select: {
+          name: true,
+          doctorProfile: {
+            select: {
+              accountSettings: {
+                select: {
+                  maximumEstimatedServiceMinutesPerPatient: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
     if (selections.length < 1 || selections.length > 3) {
       throw new ConflictException(
         'Selected Services are no longer valid for confirmation.',
@@ -380,18 +411,44 @@ export class IndividualBookingConfirmationService {
           selection.practiceLocationService.practiceLocationId !==
             practiceLocationId ||
           selection.practiceLocationService.status !==
-            ServiceAvailabilityStatus.ACTIVE,
+            ServiceAvailabilityStatus.ACTIVE ||
+          selection.practiceLocationService.durationMinutes < 1,
       )
     ) {
       throw new ConflictException(
         'Selected Services are no longer available for confirmation.',
       );
     }
-    return selections.map((selection) => ({
+    const maximumEstimatedServiceMinutesPerPatient =
+      location?.doctorProfile.accountSettings
+        ?.maximumEstimatedServiceMinutesPerPatient;
+    if (!location || maximumEstimatedServiceMinutesPerPatient === undefined) {
+      throw new ConflictException(
+        'Practice location configuration is incomplete for confirmation.',
+      );
+    }
+
+    const services = selections.map((selection) => ({
       practiceLocationServiceId: selection.practiceLocationServiceId,
       name: selection.practiceLocationService.name,
       durationMinutes: selection.practiceLocationService.durationMinutes,
     }));
+    const selectedServiceMinutes = services.reduce(
+      (total, service) => total + service.durationMinutes,
+      0,
+    );
+
+    return {
+      services,
+      authoritativeEstimatedServiceMinutes:
+        maximumEstimatedServiceMinutesPerPatient === null
+          ? selectedServiceMinutes
+          : Math.min(
+              selectedServiceMinutes,
+              maximumEstimatedServiceMinutesPerPatient,
+            ),
+      practiceLocationName: location.name,
+    };
   }
 
   private async loadAndValidateAnswers(
@@ -401,7 +458,15 @@ export class IndividualBookingConfirmationService {
   ): Promise<AnswerSnapshot[]> {
     const questions = await transaction.bookingQuestion.findMany({
       where: { practiceLocationId, isActive: true },
-      select: { id: true, isRequired: true },
+      select: {
+        id: true,
+        type: true,
+        isRequired: true,
+        textMaximumLength: true,
+        numberMinimum: true,
+        numberMaximum: true,
+        selectOptions: true,
+      },
     });
     const answers = await transaction.bookingDraftAnswer.findMany({
       where: { bookingDraftId, bookingDraftMemberId: null },
@@ -414,8 +479,20 @@ export class IndividualBookingConfirmationService {
         estimatedMinutesAdjustment: true,
       },
     });
+    const currentQuestionById = new Map(
+      questions.map((question) => [question.id, question]),
+    );
+    const currentAnswers = answers.filter((answer) =>
+      currentQuestionById.has(answer.bookingQuestionId),
+    );
+
+    for (const answer of currentAnswers) {
+      const question = currentQuestionById.get(answer.bookingQuestionId)!;
+      this.assertCurrentAnswerValid(question, answer);
+    }
+
     const answeredQuestionIds = new Set(
-      answers.map((answer) => answer.bookingQuestionId),
+      currentAnswers.map((answer) => answer.bookingQuestionId),
     );
     if (
       questions.some(
@@ -427,9 +504,120 @@ export class IndividualBookingConfirmationService {
         'Required booking answers are incomplete for confirmation.',
       );
     }
-    return answers.filter((answer) =>
-      questions.some((question) => question.id === answer.bookingQuestionId),
+    return currentAnswers;
+  }
+
+  private assertCurrentAnswerValid(
+    question: {
+      type: BookingQuestionType;
+      textMaximumLength: number | null;
+      numberMinimum: Prisma.Decimal | null;
+      numberMaximum: Prisma.Decimal | null;
+      selectOptions: Prisma.JsonValue | null;
+    },
+    answer: AnswerSnapshot,
+  ) {
+    const populatedFields = [
+      answer.answerText !== null,
+      answer.answerNumber !== null,
+      answer.answerBoolean !== null,
+      answer.selectedOptionValue !== null,
+    ].filter(Boolean).length;
+    if (populatedFields !== 1) {
+      throw new ConflictException(
+        'BookingQuestion answers are no longer valid for confirmation.',
+      );
+    }
+
+    switch (question.type) {
+      case BookingQuestionType.TEXT: {
+        const value = answer.answerText?.trim() ?? '';
+        const maximumLength = Math.min(
+          question.textMaximumLength ?? ABSOLUTE_TEXT_ANSWER_MAX_LENGTH,
+          ABSOLUTE_TEXT_ANSWER_MAX_LENGTH,
+        );
+        if (!value || value.length > maximumLength) {
+          throw new ConflictException(
+            'BookingQuestion answers are no longer valid for confirmation.',
+          );
+        }
+        return;
+      }
+      case BookingQuestionType.NUMBER:
+        if (
+          answer.answerNumber === null ||
+          (question.numberMinimum !== null &&
+            answer.answerNumber.lessThan(question.numberMinimum)) ||
+          (question.numberMaximum !== null &&
+            answer.answerNumber.greaterThan(question.numberMaximum))
+        ) {
+          throw new ConflictException(
+            'BookingQuestion answers are no longer valid for confirmation.',
+          );
+        }
+        return;
+      case BookingQuestionType.BOOLEAN:
+        if (answer.answerBoolean === null) {
+          throw new ConflictException(
+            'BookingQuestion answers are no longer valid for confirmation.',
+          );
+        }
+        return;
+      case BookingQuestionType.SINGLE_SELECT: {
+        const value = answer.selectedOptionValue?.trim() ?? '';
+        if (!value || !this.readSelectOptionValues(question.selectOptions).has(value)) {
+          throw new ConflictException(
+            'BookingQuestion answers are no longer valid for confirmation.',
+          );
+        }
+        return;
+      }
+      default:
+        throw new ConflictException(
+          'BookingQuestion answers are no longer valid for confirmation.',
+        );
+    }
+  }
+
+  private readSelectOptionValues(selectOptions: Prisma.JsonValue | null) {
+    if (!Array.isArray(selectOptions)) {
+      return new Set<string>();
+    }
+    return new Set(
+      selectOptions.flatMap((option) => {
+        if (
+          option &&
+          typeof option === 'object' &&
+          !Array.isArray(option) &&
+          typeof option.value === 'string'
+        ) {
+          return [option.value];
+        }
+        return [];
+      }),
     );
+  }
+
+  private buildConfirmationMessage(
+    draft: DraftSnapshot,
+    practiceLocationName: string,
+    queueNumber: number,
+    rawToken: string,
+  ): string {
+    const baseUrl = process.env.PUBLIC_APP_BASE_URL?.trim().replace(/\/+$/, '');
+    if (!baseUrl) {
+      throw new InternalServerErrorException(
+        'Public application base URL is not configured.',
+      );
+    }
+    const secureLink = `${baseUrl}/booking/access#token=${encodeURIComponent(rawToken)}`;
+    return [
+      'Booking confirmed.',
+      practiceLocationName,
+      draft.serviceDate.toISOString().slice(0, 10),
+      `Queue number: ${queueNumber}.`,
+      `View your booking: ${secureLink}`,
+    ].join(' ');
   }
 
   private hash(value: string): string {
