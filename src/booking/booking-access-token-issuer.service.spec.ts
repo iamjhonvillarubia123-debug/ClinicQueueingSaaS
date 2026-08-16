@@ -4,24 +4,24 @@ describe('BookingAccessTokenIssuerService', () => {
   const service = new BookingAccessTokenIssuerService();
 
   it('stores only a protected token representation and returns the raw credential once', async () => {
-    const create = jest.fn<
-      Promise<{ id: string; expiresAt: Date }>,
-      [
-        {
-          data: {
-            appointmentId: string;
-            purpose: string;
-            tokenHash: string;
-            expiresAt: Date;
-          };
-          select: { id: boolean; expiresAt: boolean };
-        },
-      ]
-    >();
-    create.mockResolvedValue({
-      id: 'token-record-1',
-      expiresAt: new Date('2026-08-27T00:00:00.000Z'),
-    });
+    let persistedTokenHash: string | undefined;
+    const create = jest.fn(
+      (args: {
+        data: {
+          appointmentId: string;
+          purpose: string;
+          tokenHash: string;
+          expiresAt: Date;
+        };
+        select: { id: boolean; expiresAt: boolean };
+      }) => {
+        persistedTokenHash = args.data.tokenHash;
+        return Promise.resolve({
+          id: 'token-record-1',
+          expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+        });
+      },
+    );
     const transaction = { bookingAccessToken: { create } };
 
     const result = await service.issueInitialToken(
@@ -41,7 +41,6 @@ describe('BookingAccessTokenIssuerService', () => {
         }) as unknown,
       }),
     );
-    const firstCreateCall = create.mock.calls[0]?.[0];
-    expect(firstCreateCall?.data.tokenHash).not.toBe(result.rawToken);
+    expect(persistedTokenHash).not.toBe(result.rawToken);
   });
 });
