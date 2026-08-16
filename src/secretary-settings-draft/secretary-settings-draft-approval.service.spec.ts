@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import {
   AdministrativeRestrictionStatus,
@@ -76,10 +77,18 @@ describe('SecretarySettingsDraftApprovalService', () => {
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     });
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([]);
-    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue([]);
-    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([]);
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([]);
+    prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue(
+      [],
+    );
+    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue(
+      [],
+    );
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue(
+      [],
+    );
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
+      [],
+    );
     prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([]);
     prismaServiceMock.bookingQuestion.findMany.mockResolvedValue([]);
     prismaServiceMock.bookingQuestion.aggregate.mockResolvedValue({
@@ -165,11 +174,18 @@ describe('SecretarySettingsDraftApprovalService', () => {
       status: SecretarySettingsDraftStatus.APPROVED,
     });
 
-    expect(prismaServiceMock.practiceLocationService.update).toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceLocationService.update,
+    ).toHaveBeenCalled();
     expect(prismaServiceMock.practiceSchedule.upsert).toHaveBeenCalled();
     expect(prismaServiceMock.scheduleException.upsert).toHaveBeenCalled();
     expect(prismaServiceMock.bookingQuestion.update).toHaveBeenCalled();
-    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledWith(
+    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledTimes(
+      1,
+    );
+    const approvalUpdate: unknown =
+      prismaServiceMock.secretarySettingsDraft.update.mock.calls[0]?.[0];
+    expect(approvalUpdate).toEqual(
       expect.objectContaining({
         where: { id: 'draft-1' },
         data: expect.objectContaining({
@@ -178,7 +194,9 @@ describe('SecretarySettingsDraftApprovalService', () => {
         }),
       }),
     );
-    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(1);
+    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('rejects approval when the resulting active BookingQuestion count exceeds five', async () => {
@@ -189,21 +207,27 @@ describe('SecretarySettingsDraftApprovalService', () => {
         isActive: true,
       })),
     );
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([
-      {
-        id: 'proposal-new',
-        bookingQuestionId: null,
-        proposedDisplayOrder: 5,
-        proposedIsActive: true,
-      },
-    ]);
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
+      [
+        {
+          id: 'proposal-new',
+          bookingQuestionId: null,
+          proposedDisplayOrder: 5,
+          proposedIsActive: true,
+        },
+      ],
+    );
 
     await expect(
       service.approve('doctor-1', 'draft-1', 'approve-key'),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(prismaServiceMock.practiceLocationService.update).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceLocationService.update,
+    ).not.toHaveBeenCalled();
     expect(prismaServiceMock.bookingQuestion.create).not.toHaveBeenCalled();
-    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects stale Service targets before applying effective settings', async () => {
@@ -221,8 +245,12 @@ describe('SecretarySettingsDraftApprovalService', () => {
     await expect(
       service.approve('doctor-1', 'draft-1', 'approve-key'),
     ).rejects.toBeInstanceOf(ConflictException);
-    expect(prismaServiceMock.practiceLocationService.update).not.toHaveBeenCalled();
-    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.practiceLocationService.update,
+    ).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
   });
 
   it('denies approval to a user who is not the owning Doctor', async () => {
@@ -239,18 +267,13 @@ describe('SecretarySettingsDraftApprovalService', () => {
     await expect(
       service.approve('doctor-other', 'draft-1', 'approve-key'),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
   });
 
   it('replays a committed approval without applying settings twice', async () => {
-    prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
-      requestFingerprint:
-        '5acb42aa2b8879831605fd538cff6dc2f009e3468a825037da0270725f4d6f8a',
-    });
-
-    const hash = await import('crypto');
-    const fingerprint = hash
-      .createHash('sha256')
+    const fingerprint = createHash('sha256')
       .update(
         'PRACTICE_LOCATION_APPROVE_SETTINGS_DRAFT|doctor-1|draft-1',
         'utf8',
@@ -269,8 +292,14 @@ describe('SecretarySettingsDraftApprovalService', () => {
       status: SecretarySettingsDraftStatus.APPROVED,
     });
 
-    expect(prismaServiceMock.secretarySettingsDraftService.findMany).not.toHaveBeenCalled();
-    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
-    expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.secretarySettingsDraftService.findMany,
+    ).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.secretarySettingsDraft.update,
+    ).not.toHaveBeenCalled();
+    expect(
+      prismaServiceMock.commandIdempotency.create,
+    ).not.toHaveBeenCalled();
   });
 });
