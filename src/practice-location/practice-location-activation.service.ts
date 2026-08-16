@@ -18,6 +18,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CrossLocationScheduleConflictService } from '../schedule/cross-location-schedule-conflict.service';
 import { DoctorCalendarAvailabilityService } from '../schedule/doctor-calendar-availability.service';
+import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ScheduleResolutionService } from '../schedule/schedule-resolution.service';
 import { ScheduleTimeService } from '../schedule/schedule-time.service';
 import { ActivatePracticeLocationDto } from './dto/activate-practice-location.dto';
@@ -49,6 +50,7 @@ export class PracticeLocationActivationService {
     private readonly scheduleResolution: ScheduleResolutionService,
     private readonly doctorCalendar: DoctorCalendarAvailabilityService,
     private readonly crossLocationConflict: CrossLocationScheduleConflictService,
+    private readonly recurringScheduleConflict: RecurringScheduleConflictService,
   ) {}
 
   activate(
@@ -154,6 +156,12 @@ export class PracticeLocationActivationService {
       const openSchedules = await this.loadAndValidateOpenSchedules(
         transaction,
         location.id,
+      );
+      await this.recurringScheduleConflict.assertNoConflictForLocation(
+        location.doctorProfileId,
+        location.id,
+        timeZone,
+        transaction,
       );
       await this.revalidateCurrentScheduleConflicts(
         transaction,
