@@ -299,13 +299,17 @@ describe('SecretarySettingsDraftApprovalService', () => {
       service.approve('doctor-1', 'draft-1', 'approve-recurring-conflict-key'),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(recurringScheduleConflictMock.assertNoConflictForLocation).toHaveBeenCalledWith(
+    expect(
+      recurringScheduleConflictMock.assertNoConflictForLocation,
+    ).toHaveBeenCalledWith(
       'doctor-profile-1',
       'location-1',
       'Asia/Manila',
       prismaServiceMock,
     );
-    expect(scheduleResolutionMock.resolveConfiguredSchedule).not.toHaveBeenCalled();
+    expect(
+      scheduleResolutionMock.resolveConfiguredSchedule,
+    ).not.toHaveBeenCalled();
     expect(
       prismaServiceMock.secretarySettingsDraft.update,
     ).not.toHaveBeenCalled();
@@ -350,11 +354,9 @@ describe('SecretarySettingsDraftApprovalService', () => {
       service.approve('doctor-1', 'draft-1', 'approve-exception-conflict-key'),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(scheduleResolutionMock.resolveConfiguredSchedule).toHaveBeenCalledWith(
-      'location-1',
-      '2026-08-20',
-      prismaServiceMock,
-    );
+    expect(
+      scheduleResolutionMock.resolveConfiguredSchedule,
+    ).toHaveBeenCalledWith('location-1', '2026-08-20', prismaServiceMock);
     expect(doctorCalendarMock.isAvailableForInterval).toHaveBeenCalledWith(
       'doctor-profile-1',
       opensAt,
