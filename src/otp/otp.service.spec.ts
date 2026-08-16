@@ -78,12 +78,12 @@ describe('OtpService', () => {
     expect(firstHash).toBe(sameHash);
     expect(firstHash).not.toBe(differentDraft);
     expect(firstHash).toHaveLength(64);
-    expect(service.verifyOtpHash('draft-1', 'BOOKING', '123456', firstHash)).toBe(
-      true,
-    );
-    expect(service.verifyOtpHash('draft-1', 'BOOKING', '654321', firstHash)).toBe(
-      false,
-    );
+    expect(
+      service.verifyOtpHash('draft-1', 'BOOKING', '123456', firstHash),
+    ).toBe(true);
+    expect(
+      service.verifyOtpHash('draft-1', 'BOOKING', '654321', firstHash),
+    ).toBe(false);
   });
 
   it('issues one active booking challenge after locking the BookingDraft', async () => {

@@ -93,12 +93,12 @@ describe('Booking OTP concurrency controls (e2e)', () => {
       otpService.createBookingOtp(draft.id),
     ]);
 
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(
-      1,
-    );
-    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(
-      1,
-    );
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
 
     const challenges = await prisma.otpVerification.findMany({
       where: { bookingDraftId: draft.id, purpose: 'BOOKING' },
