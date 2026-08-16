@@ -22,11 +22,6 @@ type RecurringSchedule = {
   closesAtLocal: Date;
 };
 
-type ActiveLocation = {
-  id: string;
-  timeZone: string | null;
-};
-
 @Injectable()
 export class RecurringScheduleConflictService {
   constructor(
@@ -52,6 +47,8 @@ export class RecurringScheduleConflictService {
       return;
     }
 
+    this.assertRecurringWallTimesResolvable(candidateSchedules, timeZone);
+
     const otherLocations = await db.practiceLocation.findMany({
       where: {
         doctorProfileId,
@@ -62,7 +59,7 @@ export class RecurringScheduleConflictService {
       orderBy: { id: 'asc' },
     });
 
-    for (const location of otherLocations as ActiveLocation[]) {
+    for (const location of otherLocations) {
       const otherTimeZone = location.timeZone?.trim();
       if (!otherTimeZone) {
         throw new ConflictException(
@@ -81,16 +78,6 @@ export class RecurringScheduleConflictService {
           candidateSchedules,
           otherSchedules,
         );
-        await this.assertRecurringWallTimesResolvable(
-          candidateSchedules,
-          timeZone,
-        );
-        if (timeZone !== PH_TIME_ZONE) {
-          await this.assertRecurringWallTimesResolvable(
-            otherSchedules,
-            otherTimeZone,
-          );
-        }
         continue;
       }
 
@@ -165,7 +152,7 @@ export class RecurringScheduleConflictService {
     otherSchedules: RecurringSchedule[],
     otherTimeZone: string,
   ): Promise<void> {
-    const schedulesByWeekday = new Map<Weekday, RecurringSchedule>();
+    const schedulesByWeekday = new Map<string, RecurringSchedule>();
     for (const schedule of otherSchedules) {
       schedulesByWeekday.set(schedule.weekday, schedule);
     }
@@ -189,7 +176,7 @@ export class RecurringScheduleConflictService {
         );
 
         for (const otherDate of otherDates) {
-          const weekday = this.scheduleTime.weekday(otherDate) as Weekday;
+          const weekday = this.scheduleTime.weekday(otherDate);
           const other = schedulesByWeekday.get(weekday);
           if (!other) {
             continue;
@@ -215,10 +202,10 @@ export class RecurringScheduleConflictService {
     }
   }
 
-  private async assertRecurringWallTimesResolvable(
+  private assertRecurringWallTimesResolvable(
     schedules: RecurringSchedule[],
     timeZone: string,
-  ): Promise<void> {
+  ): void {
     if (timeZone === PH_TIME_ZONE) {
       return;
     }
@@ -333,9 +320,7 @@ export class RecurringScheduleConflictService {
     try {
       this.scheduleTime.assertValidTimeZone(timeZone);
     } catch {
-      throw new ConflictException(
-        'Practice location time zone is invalid.',
-      );
+      throw new ConflictException('Practice location time zone is invalid.');
     }
   }
 }
