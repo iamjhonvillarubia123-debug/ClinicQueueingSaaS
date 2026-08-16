@@ -210,9 +210,9 @@ export class BookingService {
     maximumEstimatedServiceMinutesPerPatient: number | null,
   ) {
     const members = dto.members;
-    if (!members || members.length < 2 || members.length > 5) {
+    if (!members || members.length < 1 || members.length > 5) {
       throw new BadRequestException(
-        'Multi-person booking draft requires between two and five members.',
+        'Multi-person booking draft requires between one and five temporary members while being edited.',
       );
     }
 
