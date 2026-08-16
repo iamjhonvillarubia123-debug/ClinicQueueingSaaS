@@ -19,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CrossLocationScheduleConflictService } from '../schedule/cross-location-schedule-conflict.service';
 import { DoctorCalendarAvailabilityService } from '../schedule/doctor-calendar-availability.service';
+import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ScheduleResolutionService } from '../schedule/schedule-resolution.service';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -49,6 +50,7 @@ export class SecretarySettingsDraftApprovalService {
     private readonly scheduleResolution: ScheduleResolutionService,
     private readonly doctorCalendar: DoctorCalendarAvailabilityService,
     private readonly crossLocationConflict: CrossLocationScheduleConflictService,
+    private readonly recurringScheduleConflict: RecurringScheduleConflictService,
   ) {}
 
   async approve(
@@ -480,16 +482,14 @@ export class SecretarySettingsDraftApprovalService {
       );
     }
 
-    const schedules = await transaction.practiceSchedule.findMany({
-      where: { practiceLocationId: draft.practiceLocationId, isOpen: true },
-      select: { weekday: true },
-      orderBy: { weekday: 'asc' },
-    });
-    const today = this.localDateParts(new Date(), timeZone);
+    await this.recurringScheduleConflict.assertNoConflictForLocation(
+      draft.doctorProfileId,
+      draft.practiceLocationId,
+      timeZone,
+      transaction,
+    );
+
     const dates = new Set<string>();
-    for (const schedule of schedules) {
-      dates.add(this.dateKey(this.nextOrSameWeekday(today, schedule.weekday)));
-    }
     for (const serviceDate of proposedExceptionDates) {
       dates.add(this.databaseDateKey(serviceDate));
     }
@@ -503,16 +503,19 @@ export class SecretarySettingsDraftApprovalService {
       if (!resolved.isOpen || !resolved.opensAt || !resolved.closesAt) {
         continue;
       }
-      const calendarAvailable =
-        await this.doctorCalendar.isAvailableForInterval(
-          draft.doctorProfileId,
-          resolved.opensAt,
-          resolved.closesAt,
-          transaction,
+
+      const available = await this.doctorCalendar.isAvailableForInterval(
+        draft.doctorProfileId,
+        resolved.opensAt,
+        resolved.closesAt,
+        transaction,
+      );
+      if (!available) {
+        throw new ConflictException(
+          'Doctor Calendar unavailability overlaps the proposed clinic hours.',
         );
-      if (!calendarAvailable) {
-        continue;
       }
+
       await this.crossLocationConflict.assertNoConflictForInterval(
         draft.doctorProfileId,
         draft.practiceLocationId,
@@ -569,28 +572,6 @@ export class SecretarySettingsDraftApprovalService {
     }
   }
 
-  private normalizeIdempotencyKey(value: string): string {
-    const normalized = value?.trim();
-    if (!normalized) {
-      throw new BadRequestException('Idempotency-Key header is required.');
-    }
-    if (normalized.length > 100) {
-      throw new BadRequestException('Idempotency-Key is too long.');
-    }
-    return normalized;
-  }
-
-  private assertCompatibleReplay(
-    storedFingerprint: string,
-    requestFingerprint: string,
-  ): void {
-    if (storedFingerprint !== requestFingerprint) {
-      throw new ConflictException(
-        'Idempotency-Key was already used for a different request.',
-      );
-    }
-  }
-
   private async acquireCommandLock(
     transaction: TransactionClient,
     commandIdentityKey: string,
@@ -623,52 +604,35 @@ export class SecretarySettingsDraftApprovalService {
     `);
   }
 
-  private hash(value: string): string {
-    return createHash('sha256').update(value, 'utf8').digest('hex');
+  private normalizeIdempotencyKey(value: string): string {
+    const normalized = value?.trim();
+    if (!normalized) {
+      throw new BadRequestException('Idempotency-Key header is required.');
+    }
+    if (normalized.length > 100) {
+      throw new BadRequestException('Idempotency-Key is too long.');
+    }
+    return normalized;
   }
 
-  private localDateParts(instant: Date, timeZone: string) {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const parts = formatter.formatToParts(instant);
-    const get = (type: Intl.DateTimeFormatPartTypes) =>
-      Number(parts.find((part) => part.type === type)?.value);
-    return { year: get('year'), month: get('month'), day: get('day') };
-  }
-
-  private nextOrSameWeekday(
-    date: { year: number; month: number; day: number },
-    targetWeekday: Weekday,
-  ) {
-    const names = [
-      Weekday.SUNDAY,
-      Weekday.MONDAY,
-      Weekday.TUESDAY,
-      Weekday.WEDNESDAY,
-      Weekday.THURSDAY,
-      Weekday.FRIDAY,
-      Weekday.SATURDAY,
-    ];
-    const value = new Date(Date.UTC(date.year, date.month - 1, date.day));
-    const targetIndex = names.indexOf(targetWeekday);
-    const delta = (targetIndex - value.getUTCDay() + 7) % 7;
-    value.setUTCDate(value.getUTCDate() + delta);
-    return {
-      year: value.getUTCFullYear(),
-      month: value.getUTCMonth() + 1,
-      day: value.getUTCDate(),
-    };
-  }
-
-  private dateKey(date: { year: number; month: number; day: number }): string {
-    return `${String(date.year).padStart(4, '0')}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
+  private assertCompatibleReplay(
+    storedFingerprint: string,
+    requestFingerprint: string,
+  ): void {
+    if (storedFingerprint !== requestFingerprint) {
+      throw new ConflictException(
+        'Idempotency-Key was already used for a different request.',
+      );
+    }
   }
 
   private databaseDateKey(value: Date): string {
-    return `${String(value.getUTCFullYear()).padStart(4, '0')}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
+    return `${String(value.getUTCFullYear()).padStart(4, '0')}-${String(
+      value.getUTCMonth() + 1,
+    ).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  private hash(value: string): string {
+    return createHash('sha256').update(value, 'utf8').digest('hex');
   }
 }
