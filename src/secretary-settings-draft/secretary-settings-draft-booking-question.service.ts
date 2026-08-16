@@ -202,7 +202,7 @@ export class SecretarySettingsDraftBookingQuestionService {
     proposed: {
       proposedQuestionText: string;
       proposedType: BookingQuestionType;
-      proposedSelectOptions: Prisma.JsonValue;
+      proposedSelectOptions: Prisma.InputJsonValue | typeof Prisma.JsonNull;
     },
   ): void {
     const hasHistory =
