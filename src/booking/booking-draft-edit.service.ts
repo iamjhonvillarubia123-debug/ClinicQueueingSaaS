@@ -39,6 +39,13 @@ type PreparedMember = {
   requiredAnswersComplete: boolean;
 };
 
+type PreparedAcknowledgement = {
+  isAcknowledged: boolean;
+  privacyNoticeAcknowledgedAt: Date | null;
+  privacyNoticeVersion: string | null;
+  scheduledReminderOptIn: boolean;
+};
+
 @Injectable()
 export class BookingDraftEditService {
   constructor(
@@ -79,6 +86,7 @@ export class BookingDraftEditService {
     const protectedMobile = this.mobileNumberService.protect(dto.mobileNumber);
     const serviceDate = new Date(`${dto.serviceDate}T00:00:00.000Z`);
     const cap = accountSettings.maximumEstimatedServiceMinutesPerPatient;
+    const acknowledgement = this.prepareAcknowledgement(dto);
 
     const prepared =
       dto.mode === 'MULTI_PERSON'
@@ -117,6 +125,9 @@ export class BookingDraftEditService {
           existingPatientResponse: true,
           mobileNumberHash: true,
           serviceDate: true,
+          privacyNoticeAcknowledgedAt: true,
+          privacyNoticeVersion: true,
+          scheduledReminderOptIn: true,
           serviceSelections: {
             where: { bookingDraftMemberId: null },
             select: { practiceLocationServiceId: true },
@@ -150,6 +161,7 @@ export class BookingDraftEditService {
         protectedMobile.hash,
         serviceDate,
         prepared,
+        acknowledgement,
       );
       const materialChanged = before !== after;
 
@@ -158,7 +170,7 @@ export class BookingDraftEditService {
           bookingDraftId,
           materialChanged: false,
           otpInvalidated: false,
-          otpEligible: prepared.otpEligible,
+          otpEligible: prepared.otpEligible && acknowledgement.isAcknowledged,
           expiresAt: locked.expiresAt,
         };
       }
@@ -170,7 +182,11 @@ export class BookingDraftEditService {
           consumedAt: null,
           invalidatedAt: null,
         },
-        data: { invalidatedAt: new Date() },
+        data: {
+          invalidatedAt: new Date(),
+          activeContextKey: null,
+          otpHash: null,
+        },
       });
 
       await transaction.bookingDraftAnswer.deleteMany({
@@ -179,6 +195,13 @@ export class BookingDraftEditService {
       await transaction.bookingDraftServiceSelection.deleteMany({
         where: { bookingDraftId },
       });
+
+      const acknowledgementData = {
+        privacyNoticeAcknowledgedAt:
+          acknowledgement.privacyNoticeAcknowledgedAt,
+        privacyNoticeVersion: acknowledgement.privacyNoticeVersion,
+        scheduledReminderOptIn: acknowledgement.scheduledReminderOptIn,
+      };
 
       if (dto.mode === 'MULTI_PERSON') {
         await transaction.bookingDraftMember.deleteMany({
@@ -197,6 +220,7 @@ export class BookingDraftEditService {
             mobileNumberLastFour: protectedMobile.lastFour,
             serviceDate,
             estimatedServiceMinutes: null,
+            ...acknowledgementData,
           },
         });
         await this.writeMembers(transaction, bookingDraftId, prepared.members);
@@ -214,6 +238,7 @@ export class BookingDraftEditService {
             mobileNumberLastFour: protectedMobile.lastFour,
             serviceDate,
             estimatedServiceMinutes: prepared.estimatedServiceMinutes,
+            ...acknowledgementData,
             serviceSelections: {
               create: prepared.selectedServices.map((service) => ({
                 practiceLocationServiceId: service.id,
@@ -232,7 +257,7 @@ export class BookingDraftEditService {
         bookingDraftId,
         materialChanged: true,
         otpInvalidated: invalidated.count > 0,
-        otpEligible: prepared.otpEligible,
+        otpEligible: prepared.otpEligible && acknowledgement.isAcknowledged,
         expiresAt: locked.expiresAt,
       };
     });
@@ -252,6 +277,8 @@ export class BookingDraftEditService {
           id: true,
           mode: true,
           practiceLocationId: true,
+          privacyNoticeAcknowledgedAt: true,
+          privacyNoticeVersion: true,
           serviceSelections: {
             where: { bookingDraftMemberId: null },
             select: { practiceLocationServiceId: true },
@@ -282,6 +309,15 @@ export class BookingDraftEditService {
           },
         },
       });
+
+      if (
+        !draft.privacyNoticeAcknowledgedAt ||
+        !draft.privacyNoticeVersion?.trim()
+      ) {
+        throw new BadRequestException(
+          'Privacy Notice acknowledgement is required before booking OTP can be requested.',
+        );
+      }
 
       if (draft.otpVerifications.length > 0) {
         throw new BadRequestException(
@@ -459,6 +495,31 @@ export class BookingDraftEditService {
     };
   }
 
+  private prepareAcknowledgement(dto: ReplaceBookingDraftDto): PreparedAcknowledgement {
+    const isAcknowledged = dto.privacyNoticeAcknowledged === true;
+    const privacyNoticeVersion = isAcknowledged
+      ? dto.privacyNoticeVersion?.trim() || null
+      : null;
+
+    if (isAcknowledged && !privacyNoticeVersion) {
+      throw new BadRequestException(
+        'Privacy Notice version is required when acknowledgement is provided.',
+      );
+    }
+    if (!isAcknowledged && dto.privacyNoticeVersion) {
+      throw new BadRequestException(
+        'Privacy Notice version cannot be stored without acknowledgement.',
+      );
+    }
+
+    return {
+      isAcknowledged,
+      privacyNoticeAcknowledgedAt: isAcknowledged ? new Date() : null,
+      privacyNoticeVersion,
+      scheduledReminderOptIn: dto.scheduledReminderOptIn === true,
+    };
+  }
+
   private async writeMembers(
     transaction: Prisma.TransactionClient,
     bookingDraftId: string,
@@ -507,6 +568,9 @@ export class BookingDraftEditService {
     existingPatientResponse: string | null;
     mobileNumberHash: string | null;
     serviceDate: Date;
+    privacyNoticeAcknowledgedAt: Date | null;
+    privacyNoticeVersion: string | null;
+    scheduledReminderOptIn: boolean;
     serviceSelections: { practiceLocationServiceId: string }[];
     bookingDraftAnswers: Array<{
       bookingQuestionId: string;
@@ -537,6 +601,11 @@ export class BookingDraftEditService {
       practiceLocationId: existing.practiceLocationId,
       mobileNumberHash: existing.mobileNumberHash,
       serviceDate: this.dateKey(existing.serviceDate),
+      acknowledgement: {
+        acknowledged: existing.privacyNoticeAcknowledgedAt !== null,
+        privacyNoticeVersion: existing.privacyNoticeVersion,
+        scheduledReminderOptIn: existing.scheduledReminderOptIn,
+      },
       person:
         existing.mode === BookingDraftMode.INDIVIDUAL
           ? {
@@ -575,12 +644,18 @@ export class BookingDraftEditService {
         | BookingDraftEditService['prepareMultiPerson']
       >
     >,
+    acknowledgement: PreparedAcknowledgement,
   ): string {
     return JSON.stringify({
       mode: dto.mode,
       practiceLocationId: dto.practiceLocationId,
       mobileNumberHash,
       serviceDate: this.dateKey(serviceDate),
+      acknowledgement: {
+        acknowledged: acknowledgement.isAcknowledged,
+        privacyNoticeVersion: acknowledgement.privacyNoticeVersion,
+        scheduledReminderOptIn: acknowledgement.scheduledReminderOptIn,
+      },
       person:
         dto.mode === 'INDIVIDUAL'
           ? {
