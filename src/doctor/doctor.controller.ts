@@ -22,6 +22,7 @@ import { ReactivateDoctorDto } from './dto/reactivate-doctor.dto';
 import { RegisterDoctorDto } from './dto/register-doctor.dto';
 import { SaveDoctorBookingQuestionTemplateDto } from './dto/save-doctor-booking-question-template.dto';
 import { SaveDoctorServiceTemplateDto } from './dto/save-doctor-service-template.dto';
+import { UpdateDoctorAccountSettingsDto } from './dto/update-doctor-account-settings.dto';
 
 @Controller('doctor')
 export class DoctorController {
@@ -35,6 +36,21 @@ export class DoctorController {
   @Post('register')
   async register(@Body() registerDoctorDto: RegisterDoctorDto) {
     return this.doctorService.registerDoctor(registerDoctorDto);
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get('account/settings')
+  getAccountSettings(@Request() request: AuthenticatedRequest) {
+    return this.doctorService.getAccountSettings(request.user.userId);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('account/settings')
+  updateAccountSettings(
+    @Request() request: AuthenticatedRequest,
+    @Body() dto: UpdateDoctorAccountSettingsDto,
+  ) {
+    return this.doctorService.updateAccountSettings(request.user.userId, dto);
   }
 
   @UseGuards(SessionAuthGuard)
