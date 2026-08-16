@@ -37,10 +37,7 @@ export class SecretarySettingsDraftBookingQuestionService {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
-      this.assertEditableByCurrentRegularSecretary(
-        draft,
-        authenticatedUserId,
-      );
+      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
       const proposed = this.normalizeProposal(dto);
 
       const saved =
@@ -71,10 +68,7 @@ export class SecretarySettingsDraftBookingQuestionService {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
-      this.assertEditableByCurrentRegularSecretary(
-        draft,
-        authenticatedUserId,
-      );
+      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
       const proposed = this.normalizeProposal(dto);
 
       const effectiveQuestion = await transaction.bookingQuestion.findFirst({
@@ -131,10 +125,7 @@ export class SecretarySettingsDraftBookingQuestionService {
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
-      this.assertEditableByCurrentRegularSecretary(
-        draft,
-        authenticatedUserId,
-      );
+      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
       const proposed = this.normalizeProposal(dto);
 
       const proposal =
@@ -162,9 +153,7 @@ export class SecretarySettingsDraftBookingQuestionService {
     });
   }
 
-  private normalizeProposal(
-    dto: SaveSecretarySettingsDraftBookingQuestionDto,
-  ) {
+  private normalizeProposal(dto: SaveSecretarySettingsDraftBookingQuestionDto) {
     const questionText = dto.questionText.trim();
     const helpText = dto.helpText?.trim() || null;
     if (!questionText) {
@@ -195,9 +184,7 @@ export class SecretarySettingsDraftBookingQuestionService {
     };
   }
 
-  private normalizeTypeFields(
-    dto: SaveSecretarySettingsDraftBookingQuestionDto,
-  ) {
+  private normalizeTypeFields(dto: SaveSecretarySettingsDraftBookingQuestionDto) {
     if (dto.type === BookingQuestionType.TEXT) {
       if (
         dto.numberMinimum !== undefined ||
