@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_BATCH_SIZE = 100;
 const PROTECTED_DATA_RETENTION_MS = 24 * 60 * 60 * 1000;
+const TECHNICAL_SHELL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 type DraftIdRow = { id: string };
 
@@ -132,17 +133,86 @@ export class BookingDraftCleanupService {
     });
   }
 
+  async deleteEligibleTechnicalShells(
+    batchSize = DEFAULT_BATCH_SIZE,
+    now = new Date(),
+  ): Promise<number> {
+    this.assertBatchSize(batchSize);
+    const cutoff = new Date(now.getTime() - TECHNICAL_SHELL_RETENTION_MS);
+
+    return this.prisma.$transaction(async (transaction) => {
+      const rows = await transaction.$queryRaw<DraftIdRow[]>(Prisma.sql`
+        SELECT bd."id"
+        FROM "BookingDraft" bd
+        WHERE bd."protectedDataClearedAt" IS NOT NULL
+          AND (
+            (bd."status" = 'CONSUMED' AND bd."consumedAt" <= ${cutoff})
+            OR (bd."status" = 'EXPIRED' AND bd."expiredAt" <= ${cutoff})
+            OR (bd."status" = 'CANCELLED' AND bd."cancelledAt" <= ${cutoff})
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "OtpVerification" otp
+            WHERE otp."bookingDraftId" = bd."id"
+          )
+        ORDER BY
+          COALESCE(bd."consumedAt", bd."expiredAt", bd."cancelledAt"),
+          bd."id"
+        LIMIT ${batchSize}
+        FOR UPDATE OF bd SKIP LOCKED
+      `);
+
+      if (rows.length === 0) return 0;
+
+      const ids = rows.map((row) => row.id);
+
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM "BookingDraftAnswer"
+        WHERE "bookingDraftId" IN (${Prisma.join(ids)})
+      `);
+
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM "BookingDraftServiceSelection"
+        WHERE "bookingDraftId" IN (${Prisma.join(ids)})
+      `);
+
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM "BookingDraftMember"
+        WHERE "bookingDraftId" IN (${Prisma.join(ids)})
+      `);
+
+      return transaction.$executeRaw(Prisma.sql`
+        DELETE FROM "BookingDraft"
+        WHERE "id" IN (${Prisma.join(ids)})
+          AND "protectedDataClearedAt" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "OtpVerification" otp
+            WHERE otp."bookingDraftId" = "BookingDraft"."id"
+          )
+      `);
+    });
+  }
+
   async runOnce(
     batchSize = DEFAULT_BATCH_SIZE,
     now = new Date(),
-  ): Promise<{ expired: number; protectedDataCleared: number }> {
+  ): Promise<{
+    expired: number;
+    protectedDataCleared: number;
+    technicalDeleted: number;
+  }> {
     const expired = await this.expirePendingDrafts(batchSize, now);
     const protectedDataCleared = await this.clearTerminalProtectedData(
       batchSize,
       now,
     );
+    const technicalDeleted = await this.deleteEligibleTechnicalShells(
+      batchSize,
+      now,
+    );
 
-    return { expired, protectedDataCleared };
+    return { expired, protectedDataCleared, technicalDeleted };
   }
 
   private assertBatchSize(batchSize: number): void {

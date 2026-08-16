@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import {
   AdministrativeRestrictionStatus,
   BookingDraftMode,
+  OtpPurpose,
   PracticeLocationLifecycleStatus,
   UserAccountStatus,
   UserRole,
@@ -23,11 +24,11 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
     await prisma.$disconnect();
   });
 
-  it('serializes expiration and clears protected identity after the retention window', async () => {
+  it('serializes expiration, clears protected identity, and deletes only after retained dependencies are gone', async () => {
     const scope = randomUUID().replaceAll('-', '');
     const doctorUser = await prisma.user.create({
       data: {
-        email: `m5s5a-doctor-${scope.slice(0, 12)}@example.test`,
+        email: `m5s5-doctor-${scope.slice(0, 12)}@example.test`,
         firstName: 'Cleanup',
         lastName: 'Doctor',
         mobileNumber: `0917${scope.slice(0, 7)}`,
@@ -42,7 +43,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
         userId: doctorUser.id,
         professionalTitle: 'Dr.',
         specialization: 'Cleanup Testing',
-        licenseNumber: `M5S5A-${scope.slice(0, 12)}`,
+        licenseNumber: `M5S5-${scope.slice(0, 12)}`,
       },
     });
     const location = await prisma.practiceLocation.create({
@@ -55,15 +56,18 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       },
     });
 
-    const expiredDeadline = new Date(Date.now() - 60_000);
+    const transitionNow = new Date();
+    await cleanup.expirePendingDrafts(500, transitionNow);
+
+    const expiredDeadline = new Date(transitionNow.getTime() - 60_000);
     const createdAt = new Date(expiredDeadline.getTime() - 30 * 60 * 1000);
     const draft = await prisma.bookingDraft.create({
       data: {
-        bookingReference: `M5S5A${scope.slice(0, 10)}`,
+        bookingReference: `M5S5${scope.slice(0, 10)}`,
         mode: BookingDraftMode.MULTI_PERSON,
         practiceLocationId: location.id,
         mobileNumberEncrypted: 'e2e-protected-mobile',
-        mobileNumberHash: 'a'.repeat(64),
+        mobileNumberHash: scope.repeat(2),
         mobileNumberLastFour: '4567',
         draftControlTokenHash: 'b'.repeat(64),
         serviceDate: new Date('2026-08-20T00:00:00.000Z'),
@@ -80,13 +84,12 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       },
     });
 
-    const transitionNow = new Date();
-    const results = await Promise.all([
+    const expirationResults = await Promise.all([
       cleanup.expirePendingDrafts(1, transitionNow),
       cleanup.expirePendingDrafts(1, transitionNow),
     ]);
 
-    expect(results.reduce((sum, count) => sum + count, 0)).toBe(1);
+    expect(expirationResults.reduce((sum, count) => sum + count, 0)).toBe(1);
 
     const terminalRows = await prisma.$queryRaw<
       Array<{ status: string; expiredAt: Date | null }>
@@ -137,5 +140,48 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
       WHERE "bookingDraftId" = ${draft.id}
     `;
     expect(memberRows[0]).toEqual({ firstName: null, lastName: null });
+
+    const retainedOtp = await prisma.otpVerification.create({
+      data: {
+        purpose: OtpPurpose.BOOKING,
+        bookingDraftId: draft.id,
+        createdAt: new Date(transitionNow.getTime() - 60_000),
+        expiresAt: new Date(transitionNow.getTime() + 5 * 60 * 1000),
+        invalidatedAt: transitionNow,
+      },
+    });
+
+    const deletionNow = new Date(
+      transitionNow.getTime() + 8 * 24 * 60 * 60 * 1000,
+    );
+    await cleanup.deleteEligibleTechnicalShells(500, deletionNow);
+
+    const blockedShell = await prisma.bookingDraft.findUnique({
+      where: { id: draft.id },
+      select: {
+        id: true,
+        bookingReference: true,
+        mobileNumberHash: true,
+        protectedDataClearedAt: true,
+      },
+    });
+    expect(blockedShell).toMatchObject({
+      id: draft.id,
+      bookingReference: null,
+      mobileNumberHash: null,
+    });
+    expect(blockedShell?.protectedDataClearedAt).not.toBeNull();
+
+    await prisma.otpVerification.delete({ where: { id: retainedOtp.id } });
+
+    const deletionResults = await Promise.all([
+      cleanup.deleteEligibleTechnicalShells(1, deletionNow),
+      cleanup.deleteEligibleTechnicalShells(1, deletionNow),
+    ]);
+    expect(deletionResults.reduce((sum, count) => sum + count, 0)).toBe(1);
+
+    await expect(
+      prisma.bookingDraft.findUnique({ where: { id: draft.id } }),
+    ).resolves.toBeNull();
   });
 });

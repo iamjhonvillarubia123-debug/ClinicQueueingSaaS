@@ -74,7 +74,7 @@ describe('Booking OTP concurrency controls (e2e)', () => {
         practiceLocationId: location.id,
         firstName: 'Concurrent',
         lastName: 'Patient',
-        mobileNumberHash: 'b'.repeat(64),
+        mobileNumberHash: scope.repeat(2),
         mobileNumberLastFour: '4567',
         serviceDate: new Date('2026-08-17T00:00:00.000Z'),
         estimatedServiceMinutes: 30,
