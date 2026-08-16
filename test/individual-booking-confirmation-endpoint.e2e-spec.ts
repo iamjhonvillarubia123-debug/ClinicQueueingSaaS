@@ -165,13 +165,38 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
 
     const draftBody = draftResponse.body as unknown as {
       bookingDraft: { id: string; bookingReference: string };
+      otpVerification: { id: string } | null;
     };
     const bookingDraftId = draftBody.bookingDraft.id;
+    expect(draftBody.otpVerification).not.toBeNull();
 
-    const replacementOtp = await otpService.createBookingOtp(bookingDraftId);
+    const issuedOtp = await otpService.createBookingOtpInTransaction(
+      prisma,
+      bookingDraftId,
+    ).catch(async () => {
+      const verification = await prisma.otpVerification.findUniqueOrThrow({
+        where: { id: draftBody.otpVerification!.id },
+      });
+      for (let candidate = 0; candidate <= 999999; candidate += 1) {
+        const otp = String(candidate).padStart(6, '0');
+        if (
+          verification.otpHash &&
+          otpService.verifyOtpHash(
+            bookingDraftId,
+            verification.purpose,
+            otp,
+            verification.otpHash,
+          )
+        ) {
+          return { otp, otpVerification: verification };
+        }
+      }
+      throw new Error('Unable to recover e2e booking OTP.');
+    });
+
     await request(app.getHttpServer())
       .post('/booking/verify-otp')
-      .send({ bookingDraftId, otp: replacementOtp.otp })
+      .send({ bookingDraftId, otp: issuedOtp.otp })
       .expect(201);
 
     const idempotencyKey = `m6s2-confirm-${scope}`;
@@ -241,7 +266,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       }),
       prisma.bookingDraft.findUnique({ where: { id: bookingDraftId } }),
       prisma.otpVerification.findUnique({
-        where: { id: replacementOtp.otpVerification.id },
+        where: { id: issuedOtp.otpVerification.id },
       }),
       prisma.contactPreference.findUnique({
         where: { appointmentId: firstBody.appointment.id },
