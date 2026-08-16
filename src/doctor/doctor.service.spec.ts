@@ -192,19 +192,19 @@ describe('DoctorService', () => {
         { maximumEstimatedServiceMinutesPerPatient: null },
       ]);
 
-    await expect(
-      service.updateAccountSettings('doctor-user', {
-        maximumEstimatedServiceMinutesPerPatient: 45,
-      }),
-    ).resolves.toEqual({
+    const setResult = await service.updateAccountSettings('doctor-user', {
+      maximumEstimatedServiceMinutesPerPatient: 45,
+    });
+    expect(setResult).toEqual({
       maximumEstimatedServiceMinutesPerPatient: 45,
     });
 
-    await expect(
-      service.updateAccountSettings('doctor-user', {
-        maximumEstimatedServiceMinutesPerPatient: null,
-      }),
-    ).resolves.toEqual({ maximumEstimatedServiceMinutesPerPatient: null });
+    const clearResult = await service.updateAccountSettings('doctor-user', {
+      maximumEstimatedServiceMinutesPerPatient: null,
+    });
+    expect(clearResult).toEqual({
+      maximumEstimatedServiceMinutesPerPatient: null,
+    });
   });
 
   it('rejects an out-of-range per-patient duration cap before writing', async () => {
