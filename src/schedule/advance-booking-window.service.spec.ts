@@ -30,12 +30,7 @@ describe('AdvanceBookingWindowService', () => {
     const nearMidnightUtc = new Date('2026-08-16T16:30:00.000Z');
 
     expect(
-      service.isSelectable(
-        '2026-08-17',
-        'Asia/Manila',
-        0,
-        nearMidnightUtc,
-      ),
+      service.isSelectable('2026-08-17', 'Asia/Manila', 0, nearMidnightUtc),
     ).toBe(true);
   });
 });
