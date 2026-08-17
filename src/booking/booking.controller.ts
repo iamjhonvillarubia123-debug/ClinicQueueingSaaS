@@ -7,7 +7,13 @@ import {
   Param,
   Post,
   Put,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import {
+  PATIENT_BOOKING_ACCESS_COOKIE,
+  PatientBookingAccessService,
+} from '../patient-access/patient-booking-access.service';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationService } from './booking-confirmation.service';
@@ -28,6 +34,7 @@ export class BookingController {
     private readonly publicServiceDateAvailability: PublicServiceDateAvailabilityService,
     private readonly bookingDraftEditService: BookingDraftEditService,
     private readonly bookingConfirmationService: BookingConfirmationService,
+    private readonly patientBookingAccess: PatientBookingAccessService,
   ) {}
 
   @Get('configuration/:practiceLocationId')
@@ -91,13 +98,40 @@ export class BookingController {
   }
 
   @Post('draft/:bookingDraftId/confirm')
-  confirmBooking(
+  async confirmBooking(
     @Param('bookingDraftId') bookingDraftId: string,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) response: Response,
   ) {
-    return this.bookingConfirmationService.confirm({
+    const result = await this.bookingConfirmationService.confirm({
       bookingDraftId,
       idempotencyKey,
     });
+
+    if ('bookingAccessToken' in result && result.bookingAccessToken) {
+      response.cookie(
+        PATIENT_BOOKING_ACCESS_COOKIE,
+        result.bookingAccessToken.token,
+        {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'strict',
+          path: this.patientBookingAccess.cookiePath(
+            result.appointment.bookingReference,
+          ),
+          expires: result.bookingAccessToken.expiresAt,
+        },
+      );
+      return {
+        appointment: result.appointment,
+        bookingAccessToken: {
+          expiresAt: result.bookingAccessToken.expiresAt,
+          transport: 'HTTP_ONLY_COOKIE',
+        },
+        replayed: result.replayed,
+      };
+    }
+
+    return result;
   }
 }
