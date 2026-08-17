@@ -158,20 +158,19 @@ export class BookingConfirmationAdmissionService {
     `);
     const existingMinutes = Number(rows[0]?.totalMinutes ?? 0);
 
-    const availability = await this.availability.resolve(
+    const schedule = await this.availability.resolveCapacitySchedule(
       practiceLocationId,
       serviceDate.toISOString().slice(0, 10),
-      new Date(),
       transaction,
     );
-    if (!availability.opensAt || !availability.maximumOperatingUntilAt) {
+    if (!schedule.opensAt || !schedule.maximumOperatingUntilAt) {
       throw new ConflictException(
         'Booking capacity cannot be established for this Service Date.',
       );
     }
 
     const projectedFinish = new Date(
-      availability.opensAt.getTime() +
+      schedule.opensAt.getTime() +
         (existingMinutes + requestedEstimatedMinutes) * 60_000,
     );
     if (projectedFinish.getTime() > maximumOperatingUntilAt.getTime()) {
