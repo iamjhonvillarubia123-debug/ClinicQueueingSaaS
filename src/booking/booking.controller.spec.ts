@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
@@ -57,6 +58,10 @@ describe('BookingController', () => {
     controller = module.get<BookingController>(BookingController);
 
     jest.clearAllMocks();
+    publicServiceDateAvailabilityMock.resolve.mockResolvedValue({
+      availableForPublicBooking: true,
+      reason: 'AVAILABLE',
+    });
   });
 
   it('should be defined', () => {
@@ -100,6 +105,51 @@ describe('BookingController', () => {
       'location-1',
       '2026-08-17',
     );
+  });
+
+  it('checks public Service Date availability before creating a draft', async () => {
+    const dto = {
+      practiceLocationId: 'location-1',
+      mode: 'INDIVIDUAL' as const,
+      firstName: 'Maria',
+      lastName: 'Reyes',
+      existingPatientResponse: 'NO' as const,
+      mobileNumber: '+639171234567',
+      serviceDate: '2026-09-16',
+      selectedServiceIds: ['service-1'],
+    };
+    bookingServiceMock.createDraft.mockResolvedValue({ bookingDraft: { id: 'draft-1' } });
+
+    await expect(controller.createDraft(dto)).resolves.toMatchObject({
+      bookingDraft: { id: 'draft-1' },
+    });
+    expect(publicServiceDateAvailabilityMock.resolve).toHaveBeenCalledWith(
+      'location-1',
+      '2026-09-16',
+    );
+    expect(bookingServiceMock.createDraft).toHaveBeenCalledWith(dto);
+  });
+
+  it('rejects direct draft creation when the Service Date is not publicly selectable', async () => {
+    const dto = {
+      practiceLocationId: 'location-1',
+      mode: 'INDIVIDUAL' as const,
+      firstName: 'Maria',
+      lastName: 'Reyes',
+      existingPatientResponse: 'NO' as const,
+      mobileNumber: '+639171234567',
+      serviceDate: '2026-09-17',
+      selectedServiceIds: ['service-1'],
+    };
+    publicServiceDateAvailabilityMock.resolve.mockResolvedValue({
+      availableForPublicBooking: false,
+      reason: 'OUTSIDE_ADVANCE_BOOKING_WINDOW',
+    });
+
+    await expect(controller.createDraft(dto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(bookingServiceMock.createDraft).not.toHaveBeenCalled();
   });
 
   it('should delegate controlled draft replacement', async () => {
