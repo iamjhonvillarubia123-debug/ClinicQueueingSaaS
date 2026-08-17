@@ -3,42 +3,61 @@ import { readFile, writeFile } from 'node:fs/promises';
 const schemaPath = 'prisma/schema.prisma';
 let source = await readFile(schemaPath, 'utf8');
 
-function insertAfter(label, anchor, insertion, alreadyPresent) {
-  if (source.includes(alreadyPresent)) {
+function modelBlock(modelName) {
+  const startMarker = `model ${modelName} {`;
+  const start = source.indexOf(startMarker);
+  if (start === -1) {
+    throw new Error(`${modelName}: model was not found`);
+  }
+
+  const nextModel = source.indexOf('\nmodel ', start + startMarker.length);
+  const end = nextModel === -1 ? source.length : nextModel;
+  return { start, end, text: source.slice(start, end) };
+}
+
+function insertAfterInModel(modelName, label, anchor, insertion, alreadyPresent) {
+  const block = modelBlock(modelName);
+  if (block.text.includes(alreadyPresent)) {
     console.log(`${label}: already aligned`);
     return;
   }
-  const index = source.indexOf(anchor);
-  if (index === -1) {
-    throw new Error(`${label}: anchor was not found`);
+
+  const relativeAnchorIndex = block.text.indexOf(anchor);
+  if (relativeAnchorIndex === -1) {
+    throw new Error(`${label}: anchor was not found in ${modelName}`);
   }
-  const insertionPoint = index + anchor.length;
+
+  const insertionPoint = block.start + relativeAnchorIndex + anchor.length;
   source = `${source.slice(0, insertionPoint)}${insertion}${source.slice(insertionPoint)}`;
   console.log(`${label}: aligned`);
 }
 
-insertAfter(
+insertAfterInModel(
+  'BookingGroup',
   'BookingGroup NotificationOutbox reverse relation',
   '  appointments                 Appointment[]',
   '\n  notificationOutboxes          NotificationOutbox[]',
   '  notificationOutboxes          NotificationOutbox[]',
 );
 
-insertAfter(
+insertAfterInModel(
+  'NotificationOutbox',
   'NotificationOutbox bookingGroupId field',
   '  appointmentId                  String?',
   '\n  bookingGroupId                 String?',
   '  bookingGroupId                 String?',
 );
 
-insertAfter(
+insertAfterInModel(
+  'NotificationOutbox',
   'NotificationOutbox BookingGroup relation',
   '  appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)',
   '\n  bookingGroup     BookingGroup?     @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)',
   '  bookingGroup     BookingGroup?     @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)',
 );
 
-insertAfter(
+insertAfterInModel(
+  'NotificationOutbox',
   'NotificationOutbox bookingGroup index',
   '  @@index([appointmentId], map: "NotificationOutbox_appointment_idx")',
   '\n  @@index([bookingGroupId], map: "NotificationOutbox_bookingGroup_idx")',
