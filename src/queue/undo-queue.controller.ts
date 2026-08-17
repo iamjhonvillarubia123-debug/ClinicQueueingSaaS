@@ -23,10 +23,6 @@ export class UndoQueueController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.undoQueueService.undo(
-      request.user.userId,
-      dto,
-      idempotencyKey,
-    );
+    return this.undoQueueService.undo(request.user.userId, dto, idempotencyKey);
   }
 }
