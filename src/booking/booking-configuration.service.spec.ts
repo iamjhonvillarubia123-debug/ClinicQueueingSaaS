@@ -24,6 +24,9 @@ describe('BookingConfigurationService', () => {
       id: 'location-1',
       name: 'Clinic A',
       timeZone: 'Asia/Manila',
+      doctorProfile: {
+        accountSettings: { maximumAdvanceBookingDays: 30 },
+      },
       services: [
         { id: 'service-1', name: 'Consultation', durationMinutes: 30 },
       ],
@@ -53,6 +56,10 @@ describe('BookingConfigurationService', () => {
           name: 'Clinic A',
           timeZone: 'Asia/Manila',
         },
+        bookingWindow: {
+          maximumAdvanceBookingDays: 30,
+          upperBoundaryInclusive: true,
+        },
         services: [
           { id: 'service-1', name: 'Consultation', durationMinutes: 30 },
         ],
@@ -71,6 +78,7 @@ describe('BookingConfigurationService', () => {
           isBookingEnabled: true,
         }) as unknown,
         select: expect.objectContaining({
+          doctorProfile: expect.any(Object) as unknown,
           services: expect.objectContaining({
             where: { status: ServiceAvailabilityStatus.ACTIVE },
           }) as unknown,
@@ -156,6 +164,9 @@ describe('BookingConfigurationService', () => {
       id: 'location-1',
       name: 'Clinic A',
       timeZone: 'Asia/Manila',
+      doctorProfile: {
+        accountSettings: { maximumAdvanceBookingDays: 30 },
+      },
       services: [],
       bookingQuestions: Array.from({ length: 6 }, (_, index) => ({
         id: `question-${index}`,
