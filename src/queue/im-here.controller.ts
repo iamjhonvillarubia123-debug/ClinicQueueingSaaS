@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Headers,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Headers, Param, Post, UseGuards } from '@nestjs/common';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { PatientBookingAccessService } from '../patient-access/patient-booking-access.service';
 import { ImHereService } from './im-here.service';
