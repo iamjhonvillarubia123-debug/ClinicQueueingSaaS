@@ -61,10 +61,7 @@ export class ImHereService {
         commandType,
         scope: identityScope,
       });
-      const requestFingerprint = this.idempotency.fingerprint({
-        appointmentId: appointment.id,
-        bookingReference,
-      });
+      const requestFingerprint = this.idempotency.fingerprint({});
 
       await this.idempotency.acquireCommandLock(
         transaction,
@@ -158,6 +155,7 @@ export class ImHereService {
           practiceLocationId: target.practiceLocationId,
           serviceDate: target.serviceDate,
           appointmentId: target.id,
+          resultAppointmentId: target.id,
           resultQueueEventId: queueEvent.id,
           completedAt: completion.completedAt,
           expiresAt: completion.expiresAt,
