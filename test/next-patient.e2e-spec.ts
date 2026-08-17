@@ -146,56 +146,66 @@ describe('NEXT PATIENT controls (e2e)', () => {
     [NextPatientOutcome.NOW_SERVING, AppointmentStatus.TEMPORARILY_ABSENT],
     [NextPatientOutcome.COMPLETED, AppointmentStatus.COMPLETED],
     [NextPatientOutcome.OUT_FOR_PROCEDURE, AppointmentStatus.OUT_FOR_PROCEDURE],
-  ])('applies %s and calls the next waiting Appointment atomically', async (patientOutcome, expectedCurrentStatus) => {
-    const serviceDate = uniqueServiceDate(patientOutcome);
-    const current = await createClinicDayWithQueue(serviceDate);
+  ])(
+    'applies %s and calls the next waiting Appointment atomically',
+    async (patientOutcome, expectedCurrentStatus) => {
+      const serviceDate = uniqueServiceDate(patientOutcome);
+      const current = await createClinicDayWithQueue(serviceDate);
 
-    const result = await service.advance(
-      doctorUserId,
-      dto(serviceDate, patientOutcome),
-      `outcome-${patientOutcome}-${scope}`,
-    );
+      const result = await service.advance(
+        doctorUserId,
+        dto(serviceDate, patientOutcome),
+        `outcome-${patientOutcome}-${scope}`,
+      );
 
-    const [currentAfter, nextAfter, event, links, command] = await Promise.all([
-      prisma.appointment.findUniqueOrThrow({ where: { id: current.currentId } }),
-      prisma.appointment.findUniqueOrThrow({ where: { id: current.nextId } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
-      prisma.queueEventAppointmentLink.findMany({
-        where: { queueEventId: result.queueEventId },
-        orderBy: { role: 'asc' },
-      }),
-      prisma.commandIdempotency.findFirstOrThrow({
-        where: {
-          commandType: 'NEXT_PATIENT',
-          practiceLocationId,
-          serviceDate: dateValue(serviceDate),
-          actorUserId: doctorUserId,
-        },
-      }),
-    ]);
+      const [currentAfter, nextAfter, event, links, command] =
+        await Promise.all([
+          prisma.appointment.findUniqueOrThrow({
+            where: { id: current.currentId },
+          }),
+          prisma.appointment.findUniqueOrThrow({
+            where: { id: current.nextId },
+          }),
+          prisma.queueEvent.findUniqueOrThrow({
+            where: { id: result.queueEventId },
+          }),
+          prisma.queueEventAppointmentLink.findMany({
+            where: { queueEventId: result.queueEventId },
+            orderBy: { role: 'asc' },
+          }),
+          prisma.commandIdempotency.findFirstOrThrow({
+            where: {
+              commandType: 'NEXT_PATIENT',
+              practiceLocationId,
+              serviceDate: dateValue(serviceDate),
+              actorUserId: doctorUserId,
+            },
+          }),
+        ]);
 
-    expect(currentAfter.status).toBe(expectedCurrentStatus);
-    expect(nextAfter.status).toBe(AppointmentStatus.CALLED);
-    expect(nextAfter.calledAt).not.toBeNull();
-    expect(nextAfter.servingOrderKey).toBeNull();
-    expect(nextAfter.waitingPlacementType).toBeNull();
-    expect(event.type).toBe('NEXT_PATIENT');
-    expect(event.newPrimaryStatus).toBe(expectedCurrentStatus);
-    expect(event.newSecondaryStatus).toBe(AppointmentStatus.CALLED);
-    expect(links).toHaveLength(2);
-    expect(command.resultQueueEventId).toBe(result.queueEventId);
-    expect(command.resultAppointmentId).toBeNull();
+      expect(currentAfter.status).toBe(expectedCurrentStatus);
+      expect(nextAfter.status).toBe(AppointmentStatus.CALLED);
+      expect(nextAfter.calledAt).not.toBeNull();
+      expect(nextAfter.servingOrderKey).toBeNull();
+      expect(nextAfter.waitingPlacementType).toBeNull();
+      expect(event.type).toBe('NEXT_PATIENT');
+      expect(event.newPrimaryStatus).toBe(expectedCurrentStatus);
+      expect(event.newSecondaryStatus).toBe(AppointmentStatus.CALLED);
+      expect(links).toHaveLength(2);
+      expect(command.resultQueueEventId).toBe(result.queueEventId);
+      expect(command.resultAppointmentId).toBeNull();
 
-    if (expectedCurrentStatus === AppointmentStatus.COMPLETED) {
-      expect(currentAfter.completedAt).not.toBeNull();
-      expect(currentAfter.terminalAt).not.toBeNull();
-      expect(currentAfter.activeAppointmentKey).toBeNull();
-    } else {
-      expect(currentAfter.completedAt).toBeNull();
-      expect(currentAfter.terminalAt).toBeNull();
-      expect(currentAfter.activeAppointmentKey).not.toBeNull();
-    }
-  });
+      if (expectedCurrentStatus === AppointmentStatus.COMPLETED) {
+        expect(currentAfter.completedAt).not.toBeNull();
+        expect(currentAfter.terminalAt).not.toBeNull();
+        expect(currentAfter.activeAppointmentKey).toBeNull();
+      } else {
+        expect(currentAfter.completedAt).toBeNull();
+        expect(currentAfter.terminalAt).toBeNull();
+        expect(currentAfter.activeAppointmentKey).not.toBeNull();
+      }
+    },
+  );
 
   it('replays the same command without advancing again', async () => {
     const serviceDate = '2026-09-04';
@@ -265,11 +275,16 @@ describe('NEXT PATIENT controls (e2e)', () => {
       servingOrderKey: null,
       waitingPlacementType: null,
     });
-    const higherQueueEarlierOrder = await createAppointment(date, 9, 'ORDER-1', {
-      status: AppointmentStatus.WAITING,
-      servingOrderKey: new Prisma.Decimal('1.25'),
-      waitingPlacementType: WaitingPlacementType.ORDINARY,
-    });
+    const higherQueueEarlierOrder = await createAppointment(
+      date,
+      9,
+      'ORDER-1',
+      {
+        status: AppointmentStatus.WAITING,
+        servingOrderKey: new Prisma.Decimal('1.25'),
+        waitingPlacementType: WaitingPlacementType.ORDINARY,
+      },
+    );
     await createAppointment(date, 2, 'ORDER-2', {
       status: AppointmentStatus.WAITING,
       servingOrderKey: new Prisma.Decimal('2.00'),
@@ -345,14 +360,16 @@ describe('NEXT PATIENT controls (e2e)', () => {
             serviceDate: dateValue(serviceDate),
           },
         }),
-        prisma.appointment.findUniqueOrThrow({ where: { id: queue.currentId } }),
+        prisma.appointment.findUniqueOrThrow({
+          where: { id: queue.currentId },
+        }),
         prisma.appointment.findUniqueOrThrow({ where: { id: queue.nextId } }),
         prisma.appointment.findUniqueOrThrow({ where: { id: queue.thirdId! } }),
       ]);
 
     expect(events).toHaveLength(2);
-    expect(events[0]?.queueEventSequence).toBe(1);
-    expect(events[1]?.queueEventSequence).toBe(2);
+    expect(events[0]?.queueEventSequence).toBe(1n);
+    expect(events[1]?.queueEventSequence).toBe(2n);
     expect(commands).toHaveLength(2);
     expect(firstAfter.status).toBe(AppointmentStatus.COMPLETED);
     expect(secondAfter.status).toBe(AppointmentStatus.COMPLETED);

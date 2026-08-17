@@ -240,6 +240,7 @@ export class StartClinicService {
             status: AppointmentStatus.CALLED,
             servingOrderKey: null,
             waitingPlacementType: null,
+            calledAt: now,
           },
         });
       }
