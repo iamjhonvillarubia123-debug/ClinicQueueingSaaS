@@ -113,23 +113,38 @@ export class StartClinicService {
         requestFingerprint,
       );
       if (replay) {
-        const clinicDay = await transaction.clinicDay.findUnique({
-          where: {
-            practiceLocationId_serviceDate: {
-              practiceLocationId: dto.practiceLocationId,
-              serviceDate: dateValue,
+        const queueEventId = replay.resultQueueEventId;
+        if (!queueEventId) {
+          throw new ConflictException(
+            'START CLINIC replay record is incomplete.',
+          );
+        }
+        const [clinicDay, primaryLink] = await Promise.all([
+          transaction.clinicDay.findUnique({
+            where: {
+              practiceLocationId_serviceDate: {
+                practiceLocationId: dto.practiceLocationId,
+                serviceDate: dateValue,
+              },
             },
-          },
-          select: { id: true, status: true, startedAt: true },
-        });
+            select: { id: true, status: true, startedAt: true },
+          }),
+          transaction.queueEventAppointmentLink.findFirst({
+            where: {
+              queueEventId,
+              role: QueueEventAppointmentLinkRole.PRIMARY,
+            },
+            select: { appointmentId: true },
+          }),
+        ]);
         return {
           started: true,
           replayed: true,
           clinicDayId: clinicDay?.id ?? null,
           clinicDayStatus: clinicDay?.status ?? null,
           startedAt: clinicDay?.startedAt ?? null,
-          calledAppointmentId: replay.resultAppointmentId,
-          queueEventId: replay.resultQueueEventId,
+          calledAppointmentId: primaryLink?.appointmentId ?? null,
+          queueEventId,
         };
       }
 
@@ -207,6 +222,8 @@ export class StartClinicService {
               startedAt: now,
               operatingPracticeStaffId,
               maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
+              createdAt: now,
+              updatedAt: now,
             },
             select: { id: true, status: true, startedAt: true },
           });
@@ -276,7 +293,6 @@ export class StartClinicService {
           practiceLocationId: dto.practiceLocationId,
           serviceDate: dateValue,
           actorUserId: authenticatedUserId,
-          resultAppointmentId: firstWaiting?.id ?? null,
           resultQueueEventId: queueEvent.id,
           completedAt: completion.completedAt,
           expiresAt: completion.expiresAt,
