@@ -90,45 +90,62 @@ describe('Multi-person booking confirmation contention (e2e)', () => {
 
     expect([first.status, second.status].sort()).toEqual([201, 409]);
 
-    const [groups, appointments, counter, commands, tokens, outboxes, storedDraft, otp] =
-      await Promise.all([
-        prisma.bookingGroup.findMany({
-          where: {
+    const [
+      groups,
+      appointments,
+      counter,
+      commands,
+      tokens,
+      outboxes,
+      storedDraft,
+      otp,
+    ] = await Promise.all([
+      prisma.bookingGroup.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+      }),
+      prisma.appointment.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+        orderBy: { queueNumber: 'asc' },
+      }),
+      prisma.queueCounter.findUnique({
+        where: {
+          practiceLocationId_serviceDate: {
             practiceLocationId: fixture.locationId,
             serviceDate: fixture.serviceDate,
           },
-        }),
-        prisma.appointment.findMany({
-          where: {
+        },
+      }),
+      prisma.commandIdempotency.findMany({
+        where: { bookingDraftId: draft.bookingDraftId },
+      }),
+      prisma.bookingGroupAccessToken.findMany({
+        where: {
+          bookingGroup: {
             practiceLocationId: fixture.locationId,
             serviceDate: fixture.serviceDate,
           },
-          orderBy: { queueNumber: 'asc' },
-        }),
-        prisma.queueCounter.findUnique({
-          where: {
-            practiceLocationId_serviceDate: {
-              practiceLocationId: fixture.locationId,
-              serviceDate: fixture.serviceDate,
-            },
-          },
-        }),
-        prisma.commandIdempotency.findMany({
-          where: { bookingDraftId: draft.bookingDraftId },
-        }),
-        prisma.bookingGroupAccessToken.findMany({
-          where: { bookingGroup: { practiceLocationId: fixture.locationId, serviceDate: fixture.serviceDate } },
-        }),
-        prisma.notificationOutbox.findMany({
-          where: {
-            practiceLocationId: fixture.locationId,
-            bookingGroupId: { not: null },
-            notificationType: 'BOOKING_CONFIRMATION',
-          },
-        }),
-        prisma.bookingDraft.findUniqueOrThrow({ where: { id: draft.bookingDraftId } }),
-        prisma.otpVerification.findUniqueOrThrow({ where: { id: draft.otpVerificationId } }),
-      ]);
+        },
+      }),
+      prisma.notificationOutbox.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          bookingGroupId: { not: null },
+          notificationType: 'BOOKING_CONFIRMATION',
+        },
+      }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: draft.bookingDraftId },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({
+        where: { id: draft.otpVerificationId },
+      }),
+    ]);
 
     expect(groups).toHaveLength(1);
     expect(appointments).toHaveLength(2);
@@ -143,8 +160,16 @@ describe('Multi-person booking confirmation contention (e2e)', () => {
 
   it('serializes two groups competing for the last capacity so exactly one group commits', async () => {
     const fixture = await createBaseFixture(30, 9);
-    const firstDraft = await createVerifiedGroupDraft(fixture, patientMobile(), 2);
-    const secondDraft = await createVerifiedGroupDraft(fixture, patientMobile(), 2);
+    const firstDraft = await createVerifiedGroupDraft(
+      fixture,
+      patientMobile(),
+      2,
+    );
+    const secondDraft = await createVerifiedGroupDraft(
+      fixture,
+      patientMobile(),
+      2,
+    );
 
     const [first, second] = await Promise.all([
       confirm(firstDraft.bookingDraftId, `m6s3b-cap-a-${fixture.scope}`),
@@ -153,34 +178,49 @@ describe('Multi-person booking confirmation contention (e2e)', () => {
 
     expect([first.status, second.status].sort()).toEqual([201, 409]);
 
-    const [groups, appointments, counter, firstStored, secondStored, firstOtp, secondOtp] =
-      await Promise.all([
-        prisma.bookingGroup.findMany({
-          where: {
+    const [
+      groups,
+      appointments,
+      counter,
+      firstStored,
+      secondStored,
+      firstOtp,
+      secondOtp,
+    ] = await Promise.all([
+      prisma.bookingGroup.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+      }),
+      prisma.appointment.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+        orderBy: { queueNumber: 'asc' },
+      }),
+      prisma.queueCounter.findUnique({
+        where: {
+          practiceLocationId_serviceDate: {
             practiceLocationId: fixture.locationId,
             serviceDate: fixture.serviceDate,
           },
-        }),
-        prisma.appointment.findMany({
-          where: {
-            practiceLocationId: fixture.locationId,
-            serviceDate: fixture.serviceDate,
-          },
-          orderBy: { queueNumber: 'asc' },
-        }),
-        prisma.queueCounter.findUnique({
-          where: {
-            practiceLocationId_serviceDate: {
-              practiceLocationId: fixture.locationId,
-              serviceDate: fixture.serviceDate,
-            },
-          },
-        }),
-        prisma.bookingDraft.findUniqueOrThrow({ where: { id: firstDraft.bookingDraftId } }),
-        prisma.bookingDraft.findUniqueOrThrow({ where: { id: secondDraft.bookingDraftId } }),
-        prisma.otpVerification.findUniqueOrThrow({ where: { id: firstDraft.otpVerificationId } }),
-        prisma.otpVerification.findUniqueOrThrow({ where: { id: secondDraft.otpVerificationId } }),
-      ]);
+        },
+      }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: firstDraft.bookingDraftId },
+      }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: secondDraft.bookingDraftId },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({
+        where: { id: firstDraft.otpVerificationId },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({
+        where: { id: secondDraft.otpVerificationId },
+      }),
+    ]);
 
     expect(groups).toHaveLength(1);
     expect(appointments).toHaveLength(2);
@@ -277,7 +317,12 @@ describe('Multi-person booking confirmation contention (e2e)', () => {
       },
     });
 
-    return { scope, serviceDate, locationId: location.id, serviceId: service.id };
+    return {
+      scope,
+      serviceDate,
+      locationId: location.id,
+      serviceId: service.id,
+    };
   }
 
   async function createVerifiedGroupDraft(
@@ -307,7 +352,9 @@ describe('Multi-person booking confirmation contention (e2e)', () => {
       bookingDraft: { id: string };
       otpVerification: { id: string } | null;
     };
-    if (!body.otpVerification) throw new Error('Group draft did not issue OTP.');
+    if (!body.otpVerification) {
+      throw new Error('Group draft did not issue OTP.');
+    }
 
     await request(app.getHttpServer())
       .post('/booking/verify-otp')
