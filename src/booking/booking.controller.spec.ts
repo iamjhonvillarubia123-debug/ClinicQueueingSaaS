@@ -2,10 +2,10 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
+import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingController } from './booking.controller';
 import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
-import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 
 describe('BookingController', () => {
   let controller: BookingController;
@@ -24,7 +24,7 @@ describe('BookingController', () => {
   const publicServiceDateAvailabilityMock = {
     resolve: jest.fn(),
   };
-  const individualBookingConfirmationServiceMock = {
+  const bookingConfirmationServiceMock = {
     confirm: jest.fn(),
   };
 
@@ -49,8 +49,8 @@ describe('BookingController', () => {
           useValue: publicServiceDateAvailabilityMock,
         },
         {
-          provide: IndividualBookingConfirmationService,
-          useValue: individualBookingConfirmationServiceMock,
+          provide: BookingConfirmationService,
+          useValue: bookingConfirmationServiceMock,
         },
       ],
     }).compile();
@@ -227,8 +227,8 @@ describe('BookingController', () => {
     });
   });
 
-  it('should delegate individual confirmation with the Idempotency-Key header', async () => {
-    individualBookingConfirmationServiceMock.confirm.mockResolvedValue({
+  it('should delegate confirmation with the Idempotency-Key header', async () => {
+    bookingConfirmationServiceMock.confirm.mockResolvedValue({
       appointment: {
         id: 'appointment-1',
         queueNumber: 7,
@@ -241,14 +241,12 @@ describe('BookingController', () => {
     });
 
     await expect(
-      controller.confirmIndividualBooking('draft-1', 'idem-1'),
+      controller.confirmBooking('draft-1', 'idem-1'),
     ).resolves.toMatchObject({
       appointment: { id: 'appointment-1', queueNumber: 7 },
       replayed: false,
     });
-    expect(
-      individualBookingConfirmationServiceMock.confirm,
-    ).toHaveBeenCalledWith({
+    expect(bookingConfirmationServiceMock.confirm).toHaveBeenCalledWith({
       bookingDraftId: 'draft-1',
       idempotencyKey: 'idem-1',
     });
