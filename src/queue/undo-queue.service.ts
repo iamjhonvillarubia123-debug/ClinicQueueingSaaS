@@ -102,7 +102,10 @@ export class UndoQueueService {
     const requestFingerprint = this.idempotency.fingerprint({});
 
     return this.prisma.$transaction(async (transaction) => {
-      await this.idempotency.acquireCommandLock(transaction, commandIdentityKey);
+      await this.idempotency.acquireCommandLock(
+        transaction,
+        commandIdentityKey,
+      );
       await this.acquireQueueScopeLock(
         transaction,
         dto.practiceLocationId,
@@ -155,7 +158,9 @@ export class UndoQueueService {
         serviceDate,
       );
       if (!original || original.type !== QueueEventType.NEXT_PATIENT) {
-        throw new ConflictException('No eligible queue operation is available to undo.');
+        throw new ConflictException(
+          'No eligible queue operation is available to undo.',
+        );
       }
 
       const primaryLink = original.appointmentLinks.find(
@@ -422,7 +427,12 @@ export class UndoQueueService {
     const secondary = event.appointmentLinks.find(
       (link) => link.role === QueueEventAppointmentLinkRole.SECONDARY,
     );
-    if (!primary || !secondary || !event.newPrimaryStatus || !event.newSecondaryStatus) {
+    if (
+      !primary ||
+      !secondary ||
+      !event.newPrimaryStatus ||
+      !event.newSecondaryStatus
+    ) {
       throw new ConflictException('UNDO replay result is incomplete.');
     }
     return {
@@ -490,14 +500,24 @@ export class UndoQueueService {
       secondary.anonymizedAt ||
       primary.status !== original.newPrimaryStatus ||
       secondary.status !== original.newSecondaryStatus ||
-      !this.decimalEquals(primary.servingOrderKey, original.newPrimaryOrderKey) ||
-      !this.decimalEquals(secondary.servingOrderKey, original.newSecondaryOrderKey) ||
-      primary.waitingPlacementType !== original.newPrimaryWaitingPlacementType ||
-      secondary.waitingPlacementType !== original.newSecondaryWaitingPlacementType ||
+      !this.decimalEquals(
+        primary.servingOrderKey,
+        original.newPrimaryOrderKey,
+      ) ||
+      !this.decimalEquals(
+        secondary.servingOrderKey,
+        original.newSecondaryOrderKey,
+      ) ||
+      primary.waitingPlacementType !==
+        original.newPrimaryWaitingPlacementType ||
+      secondary.waitingPlacementType !==
+        original.newSecondaryWaitingPlacementType ||
       !this.dateEquals(primary.terminalAt, original.newPrimaryTerminalAt) ||
       !this.dateEquals(secondary.terminalAt, original.newSecondaryTerminalAt)
     ) {
-      throw new ConflictException('UNDO is no longer safe for the current queue state.');
+      throw new ConflictException(
+        'UNDO is no longer safe for the current queue state.',
+      );
     }
   }
 
@@ -506,16 +526,19 @@ export class UndoQueueService {
     primary: LockedAppointment,
     restoredStatus: AppointmentStatus,
   ): Promise<string | null> {
-    const active = [
+    const activeStatuses: AppointmentStatus[] = [
       AppointmentStatus.WAITING,
       AppointmentStatus.CALLED,
       AppointmentStatus.TEMPORARILY_ABSENT,
       AppointmentStatus.OUT_FOR_PROCEDURE,
-    ].includes(restoredStatus);
+    ];
+    const active = activeStatuses.includes(restoredStatus);
     if (!active) return null;
     if (primary.activeAppointmentKey) return primary.activeAppointmentKey;
     if (!primary.mobileNumberHash) {
-      throw new ConflictException('UNDO cannot restore active booking identity.');
+      throw new ConflictException(
+        'UNDO cannot restore active booking identity.',
+      );
     }
     const activeAppointmentKey = createHash('sha256')
       .update(
@@ -531,7 +554,9 @@ export class UndoQueueService {
       select: { id: true },
     });
     if (conflict) {
-      throw new ConflictException('UNDO cannot restore active booking identity.');
+      throw new ConflictException(
+        'UNDO cannot restore active booking identity.',
+      );
     }
     return activeAppointmentKey;
   }
@@ -551,13 +576,12 @@ export class UndoQueueService {
     left: Prisma.Decimal | null,
     right: Prisma.Decimal | null,
   ): boolean {
-    if (left === null || right === null) return left === right;
+    if (!left || !right) return left === right;
     return left.equals(right);
   }
 
   private dateEquals(left: Date | null, right: Date | null): boolean {
-    if (!left || !right) return left === right;
-    return left.getTime() === right.getTime();
+    return left?.getTime() === right?.getTime();
   }
 
   private async acquireQueueScopeLock(
@@ -589,7 +613,9 @@ export class UndoQueueService {
       FOR UPDATE OF pl
     `);
     const context = rows[0];
-    if (!context) throw new NotFoundException('Practice location was not found.');
+    if (!context) {
+      throw new NotFoundException('Practice location was not found.');
+    }
     if (context.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE) {
       throw new ConflictException('Practice location is not operational.');
     }
@@ -627,9 +653,12 @@ export class UndoQueueService {
     if (
       !actor ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
-      throw new ForbiddenException('Current user cannot operate this clinic day.');
+      throw new ForbiddenException(
+        'Current user cannot operate this clinic day.',
+      );
     }
   }
 
@@ -641,12 +670,19 @@ export class UndoQueueService {
   ): Promise<void> {
     if (actor.role === UserRole.DOCTOR) {
       if (actor.id !== context.doctorUserId) {
-        throw new ForbiddenException('Current user cannot operate this clinic day.');
+        throw new ForbiddenException(
+          'Current user cannot operate this clinic day.',
+        );
       }
       return;
     }
-    if (actor.role !== UserRole.SECRETARY || !clinicDay?.operatingPracticeStaffId) {
-      throw new ForbiddenException('Current user cannot operate this clinic day.');
+    if (
+      actor.role !== UserRole.SECRETARY ||
+      !clinicDay?.operatingPracticeStaffId
+    ) {
+      throw new ForbiddenException(
+        'Current user cannot operate this clinic day.',
+      );
     }
     const rows = await transaction.$queryRaw<OperatingStaff[]>(Prisma.sql`
       SELECT
@@ -671,7 +707,8 @@ export class UndoQueueService {
       operatingStaff.staffRole !== PracticeStaffRole.SECRETARY ||
       operatingStaff.userRole !== UserRole.SECRETARY ||
       operatingStaff.userAccountStatus !== UserAccountStatus.ACTIVE ||
-      operatingStaff.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      operatingStaff.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ForbiddenException(
         'Secretary is not the current operating secretary for this clinic day.',
