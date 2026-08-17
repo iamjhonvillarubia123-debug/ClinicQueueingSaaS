@@ -189,11 +189,15 @@ describe('STAFF REINSERT controls (e2e)', () => {
         orderBy: { servingOrderKey: 'asc' },
         select: { id: true },
       }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
+      prisma.queueEvent.findUniqueOrThrow({
+        where: { id: result.queueEventId },
+      }),
     ]);
 
     expect(after.status).toBe(AppointmentStatus.WAITING);
-    expect(after.waitingPlacementType).toBe(WaitingPlacementType.STAFF_REINSERT);
+    expect(after.waitingPlacementType).toBe(
+      WaitingPlacementType.STAFF_REINSERT,
+    );
     expect(after.queueNumber).toBe(99);
     expect(waiting.map((item) => item.id)).toEqual([
       protectedNext.id,
@@ -261,11 +265,16 @@ describe('STAFF REINSERT controls (e2e)', () => {
     const serviceDate = '2026-09-20';
     const date = dateValue(serviceDate);
     await createStartedClinicDay(date);
-    const protectedNext = await createAppointment(date, 1, 'BOUNDARY-PROTECTED', {
-      status: AppointmentStatus.WAITING,
-      servingOrderKey: new Prisma.Decimal(1),
-      waitingPlacementType: WaitingPlacementType.ORDINARY,
-    });
+    const protectedNext = await createAppointment(
+      date,
+      1,
+      'BOUNDARY-PROTECTED',
+      {
+        status: AppointmentStatus.WAITING,
+        servingOrderKey: new Prisma.Decimal(1),
+        waitingPlacementType: WaitingPlacementType.ORDINARY,
+      },
+    );
     await createAppointment(date, 2, 'BOUNDARY-RETURN', {
       status: AppointmentStatus.WAITING,
       servingOrderKey: new Prisma.Decimal('1.5'),
@@ -283,7 +292,7 @@ describe('STAFF REINSERT controls (e2e)', () => {
         dto(serviceDate, absent.id, protectedNext.id),
         `staff-boundary-${scope}`,
       ),
-    ).rejects.toThrow('protected queue boundary');
+    ).rejects.toThrow('cannot displace protected queue positions');
   });
 
   it('rejects a stale or non-waiting neighbor intention', async () => {
@@ -301,12 +310,9 @@ describe('STAFF REINSERT controls (e2e)', () => {
       waitingPlacementType: null,
     });
     const staleNeighbor = await createAppointment(date, 3, 'STALE-NEIGHBOR', {
-      status: AppointmentStatus.COMPLETED,
+      status: AppointmentStatus.OUT_FOR_PROCEDURE,
       servingOrderKey: null,
       waitingPlacementType: null,
-      completedAt: new Date(),
-      terminalAt: new Date(),
-      activeAppointmentKey: null,
     });
 
     await expect(
@@ -315,7 +321,7 @@ describe('STAFF REINSERT controls (e2e)', () => {
         dto(serviceDate, absent.id, staleNeighbor.id),
         `staff-stale-${scope}`,
       ),
-    ).rejects.toThrow('placement intention is stale');
+    ).rejects.toThrow('placement is stale or unavailable');
   });
 
   it('forces a temporarily absent active BookingGroup member to the current group tail', async () => {
@@ -473,11 +479,16 @@ describe('STAFF REINSERT controls (e2e)', () => {
     const allowedDate = '2026-09-25';
     const allowed = dateValue(allowedDate);
     await createStartedClinicDay(allowed);
-    const protectedAllowed = await createAppointment(allowed, 1, 'SEC-PROTECTED', {
-      status: AppointmentStatus.WAITING,
-      servingOrderKey: new Prisma.Decimal(1),
-      waitingPlacementType: WaitingPlacementType.ORDINARY,
-    });
+    const protectedAllowed = await createAppointment(
+      allowed,
+      1,
+      'SEC-PROTECTED',
+      {
+        status: AppointmentStatus.WAITING,
+        servingOrderKey: new Prisma.Decimal(1),
+        waitingPlacementType: WaitingPlacementType.ORDINARY,
+      },
+    );
     const allowedAbsent = await createAppointment(allowed, 2, 'SEC-ABSENT', {
       status: AppointmentStatus.TEMPORARILY_ABSENT,
       servingOrderKey: null,
@@ -494,16 +505,26 @@ describe('STAFF REINSERT controls (e2e)', () => {
     const deniedDate = '2026-09-26';
     const denied = dateValue(deniedDate);
     await createStartedClinicDay(denied);
-    const protectedDenied = await createAppointment(denied, 1, 'SEC-DENIED-PROTECTED', {
-      status: AppointmentStatus.WAITING,
-      servingOrderKey: new Prisma.Decimal(1),
-      waitingPlacementType: WaitingPlacementType.ORDINARY,
-    });
-    const deniedAbsent = await createAppointment(denied, 2, 'SEC-DENIED-ABSENT', {
-      status: AppointmentStatus.TEMPORARILY_ABSENT,
-      servingOrderKey: null,
-      waitingPlacementType: null,
-    });
+    const protectedDenied = await createAppointment(
+      denied,
+      1,
+      'SEC-DENIED-PROTECTED',
+      {
+        status: AppointmentStatus.WAITING,
+        servingOrderKey: new Prisma.Decimal(1),
+        waitingPlacementType: WaitingPlacementType.ORDINARY,
+      },
+    );
+    const deniedAbsent = await createAppointment(
+      denied,
+      2,
+      'SEC-DENIED-ABSENT',
+      {
+        status: AppointmentStatus.TEMPORARILY_ABSENT,
+        servingOrderKey: null,
+        waitingPlacementType: null,
+      },
+    );
     await expect(
       service.reinsert(
         otherSecretaryUserId,
