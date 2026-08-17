@@ -1199,6 +1199,7 @@ model BookingGroup {
 
   practiceLocation             PracticeLocation              @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointments                 Appointment[]
+  notificationOutboxes          NotificationOutbox[]
   accessTokens                 BookingGroupAccessToken[]
   recoveryAttempts             BookingGroupRecoveryAttempt[]
   commandIdempotenciesAsScope  CommandIdempotency[]          @relation("CommandIdempotencyBookingGroupScope")
@@ -1523,6 +1524,7 @@ model NotificationOutbox {
 
   practiceLocationId             String?
   appointmentId                  String?
+  bookingGroupId                 String?
   scheduledReminderId            String? @unique
   commandIdempotencyId           String?
   otpVerificationId              String? @unique
@@ -1561,6 +1563,7 @@ model NotificationOutbox {
 
   practiceLocation PracticeLocation? @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  bookingGroup     BookingGroup?     @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)
 
   emailVerification EmailVerification? @relation("EmailVerificationNotificationOutbox", fields: [emailVerificationId], references: [id], onDelete: Restrict)
   passwordReset     PasswordReset?     @relation("PasswordResetNotificationOutbox", fields: [passwordResetId], references: [id], onDelete: Restrict)
@@ -1580,6 +1583,7 @@ model NotificationOutbox {
   @@index([status, leaseExpiresAt], map: "NotificationOutbox_status_lease_idx")
   @@index([practiceLocationId, createdAt], map: "NotificationOutbox_location_created_idx")
   @@index([appointmentId], map: "NotificationOutbox_appointment_idx")
+  @@index([bookingGroupId], map: "NotificationOutbox_bookingGroup_idx")
   @@index([commandIdempotencyId], map: "NotificationOutbox_command_idx")
   @@index([refundRequestId], map: "NotificationOutbox_refundRequest_idx")
   @@index([expiresAt], map: "NotificationOutbox_expires_idx")
