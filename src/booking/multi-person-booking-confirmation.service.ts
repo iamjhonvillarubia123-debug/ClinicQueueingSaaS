@@ -85,7 +85,7 @@ export class MultiPersonBookingConfirmationService {
     const idempotencyKey = this.idempotency.normalizeKey(input.idempotencyKey);
     const commandIdentityKey = this.idempotency.deriveIdentity({
       idempotencyKey,
-      commandType: CommandType.CONVERT_BOOKING_DRAFT,
+      commandType: CommandType.MULTI_PERSON_BOOKING_CONFIRM,
       scope: { bookingDraftId: input.bookingDraftId },
     });
     const requestFingerprint = this.idempotency.fingerprint({
@@ -283,13 +283,12 @@ export class MultiPersonBookingConfirmationService {
         data: {
           idempotencyKey,
           commandIdentityKey,
-          commandType: CommandType.CONVERT_BOOKING_DRAFT,
+          commandType: CommandType.MULTI_PERSON_BOOKING_CONFIRM,
           requestFingerprint,
           practiceLocationId: draft.practiceLocationId,
           serviceDate: draft.serviceDate,
           bookingDraftId: draft.id,
           resultBookingGroupId: bookingGroup.id,
-          resultBookingGroupAccessTokenId: issuedToken.tokenRecordId,
           completedAt: times.completedAt,
           expiresAt: times.expiresAt,
           createdAt: times.completedAt,
