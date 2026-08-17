@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AdvanceBookingWindowService } from './advance-booking-window.service';
 import { CrossLocationScheduleConflictService } from './cross-location-schedule-conflict.service';
 import { DoctorCalendarAvailabilityService } from './doctor-calendar-availability.service';
 import { PublicServiceDateAvailabilityService } from './public-service-date-availability.service';
@@ -11,6 +12,7 @@ import { ScheduleTimeService } from './schedule-time.service';
   imports: [PrismaModule],
   providers: [
     ScheduleTimeService,
+    AdvanceBookingWindowService,
     ScheduleResolutionService,
     DoctorCalendarAvailabilityService,
     CrossLocationScheduleConflictService,
@@ -19,6 +21,7 @@ import { ScheduleTimeService } from './schedule-time.service';
   ],
   exports: [
     ScheduleTimeService,
+    AdvanceBookingWindowService,
     ScheduleResolutionService,
     DoctorCalendarAvailabilityService,
     CrossLocationScheduleConflictService,
