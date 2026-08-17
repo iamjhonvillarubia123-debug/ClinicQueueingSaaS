@@ -76,6 +76,42 @@ export class ActiveBookingIdentityService {
     }
   }
 
+  async assertNoActivePublicBookingContext(
+    transaction: TransactionClient,
+    activeAppointmentKey: string,
+    mobileNumberHash: string,
+    practiceLocationId: string,
+    serviceDate: Date,
+  ): Promise<void> {
+    await this.assertNoActiveAppointment(transaction, activeAppointmentKey);
+
+    const groups = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT bg."id"
+      FROM "BookingGroup" bg
+      WHERE bg."controllingMobileNumberHash" = ${mobileNumberHash}
+        AND bg."practiceLocationId" = ${practiceLocationId}
+        AND bg."serviceDate" = ${serviceDate}
+        AND EXISTS (
+          SELECT 1
+          FROM "Appointment" a
+          WHERE a."bookingGroupId" = bg."id"
+            AND a."status" IN (
+              'WAITING',
+              'CALLED',
+              'TEMPORARILY_ABSENT',
+              'OUT_FOR_PROCEDURE'
+            )
+        )
+      LIMIT 1
+    `);
+
+    if (groups.length > 0) {
+      throw new ConflictException(
+        'An active confirmed booking already exists for this booking scope.',
+      );
+    }
+  }
+
   async attachDraftKey(
     transaction: TransactionClient,
     bookingDraftId: string,
