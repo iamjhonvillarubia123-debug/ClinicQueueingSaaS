@@ -291,7 +291,9 @@ export class BookingGroupMemberCancellationService {
       select: { id: true },
     });
     if (!token) {
-      throw new ForbiddenException('BookingGroup controller access is invalid.');
+      throw new ForbiddenException(
+        'BookingGroup controller access is invalid.',
+      );
     }
     return token.id;
   }
@@ -379,7 +381,9 @@ export class BookingGroupMemberCancellationService {
         orderBy: { servingOrderKey: 'asc' },
         select: { bookingGroupId: true },
       });
-      shouldEnd = Boolean(firstWaiting && firstWaiting.bookingGroupId !== group.id);
+      shouldEnd = Boolean(
+        firstWaiting && firstWaiting.bookingGroupId !== group.id,
+      );
     }
 
     if (!shouldEnd) return false;

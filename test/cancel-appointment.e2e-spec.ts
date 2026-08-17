@@ -161,10 +161,25 @@ describe('Appointment cancellation controls (e2e)', () => {
     );
     const [after, event, links, command, outbox] = await Promise.all([
       prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
-      prisma.queueEventAppointmentLink.findMany({ where: { queueEventId: result.queueEventId } }),
-      prisma.commandIdempotency.findFirstOrThrow({ where: { commandType: 'CANCEL_APPOINTMENT', appointmentId: appointment.id, actorUserId: doctorUserId } }),
-      prisma.notificationOutbox.findFirst({ where: { notificationType: NotificationType.APPOINTMENT_CANCELLATION, appointmentId: appointment.id } }),
+      prisma.queueEvent.findUniqueOrThrow({
+        where: { id: result.queueEventId },
+      }),
+      prisma.queueEventAppointmentLink.findMany({
+        where: { queueEventId: result.queueEventId },
+      }),
+      prisma.commandIdempotency.findFirstOrThrow({
+        where: {
+          commandType: 'CANCEL_APPOINTMENT',
+          appointmentId: appointment.id,
+          actorUserId: doctorUserId,
+        },
+      }),
+      prisma.notificationOutbox.findFirst({
+        where: {
+          notificationType: NotificationType.APPOINTMENT_CANCELLATION,
+          appointmentId: appointment.id,
+        },
+      }),
     ]);
     expect(after.status).toBe(AppointmentStatus.CANCELLED);
     expect(after.queueNumber).toBe(41);
@@ -194,52 +209,133 @@ describe('Appointment cancellation controls (e2e)', () => {
       servingOrderKey: null,
       waitingPlacementType: null,
     });
-    await cancelService.cancel(secretaryUserId, { appointmentId: appointment.id, reason: 'OTHER', note: 'Patient transferred care elsewhere' }, `secretary-cancel-${scope}`);
-    const after = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
+    await cancelService.cancel(
+      secretaryUserId,
+      {
+        appointmentId: appointment.id,
+        reason: 'OTHER',
+        note: 'Patient transferred care elsewhere',
+      },
+      `secretary-cancel-${scope}`,
+    );
+    const after = await prisma.appointment.findUniqueOrThrow({
+      where: { id: appointment.id },
+    });
     expect(after.status).toBe(AppointmentStatus.CANCELLED);
     expect(after.cancelledByType).toBe(AppointmentCancelledByType.SECRETARY);
-    expect(after.cancellationReason).toBe('OTHER: Patient transferred care elsewhere');
+    expect(after.cancellationReason).toBe(
+      'OTHER: Patient transferred care elsewhere',
+    );
   });
 
   it('rejects an unassigned Secretary', async () => {
     const appointment = await createAppointment('2026-10-03', 43);
-    await expect(cancelService.cancel(unassignedSecretaryUserId, { appointmentId: appointment.id, reason: 'PATIENT_REQUESTED' }, `unauthorized-cancel-${scope}`)).rejects.toThrow('Secretary is not assigned');
-    expect((await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe(AppointmentStatus.WAITING);
+    await expect(
+      cancelService.cancel(
+        unassignedSecretaryUserId,
+        { appointmentId: appointment.id, reason: 'PATIENT_REQUESTED' },
+        `unauthorized-cancel-${scope}`,
+      ),
+    ).rejects.toThrow('Secretary is not assigned');
+    expect(
+      (
+        await prisma.appointment.findUniqueOrThrow({
+          where: { id: appointment.id },
+        })
+      ).status,
+    ).toBe(AppointmentStatus.WAITING);
   });
 
   it('rejects terminal Appointment cancellation', async () => {
     const now = new Date();
-    const appointment = await createAppointment('2026-10-04', 44, {
-      status: AppointmentStatus.COMPLETED,
-      terminalAt: now,
-      completedAt: now,
-      servingOrderKey: null,
-      waitingPlacementType: null,
-    }, false);
-    await expect(cancelService.cancel(doctorUserId, { appointmentId: appointment.id, reason: 'CLINIC_REQUESTED' }, `terminal-cancel-${scope}`)).rejects.toThrow('not eligible for cancellation');
+    const appointment = await createAppointment(
+      '2026-10-04',
+      44,
+      {
+        status: AppointmentStatus.COMPLETED,
+        terminalAt: now,
+        completedAt: now,
+        servingOrderKey: null,
+        waitingPlacementType: null,
+      },
+      false,
+    );
+    await expect(
+      cancelService.cancel(
+        doctorUserId,
+        { appointmentId: appointment.id, reason: 'CLINIC_REQUESTED' },
+        `terminal-cancel-${scope}`,
+      ),
+    ).rejects.toThrow('not eligible for cancellation');
   });
 
   it('replays the same cancellation and conflicts on changed fingerprint', async () => {
     const appointment = await createAppointment('2026-10-05', 45);
     const key = `replay-cancel-${scope}`;
-    const first = await cancelService.cancel(doctorUserId, { appointmentId: appointment.id, reason: 'DUPLICATE_BOOKING' }, key);
-    const replay = await cancelService.cancel(doctorUserId, { appointmentId: appointment.id, reason: 'DUPLICATE_BOOKING' }, key);
+    const first = await cancelService.cancel(
+      doctorUserId,
+      { appointmentId: appointment.id, reason: 'DUPLICATE_BOOKING' },
+      key,
+    );
+    const replay = await cancelService.cancel(
+      doctorUserId,
+      { appointmentId: appointment.id, reason: 'DUPLICATE_BOOKING' },
+      key,
+    );
     expect(replay.replayed).toBe(true);
     expect(replay.queueEventId).toBe(first.queueEventId);
-    await expect(cancelService.cancel(doctorUserId, { appointmentId: appointment.id, reason: 'CLINIC_REQUESTED' }, key)).rejects.toThrow();
-    expect(await prisma.queueEvent.count({ where: { practiceLocationId, serviceDate: dateValue('2026-10-05'), type: QueueEventType.APPOINTMENT_CANCELLED } })).toBe(1);
-    expect(await prisma.commandIdempotency.count({ where: { commandType: 'CANCEL_APPOINTMENT', appointmentId: appointment.id, actorUserId: doctorUserId } })).toBe(1);
+    await expect(
+      cancelService.cancel(
+        doctorUserId,
+        { appointmentId: appointment.id, reason: 'CLINIC_REQUESTED' },
+        key,
+      ),
+    ).rejects.toThrow();
+    expect(
+      await prisma.queueEvent.count({
+        where: {
+          practiceLocationId,
+          serviceDate: dateValue('2026-10-05'),
+          type: QueueEventType.APPOINTMENT_CANCELLED,
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.commandIdempotency.count({
+        where: {
+          commandType: 'CANCEL_APPOINTMENT',
+          appointmentId: appointment.id,
+          actorUserId: doctorUserId,
+        },
+      }),
+    ).toBe(1);
   });
 
   it('serializes cancellation versus NEXT PATIENT against authoritative state', async () => {
     const serviceDate = '2026-10-06';
     const queue = await createStartedClinicDayWithTwoAppointments(serviceDate);
     const [nextResult, cancelResult] = await Promise.allSettled([
-      nextPatientService.advance(doctorUserId, { practiceLocationId, serviceDate, patientOutcome: NextPatientOutcome.COMPLETED }, `race-next-${scope}`),
-      cancelService.cancel(doctorUserId, { appointmentId: queue.nextId, reason: 'CLINIC_REQUESTED' }, `race-cancel-${scope}`),
+      nextPatientService.advance(
+        doctorUserId,
+        {
+          practiceLocationId,
+          serviceDate,
+          patientOutcome: NextPatientOutcome.COMPLETED,
+        },
+        `race-next-${scope}`,
+      ),
+      cancelService.cancel(
+        doctorUserId,
+        { appointmentId: queue.nextId, reason: 'CLINIC_REQUESTED' },
+        `race-cancel-${scope}`,
+      ),
     ]);
-    const current = await prisma.appointment.findUniqueOrThrow({ where: { id: queue.currentId } });
-    const next = await prisma.appointment.findUniqueOrThrow({ where: { id: queue.nextId } });
+    const current = await prisma.appointment.findUniqueOrThrow({
+      where: { id: queue.currentId },
+    });
+    const next = await prisma.appointment.findUniqueOrThrow({
+      where: { id: queue.nextId },
+    });
 
     expect(cancelResult.status).toBe('fulfilled');
     if (nextResult.status === 'fulfilled') {
@@ -260,13 +356,28 @@ describe('Appointment cancellation controls (e2e)', () => {
     }
     expect(next.servingOrderKey).toBeNull();
     expect(next.waitingPlacementType).toBeNull();
-    expect(await prisma.appointment.count({ where: { practiceLocationId, serviceDate: dateValue(serviceDate), status: AppointmentStatus.CALLED } })).toBe(nextResult.status === 'fulfilled' ? 0 : 1);
+    expect(
+      await prisma.appointment.count({
+        where: {
+          practiceLocationId,
+          serviceDate: dateValue(serviceDate),
+          status: AppointmentStatus.CALLED,
+        },
+      }),
+    ).toBe(nextResult.status === 'fulfilled' ? 0 : 1);
   });
 
-  async function createAppointment(serviceDate: string, queueNumber: number, overrides: AppointmentFixtureOverrides = {}, active = true) {
+  async function createAppointment(
+    serviceDate: string,
+    queueNumber: number,
+    overrides: AppointmentFixtureOverrides = {},
+    active = true,
+  ) {
     const date = dateValue(serviceDate);
     const activeAppointmentKey = active
-      ? createHash('sha256').update(`${scope}|${date.toISOString()}|${queueNumber}|cancel`).digest('hex')
+      ? createHash('sha256')
+          .update(`${scope}|${date.toISOString()}|${queueNumber}|cancel`)
+          .digest('hex')
       : null;
     return prisma.appointment.create({
       data: {
@@ -286,7 +397,9 @@ describe('Appointment cancellation controls (e2e)', () => {
     });
   }
 
-  async function createStartedClinicDayWithTwoAppointments(serviceDate: string) {
+  async function createStartedClinicDayWithTwoAppointments(
+    serviceDate: string,
+  ) {
     const now = new Date();
     await prisma.clinicDay.create({
       data: {
@@ -298,8 +411,17 @@ describe('Appointment cancellation controls (e2e)', () => {
         updatedAt: now,
       },
     });
-    const current = await createAppointment(serviceDate, 51, { status: AppointmentStatus.CALLED, servingOrderKey: null, waitingPlacementType: null, calledAt: now });
-    const next = await createAppointment(serviceDate, 52, { status: AppointmentStatus.WAITING, servingOrderKey: new Prisma.Decimal(1), waitingPlacementType: WaitingPlacementType.ORDINARY });
+    const current = await createAppointment(serviceDate, 51, {
+      status: AppointmentStatus.CALLED,
+      servingOrderKey: null,
+      waitingPlacementType: null,
+      calledAt: now,
+    });
+    const next = await createAppointment(serviceDate, 52, {
+      status: AppointmentStatus.WAITING,
+      servingOrderKey: new Prisma.Decimal(1),
+      waitingPlacementType: WaitingPlacementType.ORDINARY,
+    });
     return { currentId: current.id, nextId: next.id };
   }
 });
