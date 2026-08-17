@@ -14,6 +14,7 @@ import { BookingController } from './booking.controller';
 import { BookingDraftCleanupService } from './booking-draft-cleanup.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
+import { BookingGroupAccessTokenIssuerService } from './booking-group-access-token-issuer.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
@@ -39,12 +40,14 @@ import { IndividualBookingConfirmationService } from './individual-booking-confi
     ActiveBookingIdentityService,
     BookingConfirmationAdmissionService,
     BookingAccessTokenIssuerService,
+    BookingGroupAccessTokenIssuerService,
     IndividualBookingConfirmationService,
   ],
   exports: [
     ActiveBookingIdentityService,
     BookingConfirmationAdmissionService,
     BookingAccessTokenIssuerService,
+    BookingGroupAccessTokenIssuerService,
     IndividualBookingConfirmationService,
   ],
 })
