@@ -2,9 +2,12 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
+import { PatientAccessModule } from '../patient-access/patient-access.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { ClinicDayCancellationService } from './clinic-day-cancellation.service';
+import { ImHereController } from './im-here.controller';
+import { ImHereService } from './im-here.service';
 import { NextPatientController } from './next-patient.controller';
 import { NextPatientService } from './next-patient.service';
 import { QueueNumberAllocationService } from './queue-number-allocation.service';
@@ -23,11 +26,13 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     AuthModule,
     IdempotencyModule,
     NotificationModule,
+    PatientAccessModule,
     PrismaModule,
     ScheduleModule,
   ],
   providers: [
     ClinicDayCancellationService,
+    ImHereService,
     NextPatientService,
     QueueNumberAllocationService,
     QueueServingOrderPlacementService,
@@ -37,6 +42,7 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     SubstituteSecretaryService,
   ],
   controllers: [
+    ImHereController,
     NextPatientController,
     ReturnToQueueController,
     StaffReinsertController,
@@ -45,6 +51,7 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
   ],
   exports: [
     ClinicDayCancellationService,
+    ImHereService,
     NextPatientService,
     QueueNumberAllocationService,
     QueueServingOrderPlacementService,
