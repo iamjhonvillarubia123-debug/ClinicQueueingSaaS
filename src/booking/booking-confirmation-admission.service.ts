@@ -102,9 +102,12 @@ export class BookingConfirmationAdmissionService {
       transaction,
       activeAppointmentKey,
     );
-    await this.activeBookingIdentity.assertNoActiveAppointment(
+    await this.activeBookingIdentity.assertNoActivePublicBookingContext(
       transaction,
       activeAppointmentKey,
+      draft.mobileNumberHash,
+      draft.practiceLocationId,
+      draft.serviceDate,
     );
 
     return {
