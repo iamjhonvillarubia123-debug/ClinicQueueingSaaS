@@ -32,6 +32,13 @@ export class BookingConfigurationService {
         id: true,
         name: true,
         timeZone: true,
+        doctorProfile: {
+          select: {
+            accountSettings: {
+              select: { maximumAdvanceBookingDays: true },
+            },
+          },
+        },
         services: {
           where: { status: ServiceAvailabilityStatus.ACTIVE },
           orderBy: [{ name: 'asc' }, { id: 'asc' }],
@@ -66,6 +73,13 @@ export class BookingConfigurationService {
       );
     }
 
+    const accountSettings = location.doctorProfile.accountSettings;
+    if (!accountSettings) {
+      throw new BadRequestException(
+        'Practice location public booking configuration is incomplete.',
+      );
+    }
+
     if (location.services.length === 0) {
       throw new BadRequestException(
         'Practice location must have at least one active Service with a valid duration before online booking is available.',
@@ -89,6 +103,10 @@ export class BookingConfigurationService {
         id: location.id,
         name: location.name,
         timeZone: location.timeZone,
+      },
+      bookingWindow: {
+        maximumAdvanceBookingDays: accountSettings.maximumAdvanceBookingDays,
+        upperBoundaryInclusive: true,
       },
       services: location.services,
       bookingQuestions: location.bookingQuestions,
