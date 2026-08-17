@@ -128,7 +128,11 @@ export class MultiPersonBookingConfirmationService {
             'Confirmed booking group result is no longer available.',
           );
         }
-        return { bookingGroup: group, bookingGroupAccessToken: null, replayed: true };
+        return {
+          bookingGroup: group,
+          bookingGroupAccessToken: null,
+          replayed: true,
+        };
       }
 
       const admission = await this.admission.lockAndValidateCurrentAdmission(
@@ -142,7 +146,10 @@ export class MultiPersonBookingConfirmationService {
         );
       }
 
-      const draft = await this.loadDraftSnapshot(transaction, input.bookingDraftId);
+      const draft = await this.loadDraftSnapshot(
+        transaction,
+        input.bookingDraftId,
+      );
       const { members, practiceLocationName } =
         await this.loadAndValidateMembers(transaction, draft);
       if (members.length < 2 || members.length > 5) {
@@ -309,9 +316,8 @@ export class MultiPersonBookingConfirmationService {
           commandIdempotencyId: command.id,
           recipientMobileEncrypted: draft.mobileNumberEncrypted,
           recipientEmailEncrypted: null,
-          messageBodyEncrypted: this.notificationPayload.encryptMessage(
-            confirmationMessage,
-          ),
+          messageBodyEncrypted:
+            this.notificationPayload.encryptMessage(confirmationMessage),
           providerIdempotencyKey: `booking-group-confirmation:${commandIdentityKey}`,
           attemptCount: 0,
           nextAttemptAt: completedAt,
@@ -468,7 +474,9 @@ export class MultiPersonBookingConfirmationService {
       );
     }
 
-    const questionById = new Map(questions.map((question) => [question.id, question]));
+    const questionById = new Map(
+      questions.map((question) => [question.id, question]),
+    );
     const preparedMembers: MemberSnapshot[] = [];
     for (const member of members) {
       if (
@@ -480,7 +488,10 @@ export class MultiPersonBookingConfirmationService {
           'A group member is incomplete for confirmation.',
         );
       }
-      if (member.serviceSelections.length < 1 || member.serviceSelections.length > 3) {
+      if (
+        member.serviceSelections.length < 1 ||
+        member.serviceSelections.length > 3
+      ) {
         throw new ConflictException(
           'Selected Services are no longer valid for confirmation.',
         );
@@ -615,7 +626,10 @@ export class MultiPersonBookingConfirmationService {
         return;
       case BookingQuestionType.SINGLE_SELECT: {
         const value = answer.selectedOptionValue?.trim() ?? '';
-        if (!value || !this.readSelectOptionValues(question.selectOptions).has(value)) {
+        if (
+          !value ||
+          !this.readSelectOptionValues(question.selectOptions).has(value)
+        ) {
           throw new ConflictException(
             'BookingQuestion answers are no longer valid for confirmation.',
           );
