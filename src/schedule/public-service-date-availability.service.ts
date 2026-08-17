@@ -99,7 +99,8 @@ export class PublicServiceDateAvailabilityService {
     if (
       location.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE ||
       !location.isBookingEnabled ||
-      accountSettings?.allowOnlineBooking !== true
+      accountSettings?.allowOnlineBooking !== true ||
+      !location.timeZone?.trim()
     ) {
       return this.unavailable(
         practiceLocationId,
@@ -111,7 +112,7 @@ export class PublicServiceDateAvailabilityService {
     if (
       !this.advanceBookingWindow.isSelectable(
         serviceDate,
-        location.timeZone,
+        location.timeZone.trim(),
         accountSettings.maximumAdvanceBookingDays,
         now,
       )
