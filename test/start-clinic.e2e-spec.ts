@@ -250,6 +250,7 @@ describe('START CLINIC controls (e2e)', () => {
       ]);
 
     expect(firstAfter.status).toBe(AppointmentStatus.CALLED);
+    expect(firstAfter.calledAt).not.toBeNull();
     expect(firstAfter.servingOrderKey).toBeNull();
     expect(firstAfter.waitingPlacementType).toBeNull();
     expect(secondAfter.status).toBe(AppointmentStatus.WAITING);
