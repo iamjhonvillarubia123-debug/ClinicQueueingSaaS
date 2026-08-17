@@ -359,7 +359,8 @@ export class CancelAppointmentService {
     if (
       !actor ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ForbiddenException(
         'Current user cannot cancel this Appointment.',
