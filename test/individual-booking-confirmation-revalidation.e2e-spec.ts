@@ -269,40 +269,35 @@ describe('Individual booking confirmation current-state revalidation (e2e)', () 
   }
 
   async function expectRejectedConfirmationState(fixture: ConfirmationFixture) {
-    const [
-      counter,
-      appointmentCount,
-      commandCount,
-      draft,
-      otpVerification,
-    ] = await Promise.all([
-      prisma.queueCounter.findUnique({
-        where: {
-          practiceLocationId_serviceDate: {
+    const [counter, appointmentCount, commandCount, draft, otpVerification] =
+      await Promise.all([
+        prisma.queueCounter.findUnique({
+          where: {
+            practiceLocationId_serviceDate: {
+              practiceLocationId: fixture.locationId,
+              serviceDate: fixture.serviceDate,
+            },
+          },
+        }),
+        prisma.appointment.count({
+          where: {
             practiceLocationId: fixture.locationId,
             serviceDate: fixture.serviceDate,
           },
-        },
-      }),
-      prisma.appointment.count({
-        where: {
-          practiceLocationId: fixture.locationId,
-          serviceDate: fixture.serviceDate,
-        },
-      }),
-      prisma.commandIdempotency.count({
-        where: {
-          commandType: CommandType.CONVERT_BOOKING_DRAFT,
-          bookingDraftId: fixture.bookingDraftId,
-        },
-      }),
-      prisma.bookingDraft.findUniqueOrThrow({
-        where: { id: fixture.bookingDraftId },
-      }),
-      prisma.otpVerification.findUniqueOrThrow({
-        where: { id: fixture.otpVerificationId },
-      }),
-    ]);
+        }),
+        prisma.commandIdempotency.count({
+          where: {
+            commandType: CommandType.CONVERT_BOOKING_DRAFT,
+            bookingDraftId: fixture.bookingDraftId,
+          },
+        }),
+        prisma.bookingDraft.findUniqueOrThrow({
+          where: { id: fixture.bookingDraftId },
+        }),
+        prisma.otpVerification.findUniqueOrThrow({
+          where: { id: fixture.otpVerificationId },
+        }),
+      ]);
 
     expect(counter).toBeNull();
     expect(appointmentCount).toBe(0);
