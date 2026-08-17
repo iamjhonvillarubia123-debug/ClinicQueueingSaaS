@@ -88,7 +88,12 @@ describe("I'M HERE controls (e2e)", () => {
   it('reinstates an eligible individual Appointment once without changing Queue Number', async () => {
     const serviceDate = dateValue('2026-10-01');
     await createStartedClinicDay(serviceDate);
-    const protectedNext = await createWaiting(serviceDate, 1, 'BASIC-PROTECTED', 1);
+    const protectedNext = await createWaiting(
+      serviceDate,
+      1,
+      'BASIC-PROTECTED',
+      1,
+    );
     const absent = await createAppointment(serviceDate, 99, 'BASIC-ABSENT', {
       status: AppointmentStatus.TEMPORARILY_ABSENT,
       servingOrderKey: null,
@@ -113,7 +118,9 @@ describe("I'M HERE controls (e2e)", () => {
         orderBy: { servingOrderKey: 'asc' },
         select: { id: true },
       }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
+      prisma.queueEvent.findUniqueOrThrow({
+        where: { id: result.queueEventId },
+      }),
       prisma.commandIdempotency.findFirstOrThrow({
         where: {
           commandType: CommandType.SELF_SERVICE_REINSERTION,
@@ -126,16 +133,24 @@ describe("I'M HERE controls (e2e)", () => {
     expect(after.waitingPlacementType).toBe(WaitingPlacementType.IM_HERE);
     expect(after.queueNumber).toBe(99);
     expect(after.selfServiceReinsertedAt).not.toBeNull();
-    expect(waiting.map((item) => item.id)).toEqual([protectedNext.id, absent.id]);
+    expect(waiting.map((item) => item.id)).toEqual([
+      protectedNext.id,
+      absent.id,
+    ]);
     expect(event.type).toBe(QueueEventType.SELF_SERVICE_REINSERTION);
     expect(event.actorType).toBe(QueueEventActorType.PATIENT);
     expect(command.idempotencyKey).toBe(`imhere-basic-${scope}`);
   });
 
-  it('places I\'M HERE after Protected Next and committed RETURN_TO_QUEUE entries', async () => {
+  it("places I'M HERE after Protected Next and committed RETURN_TO_QUEUE entries", async () => {
     const serviceDate = dateValue('2026-10-02');
     await createStartedClinicDay(serviceDate);
-    const protectedNext = await createWaiting(serviceDate, 1, 'ORDER-PROTECTED', 1);
+    const protectedNext = await createWaiting(
+      serviceDate,
+      1,
+      'ORDER-PROTECTED',
+      1,
+    );
     const returnedA = await createWaiting(
       serviceDate,
       2,
@@ -179,9 +194,30 @@ describe("I'M HERE controls (e2e)", () => {
     const group = await prisma.bookingGroup.create({
       data: { practiceLocationId, serviceDate },
     });
-    const groupA = await createWaiting(serviceDate, 1, 'GROUP-A', 1, WaitingPlacementType.ORDINARY, group.id);
-    const groupB = await createWaiting(serviceDate, 2, 'GROUP-B', 2, WaitingPlacementType.ORDINARY, group.id);
-    const groupC = await createWaiting(serviceDate, 3, 'GROUP-C', 3, WaitingPlacementType.ORDINARY, group.id);
+    const groupA = await createWaiting(
+      serviceDate,
+      1,
+      'GROUP-A',
+      1,
+      WaitingPlacementType.ORDINARY,
+      group.id,
+    );
+    const groupB = await createWaiting(
+      serviceDate,
+      2,
+      'GROUP-B',
+      2,
+      WaitingPlacementType.ORDINARY,
+      group.id,
+    );
+    const groupC = await createWaiting(
+      serviceDate,
+      3,
+      'GROUP-C',
+      3,
+      WaitingPlacementType.ORDINARY,
+      group.id,
+    );
     const ordinary = await createWaiting(serviceDate, 4, 'GROUP-ORDINARY', 4);
     const absent = await createAppointment(serviceDate, 60, 'GROUP-ABSENT', {
       status: AppointmentStatus.TEMPORARILY_ABSENT,
@@ -243,7 +279,11 @@ describe("I'M HERE controls (e2e)", () => {
     await expect(
       service.reinsert(
         absent.bookingReference,
-        await issueToken(absent.id, serviceDate, BookingAccessTokenPurpose.VIEW_ONLY),
+        await issueToken(
+          absent.id,
+          serviceDate,
+          BookingAccessTokenPurpose.VIEW_ONLY,
+        ),
         `imhere-viewonly-${scope}`,
       ),
     ).rejects.toThrow('Patient booking access is unavailable');
@@ -256,10 +296,20 @@ describe("I'M HERE controls (e2e)", () => {
       ),
     ).rejects.toThrow('Patient booking access is unavailable');
 
+    const expiredToken = await issueToken(absent.id, serviceDate);
+    const expiredTokenCreatedAt = new Date(Date.now() - 2_000);
+    const expiredTokenExpiresAt = new Date(Date.now() - 1_000);
+    await prisma.bookingAccessToken.update({
+      where: { tokenHash: tokenHash(expiredToken) },
+      data: {
+        createdAt: expiredTokenCreatedAt,
+        expiresAt: expiredTokenExpiresAt,
+      },
+    });
     await expect(
       service.reinsert(
         absent.bookingReference,
-        await issueToken(absent.id, serviceDate, BookingAccessTokenPurpose.VIEW_AND_MANAGE_BOOKING, new Date(Date.now() - 1000)),
+        expiredToken,
         `imhere-expired-${scope}`,
       ),
     ).rejects.toThrow('Patient booking access is unavailable');
@@ -290,8 +340,16 @@ describe("I'M HERE controls (e2e)", () => {
     const rawToken = await issueToken(absent.id, serviceDate);
     const key = `imhere-replay-${scope}`;
 
-    const first = await service.reinsert(absent.bookingReference, rawToken, key);
-    const replay = await service.reinsert(absent.bookingReference, rawToken, key);
+    const first = await service.reinsert(
+      absent.bookingReference,
+      rawToken,
+      key,
+    );
+    const replay = await service.reinsert(
+      absent.bookingReference,
+      rawToken,
+      key,
+    );
     expect(replay.replayed).toBe(true);
     expect(replay.queueEventId).toBe(first.queueEventId);
 
@@ -323,7 +381,7 @@ describe("I'M HERE controls (e2e)", () => {
     ).toBe(1);
   });
 
-  it('serializes concurrent I\'M HERE attempts so only one mutation is committed', async () => {
+  it("serializes concurrent I'M HERE attempts so only one mutation is committed", async () => {
     const serviceDate = dateValue('2026-10-07');
     await createStartedClinicDay(serviceDate);
     await createWaiting(serviceDate, 1, 'RACE-PROTECTED', 1);
@@ -335,12 +393,24 @@ describe("I'M HERE controls (e2e)", () => {
     const rawToken = await issueToken(absent.id, serviceDate);
 
     const results = await Promise.allSettled([
-      service.reinsert(absent.bookingReference, rawToken, `imhere-race-a-${scope}`),
-      service.reinsert(absent.bookingReference, rawToken, `imhere-race-b-${scope}`),
+      service.reinsert(
+        absent.bookingReference,
+        rawToken,
+        `imhere-race-a-${scope}`,
+      ),
+      service.reinsert(
+        absent.bookingReference,
+        rawToken,
+        `imhere-race-b-${scope}`,
+      ),
     ]);
 
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === 'rejected'),
+    ).toHaveLength(1);
     expect(
       await prisma.queueEvent.count({
         where: {
@@ -389,7 +459,9 @@ describe("I'M HERE controls (e2e)", () => {
     overrides: AppointmentFixtureOverrides,
   ) {
     const activeAppointmentKey = createHash('sha256')
-      .update(`${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`)
+      .update(
+        `${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`,
+      )
       .digest('hex');
     return prisma.appointment.create({
       data: {
@@ -412,7 +484,9 @@ describe("I'M HERE controls (e2e)", () => {
     purpose: BookingAccessTokenPurpose = BookingAccessTokenPurpose.VIEW_AND_MANAGE_BOOKING,
     expiresAt = new Date(serviceDate.getTime() + 10 * 24 * 60 * 60 * 1000),
   ): Promise<string> {
-    const rawToken = Buffer.from(randomUUID()).toString('base64url').replaceAll('=', '');
+    const rawToken = Buffer.from(randomUUID())
+      .toString('base64url')
+      .replaceAll('=', '');
     await prisma.bookingAccessToken.create({
       data: {
         appointmentId,
