@@ -11,6 +11,8 @@ import { QueueNumberAllocationService } from './queue-number-allocation.service'
 import { QueueServingOrderPlacementService } from './queue-serving-order-placement.service';
 import { ReturnToQueueController } from './return-to-queue.controller';
 import { ReturnToQueueService } from './return-to-queue.service';
+import { StaffReinsertController } from './staff-reinsert.controller';
+import { StaffReinsertService } from './staff-reinsert.service';
 import { StartClinicController } from './start-clinic.controller';
 import { StartClinicService } from './start-clinic.service';
 import { SubstituteSecretaryController } from './substitute-secretary.controller';
@@ -30,12 +32,14 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     QueueNumberAllocationService,
     QueueServingOrderPlacementService,
     ReturnToQueueService,
+    StaffReinsertService,
     StartClinicService,
     SubstituteSecretaryService,
   ],
   controllers: [
     NextPatientController,
     ReturnToQueueController,
+    StaffReinsertController,
     StartClinicController,
     SubstituteSecretaryController,
   ],
@@ -45,6 +49,7 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     QueueNumberAllocationService,
     QueueServingOrderPlacementService,
     ReturnToQueueService,
+    StaffReinsertService,
     StartClinicService,
     SubstituteSecretaryService,
   ],
