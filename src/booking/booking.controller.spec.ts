@@ -118,7 +118,9 @@ describe('BookingController', () => {
       serviceDate: '2026-09-16',
       selectedServiceIds: ['service-1'],
     };
-    bookingServiceMock.createDraft.mockResolvedValue({ bookingDraft: { id: 'draft-1' } });
+    bookingServiceMock.createDraft.mockResolvedValue({
+      bookingDraft: { id: 'draft-1' },
+    });
 
     await expect(controller.createDraft(dto)).resolves.toMatchObject({
       bookingDraft: { id: 'draft-1' },
