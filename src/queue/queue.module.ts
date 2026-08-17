@@ -5,6 +5,8 @@ import { NotificationModule } from '../notification/notification.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { ClinicDayCancellationService } from './clinic-day-cancellation.service';
+import { NextPatientController } from './next-patient.controller';
+import { NextPatientService } from './next-patient.service';
 import { QueueNumberAllocationService } from './queue-number-allocation.service';
 import { StartClinicController } from './start-clinic.controller';
 import { StartClinicService } from './start-clinic.service';
@@ -21,13 +23,19 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
   ],
   providers: [
     ClinicDayCancellationService,
+    NextPatientService,
     QueueNumberAllocationService,
     StartClinicService,
     SubstituteSecretaryService,
   ],
-  controllers: [StartClinicController, SubstituteSecretaryController],
+  controllers: [
+    NextPatientController,
+    StartClinicController,
+    SubstituteSecretaryController,
+  ],
   exports: [
     ClinicDayCancellationService,
+    NextPatientService,
     QueueNumberAllocationService,
     StartClinicService,
     SubstituteSecretaryService,
