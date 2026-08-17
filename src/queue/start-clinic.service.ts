@@ -195,8 +195,7 @@ export class StartClinicService {
               status: ClinicDayStatus.STARTED,
               startedAt: now,
               operatingPracticeStaffId,
-              maximumOnlineBookingUntilAt:
-                schedule.maximumOnlineBookingUntilAt,
+              maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
             },
             select: { id: true, status: true, startedAt: true },
           })
@@ -207,8 +206,7 @@ export class StartClinicService {
               status: ClinicDayStatus.STARTED,
               startedAt: now,
               operatingPracticeStaffId,
-              maximumOnlineBookingUntilAt:
-                schedule.maximumOnlineBookingUntilAt,
+              maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
             },
             select: { id: true, status: true, startedAt: true },
           });
