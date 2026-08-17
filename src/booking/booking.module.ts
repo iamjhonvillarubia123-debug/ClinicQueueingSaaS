@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
 import { OtpModule } from '../otp/otp.module';
+import { PatientAccessModule } from '../patient-access/patient-access.module';
 import { QueueModule } from '../queue/queue.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
@@ -28,6 +29,7 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     ScheduleModule,
     IdempotencyModule,
     NotificationModule,
+    PatientAccessModule,
     QueueModule,
   ],
   controllers: [BookingController],
