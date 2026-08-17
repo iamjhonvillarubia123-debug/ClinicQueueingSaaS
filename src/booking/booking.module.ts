@@ -10,6 +10,7 @@ import { BookingAccessTokenIssuerService } from './booking-access-token-issuer.s
 import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
+import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingController } from './booking.controller';
 import { BookingDraftCleanupService } from './booking-draft-cleanup.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
@@ -18,6 +19,7 @@ import { BookingGroupAccessTokenIssuerService } from './booking-group-access-tok
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
+import { MultiPersonBookingConfirmationService } from './multi-person-booking-confirmation.service';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { IndividualBookingConfirmationService } from './individual-booking-confi
     BookingAccessTokenIssuerService,
     BookingGroupAccessTokenIssuerService,
     IndividualBookingConfirmationService,
+    MultiPersonBookingConfirmationService,
+    BookingConfirmationService,
   ],
   exports: [
     ActiveBookingIdentityService,
@@ -49,6 +53,8 @@ import { IndividualBookingConfirmationService } from './individual-booking-confi
     BookingAccessTokenIssuerService,
     BookingGroupAccessTokenIssuerService,
     IndividualBookingConfirmationService,
+    MultiPersonBookingConfirmationService,
+    BookingConfirmationService,
   ],
 })
 export class BookingModule {}
