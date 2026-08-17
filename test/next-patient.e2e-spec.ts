@@ -19,6 +19,20 @@ import {
 import { NextPatientService } from './../src/queue/next-patient.service';
 import { ScheduleTimeService } from './../src/schedule/schedule-time.service';
 
+type AppointmentFixtureOverrides = Partial<
+  Omit<
+    Prisma.AppointmentUncheckedCreateInput,
+    | 'bookingReference'
+    | 'practiceLocationId'
+    | 'serviceDate'
+    | 'estimatedServiceMinutes'
+    | 'queueNumber'
+    | 'activeAppointmentKey'
+    | 'firstName'
+    | 'lastName'
+  >
+>;
+
 describe('NEXT PATIENT controls (e2e)', () => {
   let prisma: PrismaService;
   let service: NextPatientService;
@@ -432,7 +446,7 @@ describe('NEXT PATIENT controls (e2e)', () => {
     serviceDate: Date,
     queueNumber: number,
     discriminator: string,
-    overrides: Prisma.AppointmentUncheckedCreateInput,
+    overrides: AppointmentFixtureOverrides,
   ) {
     return prisma.appointment.create({
       data: {
@@ -443,9 +457,9 @@ describe('NEXT PATIENT controls (e2e)', () => {
         serviceDate,
         estimatedServiceMinutes: 30,
         queueNumber,
-        activeAppointmentKey: `${scope.slice(0, 12)}-${serviceDate
+        activeAppointmentKey: `${scope.slice(0, 8)}-${serviceDate
           .toISOString()
-          .slice(0, 10)}-${queueNumber}-${discriminator}`,
+          .slice(8, 10)}-${queueNumber}-${discriminator.slice(0, 12)}`,
         firstName: 'Queue',
         lastName: discriminator,
         ...overrides,
