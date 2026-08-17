@@ -19,6 +19,9 @@ describe('PublicServiceDateAvailabilityService', () => {
   const scheduleTimeMock = {
     parseServiceDate: jest.fn(),
   };
+  const advanceBookingWindowMock = {
+    isSelectable: jest.fn(),
+  };
 
   let service: PublicServiceDateAvailabilityService;
 
@@ -42,18 +45,26 @@ describe('PublicServiceDateAvailabilityService', () => {
       doctorCalendarMock as never,
       crossLocationMock as never,
       scheduleTimeMock as never,
+      advanceBookingWindowMock as never,
     );
     scheduleTimeMock.parseServiceDate.mockReturnValue({
       year: 2026,
       month: 8,
       day: 17,
     });
+    advanceBookingWindowMock.isSelectable.mockReturnValue(true);
     prismaMock.practiceLocation.findUnique.mockResolvedValue({
       id: 'location-1',
       doctorProfileId: 'doctor-1',
       lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
       isBookingEnabled: true,
-      doctorProfile: { accountSettings: { allowOnlineBooking: true } },
+      timeZone: 'Asia/Manila',
+      doctorProfile: {
+        accountSettings: {
+          allowOnlineBooking: true,
+          maximumAdvanceBookingDays: 30,
+        },
+      },
     });
     scheduleResolutionMock.resolveConfiguredSchedule.mockResolvedValue(
       openSchedule,
@@ -77,7 +88,13 @@ describe('PublicServiceDateAvailabilityService', () => {
       doctorProfileId: 'doctor-1',
       lifecycleStatus: PracticeLocationLifecycleStatus.DISABLED,
       isBookingEnabled: true,
-      doctorProfile: { accountSettings: { allowOnlineBooking: true } },
+      timeZone: 'Asia/Manila',
+      doctorProfile: {
+        accountSettings: {
+          allowOnlineBooking: true,
+          maximumAdvanceBookingDays: 30,
+        },
+      },
     });
 
     await expect(
@@ -86,6 +103,27 @@ describe('PublicServiceDateAvailabilityService', () => {
       availableForPublicBooking: false,
       reason: 'LOCATION_UNAVAILABLE',
     });
+    expect(
+      scheduleResolutionMock.resolveConfiguredSchedule,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('stops before schedule resolution when the Service Date is outside the advance window', async () => {
+    advanceBookingWindowMock.isSelectable.mockReturnValue(false);
+    const now = new Date('2026-08-17T03:00:00.000Z');
+
+    await expect(
+      service.resolve('location-1', '2026-09-17', now),
+    ).resolves.toMatchObject({
+      availableForPublicBooking: false,
+      reason: 'OUTSIDE_ADVANCE_BOOKING_WINDOW',
+    });
+    expect(advanceBookingWindowMock.isSelectable).toHaveBeenCalledWith(
+      '2026-09-17',
+      'Asia/Manila',
+      30,
+      now,
+    );
     expect(
       scheduleResolutionMock.resolveConfiguredSchedule,
     ).not.toHaveBeenCalled();
