@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -48,7 +49,17 @@ export class BookingController {
   }
 
   @Post('draft')
-  createDraft(@Body() createBookingDraftDto: CreateBookingDraftDto) {
+  async createDraft(@Body() createBookingDraftDto: CreateBookingDraftDto) {
+    const availability = await this.publicServiceDateAvailability.resolve(
+      createBookingDraftDto.practiceLocationId,
+      createBookingDraftDto.serviceDate,
+    );
+    if (!availability.availableForPublicBooking) {
+      throw new BadRequestException(
+        'Selected Service Date is not available for public booking.',
+      );
+    }
+
     return this.bookingService.createDraft(createBookingDraftDto);
   }
 
