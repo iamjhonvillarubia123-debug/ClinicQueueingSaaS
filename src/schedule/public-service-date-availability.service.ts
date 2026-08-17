@@ -8,6 +8,7 @@ import {
   Prisma,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdvanceBookingWindowService } from './advance-booking-window.service';
 import { CrossLocationScheduleConflictService } from './cross-location-schedule-conflict.service';
 import { DoctorCalendarAvailabilityService } from './doctor-calendar-availability.service';
 import { ScheduleResolutionService } from './schedule-resolution.service';
@@ -16,6 +17,7 @@ import { ScheduleTimeService } from './schedule-time.service';
 export type PublicServiceDateAvailabilityReason =
   | 'AVAILABLE'
   | 'LOCATION_UNAVAILABLE'
+  | 'OUTSIDE_ADVANCE_BOOKING_WINDOW'
   | 'NO_OPEN_SCHEDULE'
   | 'DOCTOR_CALENDAR_UNAVAILABLE'
   | 'CROSS_LOCATION_CONFLICT'
@@ -54,6 +56,7 @@ export class PublicServiceDateAvailabilityService {
     private readonly doctorCalendar: DoctorCalendarAvailabilityService,
     private readonly crossLocationConflict: CrossLocationScheduleConflictService,
     private readonly scheduleTime: ScheduleTimeService,
+    private readonly advanceBookingWindow: AdvanceBookingWindowService,
   ) {}
 
   async resolve(
@@ -75,10 +78,14 @@ export class PublicServiceDateAvailabilityService {
         doctorProfileId: true,
         lifecycleStatus: true,
         isBookingEnabled: true,
+        timeZone: true,
         doctorProfile: {
           select: {
             accountSettings: {
-              select: { allowOnlineBooking: true },
+              select: {
+                allowOnlineBooking: true,
+                maximumAdvanceBookingDays: true,
+              },
             },
           },
         },
@@ -88,15 +95,31 @@ export class PublicServiceDateAvailabilityService {
       throw new NotFoundException('Practice location was not found.');
     }
 
+    const accountSettings = location.doctorProfile.accountSettings;
     if (
       location.lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE ||
       !location.isBookingEnabled ||
-      location.doctorProfile.accountSettings?.allowOnlineBooking !== true
+      accountSettings?.allowOnlineBooking !== true
     ) {
       return this.unavailable(
         practiceLocationId,
         serviceDate,
         'LOCATION_UNAVAILABLE',
+      );
+    }
+
+    if (
+      !this.advanceBookingWindow.isSelectable(
+        serviceDate,
+        location.timeZone,
+        accountSettings.maximumAdvanceBookingDays,
+        now,
+      )
+    ) {
+      return this.unavailable(
+        practiceLocationId,
+        serviceDate,
+        'OUTSIDE_ADVANCE_BOOKING_WINDOW',
       );
     }
 
