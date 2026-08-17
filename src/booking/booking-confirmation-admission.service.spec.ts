@@ -29,33 +29,10 @@ describe('BookingConfirmationAdmissionService', () => {
   it('accepts an active Doctor during subscription grace and protects duplicate scope', async () => {
     const now = new Date('2026-08-17T01:00:00.000Z');
     const transaction = transactionWithRows([
-      [
-        {
-          id: 'draft-1',
-          mode: 'INDIVIDUAL',
-          status: 'PENDING_OTP',
-          practiceLocationId: 'practice-1',
-          serviceDate: new Date('2026-08-20T00:00:00.000Z'),
-          mobileNumberHash: 'mobile-hash',
-          activeDraftKey: 'd'.repeat(64),
-          expiresAt: new Date('2026-08-17T01:30:00.000Z'),
-          consumedAt: null,
-          cancelledAt: null,
-          doctorUserId: 'doctor-1',
-          doctorAccountStatus: 'ACTIVE',
-          doctorAdministrativeRestrictionStatus: 'NONE',
-          entitlementGraceEndsAt: new Date('2026-08-18T00:00:00.000Z'),
-        },
-      ],
-      [
-        {
-          id: 'otp-1',
-          verifiedAt: new Date('2026-08-17T00:59:00.000Z'),
-          consumedAt: null,
-          invalidatedAt: null,
-          activeContextKey: 'BOOKING:draft-1',
-        },
-      ],
+      [draftRow()],
+      [doctorRow()],
+      [{ graceEndsAt: new Date('2026-08-18T00:00:00.000Z') }],
+      [verifiedOtpRow()],
     ]);
     resolveAvailability.mockResolvedValue({
       practiceLocationId: 'practice-1',
@@ -83,33 +60,10 @@ describe('BookingConfirmationAdmissionService', () => {
   it('rejects unresolved subscription grace expiry before duplicate and queue work', async () => {
     const now = new Date('2026-08-17T01:00:00.000Z');
     const transaction = transactionWithRows([
-      [
-        {
-          id: 'draft-1',
-          mode: 'INDIVIDUAL',
-          status: 'PENDING_OTP',
-          practiceLocationId: 'practice-1',
-          serviceDate: new Date('2026-08-20T00:00:00.000Z'),
-          mobileNumberHash: 'mobile-hash',
-          activeDraftKey: 'd'.repeat(64),
-          expiresAt: new Date('2026-08-17T01:30:00.000Z'),
-          consumedAt: null,
-          cancelledAt: null,
-          doctorUserId: 'doctor-1',
-          doctorAccountStatus: 'ACTIVE',
-          doctorAdministrativeRestrictionStatus: 'NONE',
-          entitlementGraceEndsAt: new Date('2026-08-17T00:59:59.000Z'),
-        },
-      ],
-      [
-        {
-          id: 'otp-1',
-          verifiedAt: new Date('2026-08-17T00:59:00.000Z'),
-          consumedAt: null,
-          invalidatedAt: null,
-          activeContextKey: 'BOOKING:draft-1',
-        },
-      ],
+      [draftRow()],
+      [doctorRow()],
+      [{ graceEndsAt: new Date('2026-08-17T00:59:59.000Z') }],
+      [verifiedOtpRow()],
     ]);
 
     await expect(
@@ -125,24 +79,9 @@ describe('BookingConfirmationAdmissionService', () => {
   it('rejects a stale or unverified booking OTP', async () => {
     const now = new Date('2026-08-17T01:00:00.000Z');
     const transaction = transactionWithRows([
-      [
-        {
-          id: 'draft-1',
-          mode: 'INDIVIDUAL',
-          status: 'PENDING_OTP',
-          practiceLocationId: 'practice-1',
-          serviceDate: new Date('2026-08-20T00:00:00.000Z'),
-          mobileNumberHash: 'mobile-hash',
-          activeDraftKey: 'd'.repeat(64),
-          expiresAt: new Date('2026-08-17T01:30:00.000Z'),
-          consumedAt: null,
-          cancelledAt: null,
-          doctorUserId: 'doctor-1',
-          doctorAccountStatus: 'ACTIVE',
-          doctorAdministrativeRestrictionStatus: 'NONE',
-          entitlementGraceEndsAt: new Date('2026-08-18T00:00:00.000Z'),
-        },
-      ],
+      [draftRow()],
+      [doctorRow()],
+      [{ graceEndsAt: new Date('2026-08-18T00:00:00.000Z') }],
       [],
     ]);
 
@@ -154,6 +93,40 @@ describe('BookingConfirmationAdmissionService', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
+
+  function draftRow() {
+    return {
+      id: 'draft-1',
+      mode: 'INDIVIDUAL',
+      status: 'PENDING_OTP',
+      practiceLocationId: 'practice-1',
+      serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+      mobileNumberHash: 'mobile-hash',
+      activeDraftKey: 'd'.repeat(64),
+      expiresAt: new Date('2026-08-17T01:30:00.000Z'),
+      consumedAt: null,
+      cancelledAt: null,
+      doctorProfileId: 'doctor-profile-1',
+      doctorUserId: 'doctor-1',
+    };
+  }
+
+  function doctorRow() {
+    return {
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+    };
+  }
+
+  function verifiedOtpRow() {
+    return {
+      id: 'otp-1',
+      verifiedAt: new Date('2026-08-17T00:59:00.000Z'),
+      consumedAt: null,
+      invalidatedAt: null,
+      activeContextKey: 'BOOKING:draft-1',
+    };
+  }
 
   function transactionWithRows(rowBatches: unknown[][]) {
     const batches = [...rowBatches];
