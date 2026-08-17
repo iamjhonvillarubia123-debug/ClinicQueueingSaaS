@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   AdministrativeRestrictionStatus,
   AppointmentStatus,
@@ -308,7 +308,7 @@ describe('NEXT PATIENT controls (e2e)', () => {
     ).rejects.toThrow('current operating secretary');
   });
 
-  it('serializes concurrent distinct NEXT PATIENT commands so only one advances the queue', async () => {
+  it('serializes concurrent distinct NEXT PATIENT commands in queue order', async () => {
     const serviceDate = '2026-09-09';
     const queue = await createClinicDayWithQueue(serviceDate, 3);
 
@@ -326,16 +326,17 @@ describe('NEXT PATIENT controls (e2e)', () => {
     ]);
 
     expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(
-      1,
+      2,
     );
     expect(settled.filter((item) => item.status === 'rejected')).toHaveLength(
-      1,
+      0,
     );
 
     const [events, commands, firstAfter, secondAfter, thirdAfter] =
       await Promise.all([
         prisma.queueEvent.findMany({
           where: { practiceLocationId, serviceDate: dateValue(serviceDate) },
+          orderBy: { queueEventSequence: 'asc' },
         }),
         prisma.commandIdempotency.findMany({
           where: {
@@ -349,11 +350,13 @@ describe('NEXT PATIENT controls (e2e)', () => {
         prisma.appointment.findUniqueOrThrow({ where: { id: queue.thirdId! } }),
       ]);
 
-    expect(events).toHaveLength(1);
-    expect(commands).toHaveLength(1);
+    expect(events).toHaveLength(2);
+    expect(events[0]?.queueEventSequence).toBe(1);
+    expect(events[1]?.queueEventSequence).toBe(2);
+    expect(commands).toHaveLength(2);
     expect(firstAfter.status).toBe(AppointmentStatus.COMPLETED);
-    expect(secondAfter.status).toBe(AppointmentStatus.CALLED);
-    expect(thirdAfter.status).toBe(AppointmentStatus.WAITING);
+    expect(secondAfter.status).toBe(AppointmentStatus.COMPLETED);
+    expect(thirdAfter.status).toBe(AppointmentStatus.CALLED);
   });
 
   it('ends group serving protection when NEXT PATIENT leaves the group', async () => {
@@ -406,20 +409,22 @@ describe('NEXT PATIENT controls (e2e)', () => {
       servingOrderKey: null,
       waitingPlacementType: null,
     });
-    const next = count >= 2
-      ? await createAppointment(date, 2, 'NEXT', {
-          status: AppointmentStatus.WAITING,
-          servingOrderKey: new Prisma.Decimal(1),
-          waitingPlacementType: WaitingPlacementType.ORDINARY,
-        })
-      : null;
-    const third = count >= 3
-      ? await createAppointment(date, 3, 'THIRD', {
-          status: AppointmentStatus.WAITING,
-          servingOrderKey: new Prisma.Decimal(2),
-          waitingPlacementType: WaitingPlacementType.ORDINARY,
-        })
-      : null;
+    const next =
+      count >= 2
+        ? await createAppointment(date, 2, 'NEXT', {
+            status: AppointmentStatus.WAITING,
+            servingOrderKey: new Prisma.Decimal(1),
+            waitingPlacementType: WaitingPlacementType.ORDINARY,
+          })
+        : null;
+    const third =
+      count >= 3
+        ? await createAppointment(date, 3, 'THIRD', {
+            status: AppointmentStatus.WAITING,
+            servingOrderKey: new Prisma.Decimal(2),
+            waitingPlacementType: WaitingPlacementType.ORDINARY,
+          })
+        : null;
     return {
       currentId: current.id,
       nextId: next?.id ?? '',
@@ -448,6 +453,12 @@ describe('NEXT PATIENT controls (e2e)', () => {
     discriminator: string,
     overrides: AppointmentFixtureOverrides,
   ) {
+    const activeAppointmentKey = createHash('sha256')
+      .update(
+        `${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`,
+      )
+      .digest('hex');
+
     return prisma.appointment.create({
       data: {
         bookingReference: `M7N-${scope.slice(0, 8)}-${serviceDate
@@ -457,9 +468,7 @@ describe('NEXT PATIENT controls (e2e)', () => {
         serviceDate,
         estimatedServiceMinutes: 30,
         queueNumber,
-        activeAppointmentKey: `${scope.slice(0, 8)}-${serviceDate
-          .toISOString()
-          .slice(8, 10)}-${queueNumber}-${discriminator.slice(0, 12)}`,
+        activeAppointmentKey,
         firstName: 'Queue',
         lastName: discriminator,
         ...overrides,
