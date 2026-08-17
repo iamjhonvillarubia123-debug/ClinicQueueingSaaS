@@ -138,36 +138,42 @@ describe('Individual booking confirmation contention (e2e)', () => {
 
     expect([first.status, second.status].sort()).toEqual([201, 409]);
 
-    const [appointments, counter, firstStored, secondStored, firstOtp, secondOtp] =
-      await Promise.all([
-        prisma.appointment.findMany({
-          where: {
+    const [
+      appointments,
+      counter,
+      firstStored,
+      secondStored,
+      firstOtp,
+      secondOtp,
+    ] = await Promise.all([
+      prisma.appointment.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+        select: { queueNumber: true, bookingReference: true },
+      }),
+      prisma.queueCounter.findUnique({
+        where: {
+          practiceLocationId_serviceDate: {
             practiceLocationId: fixture.locationId,
             serviceDate: fixture.serviceDate,
           },
-          select: { queueNumber: true, bookingReference: true },
-        }),
-        prisma.queueCounter.findUnique({
-          where: {
-            practiceLocationId_serviceDate: {
-              practiceLocationId: fixture.locationId,
-              serviceDate: fixture.serviceDate,
-            },
-          },
-        }),
-        prisma.bookingDraft.findUniqueOrThrow({
-          where: { id: firstDraft.bookingDraftId },
-        }),
-        prisma.bookingDraft.findUniqueOrThrow({
-          where: { id: secondDraft.bookingDraftId },
-        }),
-        prisma.otpVerification.findUniqueOrThrow({
-          where: { id: firstDraft.otpVerificationId },
-        }),
-        prisma.otpVerification.findUniqueOrThrow({
-          where: { id: secondDraft.otpVerificationId },
-        }),
-      ]);
+        },
+      }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: firstDraft.bookingDraftId },
+      }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: secondDraft.bookingDraftId },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({
+        where: { id: firstDraft.otpVerificationId },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({
+        where: { id: secondDraft.otpVerificationId },
+      }),
+    ]);
 
     expect(appointments).toHaveLength(1);
     expect(appointments[0]?.queueNumber).toBe(1);
