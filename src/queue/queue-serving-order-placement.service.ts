@@ -66,7 +66,8 @@ export class QueueServingOrderPlacementService {
   private assertValidWaitingRows(waiting: WaitingRow[]): void {
     if (
       waiting.some(
-        (row) => !row.servingOrderKey || row.waitingPlacementType === null,
+        (row) =>
+          !row.servingOrderKey || row.waitingPlacementType === null,
       )
     ) {
       throw new ConflictException(
