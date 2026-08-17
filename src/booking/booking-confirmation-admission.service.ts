@@ -253,17 +253,17 @@ export class BookingConfirmationAdmissionService {
     transaction: TransactionClient,
     doctorUserId: string,
   ): Promise<Date | null> {
-    const rows = await transaction.$queryRaw<Array<{ graceEndsAt: Date | null }>>(
-      Prisma.sql`
-        SELECT dse."graceEndsAt"
-        FROM "DoctorFinancialAccount" dfa
-        INNER JOIN "DoctorSubscriptionEntitlement" dse
-          ON dse."doctorFinancialAccountId" = dfa."id"
-        WHERE dfa."doctorUserId" = ${doctorUserId}
-        LIMIT 1
-        FOR UPDATE OF dse
-      `,
-    );
+    const rows = await transaction.$queryRaw<
+      Array<{ graceEndsAt: Date | null }>
+    >(Prisma.sql`
+      SELECT dse."graceEndsAt"
+      FROM "DoctorFinancialAccount" dfa
+      INNER JOIN "DoctorSubscriptionEntitlement" dse
+        ON dse."doctorFinancialAccountId" = dfa."id"
+      WHERE dfa."doctorUserId" = ${doctorUserId}
+      LIMIT 1
+      FOR UPDATE OF dse
+    `);
     return rows[0]?.graceEndsAt ?? null;
   }
 
