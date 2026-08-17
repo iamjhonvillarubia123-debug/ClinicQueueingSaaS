@@ -1,6 +1,6 @@
 -- M6S3: propagate the approved BookingGroup correlation onto NotificationOutbox.
 ALTER TABLE "NotificationOutbox"
-ADD COLUMN "bookingGroupId" UUID;
+ADD COLUMN "bookingGroupId" TEXT;
 
 CREATE INDEX "NotificationOutbox_bookingGroup_idx"
 ON "NotificationOutbox"("bookingGroupId");
