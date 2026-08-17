@@ -212,10 +212,9 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     );
     expect(firstBody.appointment.queueNumber).toBe(1);
     expect(firstBody.appointment.status).toBe('WAITING');
-    expect(firstBody.bookingAccessToken).toMatchObject({
-      transport: 'HTTP_ONLY_COOKIE',
-      expiresAt: expect.any(String),
-    });
+    expect(firstBody.bookingAccessToken.transport).toBe('HTTP_ONLY_COOKIE');
+    expect(typeof firstBody.bookingAccessToken.expiresAt).toBe('string');
+    expect(firstBody.bookingAccessToken.expiresAt.length).toBeGreaterThan(0);
     expect(firstBody.bookingAccessToken).not.toHaveProperty('token');
 
     const firstCookies = firstResponse.headers['set-cookie'];
