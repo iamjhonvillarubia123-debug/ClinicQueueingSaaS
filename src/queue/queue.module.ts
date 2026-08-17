@@ -20,6 +20,8 @@ import { StartClinicController } from './start-clinic.controller';
 import { StartClinicService } from './start-clinic.service';
 import { SubstituteSecretaryController } from './substitute-secretary.controller';
 import { SubstituteSecretaryService } from './substitute-secretary.service';
+import { UndoQueueController } from './undo-queue.controller';
+import { UndoQueueService } from './undo-queue.service';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     StaffReinsertService,
     StartClinicService,
     SubstituteSecretaryService,
+    UndoQueueService,
   ],
   controllers: [
     ImHereController,
@@ -48,6 +51,7 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     StaffReinsertController,
     StartClinicController,
     SubstituteSecretaryController,
+    UndoQueueController,
   ],
   exports: [
     ClinicDayCancellationService,
@@ -59,6 +63,7 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     StaffReinsertService,
     StartClinicService,
     SubstituteSecretaryService,
+    UndoQueueService,
   ],
 })
 export class QueueModule {}
