@@ -198,7 +198,6 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         queueNumber: number;
         status: string;
       };
-      bookingAccessToken: { token: string; expiresAt: string } | null;
       replayed: boolean;
     };
 
@@ -208,7 +207,20 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     );
     expect(firstBody.appointment.queueNumber).toBe(1);
     expect(firstBody.appointment.status).toBe('WAITING');
-    expect(firstBody.bookingAccessToken?.token).toEqual(expect.any(String));
+    expect(firstBody).not.toHaveProperty('bookingAccessToken');
+
+    const firstCookies = firstResponse.headers['set-cookie'];
+    expect(firstCookies).toEqual(expect.any(Array));
+    const bookingCookie = (firstCookies as unknown as string[]).find((value) =>
+      value.startsWith('cq_booking_access='),
+    );
+    expect(bookingCookie).toEqual(expect.any(String));
+    expect(bookingCookie).toContain('HttpOnly');
+    expect(bookingCookie).toContain('Secure');
+    expect(bookingCookie).toContain('SameSite=Strict');
+    expect(bookingCookie).toContain(
+      `Path=/patient-bookings/${encodeURIComponent(firstBody.appointment.bookingReference)}`,
+    );
 
     const replayResponse = await request(app.getHttpServer())
       .post(`/booking/draft/${bookingDraftId}/confirm`)
@@ -228,6 +240,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       bookingAccessToken: null,
       replayed: true,
     });
+    expect(replayResponse.headers['set-cookie']).toBeUndefined();
 
     const [
       appointmentCount,
@@ -331,11 +344,10 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       commandRows[0].id,
     );
 
-    const rawAccessToken = firstBody.bookingAccessToken?.token;
+    const cookiePair = bookingCookie?.split(';', 1)[0];
+    const rawAccessToken = cookiePair?.split('=', 2)[1];
     if (!rawAccessToken) {
-      throw new Error(
-        'Initial booking confirmation did not return an access token.',
-      );
+      throw new Error('Initial booking confirmation did not issue an access cookie.');
     }
     const encryptedMessage = confirmationOutboxes[0].messageBodyEncrypted;
     if (!encryptedMessage) {
