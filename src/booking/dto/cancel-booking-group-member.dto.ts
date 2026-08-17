@@ -1,4 +1,10 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 export const BOOKING_GROUP_MEMBER_CANCELLATION_REASONS = [
   'PATIENT_REQUESTED',
@@ -14,8 +20,12 @@ export class CancelBookingGroupMemberDto {
   @IsIn(BOOKING_GROUP_MEMBER_CANCELLATION_REASONS)
   reason!: BookingGroupMemberCancellationReason;
 
-  @IsOptional()
+  @ValidateIf(
+    (value: CancelBookingGroupMemberDto) =>
+      value.reason === 'OTHER' || value.note !== undefined,
+  )
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   note?: string;
 }
