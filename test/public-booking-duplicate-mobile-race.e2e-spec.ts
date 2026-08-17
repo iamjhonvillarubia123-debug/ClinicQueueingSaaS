@@ -127,8 +127,7 @@ describe('Public booking duplicate-mobile confirmation race (e2e)', () => {
     ]);
 
     expect([individualResponse.status, groupResponse.status].sort()).toEqual([
-      201,
-      409,
+      201, 409,
     ]);
 
     const [
