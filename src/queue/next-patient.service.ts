@@ -159,12 +159,7 @@ export class NextPatientService {
         },
       });
       this.assertEligibleActor(actor);
-      await this.assertActorAuthority(
-        transaction,
-        context,
-        clinicDay,
-        actor,
-      );
+      await this.assertActorAuthority(transaction, context, clinicDay, actor);
 
       const current = await this.lockCurrentCalledAppointment(
         transaction,
@@ -332,7 +327,9 @@ export class NextPatientService {
     };
   }
 
-  private readMetadata(value: Prisma.JsonValue | null): Record<string, unknown> {
+  private readMetadata(
+    value: Prisma.JsonValue | null,
+  ): Record<string, unknown> {
     if (!value || Array.isArray(value) || typeof value !== 'object') {
       return {};
     }
@@ -463,7 +460,10 @@ export class NextPatientService {
       }
       return;
     }
-    if (actor.role !== UserRole.SECRETARY || !clinicDay.operatingPracticeStaffId) {
+    if (
+      actor.role !== UserRole.SECRETARY ||
+      !clinicDay.operatingPracticeStaffId
+    ) {
       throw new ForbiddenException(
         'Current user cannot operate this clinic day.',
       );
@@ -520,17 +520,15 @@ export class NextPatientService {
       WHERE "practiceLocationId" = ${practiceLocationId}
         AND "serviceDate" = ${serviceDate}
         AND "status" = 'CALLED'::"AppointmentStatus"
-      ORDER BY "id" ASC
+      ORDER BY "calledAt" ASC NULLS FIRST, "queueNumber" ASC, "id" ASC
       FOR UPDATE
     `);
     if (rows.length !== 1) {
       throw new ConflictException(
-        rows.length === 0
-          ? 'NEXT PATIENT requires one current called Appointment.'
-          : 'Queue invariant violation: more than one Appointment is CALLED.',
+        'NEXT PATIENT requires exactly one current CALLED Appointment.',
       );
     }
-    return rows[0];
+    return rows[0]!;
   }
 
   private async lockNextWaitingAppointment(
@@ -570,6 +568,7 @@ export class NextPatientService {
     if (!current.bookingGroupId) {
       return false;
     }
+
     const rows = await transaction.$queryRaw<BookingGroupState[]>(Prisma.sql`
       SELECT "id", "servingProtectionEndedAt"
       FROM "BookingGroup"
@@ -585,22 +584,23 @@ export class NextPatientService {
     const nextIsSameGroup = next.bookingGroupId === current.bookingGroupId;
     let shouldEnd = !nextIsSameGroup;
     if (!shouldEnd && nextIsSameGroup) {
-      const remainingRows = await transaction.$queryRaw<Array<{ count: bigint }>>(
-        Prisma.sql`
-          SELECT COUNT(*)::bigint AS "count"
-          FROM "Appointment"
-          WHERE "bookingGroupId" = ${current.bookingGroupId}
-            AND "status" = 'WAITING'::"AppointmentStatus"
-            AND "id" <> ${next.id}
-        `,
-      );
+      const remainingRows = await transaction.$queryRaw<
+        Array<{ count: bigint }>
+      >(Prisma.sql`
+        SELECT COUNT(*)::bigint AS "count"
+        FROM "Appointment"
+        WHERE "bookingGroupId" = ${current.bookingGroupId}
+          AND "status" = 'WAITING'::"AppointmentStatus"
+          AND "id" <> ${next.id}
+      `);
       shouldEnd = (remainingRows[0]?.count ?? 0n) === 0n;
     }
     if (!shouldEnd) {
       return false;
     }
+
     await transaction.bookingGroup.update({
-      where: { id: group.id },
+      where: { id: current.bookingGroupId },
       data: { servingProtectionEndedAt: now },
     });
     return true;
