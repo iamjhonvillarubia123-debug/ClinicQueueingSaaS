@@ -106,7 +106,7 @@ describe('BookingDraft cleanup concurrency (e2e)', () => {
 
     const cleanupNow = new Date(transitionNow.getTime() + 25 * 60 * 60 * 1000);
     await expect(
-      cleanup.clearTerminalProtectedData(10, cleanupNow),
+      cleanup.clearTerminalProtectedData(500, cleanupNow),
     ).resolves.toBeGreaterThanOrEqual(1);
 
     const cleanedRows = await prisma.$queryRaw<
