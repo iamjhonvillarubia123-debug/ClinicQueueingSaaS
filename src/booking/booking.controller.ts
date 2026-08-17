@@ -10,10 +10,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  PATIENT_BOOKING_ACCESS_COOKIE,
-  PatientBookingAccessService,
-} from '../patient-access/patient-booking-access.service';
+import { PATIENT_BOOKING_ACCESS_COOKIE } from '../patient-access/patient-booking-access.service';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationService } from './booking-confirmation.service';
@@ -34,7 +31,6 @@ export class BookingController {
     private readonly publicServiceDateAvailability: PublicServiceDateAvailabilityService,
     private readonly bookingDraftEditService: BookingDraftEditService,
     private readonly bookingConfirmationService: BookingConfirmationService,
-    private readonly patientBookingAccess: PatientBookingAccessService,
   ) {}
 
   @Get('configuration/:practiceLocationId')
@@ -101,7 +97,7 @@ export class BookingController {
   async confirmBooking(
     @Param('bookingDraftId') bookingDraftId: string,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Res({ passthrough: true }) response: Response,
+    @Res({ passthrough: true }) response?: Response,
   ) {
     const result = await this.bookingConfirmationService.confirm({
       bookingDraftId,
@@ -109,16 +105,16 @@ export class BookingController {
     });
 
     if ('bookingAccessToken' in result && result.bookingAccessToken) {
-      response.cookie(
+      response?.cookie(
         PATIENT_BOOKING_ACCESS_COOKIE,
         result.bookingAccessToken.token,
         {
           httpOnly: true,
           secure: true,
           sameSite: 'strict',
-          path: this.patientBookingAccess.cookiePath(
+          path: `/patient-bookings/${encodeURIComponent(
             result.appointment.bookingReference,
-          ),
+          )}`,
           expires: result.bookingAccessToken.expiresAt,
         },
       );
