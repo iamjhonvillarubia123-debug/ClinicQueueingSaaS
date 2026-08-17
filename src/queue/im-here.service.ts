@@ -221,7 +221,9 @@ export class ImHereService {
       },
     });
     if (!appointment) {
-      throw new ConflictException("I'M HERE replay Appointment is unavailable.");
+      throw new ConflictException(
+        "I'M HERE replay Appointment is unavailable.",
+      );
     }
     return {
       replayed: true,
