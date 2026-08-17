@@ -16,6 +16,7 @@ import { OtpGenerator } from './../src/otp/otp.generator';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 const KNOWN_BOOKING_OTP = '123456';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type RaceFixture = {
   scope: string;
@@ -73,18 +74,14 @@ describe('Individual booking confirmation admission races (e2e)', () => {
   afterAll(async () => {
     await app.close();
     for (const [key, value] of Object.entries(originalEnvironment)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
     }
   });
 
   it('serializes a concurrent schedule closure ahead of confirmation and rejects without consuming queue identity', async () => {
     const fixture = await createFixture();
     const barrier = createBarrier();
-
     const scheduleChange = prisma.$transaction(async (transaction) => {
       const scope = `DOCTOR_SCHEDULE|${fixture.doctorProfileId}`;
       await transaction.$executeRaw(Prisma.sql`
@@ -92,22 +89,24 @@ describe('Individual booking confirmation admission races (e2e)', () => {
       `);
       await transaction.scheduleException.update({
         where: { id: fixture.scheduleExceptionId },
-        data: { isOpen: false },
+        data: {
+          isOpen: false,
+          opensAtLocal: null,
+          closesAtLocal: null,
+          maximumOnlineBookingUntilLocal: null,
+        },
       });
       barrier.signalLocked();
       await barrier.waitForRelease();
     });
-
     await barrier.waitUntilLocked();
     const confirmation = request(app.getHttpServer())
       .post(`/booking/draft/${fixture.bookingDraftId}/confirm`)
       .set('Idempotency-Key', `m6s2-schedule-race-${fixture.scope}`)
       .then((response) => response);
-
     await waitForBlockedConfirmation();
     barrier.release();
     await scheduleChange;
-
     const response = await confirmation;
     expect(response.status).toBe(409);
     await expectRejectedState(fixture);
@@ -116,35 +115,30 @@ describe('Individual booking confirmation admission races (e2e)', () => {
   it('serializes a concurrent subscription expiry ahead of confirmation and rejects without consuming queue identity', async () => {
     const fixture = await createFixture();
     const barrier = createBarrier();
-
     const entitlementChange = prisma.$transaction(async (transaction) => {
       await transaction.$queryRaw(Prisma.sql`
-        SELECT "id"
-        FROM "DoctorSubscriptionEntitlement"
-        WHERE "id" = ${fixture.entitlementId}
-        FOR UPDATE
+        SELECT "id" FROM "DoctorSubscriptionEntitlement"
+        WHERE "id" = ${fixture.entitlementId} FOR UPDATE
       `);
+      const paidThrough = new Date(Date.now() - 8 * DAY_MS);
       await transaction.doctorSubscriptionEntitlement.update({
         where: { id: fixture.entitlementId },
         data: {
-          paidThrough: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-          graceEndsAt: new Date(Date.now() - 60_000),
+          paidThrough,
+          graceEndsAt: new Date(paidThrough.getTime() + 7 * DAY_MS),
         },
       });
       barrier.signalLocked();
       await barrier.waitForRelease();
     });
-
     await barrier.waitUntilLocked();
     const confirmation = request(app.getHttpServer())
       .post(`/booking/draft/${fixture.bookingDraftId}/confirm`)
       .set('Idempotency-Key', `m6s2-subscription-race-${fixture.scope}`)
       .then((response) => response);
-
     await waitForBlockedConfirmation();
     barrier.release();
     await entitlementChange;
-
     const response = await confirmation;
     expect(response.status).toBe(409);
     await expectRejectedState(fixture);
@@ -193,8 +187,8 @@ describe('Individual booking confirmation admission races (e2e)', () => {
     const entitlement = await prisma.doctorSubscriptionEntitlement.create({
       data: {
         doctorFinancialAccountId: financialAccount.id,
-        paidThrough: new Date(serviceDate.getTime() + 20 * 24 * 60 * 60 * 1000),
-        graceEndsAt: new Date(serviceDate.getTime() + 27 * 24 * 60 * 60 * 1000),
+        paidThrough: new Date(serviceDate.getTime() + 20 * DAY_MS),
+        graceEndsAt: new Date(serviceDate.getTime() + 27 * DAY_MS),
       },
     });
     const location = await prisma.practiceLocation.create({
@@ -225,7 +219,6 @@ describe('Individual booking confirmation admission races (e2e)', () => {
         maximumOperatingUntilLocal: localTime(18),
       },
     });
-
     const draftResponse = await request(app.getHttpServer())
       .post('/booking/draft')
       .send({
@@ -241,7 +234,6 @@ describe('Individual booking confirmation admission races (e2e)', () => {
         selectedServiceIds: [service.id],
       })
       .expect(201);
-
     const draftBody = draftResponse.body as unknown as {
       bookingDraft: { id: string };
       otpVerification: { id: string } | null;
@@ -249,12 +241,13 @@ describe('Individual booking confirmation admission races (e2e)', () => {
     if (!draftBody.otpVerification) {
       throw new Error('Booking draft did not issue an OTP challenge.');
     }
-
     await request(app.getHttpServer())
       .post('/booking/verify-otp')
-      .send({ bookingDraftId: draftBody.bookingDraft.id, otp: KNOWN_BOOKING_OTP })
+      .send({
+        bookingDraftId: draftBody.bookingDraft.id,
+        otp: KNOWN_BOOKING_OTP,
+      })
       .expect(201);
-
     return {
       scope,
       serviceDate,
@@ -283,14 +276,11 @@ describe('Individual booking confirmation admission races (e2e)', () => {
           serviceDate: fixture.serviceDate,
         },
       }),
-      prisma.bookingDraft.findUniqueOrThrow({
-        where: { id: fixture.bookingDraftId },
-      }),
+      prisma.bookingDraft.findUniqueOrThrow({ where: { id: fixture.bookingDraftId } }),
       prisma.otpVerification.findUniqueOrThrow({
         where: { id: fixture.otpVerificationId },
       }),
     ]);
-
     expect(counter).toBeNull();
     expect(appointmentCount).toBe(0);
     expect(draft.status).not.toBe('CONSUMED');
@@ -311,7 +301,6 @@ function createBarrier() {
   const released = new Promise<void>((resolve) => {
     release = resolve;
   });
-
   return {
     signalLocked: () => signalLocked?.(),
     waitUntilLocked: () => locked,
