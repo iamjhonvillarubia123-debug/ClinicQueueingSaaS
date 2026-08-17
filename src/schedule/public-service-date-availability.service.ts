@@ -214,6 +214,19 @@ export class PublicServiceDateAvailabilityService {
     return this.fromSchedule(schedule, true, 'AVAILABLE', effectiveCutoff);
   }
 
+  resolveCapacitySchedule(
+    practiceLocationId: string,
+    serviceDate: string,
+    transaction?: AvailabilityClient,
+  ) {
+    const db: AvailabilityClient = transaction ?? this.prisma;
+    return this.scheduleResolution.resolveConfiguredSchedule(
+      practiceLocationId,
+      serviceDate,
+      db,
+    );
+  }
+
   private unavailable(
     practiceLocationId: string,
     serviceDate: string,
