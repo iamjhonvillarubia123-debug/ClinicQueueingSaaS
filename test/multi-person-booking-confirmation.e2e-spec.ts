@@ -106,11 +106,12 @@ describe('Multi-person booking confirmation (e2e)', () => {
     };
 
     expect(firstBody.replayed).toBe(false);
-    expect(firstBody.bookingGroup.appointments.map((item) => item.queueNumber)).toEqual([
-      1,
-      2,
-    ]);
-    expect(firstBody.bookingGroupAccessToken?.token).toEqual(expect.any(String));
+    expect(
+      firstBody.bookingGroup.appointments.map((item) => item.queueNumber),
+    ).toEqual([1, 2]);
+    expect(firstBody.bookingGroupAccessToken?.token).toEqual(
+      expect.any(String),
+    );
 
     const replay = await confirm(draft.bookingDraftId, idempotencyKey);
     expect(replay.status).toBe(201);
@@ -164,7 +165,7 @@ describe('Multi-person booking confirmation (e2e)', () => {
       prisma.commandIdempotency.findMany({
         where: {
           bookingDraftId: draft.bookingDraftId,
-          commandType: CommandType.CONVERT_BOOKING_DRAFT,
+          commandType: CommandType.MULTI_PERSON_BOOKING_CONFIRM,
         },
       }),
       prisma.contactPreference.findMany({
@@ -183,9 +184,9 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(groups).toHaveLength(1);
     expect(appointments).toHaveLength(2);
     expect(appointments.map((item) => item.queueNumber)).toEqual([1, 2]);
-    expect(appointments.every((item) => item.bookingGroupId === groups[0]?.id)).toBe(
-      true,
-    );
+    expect(
+      appointments.every((item) => item.bookingGroupId === groups[0]?.id),
+    ).toBe(true);
     expect(
       appointments.every(
         (item) =>
@@ -200,6 +201,7 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(outboxes).toHaveLength(1);
     expect(commands).toHaveLength(1);
     expect(commands[0]?.resultBookingGroupId).toBe(firstBody.bookingGroup.id);
+    expect(commands[0]?.resultBookingGroupAccessTokenId).toBeNull();
     expect(contacts).toHaveLength(2);
     expect(storedDraft.status).toBe('CONSUMED');
     expect(storedDraft.activeDraftKey).toBeNull();
@@ -233,10 +235,12 @@ describe('Multi-person booking confirmation (e2e)', () => {
 
     expect(groups).toHaveLength(1);
     expect(appointments).toHaveLength(5);
-    expect(appointments.map((item) => item.queueNumber)).toEqual([1, 2, 3, 4, 5]);
-    expect(appointments.every((item) => item.waitingPlacementType === 'ORDINARY')).toBe(
-      true,
-    );
+    expect(appointments.map((item) => item.queueNumber)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    expect(
+      appointments.every((item) => item.waitingPlacementType === 'ORDINARY'),
+    ).toBe(true);
   }, 30_000);
 
   it('rolls back the whole group when one member service becomes invalid after OTP verification', async () => {
@@ -408,45 +412,51 @@ describe('Multi-person booking confirmation (e2e)', () => {
     fixture: BaseFixture,
     draft: DraftFixture,
   ): Promise<void> {
-    const [groups, appointments, counter, commands, outboxes, storedDraft, otp] =
-      await Promise.all([
-        prisma.bookingGroup.findMany({
-          where: {
+    const [
+      groups,
+      appointments,
+      counter,
+      commands,
+      outboxes,
+      storedDraft,
+      otp,
+    ] = await Promise.all([
+      prisma.bookingGroup.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+      }),
+      prisma.appointment.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          serviceDate: fixture.serviceDate,
+        },
+      }),
+      prisma.queueCounter.findUnique({
+        where: {
+          practiceLocationId_serviceDate: {
             practiceLocationId: fixture.locationId,
             serviceDate: fixture.serviceDate,
           },
-        }),
-        prisma.appointment.findMany({
-          where: {
-            practiceLocationId: fixture.locationId,
-            serviceDate: fixture.serviceDate,
-          },
-        }),
-        prisma.queueCounter.findUnique({
-          where: {
-            practiceLocationId_serviceDate: {
-              practiceLocationId: fixture.locationId,
-              serviceDate: fixture.serviceDate,
-            },
-          },
-        }),
-        prisma.commandIdempotency.findMany({
-          where: { bookingDraftId: draft.bookingDraftId },
-        }),
-        prisma.notificationOutbox.findMany({
-          where: {
-            practiceLocationId: fixture.locationId,
-            serviceDate: fixture.serviceDate,
-            notificationType: NotificationType.BOOKING_CONFIRMATION,
-          },
-        }),
-        prisma.bookingDraft.findUniqueOrThrow({
-          where: { id: draft.bookingDraftId },
-        }),
-        prisma.otpVerification.findUniqueOrThrow({
-          where: { id: draft.otpVerificationId },
-        }),
-      ]);
+        },
+      }),
+      prisma.commandIdempotency.findMany({
+        where: { bookingDraftId: draft.bookingDraftId },
+      }),
+      prisma.notificationOutbox.findMany({
+        where: {
+          practiceLocationId: fixture.locationId,
+          notificationType: NotificationType.BOOKING_CONFIRMATION,
+        },
+      }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: draft.bookingDraftId },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({
+        where: { id: draft.otpVerificationId },
+      }),
+    ]);
 
     expect(groups).toHaveLength(0);
     expect(appointments).toHaveLength(0);
