@@ -3,16 +3,19 @@ import fs from 'node:fs';
 const path = 'prisma/schema.prisma';
 let source = fs.readFileSync(path, 'utf8');
 
-const marker = `  CLOSE_CLINIC\n  CANCEL_CLINIC_DAY`;
-const replacement = `  CLOSE_CLINIC\n  CANCEL_APPOINTMENT\n  CANCEL_CLINIC_DAY`;
-
-if (source.includes('  CANCEL_APPOINTMENT\n')) {
+if (/^\s*CANCEL_APPOINTMENT\s*$/m.test(source)) {
   console.log('CommandType CANCEL_APPOINTMENT already aligned.');
-} else {
-  if (!source.includes(marker)) {
-    throw new Error('CommandType CLOSE_CLINIC/CANCEL_CLINIC_DAY marker was not found');
-  }
-  source = source.replace(marker, replacement);
-  fs.writeFileSync(path, source);
-  console.log('CommandType CANCEL_APPOINTMENT aligned.');
+  process.exit(0);
 }
+
+const closeClinicPattern = /(^\s*CLOSE_CLINIC\s*$)/m;
+if (!closeClinicPattern.test(source)) {
+  throw new Error('CommandType CLOSE_CLINIC marker was not found');
+}
+
+source = source.replace(
+  closeClinicPattern,
+  `$1${source.includes('\r\n') ? '\r\n' : '\n'}  CANCEL_APPOINTMENT`,
+);
+fs.writeFileSync(path, source);
+console.log('CommandType CANCEL_APPOINTMENT aligned.');
