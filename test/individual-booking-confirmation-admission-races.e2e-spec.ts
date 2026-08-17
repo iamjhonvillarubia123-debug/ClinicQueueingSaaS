@@ -94,6 +94,7 @@ describe('Individual booking confirmation admission races (e2e)', () => {
           opensAtLocal: null,
           closesAtLocal: null,
           maximumOnlineBookingUntilLocal: null,
+          maximumOperatingUntilLocal: null,
         },
       });
       barrier.signalLocked();
@@ -276,7 +277,9 @@ describe('Individual booking confirmation admission races (e2e)', () => {
           serviceDate: fixture.serviceDate,
         },
       }),
-      prisma.bookingDraft.findUniqueOrThrow({ where: { id: fixture.bookingDraftId } }),
+      prisma.bookingDraft.findUniqueOrThrow({
+        where: { id: fixture.bookingDraftId },
+      }),
       prisma.otpVerification.findUniqueOrThrow({
         where: { id: fixture.otpVerificationId },
       }),
