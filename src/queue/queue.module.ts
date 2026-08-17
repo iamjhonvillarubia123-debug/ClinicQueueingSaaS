@@ -8,6 +8,9 @@ import { ClinicDayCancellationService } from './clinic-day-cancellation.service'
 import { NextPatientController } from './next-patient.controller';
 import { NextPatientService } from './next-patient.service';
 import { QueueNumberAllocationService } from './queue-number-allocation.service';
+import { QueueServingOrderPlacementService } from './queue-serving-order-placement.service';
+import { ReturnToQueueController } from './return-to-queue.controller';
+import { ReturnToQueueService } from './return-to-queue.service';
 import { StartClinicController } from './start-clinic.controller';
 import { StartClinicService } from './start-clinic.service';
 import { SubstituteSecretaryController } from './substitute-secretary.controller';
@@ -25,11 +28,14 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     ClinicDayCancellationService,
     NextPatientService,
     QueueNumberAllocationService,
+    QueueServingOrderPlacementService,
+    ReturnToQueueService,
     StartClinicService,
     SubstituteSecretaryService,
   ],
   controllers: [
     NextPatientController,
+    ReturnToQueueController,
     StartClinicController,
     SubstituteSecretaryController,
   ],
@@ -37,6 +43,8 @@ import { SubstituteSecretaryService } from './substitute-secretary.service';
     ClinicDayCancellationService,
     NextPatientService,
     QueueNumberAllocationService,
+    QueueServingOrderPlacementService,
+    ReturnToQueueService,
     StartClinicService,
     SubstituteSecretaryService,
   ],
