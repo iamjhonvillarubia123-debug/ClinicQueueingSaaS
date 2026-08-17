@@ -84,15 +84,18 @@ export class ReturnToQueueService {
     const identityScope = {
       practiceLocationId: dto.practiceLocationId,
       serviceDate: dto.serviceDate,
-      appointmentId: dto.appointmentId,
       actorUserId: authenticatedUserId,
+    };
+    const requestPayload = {
+      ...identityScope,
+      appointmentId: dto.appointmentId,
     };
     const commandIdentityKey = this.idempotency.deriveIdentity({
       idempotencyKey: key,
       commandType,
       scope: identityScope,
     });
-    const requestFingerprint = this.idempotency.fingerprint(identityScope);
+    const requestFingerprint = this.idempotency.fingerprint(requestPayload);
 
     return this.prisma.$transaction(async (transaction) => {
       await this.idempotency.acquireCommandLock(
@@ -160,11 +163,12 @@ export class ReturnToQueueService {
         );
       }
 
-      const servingOrderKey = await this.placement.calculateReturnToQueuePlacement(
-        transaction,
-        dto.practiceLocationId,
-        serviceDate,
-      );
+      const servingOrderKey =
+        await this.placement.calculateReturnToQueuePlacement(
+          transaction,
+          dto.practiceLocationId,
+          serviceDate,
+        );
       const now = new Date();
 
       await transaction.appointment.update({
@@ -251,7 +255,9 @@ export class ReturnToQueueService {
     appointmentId: string,
   ) {
     if (!queueEventId) {
-      throw new ConflictException('RETURN TO QUEUE replay record is incomplete.');
+      throw new ConflictException(
+        'RETURN TO QUEUE replay record is incomplete.',
+      );
     }
 
     const event = await transaction.queueEvent.findUnique({
@@ -277,7 +283,9 @@ export class ReturnToQueueService {
       !primary ||
       primary.appointmentId !== appointmentId
     ) {
-      throw new ConflictException('RETURN TO QUEUE replay result is inconsistent.');
+      throw new ConflictException(
+        'RETURN TO QUEUE replay result is inconsistent.',
+      );
     }
 
     const appointment = await transaction.appointment.findUnique({
@@ -291,7 +299,9 @@ export class ReturnToQueueService {
       },
     });
     if (!appointment) {
-      throw new ConflictException('RETURN TO QUEUE replay Appointment is unavailable.');
+      throw new ConflictException(
+        'RETURN TO QUEUE replay Appointment is unavailable.',
+      );
     }
 
     return {
