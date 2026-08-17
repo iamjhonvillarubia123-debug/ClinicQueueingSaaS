@@ -143,11 +143,16 @@ describe('Appointment cancellation controls (e2e)', () => {
 
   it('doctor cancels WAITING Appointment atomically and preserves Queue Number', async () => {
     const serviceDate = '2026-10-01';
+    const mobileNumberHash = createHash('sha256')
+      .update(`cancel-mobile|${scope}|41`)
+      .digest('hex');
     const appointment = await createAppointment(serviceDate, 41, {
       status: AppointmentStatus.WAITING,
       servingOrderKey: new Prisma.Decimal(41),
       waitingPlacementType: WaitingPlacementType.ORDINARY,
-      mobileNumberEncrypted: 'encrypted-mobile-e2e',
+      mobileNumberEncrypted: `fixture-encrypted-${mobileNumberHash}`,
+      mobileNumberHash,
+      mobileNumberLastFour: '1234',
     });
     const result = await cancelService.cancel(
       doctorUserId,
@@ -184,7 +189,11 @@ describe('Appointment cancellation controls (e2e)', () => {
   });
 
   it('assigned Secretary can cancel and OTHER reason preserves note', async () => {
-    const appointment = await createAppointment('2026-10-02', 42, { status: AppointmentStatus.TEMPORARILY_ABSENT });
+    const appointment = await createAppointment('2026-10-02', 42, {
+      status: AppointmentStatus.TEMPORARILY_ABSENT,
+      servingOrderKey: null,
+      waitingPlacementType: null,
+    });
     await cancelService.cancel(secretaryUserId, { appointmentId: appointment.id, reason: 'OTHER', note: 'Patient transferred care elsewhere' }, `secretary-cancel-${scope}`);
     const after = await prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
     expect(after.status).toBe(AppointmentStatus.CANCELLED);
@@ -222,7 +231,7 @@ describe('Appointment cancellation controls (e2e)', () => {
     expect(await prisma.commandIdempotency.count({ where: { commandType: 'CANCEL_APPOINTMENT', appointmentId: appointment.id, actorUserId: doctorUserId } })).toBe(1);
   });
 
-  it('serializes cancellation versus NEXT PATIENT with one coherent winner', async () => {
+  it('serializes cancellation versus NEXT PATIENT against authoritative state', async () => {
     const serviceDate = '2026-10-06';
     const queue = await createStartedClinicDayWithTwoAppointments(serviceDate);
     const [nextResult, cancelResult] = await Promise.allSettled([
@@ -231,16 +240,27 @@ describe('Appointment cancellation controls (e2e)', () => {
     ]);
     const current = await prisma.appointment.findUniqueOrThrow({ where: { id: queue.currentId } });
     const next = await prisma.appointment.findUniqueOrThrow({ where: { id: queue.nextId } });
+
+    expect(cancelResult.status).toBe('fulfilled');
     if (nextResult.status === 'fulfilled') {
-      expect(cancelResult.status).toBe('rejected');
       expect(current.status).toBe(AppointmentStatus.COMPLETED);
-      expect(next.status).toBe(AppointmentStatus.CALLED);
+      expect(next.status).toBe(AppointmentStatus.CANCELLED);
+      const cancelEvent = await prisma.queueEvent.findFirstOrThrow({
+        where: {
+          practiceLocationId,
+          serviceDate: dateValue(serviceDate),
+          type: QueueEventType.APPOINTMENT_CANCELLED,
+        },
+        orderBy: { queueEventSequence: 'desc' },
+      });
+      expect(cancelEvent.previousPrimaryStatus).toBe(AppointmentStatus.CALLED);
     } else {
-      expect(cancelResult.status).toBe('fulfilled');
       expect(current.status).toBe(AppointmentStatus.CALLED);
       expect(next.status).toBe(AppointmentStatus.CANCELLED);
     }
-    expect(await prisma.appointment.count({ where: { practiceLocationId, serviceDate: dateValue(serviceDate), status: AppointmentStatus.CALLED } })).toBe(1);
+    expect(next.servingOrderKey).toBeNull();
+    expect(next.waitingPlacementType).toBeNull();
+    expect(await prisma.appointment.count({ where: { practiceLocationId, serviceDate: dateValue(serviceDate), status: AppointmentStatus.CALLED } })).toBe(nextResult.status === 'fulfilled' ? 0 : 1);
   });
 
   async function createAppointment(serviceDate: string, queueNumber: number, overrides: AppointmentFixtureOverrides = {}, active = true) {
