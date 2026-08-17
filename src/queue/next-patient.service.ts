@@ -528,7 +528,7 @@ export class NextPatientService {
         'NEXT PATIENT requires exactly one current CALLED Appointment.',
       );
     }
-    return rows[0]!;
+    return rows[0];
   }
 
   private async lockNextWaitingAppointment(
@@ -568,7 +568,6 @@ export class NextPatientService {
     if (!current.bookingGroupId) {
       return false;
     }
-
     const rows = await transaction.$queryRaw<BookingGroupState[]>(Prisma.sql`
       SELECT "id", "servingProtectionEndedAt"
       FROM "BookingGroup"
