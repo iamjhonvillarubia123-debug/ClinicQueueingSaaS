@@ -257,7 +257,9 @@ export class StaffReinsertService {
     appointmentId: string,
   ) {
     if (!queueEventId) {
-      throw new ConflictException('STAFF REINSERT replay record is incomplete.');
+      throw new ConflictException(
+        'STAFF REINSERT replay record is incomplete.',
+      );
     }
 
     const event = await transaction.queueEvent.findUnique({
