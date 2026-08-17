@@ -198,6 +198,11 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         queueNumber: number;
         status: string;
       };
+      bookingAccessToken: {
+        expiresAt: string;
+        transport: string;
+        token?: string;
+      };
       replayed: boolean;
     };
 
@@ -207,7 +212,11 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     );
     expect(firstBody.appointment.queueNumber).toBe(1);
     expect(firstBody.appointment.status).toBe('WAITING');
-    expect(firstBody).not.toHaveProperty('bookingAccessToken');
+    expect(firstBody.bookingAccessToken).toMatchObject({
+      transport: 'HTTP_ONLY_COOKIE',
+      expiresAt: expect.any(String),
+    });
+    expect(firstBody.bookingAccessToken).not.toHaveProperty('token');
 
     const firstCookies = firstResponse.headers['set-cookie'];
     expect(firstCookies).toEqual(expect.any(Array));
@@ -347,7 +356,9 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     const cookiePair = bookingCookie?.split(';', 1)[0];
     const rawAccessToken = cookiePair?.split('=', 2)[1];
     if (!rawAccessToken) {
-      throw new Error('Initial booking confirmation did not issue an access cookie.');
+      throw new Error(
+        'Initial booking confirmation did not issue an access cookie.',
+      );
     }
     const encryptedMessage = confirmationOutboxes[0].messageBodyEncrypted;
     if (!encryptedMessage) {
