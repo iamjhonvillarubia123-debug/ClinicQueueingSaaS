@@ -44,6 +44,30 @@ export class QueueServingOrderPlacementService {
     return this.keyForInsertion(transaction, waiting, insertionIndex);
   }
 
+  async calculateImHerePlacement(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+    serviceDate: Date,
+  ): Promise<Prisma.Decimal> {
+    const waiting = await this.lockWaitingRows(
+      transaction,
+      practiceLocationId,
+      serviceDate,
+    );
+    if (waiting.length === 0) {
+      return new Prisma.Decimal(1);
+    }
+
+    this.assertValidWaitingRows(waiting);
+    let insertionIndex = this.returnToQueueInsertionIndex(waiting);
+    insertionIndex = await this.movePastProtectedGroupForImHere(
+      transaction,
+      waiting,
+      insertionIndex,
+    );
+    return this.keyForInsertion(transaction, waiting, insertionIndex);
+  }
+
   async calculateStaffReinsertPlacement(
     transaction: TransactionClient,
     practiceLocationId: string,
@@ -165,6 +189,34 @@ export class QueueServingOrderPlacementService {
 
   private recoveryAreaStartIndex(waiting: WaitingRow[]): number {
     return this.returnToQueueInsertionIndex(waiting);
+  }
+
+  private async movePastProtectedGroupForImHere(
+    transaction: TransactionClient,
+    waiting: WaitingRow[],
+    insertionIndex: number,
+  ): Promise<number> {
+    if (insertionIndex >= waiting.length) return insertionIndex;
+
+    const protectedNextGroupId = waiting[0]?.bookingGroupId ?? null;
+    const candidateGroupId =
+      protectedNextGroupId ?? waiting[insertionIndex]?.bookingGroupId ?? null;
+    if (!candidateGroupId) return insertionIndex;
+
+    const group = await transaction.bookingGroup.findUnique({
+      where: { id: candidateGroupId },
+      select: { servingProtectionEndedAt: true },
+    });
+    if (!group || group.servingProtectionEndedAt) return insertionIndex;
+
+    let index = insertionIndex;
+    while (
+      index < waiting.length &&
+      waiting[index]?.bookingGroupId === candidateGroupId
+    ) {
+      index += 1;
+    }
+    return index;
   }
 
   private async activeGroupTailInsertionIndex(
