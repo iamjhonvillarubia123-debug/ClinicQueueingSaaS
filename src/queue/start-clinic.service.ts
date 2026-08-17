@@ -79,7 +79,9 @@ export class StartClinicService {
     idempotencyKey: string,
   ) {
     const key = this.idempotency.normalizeKey(idempotencyKey);
-    const parsedServiceDate = this.scheduleTime.parseServiceDate(dto.serviceDate);
+    const parsedServiceDate = this.scheduleTime.parseServiceDate(
+      dto.serviceDate,
+    );
     const dateValue = new Date(
       Date.UTC(
         parsedServiceDate.year,
@@ -153,11 +155,12 @@ export class StartClinicService {
       });
       this.assertEligibleActor(actor);
 
-      const schedule = await this.scheduleResolution.resolveOperationalSchedule(
-        dto.practiceLocationId,
-        dto.serviceDate,
-        transaction,
-      );
+      const schedule =
+        await this.scheduleResolution.resolveOperationalSchedule(
+          dto.practiceLocationId,
+          dto.serviceDate,
+          transaction,
+        );
       if (!schedule.isOpen) {
         throw new ConflictException(
           'Clinic cannot be started on a closed or unavailable Service Date.',
@@ -177,12 +180,13 @@ export class StartClinicService {
         throw new ConflictException('Clinic day cannot be started again.');
       }
 
-      const operatingPracticeStaffId = await this.assertActorAuthorityAndResolveOperatingStaff(
-        transaction,
-        context,
-        existingClinicDay,
-        actor!,
-      );
+      const operatingPracticeStaffId =
+        await this.assertActorAuthorityAndResolveOperatingStaff(
+          transaction,
+          context,
+          existingClinicDay,
+          actor,
+        );
 
       const now = new Date();
       const clinicDay = existingClinicDay
@@ -192,8 +196,7 @@ export class StartClinicService {
               status: ClinicDayStatus.STARTED,
               startedAt: now,
               operatingPracticeStaffId,
-              maximumOnlineBookingUntilAt:
-                schedule.maximumOnlineBookingUntilAt,
+              maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
             },
             select: { id: true, status: true, startedAt: true },
           })
@@ -204,8 +207,7 @@ export class StartClinicService {
               status: ClinicDayStatus.STARTED,
               startedAt: now,
               operatingPracticeStaffId,
-              maximumOnlineBookingUntilAt:
-                schedule.maximumOnlineBookingUntilAt,
+              maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
             },
             select: { id: true, status: true, startedAt: true },
           });
@@ -343,13 +345,18 @@ export class StartClinicService {
     `);
   }
 
-  private assertEligibleActor(actor: ActorState | null): asserts actor is ActorState {
+  private assertEligibleActor(
+    actor: ActorState | null,
+  ): asserts actor is ActorState {
     if (
       !actor ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
-      throw new ForbiddenException('Current user cannot start this clinic day.');
+      throw new ForbiddenException(
+        'Current user cannot start this clinic day.',
+      );
     }
   }
 
@@ -361,17 +368,25 @@ export class StartClinicService {
   ): Promise<string | null> {
     if (actor.role === UserRole.DOCTOR) {
       if (actor.id !== context.doctorUserId) {
-        throw new ForbiddenException('Current user cannot start this clinic day.');
+        throw new ForbiddenException(
+          'Current user cannot start this clinic day.',
+        );
       }
-      return clinicDay?.operatingPracticeStaffId ?? context.currentRegularPracticeStaffId;
+      return (
+        clinicDay?.operatingPracticeStaffId ??
+        context.currentRegularPracticeStaffId
+      );
     }
 
     if (actor.role !== UserRole.SECRETARY) {
-      throw new ForbiddenException('Current user cannot start this clinic day.');
+      throw new ForbiddenException(
+        'Current user cannot start this clinic day.',
+      );
     }
 
     const expectedStaffId =
-      clinicDay?.operatingPracticeStaffId ?? context.currentRegularPracticeStaffId;
+      clinicDay?.operatingPracticeStaffId ??
+      context.currentRegularPracticeStaffId;
     if (!expectedStaffId) {
       throw new ForbiddenException(
         'No operating secretary is assigned for this clinic day.',
