@@ -26,12 +26,8 @@ export class CancelAppointmentBodyDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(220)
-  note?: string;
-
   @ValidateIf((dto: CancelAppointmentBodyDto) => dto.reason !== 'OTHER')
   @IsOptional()
-  @IsString()
-  @MaxLength(220)
   note?: string;
 }
 
