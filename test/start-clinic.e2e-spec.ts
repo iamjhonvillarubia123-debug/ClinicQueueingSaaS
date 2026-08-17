@@ -337,32 +337,31 @@ describe('START CLINIC controls (e2e)', () => {
       ),
     ]);
 
-    expect(
-      settled.filter((item) => item.status === 'fulfilled'),
-    ).toHaveLength(1);
-    expect(
-      settled.filter((item) => item.status === 'rejected'),
-    ).toHaveLength(1);
+    expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(
+      1,
+    );
+    expect(settled.filter((item) => item.status === 'rejected')).toHaveLength(
+      1,
+    );
 
-    const [clinicDays, events, commands, appointmentAfter] =
-      await Promise.all([
-        prisma.clinicDay.findMany({
-          where: { practiceLocationId, serviceDate: date },
-        }),
-        prisma.queueEvent.findMany({
-          where: { practiceLocationId, serviceDate: date },
-        }),
-        prisma.commandIdempotency.findMany({
-          where: {
-            commandType: 'START_CLINIC',
-            practiceLocationId,
-            serviceDate: date,
-          },
-        }),
-        prisma.appointment.findUniqueOrThrow({
-          where: { id: appointment.id },
-        }),
-      ]);
+    const [clinicDays, events, commands, appointmentAfter] = await Promise.all([
+      prisma.clinicDay.findMany({
+        where: { practiceLocationId, serviceDate: date },
+      }),
+      prisma.queueEvent.findMany({
+        where: { practiceLocationId, serviceDate: date },
+      }),
+      prisma.commandIdempotency.findMany({
+        where: {
+          commandType: 'START_CLINIC',
+          practiceLocationId,
+          serviceDate: date,
+        },
+      }),
+      prisma.appointment.findUniqueOrThrow({
+        where: { id: appointment.id },
+      }),
+    ]);
 
     expect(clinicDays).toHaveLength(1);
     expect(clinicDays[0]?.status).toBe('STARTED');
