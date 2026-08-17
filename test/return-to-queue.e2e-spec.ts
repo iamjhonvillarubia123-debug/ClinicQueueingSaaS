@@ -178,7 +178,9 @@ describe('RETURN TO QUEUE controls (e2e)', () => {
         },
         orderBy: { servingOrderKey: 'asc' },
       }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
+      prisma.queueEvent.findUniqueOrThrow({
+        where: { id: result.queueEventId },
+      }),
       prisma.commandIdempotency.findFirstOrThrow({
         where: {
           commandType: 'RETURN_TO_QUEUE',
@@ -190,7 +192,9 @@ describe('RETURN TO QUEUE controls (e2e)', () => {
     ]);
 
     expect(after.status).toBe(AppointmentStatus.WAITING);
-    expect(after.waitingPlacementType).toBe(WaitingPlacementType.RETURN_TO_QUEUE);
+    expect(after.waitingPlacementType).toBe(
+      WaitingPlacementType.RETURN_TO_QUEUE,
+    );
     expect(after.queueNumber).toBe(99);
     expect(waiting.map((item) => item.id)).toEqual([
       protectedNext.id,
@@ -399,8 +403,12 @@ describe('RETURN TO QUEUE controls (e2e)', () => {
       ),
     ]);
 
-    expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(2);
-    expect(settled.filter((item) => item.status === 'rejected')).toHaveLength(0);
+    expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(
+      2,
+    );
+    expect(settled.filter((item) => item.status === 'rejected')).toHaveLength(
+      0,
+    );
 
     const [waiting, events] = await Promise.all([
       prisma.appointment.findMany({
@@ -429,8 +437,9 @@ describe('RETURN TO QUEUE controls (e2e)', () => {
 
     expect(events).toHaveLength(2);
     const returnedOrder = events.map(
-      (event) => event.appointmentLinks.find((link) => link.role === 'PRIMARY')!
-        .appointmentId,
+      (event) =>
+        event.appointmentLinks.find((link) => link.role === 'PRIMARY')!
+          .appointmentId,
     );
     expect(waiting.map((item) => item.id)).toEqual([
       protectedNext.id,
@@ -438,9 +447,12 @@ describe('RETURN TO QUEUE controls (e2e)', () => {
       ordinary.id,
     ]);
     expect(
-      waiting.slice(1, 3).every(
-        (item) => item.waitingPlacementType === WaitingPlacementType.RETURN_TO_QUEUE,
-      ),
+      waiting
+        .slice(1, 3)
+        .every(
+          (item) =>
+            item.waitingPlacementType === WaitingPlacementType.RETURN_TO_QUEUE,
+        ),
     ).toBe(true);
   });
 
