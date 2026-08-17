@@ -1,4 +1,12 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 export const APPOINTMENT_CANCELLATION_REASONS = [
   'PATIENT_REQUESTED',
@@ -10,22 +18,24 @@ export const APPOINTMENT_CANCELLATION_REASONS = [
 export type AppointmentCancellationReason =
   (typeof APPOINTMENT_CANCELLATION_REASONS)[number];
 
-export class CancelAppointmentDto {
-  @IsUUID()
-  appointmentId!: string;
-
+export class CancelAppointmentBodyDto {
   @IsIn(APPOINTMENT_CANCELLATION_REASONS)
   reason!: AppointmentCancellationReason;
 
-  @ValidateIf((dto: CancelAppointmentDto) => dto.reason === 'OTHER')
+  @ValidateIf((dto: CancelAppointmentBodyDto) => dto.reason === 'OTHER')
   @IsString()
   @IsNotEmpty()
   @MaxLength(220)
   note?: string;
 
-  @ValidateIf((dto: CancelAppointmentDto) => dto.reason !== 'OTHER')
+  @ValidateIf((dto: CancelAppointmentBodyDto) => dto.reason !== 'OTHER')
   @IsOptional()
   @IsString()
   @MaxLength(220)
   note?: string;
+}
+
+export class CancelAppointmentDto extends CancelAppointmentBodyDto {
+  @IsUUID()
+  appointmentId!: string;
 }
