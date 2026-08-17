@@ -1,4 +1,11 @@
-import { IsIn, IsNotEmpty, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 export const APPOINTMENT_CANCELLATION_REASONS = [
   'PATIENT_REQUESTED',
