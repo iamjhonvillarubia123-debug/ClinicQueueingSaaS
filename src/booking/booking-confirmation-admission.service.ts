@@ -23,15 +23,18 @@ export type LockedConfirmationDraft = {
   expiresAt: Date;
   consumedAt: Date | null;
   cancelledAt: Date | null;
+  doctorProfileId: string;
   doctorUserId: string;
-  doctorAccountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED';
-  doctorAdministrativeRestrictionStatus: AdministrativeRestrictionStatus;
-  entitlementGraceEndsAt: Date | null;
 };
 
 export type LockedVerifiedBookingOtp = {
   id: string;
   verifiedAt: Date;
+};
+
+type LockedDoctorAdmissionState = {
+  accountStatus: 'ACTIVE' | 'VOLUNTARILY_DISABLED' | 'PERMANENTLY_CLOSED';
+  administrativeRestrictionStatus: AdministrativeRestrictionStatus;
 };
 
 @Injectable()
@@ -54,8 +57,21 @@ export class BookingConfirmationAdmissionService {
     const draft = await this.lockDraft(transaction, bookingDraftId);
     this.assertDraftCanConfirm(draft, now);
 
+    await this.acquireDoctorScheduleLock(transaction, draft.doctorProfileId);
+    const doctorState = await this.lockDoctorAdmissionState(
+      transaction,
+      draft.doctorUserId,
+    );
+    const entitlementGraceEndsAt = await this.lockSubscriptionEntitlement(
+      transaction,
+      draft.doctorUserId,
+    );
     const otp = await this.lockVerifiedOtp(transaction, draft.id);
-    this.assertDoctorAndSubscriptionEligible(draft, now);
+    this.assertDoctorAndSubscriptionEligible(
+      doctorState,
+      entitlementGraceEndsAt,
+      now,
+    );
 
     const serviceDate = draft.serviceDate.toISOString().slice(0, 10);
     const availability = await this.availability.resolve(
@@ -182,20 +198,15 @@ export class BookingConfirmationAdmissionService {
           bd."expiresAt",
           bd."consumedAt",
           bd."cancelledAt",
-          u."id" AS "doctorUserId",
-          u."accountStatus" AS "doctorAccountStatus",
-          u."administrativeRestrictionStatus" AS "doctorAdministrativeRestrictionStatus",
-          dse."graceEndsAt" AS "entitlementGraceEndsAt"
+          dp."id" AS "doctorProfileId",
+          u."id" AS "doctorUserId"
         FROM "BookingDraft" bd
         INNER JOIN "PracticeLocation" pl ON pl."id" = bd."practiceLocationId"
         INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
         INNER JOIN "User" u ON u."id" = dp."userId"
-        LEFT JOIN "DoctorFinancialAccount" dfa ON dfa."doctorUserId" = u."id"
-        LEFT JOIN "DoctorSubscriptionEntitlement" dse
-          ON dse."doctorFinancialAccountId" = dfa."id"
         WHERE bd."id" = ${bookingDraftId}
         LIMIT 1
-        FOR UPDATE OF bd, pl, u
+        FOR UPDATE OF bd, pl
       `,
     );
     const draft = rows[0];
@@ -205,6 +216,55 @@ export class BookingConfirmationAdmissionService {
       );
     }
     return draft;
+  }
+
+  private async acquireDoctorScheduleLock(
+    transaction: TransactionClient,
+    doctorProfileId: string,
+  ): Promise<void> {
+    const scope = `DOCTOR_SCHEDULE|${doctorProfileId}`;
+    await transaction.$executeRaw(Prisma.sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${scope}, 0))
+    `);
+  }
+
+  private async lockDoctorAdmissionState(
+    transaction: TransactionClient,
+    doctorUserId: string,
+  ): Promise<LockedDoctorAdmissionState> {
+    const rows = await transaction.$queryRaw<LockedDoctorAdmissionState[]>(
+      Prisma.sql`
+        SELECT "accountStatus", "administrativeRestrictionStatus"
+        FROM "User"
+        WHERE "id" = ${doctorUserId}
+        FOR UPDATE
+      `,
+    );
+    const doctor = rows[0];
+    if (!doctor) {
+      throw new ConflictException(
+        'Booking confirmation is currently unavailable.',
+      );
+    }
+    return doctor;
+  }
+
+  private async lockSubscriptionEntitlement(
+    transaction: TransactionClient,
+    doctorUserId: string,
+  ): Promise<Date | null> {
+    const rows = await transaction.$queryRaw<Array<{ graceEndsAt: Date | null }>>(
+      Prisma.sql`
+        SELECT dse."graceEndsAt"
+        FROM "DoctorFinancialAccount" dfa
+        INNER JOIN "DoctorSubscriptionEntitlement" dse
+          ON dse."doctorFinancialAccountId" = dfa."id"
+        WHERE dfa."doctorUserId" = ${doctorUserId}
+        LIMIT 1
+        FOR UPDATE OF dse
+      `,
+    );
+    return rows[0]?.graceEndsAt ?? null;
   }
 
   private async lockVerifiedOtp(
@@ -261,12 +321,13 @@ export class BookingConfirmationAdmissionService {
   }
 
   private assertDoctorAndSubscriptionEligible(
-    draft: LockedConfirmationDraft,
+    doctor: LockedDoctorAdmissionState,
+    entitlementGraceEndsAt: Date | null,
     now: Date,
   ): void {
     if (
-      draft.doctorAccountStatus !== 'ACTIVE' ||
-      draft.doctorAdministrativeRestrictionStatus !==
+      doctor.accountStatus !== 'ACTIVE' ||
+      doctor.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE
     ) {
       throw new ConflictException(
@@ -274,8 +335,8 @@ export class BookingConfirmationAdmissionService {
       );
     }
     if (
-      !draft.entitlementGraceEndsAt ||
-      draft.entitlementGraceEndsAt.getTime() <= now.getTime()
+      !entitlementGraceEndsAt ||
+      entitlementGraceEndsAt.getTime() <= now.getTime()
     ) {
       throw new ConflictException(
         'Booking confirmation is currently unavailable.',
