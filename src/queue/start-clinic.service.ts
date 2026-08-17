@@ -17,6 +17,7 @@ import {
   QueueEventType,
   UserAccountStatus,
   UserRole,
+  WaitingPlacementType,
 } from '../../generated/prisma/client';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,7 +29,6 @@ type TransactionClient = Prisma.TransactionClient;
 
 type StartContext = {
   practiceLocationId: string;
-  serviceDate: Date;
   lifecycleStatus: PracticeLocationLifecycleStatus;
   doctorUserId: string;
   currentRegularPracticeStaffId: string | null;
@@ -51,7 +51,17 @@ type FirstWaiting = {
   id: string;
   status: AppointmentStatus;
   servingOrderKey: Prisma.Decimal | null;
-  waitingPlacementType: string | null;
+  waitingPlacementType: WaitingPlacementType | null;
+};
+
+type OperatingStaff = {
+  id: string;
+  userId: string;
+  isActive: boolean;
+  staffRole: PracticeStaffRole;
+  userRole: UserRole;
+  userAccountStatus: UserAccountStatus;
+  administrativeRestrictionStatus: AdministrativeRestrictionStatus;
 };
 
 @Injectable()
@@ -69,9 +79,13 @@ export class StartClinicService {
     idempotencyKey: string,
   ) {
     const key = this.idempotency.normalizeKey(idempotencyKey);
-    const serviceDate = this.scheduleTime.parseServiceDate(dto.serviceDate);
+    const parsedServiceDate = this.scheduleTime.parseServiceDate(dto.serviceDate);
     const dateValue = new Date(
-      Date.UTC(serviceDate.year, serviceDate.month - 1, serviceDate.day),
+      Date.UTC(
+        parsedServiceDate.year,
+        parsedServiceDate.month - 1,
+        parsedServiceDate.day,
+      ),
     );
     const commandType = CommandType.START_CLINIC;
     const scope = {
@@ -137,7 +151,7 @@ export class StartClinicService {
           administrativeRestrictionStatus: true,
         },
       });
-      this.assertAuthorizedActor(context, actor);
+      this.assertEligibleActor(actor);
 
       const schedule = await this.scheduleResolution.resolveOperationalSchedule(
         dto.practiceLocationId,
@@ -163,13 +177,13 @@ export class StartClinicService {
         throw new ConflictException('Clinic day cannot be started again.');
       }
 
-      const operatingPracticeStaffId = existingClinicDay
-        ? existingClinicDay.operatingPracticeStaffId
-        : await this.resolveInitialOperatingStaffId(
-            transaction,
-            context,
-            authenticatedUserId,
-          );
+      const operatingPracticeStaffId = await this.assertActorAuthorityAndResolveOperatingStaff(
+        transaction,
+        context,
+        existingClinicDay,
+        actor!,
+      );
+
       const now = new Date();
       const clinicDay = existingClinicDay
         ? await transaction.clinicDay.update({
@@ -329,10 +343,7 @@ export class StartClinicService {
     `);
   }
 
-  private assertAuthorizedActor(
-    context: StartContext,
-    actor: ActorState | null,
-  ): void {
+  private assertEligibleActor(actor: ActorState | null): asserts actor is ActorState {
     if (
       !actor ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
@@ -340,13 +351,64 @@ export class StartClinicService {
     ) {
       throw new ForbiddenException('Current user cannot start this clinic day.');
     }
-    if (actor.role === UserRole.DOCTOR && actor.id === context.doctorUserId) {
-      return;
+  }
+
+  private async assertActorAuthorityAndResolveOperatingStaff(
+    transaction: TransactionClient,
+    context: StartContext,
+    clinicDay: ExistingClinicDay | null,
+    actor: ActorState,
+  ): Promise<string | null> {
+    if (actor.role === UserRole.DOCTOR) {
+      if (actor.id !== context.doctorUserId) {
+        throw new ForbiddenException('Current user cannot start this clinic day.');
+      }
+      return clinicDay?.operatingPracticeStaffId ?? context.currentRegularPracticeStaffId;
     }
-    if (actor.role === UserRole.SECRETARY) {
-      return;
+
+    if (actor.role !== UserRole.SECRETARY) {
+      throw new ForbiddenException('Current user cannot start this clinic day.');
     }
-    throw new ForbiddenException('Current user cannot start this clinic day.');
+
+    const expectedStaffId =
+      clinicDay?.operatingPracticeStaffId ?? context.currentRegularPracticeStaffId;
+    if (!expectedStaffId) {
+      throw new ForbiddenException(
+        'No operating secretary is assigned for this clinic day.',
+      );
+    }
+
+    const rows = await transaction.$queryRaw<OperatingStaff[]>(Prisma.sql`
+      SELECT
+        ps."id",
+        ps."userId",
+        ps."isActive",
+        ps."staffRole",
+        u."role" AS "userRole",
+        u."accountStatus" AS "userAccountStatus",
+        u."administrativeRestrictionStatus"
+      FROM "PracticeStaff" ps
+      INNER JOIN "User" u ON u."id" = ps."userId"
+      WHERE ps."id" = ${expectedStaffId}
+      LIMIT 1
+      FOR UPDATE OF ps, u
+    `);
+    const operatingStaff = rows[0];
+    if (
+      !operatingStaff ||
+      operatingStaff.userId !== actor.id ||
+      !operatingStaff.isActive ||
+      operatingStaff.staffRole !== PracticeStaffRole.SECRETARY ||
+      operatingStaff.userRole !== UserRole.SECRETARY ||
+      operatingStaff.userAccountStatus !== UserAccountStatus.ACTIVE ||
+      operatingStaff.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
+    ) {
+      throw new ForbiddenException(
+        'Secretary is not the current operating secretary for this clinic day.',
+      );
+    }
+    return operatingStaff.id;
   }
 
   private async lockClinicDay(
@@ -363,39 +425,6 @@ export class StartClinicService {
       FOR UPDATE
     `);
     return rows[0] ?? null;
-  }
-
-  private async resolveInitialOperatingStaffId(
-    transaction: TransactionClient,
-    context: StartContext,
-    actorUserId: string,
-  ): Promise<string | null> {
-    if (actorUserId === context.doctorUserId) {
-      return context.currentRegularPracticeStaffId;
-    }
-    const staff = await transaction.practiceStaff.findFirst({
-      where: {
-        userId: actorUserId,
-        practiceLocationId: context.practiceLocationId,
-        staffRole: PracticeStaffRole.SECRETARY,
-        isActive: true,
-      },
-      select: { id: true },
-    });
-    if (!staff) {
-      throw new ForbiddenException(
-        'Secretary is not assigned to this practice location.',
-      );
-    }
-    if (
-      context.currentRegularPracticeStaffId &&
-      staff.id !== context.currentRegularPracticeStaffId
-    ) {
-      throw new ForbiddenException(
-        'Secretary is not the current operating secretary for this clinic day.',
-      );
-    }
-    return staff.id;
   }
 
   private async lockFirstWaitingAppointment(
