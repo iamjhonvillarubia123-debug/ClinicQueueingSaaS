@@ -94,54 +94,64 @@ describe('UNDO queue controls (e2e)', () => {
     await prisma.$disconnect();
   });
 
-  it.each([
-    NextPatientOutcome.COMPLETED,
-    NextPatientOutcome.OUT_FOR_PROCEDURE,
-  ])('reverses the latest NEXT PATIENT outcome %s', async (outcome) => {
-    const serviceDate = outcome === NextPatientOutcome.COMPLETED ? '2026-11-01' : '2026-11-02';
-    const queue = await createClinicDayWithQueue(serviceDate);
-    const nextResult = await nextPatient.advance(
-      doctorUserId,
-      nextDto(serviceDate, outcome),
-      `undo-source-${outcome}-${scope}`,
-    );
+  it.each([NextPatientOutcome.COMPLETED, NextPatientOutcome.OUT_FOR_PROCEDURE])(
+    'reverses the latest NEXT PATIENT outcome %s',
+    async (outcome) => {
+      const serviceDate =
+        outcome === NextPatientOutcome.COMPLETED ? '2026-11-01' : '2026-11-02';
+      const queue = await createClinicDayWithQueue(serviceDate);
+      const nextResult = await nextPatient.advance(
+        doctorUserId,
+        nextDto(serviceDate, outcome),
+        `undo-source-${outcome}-${scope}`,
+      );
 
-    const result = await undoQueue.undo(
-      doctorUserId,
-      undoDto(serviceDate),
-      `undo-command-${outcome}-${scope}`,
-    );
+      const result = await undoQueue.undo(
+        doctorUserId,
+        undoDto(serviceDate),
+        `undo-command-${outcome}-${scope}`,
+      );
 
-    const [primary, secondary, undoEvent, original, command] = await Promise.all([
-      prisma.appointment.findUniqueOrThrow({ where: { id: queue.currentId } }),
-      prisma.appointment.findUniqueOrThrow({ where: { id: queue.nextId } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: nextResult.queueEventId } }),
-      prisma.commandIdempotency.findFirstOrThrow({
-        where: {
-          commandType: CommandType.UNDO,
-          practiceLocationId,
-          serviceDate: dateValue(serviceDate),
-          actorUserId: doctorUserId,
-        },
-      }),
-    ]);
+      const [primary, secondary, undoEvent, original, command] =
+        await Promise.all([
+          prisma.appointment.findUniqueOrThrow({
+            where: { id: queue.currentId },
+          }),
+          prisma.appointment.findUniqueOrThrow({ where: { id: queue.nextId } }),
+          prisma.queueEvent.findUniqueOrThrow({
+            where: { id: result.queueEventId },
+          }),
+          prisma.queueEvent.findUniqueOrThrow({
+            where: { id: nextResult.queueEventId },
+          }),
+          prisma.commandIdempotency.findFirstOrThrow({
+            where: {
+              commandType: CommandType.UNDO,
+              practiceLocationId,
+              serviceDate: dateValue(serviceDate),
+              actorUserId: doctorUserId,
+            },
+          }),
+        ]);
 
-    expect(primary.status).toBe(AppointmentStatus.CALLED);
-    expect(primary.servingOrderKey).toBeNull();
-    expect(primary.waitingPlacementType).toBeNull();
-    expect(primary.activeAppointmentKey).not.toBeNull();
-    expect(primary.terminalAt).toBeNull();
-    expect(primary.completedAt).toBeNull();
-    expect(secondary.status).toBe(AppointmentStatus.WAITING);
-    expect(secondary.servingOrderKey?.toString()).toBe('1');
-    expect(secondary.waitingPlacementType).toBe(WaitingPlacementType.ORDINARY);
-    expect(secondary.calledAt).toBeNull();
-    expect(undoEvent.type).toBe(QueueEventType.UNDO);
-    expect(undoEvent.actorType).toBe(QueueEventActorType.USER);
-    expect(undoEvent.reversesQueueEventId).toBe(original.id);
-    expect(command.resultQueueEventId).toBe(undoEvent.id);
-  });
+      expect(primary.status).toBe(AppointmentStatus.CALLED);
+      expect(primary.servingOrderKey).toBeNull();
+      expect(primary.waitingPlacementType).toBeNull();
+      expect(primary.activeAppointmentKey).not.toBeNull();
+      expect(primary.terminalAt).toBeNull();
+      expect(primary.completedAt).toBeNull();
+      expect(secondary.status).toBe(AppointmentStatus.WAITING);
+      expect(secondary.servingOrderKey?.toString()).toBe('1');
+      expect(secondary.waitingPlacementType).toBe(
+        WaitingPlacementType.ORDINARY,
+      );
+      expect(secondary.calledAt).toBeNull();
+      expect(undoEvent.type).toBe(QueueEventType.UNDO);
+      expect(undoEvent.actorType).toBe(QueueEventActorType.USER);
+      expect(undoEvent.reversesQueueEventId).toBe(original.id);
+      expect(command.resultQueueEventId).toBe(undoEvent.id);
+    },
+  );
 
   it('restores BookingGroup serving protection ended by NEXT PATIENT', async () => {
     const serviceDate = '2026-11-03';
@@ -199,7 +209,11 @@ describe('UNDO queue controls (e2e)', () => {
     );
     const key = `undo-replay-${scope}`;
     const first = await undoQueue.undo(doctorUserId, undoDto(serviceDate), key);
-    const replay = await undoQueue.undo(doctorUserId, undoDto(serviceDate), key);
+    const replay = await undoQueue.undo(
+      doctorUserId,
+      undoDto(serviceDate),
+      key,
+    );
 
     expect(replay.replayed).toBe(true);
     expect(replay.queueEventId).toBe(first.queueEventId);
@@ -245,11 +259,7 @@ describe('UNDO queue controls (e2e)', () => {
     });
 
     await expect(
-      undoQueue.undo(
-        doctorUserId,
-        undoDto(serviceDate),
-        `undo-stale-${scope}`,
-      ),
+      undoQueue.undo(doctorUserId, undoDto(serviceDate), `undo-stale-${scope}`),
     ).rejects.toThrow('No eligible queue operation is available to undo');
   });
 
@@ -275,8 +285,12 @@ describe('UNDO queue controls (e2e)', () => {
       ),
     ]);
 
-    expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(1);
-    expect(settled.filter((item) => item.status === 'rejected')).toHaveLength(1);
+    expect(settled.filter((item) => item.status === 'fulfilled')).toHaveLength(
+      1,
+    );
+    expect(settled.filter((item) => item.status === 'rejected')).toHaveLength(
+      1,
+    );
     expect(
       await prisma.queueEvent.count({
         where: {
@@ -338,7 +352,9 @@ describe('UNDO queue controls (e2e)', () => {
     overrides: AppointmentFixtureOverrides,
   ) {
     const mobileNumberHash = createHash('sha256')
-      .update(`${scope}|mobile|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`)
+      .update(
+        `${scope}|mobile|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`,
+      )
       .digest('hex');
     const activeAppointmentKey = createHash('sha256')
       .update(
@@ -355,7 +371,9 @@ describe('UNDO queue controls (e2e)', () => {
         estimatedServiceMinutes: 30,
         queueNumber,
         activeAppointmentKey,
+        mobileNumberEncrypted: `fixture-encrypted-${mobileNumberHash}`,
         mobileNumberHash,
+        mobileNumberLastFour: '1234',
         firstName: 'Patient',
         lastName: discriminator,
         ...overrides,
