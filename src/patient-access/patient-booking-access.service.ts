@@ -45,12 +45,7 @@ export class PatientBookingAccessService {
     rawToken: string,
     bookingReference: string,
   ): Promise<PatientBookingAccess> {
-    return this.validateToken(
-      transaction,
-      rawToken,
-      bookingReference,
-      true,
-    );
+    return this.validateToken(transaction, rawToken, bookingReference, true);
   }
 
   readCookie(cookieHeader: string | undefined): string {
