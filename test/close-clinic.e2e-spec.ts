@@ -153,64 +153,88 @@ describe('CLOSE CLINIC controls (e2e)', () => {
   it.each([
     ClinicClosureDisposition.COMPLETED,
     ClinicClosureDisposition.OUT_FOR_PROCEDURE,
-  ])('closes a started clinic and applies final disposition %s', async (disposition) => {
-    const serviceDate = disposition === ClinicClosureDisposition.COMPLETED ? '2026-11-16' : '2026-11-23';
-    const date = dateValue(serviceDate);
-    await createStartedClinicDay(date);
-    const current = await createAppointment(date, 1, `CURRENT-${disposition}`, {
-      status: AppointmentStatus.CALLED,
-      calledAt: new Date(),
-      servingOrderKey: null,
-      waitingPlacementType: null,
-    });
-    const absent = await createAppointment(date, 2, `ABSENT-${disposition}`, {
-      status: AppointmentStatus.TEMPORARILY_ABSENT,
-      servingOrderKey: null,
-      waitingPlacementType: null,
-    });
-    const procedure = await createAppointment(date, 3, `PROCEDURE-${disposition}`, {
-      status: AppointmentStatus.OUT_FOR_PROCEDURE,
-      servingOrderKey: null,
-      waitingPlacementType: null,
-    });
+  ])(
+    'closes a started clinic and applies final disposition %s',
+    async (disposition) => {
+      const serviceDate =
+        disposition === ClinicClosureDisposition.COMPLETED
+          ? '2026-06-29'
+          : '2026-07-06';
+      const date = dateValue(serviceDate);
+      await createStartedClinicDay(date);
+      const current = await createAppointment(
+        date,
+        1,
+        `CURRENT-${disposition}`,
+        {
+          status: AppointmentStatus.CALLED,
+          calledAt: new Date(),
+          servingOrderKey: null,
+          waitingPlacementType: null,
+        },
+      );
+      const absent = await createAppointment(date, 2, `ABSENT-${disposition}`, {
+        status: AppointmentStatus.TEMPORARILY_ABSENT,
+        servingOrderKey: null,
+        waitingPlacementType: null,
+      });
+      const procedure = await createAppointment(
+        date,
+        3,
+        `PROCEDURE-${disposition}`,
+        {
+          status: AppointmentStatus.OUT_FOR_PROCEDURE,
+          servingOrderKey: null,
+          waitingPlacementType: null,
+        },
+      );
 
-    const result = await closeClinic.close(
-      doctorUserId,
-      closeDto(serviceDate, disposition),
-      `close-${disposition}-${scope}`,
-    );
+      const result = await closeClinic.close(
+        doctorUserId,
+        closeDto(serviceDate, disposition),
+        `close-${disposition}-${scope}`,
+      );
 
-    const [clinicDay, currentAfter, absentAfter, procedureAfter, event] = await Promise.all([
-      prisma.clinicDay.findUniqueOrThrow({
-        where: { practiceLocationId_serviceDate: { practiceLocationId, serviceDate: date } },
-      }),
-      prisma.appointment.findUniqueOrThrow({ where: { id: current.id } }),
-      prisma.appointment.findUniqueOrThrow({ where: { id: absent.id } }),
-      prisma.appointment.findUniqueOrThrow({ where: { id: procedure.id } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
-    ]);
+      const [clinicDay, currentAfter, absentAfter, procedureAfter, event] =
+        await Promise.all([
+          prisma.clinicDay.findUniqueOrThrow({
+            where: {
+              practiceLocationId_serviceDate: {
+                practiceLocationId,
+                serviceDate: date,
+              },
+            },
+          }),
+          prisma.appointment.findUniqueOrThrow({ where: { id: current.id } }),
+          prisma.appointment.findUniqueOrThrow({ where: { id: absent.id } }),
+          prisma.appointment.findUniqueOrThrow({ where: { id: procedure.id } }),
+          prisma.queueEvent.findUniqueOrThrow({
+            where: { id: result.queueEventId },
+          }),
+        ]);
 
-    expect(clinicDay.status).toBe(ClinicDayStatus.CLOSED);
-    expect(clinicDay.closedAt).not.toBeNull();
-    expect(event.type).toBe(QueueEventType.QUEUE_CLOSED);
-    expect(absentAfter.status).toBe(AppointmentStatus.EXPIRED);
-    expect(procedureAfter.status).toBe(AppointmentStatus.EXPIRED);
-    expect(absentAfter.activeAppointmentKey).toBeNull();
-    expect(procedureAfter.activeAppointmentKey).toBeNull();
+      expect(clinicDay.status).toBe(ClinicDayStatus.CLOSED);
+      expect(clinicDay.closedAt).not.toBeNull();
+      expect(event.type).toBe(QueueEventType.QUEUE_CLOSED);
+      expect(absentAfter.status).toBe(AppointmentStatus.EXPIRED);
+      expect(procedureAfter.status).toBe(AppointmentStatus.EXPIRED);
+      expect(absentAfter.activeAppointmentKey).toBeNull();
+      expect(procedureAfter.activeAppointmentKey).toBeNull();
 
-    if (disposition === ClinicClosureDisposition.COMPLETED) {
-      expect(currentAfter.status).toBe(AppointmentStatus.COMPLETED);
-      expect(currentAfter.completedAt).not.toBeNull();
-    } else {
-      expect(currentAfter.status).toBe(AppointmentStatus.EXPIRED);
-      expect(currentAfter.completedAt).toBeNull();
-    }
-    expect(currentAfter.terminalAt).not.toBeNull();
-    expect(currentAfter.activeAppointmentKey).toBeNull();
-  });
+      if (disposition === ClinicClosureDisposition.COMPLETED) {
+        expect(currentAfter.status).toBe(AppointmentStatus.COMPLETED);
+        expect(currentAfter.completedAt).not.toBeNull();
+      } else {
+        expect(currentAfter.status).toBe(AppointmentStatus.EXPIRED);
+        expect(currentAfter.completedAt).toBeNull();
+      }
+      expect(currentAfter.terminalAt).not.toBeNull();
+      expect(currentAfter.activeAppointmentKey).toBeNull();
+    },
+  );
 
   it('rejects closure while WAITING Appointments remain', async () => {
-    const serviceDate = '2026-11-30';
+    const serviceDate = '2026-07-13';
     const date = dateValue(serviceDate);
     await createStartedClinicDay(date);
     await createAppointment(date, 1, 'WAITING-BLOCK', {
@@ -220,44 +244,68 @@ describe('CLOSE CLINIC controls (e2e)', () => {
     });
 
     await expect(
-      closeClinic.close(doctorUserId, closeDto(serviceDate), `waiting-block-${scope}`),
+      closeClinic.close(
+        doctorUserId,
+        closeDto(serviceDate),
+        `waiting-block-${scope}`,
+      ),
     ).rejects.toThrow('waiting Appointments remain');
   });
 
   it('replays the same CLOSE CLINIC idempotently', async () => {
-    const serviceDate = '2026-12-07';
+    const serviceDate = '2026-07-20';
     const date = dateValue(serviceDate);
     await createStartedClinicDay(date);
     const key = `close-replay-${scope}`;
 
-    const first = await closeClinic.close(doctorUserId, closeDto(serviceDate), key);
-    const replay = await closeClinic.close(doctorUserId, closeDto(serviceDate), key);
+    const first = await closeClinic.close(
+      doctorUserId,
+      closeDto(serviceDate),
+      key,
+    );
+    const replay = await closeClinic.close(
+      doctorUserId,
+      closeDto(serviceDate),
+      key,
+    );
 
     expect(replay.replayed).toBe(true);
     expect(replay.queueEventId).toBe(first.queueEventId);
     expect(
       await prisma.queueEvent.count({
-        where: { practiceLocationId, serviceDate: date, type: QueueEventType.QUEUE_CLOSED },
+        where: {
+          practiceLocationId,
+          serviceDate: date,
+          type: QueueEventType.QUEUE_CLOSED,
+        },
       }),
     ).toBe(1);
   });
 
   it('allows the operating secretary and rejects another assigned secretary', async () => {
-    const allowedDate = '2026-12-14';
+    const allowedDate = '2026-07-27';
     await createStartedClinicDay(dateValue(allowedDate));
     await expect(
-      closeClinic.close(secretaryUserId, closeDto(allowedDate), `close-secretary-ok-${scope}`),
+      closeClinic.close(
+        secretaryUserId,
+        closeDto(allowedDate),
+        `close-secretary-ok-${scope}`,
+      ),
     ).resolves.toMatchObject({ status: ClinicDayStatus.CLOSED });
 
-    const deniedDate = '2026-12-21';
+    const deniedDate = '2026-08-03';
     await createStartedClinicDay(dateValue(deniedDate));
     await expect(
-      closeClinic.close(otherSecretaryUserId, closeDto(deniedDate), `close-secretary-no-${scope}`),
+      closeClinic.close(
+        otherSecretaryUserId,
+        closeDto(deniedDate),
+        `close-secretary-no-${scope}`,
+      ),
     ).rejects.toThrow('current operating secretary');
   });
 
   it('serializes CLOSE CLINIC against concurrent NEXT PATIENT mutation', async () => {
-    const serviceDate = '2026-12-28';
+    const serviceDate = '2026-08-10';
     const date = dateValue(serviceDate);
     await createStartedClinicDay(date);
     await createAppointment(date, 1, 'RACE-CURRENT', {
@@ -291,17 +339,32 @@ describe('CLOSE CLINIC controls (e2e)', () => {
     expect(rejected).toHaveLength(1);
 
     const clinicDay = await prisma.clinicDay.findUniqueOrThrow({
-      where: { practiceLocationId_serviceDate: { practiceLocationId, serviceDate: date } },
+      where: {
+        practiceLocationId_serviceDate: {
+          practiceLocationId,
+          serviceDate: date,
+        },
+      },
     });
     const queueClosedEvents = await prisma.queueEvent.count({
-      where: { practiceLocationId, serviceDate: date, type: QueueEventType.QUEUE_CLOSED },
+      where: {
+        practiceLocationId,
+        serviceDate: date,
+        type: QueueEventType.QUEUE_CLOSED,
+      },
     });
     const nextEvents = await prisma.queueEvent.count({
-      where: { practiceLocationId, serviceDate: date, type: QueueEventType.NEXT_PATIENT },
+      where: {
+        practiceLocationId,
+        serviceDate: date,
+        type: QueueEventType.NEXT_PATIENT,
+      },
     });
 
     expect(queueClosedEvents + nextEvents).toBe(1);
-    expect([ClinicDayStatus.STARTED, ClinicDayStatus.CLOSED]).toContain(clinicDay.status);
+    expect([ClinicDayStatus.STARTED, ClinicDayStatus.CLOSED]).toContain(
+      clinicDay.status,
+    );
   });
 
   function closeDto(
@@ -346,7 +409,10 @@ describe('CLOSE CLINIC controls (e2e)', () => {
         serviceDate,
         estimatedServiceMinutes: 30,
         queueNumber,
-        activeAppointmentKey: randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64),
+        activeAppointmentKey: randomUUID()
+          .replaceAll('-', '')
+          .padEnd(64, '0')
+          .slice(0, 64),
         firstName: 'Close',
         lastName: discriminator,
         ...overrides,

@@ -132,7 +132,9 @@ export class CloseClinicService {
         serviceDate,
       );
       if (!clinicDay || clinicDay.status !== ClinicDayStatus.STARTED) {
-        throw new ConflictException('CLOSE CLINIC requires a started clinic day.');
+        throw new ConflictException(
+          'CLOSE CLINIC requires a started clinic day.',
+        );
       }
 
       await this.lockUser(transaction, authenticatedUserId);
@@ -196,7 +198,9 @@ export class CloseClinicService {
       const now = new Date();
 
       if (current) {
-        if (dto.finalPatientDisposition === ClinicClosureDisposition.COMPLETED) {
+        if (
+          dto.finalPatientDisposition === ClinicClosureDisposition.COMPLETED
+        ) {
           await transaction.appointment.update({
             where: { id: current.id },
             data: {
@@ -209,7 +213,8 @@ export class CloseClinicService {
             },
           });
         } else if (
-          dto.finalPatientDisposition === ClinicClosureDisposition.OUT_FOR_PROCEDURE
+          dto.finalPatientDisposition ===
+          ClinicClosureDisposition.OUT_FOR_PROCEDURE
         ) {
           await transaction.appointment.update({
             where: { id: current.id },
@@ -282,22 +287,15 @@ export class CloseClinicService {
         select: { id: true },
       });
 
-      const links = [
-        ...(current
-          ? [
-              {
-                queueEventId: event.id,
-                appointmentId: current.id,
-                role: QueueEventAppointmentLinkRole.PRIMARY,
-              },
-            ]
-          : []),
-        ...unresolved.map((appointment) => ({
-          queueEventId: event.id,
-          appointmentId: appointment.id,
-          role: QueueEventAppointmentLinkRole.SECONDARY,
-        })),
-      ];
+      const links = current
+        ? [
+            {
+              queueEventId: event.id,
+              appointmentId: current.id,
+              role: QueueEventAppointmentLinkRole.PRIMARY,
+            },
+          ]
+        : [];
       if (links.length > 0) {
         await transaction.queueEventAppointmentLink.createMany({ data: links });
       }
@@ -350,7 +348,9 @@ export class CloseClinicService {
       },
     });
     if (!event || event.type !== QueueEventType.QUEUE_CLOSED) {
-      throw new ConflictException('CLOSE CLINIC replay result is inconsistent.');
+      throw new ConflictException(
+        'CLOSE CLINIC replay result is inconsistent.',
+      );
     }
     const clinicDay = await transaction.clinicDay.findUnique({
       where: {
@@ -362,10 +362,13 @@ export class CloseClinicService {
       select: { id: true, status: true, closedAt: true },
     });
     if (!clinicDay || clinicDay.status !== ClinicDayStatus.CLOSED) {
-      throw new ConflictException('CLOSE CLINIC replay ClinicDay is inconsistent.');
+      throw new ConflictException(
+        'CLOSE CLINIC replay ClinicDay is inconsistent.',
+      );
     }
     const metadata =
-      event.metadata && !Array.isArray(event.metadata) &&
+      event.metadata &&
+      !Array.isArray(event.metadata) &&
       typeof event.metadata === 'object'
         ? event.metadata
         : {};
@@ -495,7 +498,9 @@ export class CloseClinicService {
       actor.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE
     ) {
-      throw new ForbiddenException('Current user cannot close this clinic day.');
+      throw new ForbiddenException(
+        'Current user cannot close this clinic day.',
+      );
     }
   }
 
@@ -507,12 +512,19 @@ export class CloseClinicService {
   ): Promise<void> {
     if (actor.role === UserRole.DOCTOR) {
       if (actor.id !== context.doctorUserId) {
-        throw new ForbiddenException('Current user cannot close this clinic day.');
+        throw new ForbiddenException(
+          'Current user cannot close this clinic day.',
+        );
       }
       return;
     }
-    if (actor.role !== UserRole.SECRETARY || !clinicDay.operatingPracticeStaffId) {
-      throw new ForbiddenException('Current user cannot close this clinic day.');
+    if (
+      actor.role !== UserRole.SECRETARY ||
+      !clinicDay.operatingPracticeStaffId
+    ) {
+      throw new ForbiddenException(
+        'Current user cannot close this clinic day.',
+      );
     }
     const rows = await transaction.$queryRaw<OperatingStaff[]>(Prisma.sql`
       SELECT ps."id", ps."userId", ps."isActive", ps."staffRole",
