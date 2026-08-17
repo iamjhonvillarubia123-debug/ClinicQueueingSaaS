@@ -356,7 +356,9 @@ describe('Public booking duplicate-mobile confirmation race (e2e)', () => {
     return verifyDraftResponse(response.body);
   }
 
-  async function verifyDraftResponse(bodyValue: unknown): Promise<DraftFixture> {
+  async function verifyDraftResponse(
+    bodyValue: unknown,
+  ): Promise<DraftFixture> {
     const body = bodyValue as {
       bookingDraft: { id: string };
       otpVerification: { id: string } | null;
