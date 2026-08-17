@@ -155,12 +155,11 @@ export class StartClinicService {
       });
       this.assertEligibleActor(actor);
 
-      const schedule =
-        await this.scheduleResolution.resolveOperationalSchedule(
-          dto.practiceLocationId,
-          dto.serviceDate,
-          transaction,
-        );
+      const schedule = await this.scheduleResolution.resolveOperationalSchedule(
+        dto.practiceLocationId,
+        dto.serviceDate,
+        transaction,
+      );
       if (!schedule.isOpen) {
         throw new ConflictException(
           'Clinic cannot be started on a closed or unavailable Service Date.',
@@ -196,7 +195,8 @@ export class StartClinicService {
               status: ClinicDayStatus.STARTED,
               startedAt: now,
               operatingPracticeStaffId,
-              maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
+              maximumOnlineBookingUntilAt:
+                schedule.maximumOnlineBookingUntilAt,
             },
             select: { id: true, status: true, startedAt: true },
           })
@@ -207,7 +207,8 @@ export class StartClinicService {
               status: ClinicDayStatus.STARTED,
               startedAt: now,
               operatingPracticeStaffId,
-              maximumOnlineBookingUntilAt: schedule.maximumOnlineBookingUntilAt,
+              maximumOnlineBookingUntilAt:
+                schedule.maximumOnlineBookingUntilAt,
             },
             select: { id: true, status: true, startedAt: true },
           });
