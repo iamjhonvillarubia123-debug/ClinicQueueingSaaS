@@ -82,13 +82,14 @@ export class ReturnToQueueService {
     const serviceDate = this.parseServiceDate(dto.serviceDate);
     const commandType = CommandType.RETURN_TO_QUEUE;
     const identityScope = {
-      practiceLocationId: dto.practiceLocationId,
-      serviceDate: dto.serviceDate,
+      appointmentId: dto.appointmentId,
       actorUserId: authenticatedUserId,
     };
     const requestPayload = {
-      ...identityScope,
+      practiceLocationId: dto.practiceLocationId,
+      serviceDate: dto.serviceDate,
       appointmentId: dto.appointmentId,
+      actorUserId: authenticatedUserId,
     };
     const commandIdentityKey = this.idempotency.deriveIdentity({
       idempotencyKey: key,
