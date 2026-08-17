@@ -71,7 +71,7 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
         bookingReference: `BD-${fixture.scope.slice(0, 12)}`,
         practiceLocationId: fixture.location.id,
         serviceDate: new Date('2026-08-17T00:00:00.000Z'),
-        expiresAt: new Date('2026-08-17T01:00:00.000Z'),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
     await prisma.bookingDraftAnswer.create({
@@ -208,7 +208,7 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
           bookingReference: `BD-${fixture.scope.slice(0, 12)}`,
           practiceLocationId: fixture.location.id,
           serviceDate: new Date('2026-08-17T00:00:00.000Z'),
-          expiresAt: new Date('2026-08-17T01:00:00.000Z'),
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         },
       });
       await prisma.bookingDraftAnswer.create({
