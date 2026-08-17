@@ -23,6 +23,7 @@ type ConfirmationFixture = {
   serviceDate: Date;
   locationId: string;
   serviceId: string;
+  doctorAccountSettingsId: string;
   bookingDraftId: string;
   otpVerificationId: string;
   questionId: string | null;
@@ -126,6 +127,22 @@ describe('Individual booking confirmation current-state revalidation (e2e)', () 
     await expectRejectedConfirmationState(fixture);
   });
 
+  it('rejects when the Doctor reduces the advance-booking window after OTP verification and preserves the verified draft/OTP', async () => {
+    const fixture = await createFixture(false);
+
+    await prisma.doctorAccountSettings.update({
+      where: { id: fixture.doctorAccountSettingsId },
+      data: { maximumAdvanceBookingDays: 2 },
+    });
+
+    await request(app.getHttpServer())
+      .post(`/booking/draft/${fixture.bookingDraftId}/confirm`)
+      .set('Idempotency-Key', `m6s2-revalidate-advance-${fixture.scope}`)
+      .expect(409);
+
+    await expectRejectedConfirmationState(fixture);
+  });
+
   async function createFixture(
     includeRequiredQuestion: boolean,
   ): Promise<ConfirmationFixture> {
@@ -157,7 +174,7 @@ describe('Individual booking confirmation current-state revalidation (e2e)', () 
         licenseNumber: `M6RV-${scope.slice(0, 12)}`,
       },
     });
-    await prisma.doctorAccountSettings.create({
+    const doctorAccountSettings = await prisma.doctorAccountSettings.create({
       data: {
         doctorProfileId: doctorProfile.id,
         allowOnlineBooking: true,
@@ -262,6 +279,7 @@ describe('Individual booking confirmation current-state revalidation (e2e)', () 
       serviceDate,
       locationId: location.id,
       serviceId: service.id,
+      doctorAccountSettingsId: doctorAccountSettings.id,
       bookingDraftId: draftBody.bookingDraft.id,
       otpVerificationId: draftBody.otpVerification.id,
       questionId: question?.id ?? null,
