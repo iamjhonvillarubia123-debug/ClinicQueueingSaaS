@@ -85,7 +85,9 @@ export class ActiveBookingIdentityService {
   ): Promise<void> {
     await this.assertNoActiveAppointment(transaction, activeAppointmentKey);
 
-    const groups = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    const groups = await transaction.$queryRaw<
+      Array<{ id: string }>
+    >(Prisma.sql`
       SELECT bg."id"
       FROM "BookingGroup" bg
       WHERE bg."controllingMobileNumberHash" = ${mobileNumberHash}
