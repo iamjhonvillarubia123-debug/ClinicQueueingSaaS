@@ -7,7 +7,7 @@ describe('BookingConfirmationAdmissionService', () => {
   const resolveAvailability = jest.fn();
   const deriveAppointmentKey = jest.fn(() => 'a'.repeat(64));
   const acquireAppointmentScopeLock = jest.fn();
-  const assertNoActiveAppointment = jest.fn();
+  const assertNoActivePublicBookingContext = jest.fn();
 
   const availability = {
     resolve: resolveAvailability,
@@ -15,7 +15,7 @@ describe('BookingConfirmationAdmissionService', () => {
   const activeBookingIdentity = {
     deriveAppointmentKey,
     acquireAppointmentScopeLock,
-    assertNoActiveAppointment,
+    assertNoActivePublicBookingContext,
   } as unknown as ActiveBookingIdentityService;
   const service = new BookingConfirmationAdmissionService(
     availability,
@@ -54,7 +54,13 @@ describe('BookingConfirmationAdmissionService', () => {
 
     expect(result.activeAppointmentKey).toBe('a'.repeat(64));
     expect(acquireAppointmentScopeLock).toHaveBeenCalled();
-    expect(assertNoActiveAppointment).toHaveBeenCalled();
+    expect(assertNoActivePublicBookingContext).toHaveBeenCalledWith(
+      transaction,
+      'a'.repeat(64),
+      'mobile-hash',
+      'practice-1',
+      new Date('2026-08-20T00:00:00.000Z'),
+    );
   });
 
   it('rejects unresolved subscription grace expiry before duplicate and queue work', async () => {
