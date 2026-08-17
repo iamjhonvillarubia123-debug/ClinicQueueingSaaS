@@ -5,6 +5,8 @@ import { NotificationModule } from '../notification/notification.module';
 import { PatientAccessModule } from '../patient-access/patient-access.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
+import { CancelAppointmentController } from './cancel-appointment.controller';
+import { CancelAppointmentService } from './cancel-appointment.service';
 import { ClinicDayCancellationService } from './clinic-day-cancellation.service';
 import { CloseClinicController } from './close-clinic.controller';
 import { CloseClinicService } from './close-clinic.service';
@@ -35,6 +37,7 @@ import { UndoQueueService } from './undo-queue.service';
     ScheduleModule,
   ],
   providers: [
+    CancelAppointmentService,
     ClinicDayCancellationService,
     CloseClinicService,
     ImHereService,
@@ -48,6 +51,7 @@ import { UndoQueueService } from './undo-queue.service';
     UndoQueueService,
   ],
   controllers: [
+    CancelAppointmentController,
     CloseClinicController,
     ImHereController,
     NextPatientController,
@@ -58,6 +62,7 @@ import { UndoQueueService } from './undo-queue.service';
     UndoQueueController,
   ],
   exports: [
+    CancelAppointmentService,
     ClinicDayCancellationService,
     CloseClinicService,
     ImHereService,
