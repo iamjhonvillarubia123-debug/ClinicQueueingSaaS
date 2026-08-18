@@ -5,10 +5,6 @@ import {
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
-type ReplayRecord = Awaited<
-  ReturnType<CommandIdempotencyService['findReplay']>
->;
-
 type CreateAttemptArgs = {
   data: { bookingGroupId: string | null };
 };
@@ -132,12 +128,17 @@ describe('BookingGroupRecoveryService', () => {
   });
 
   it('returns the committed logical result on compatible replay without rotating again', async () => {
-    const transaction = {};
+    const transaction = {
+      commandIdempotency: {
+        findUnique: jest.fn().mockResolvedValue({
+          requestFingerprint: 'request-fingerprint',
+          resultBookingGroupId: 'group-1',
+          resultBookingGroupAccessTokenId: 'token-record-1',
+        }),
+      },
+    };
     const { service, idempotency } = buildService(transaction);
-    const replay: Exclude<ReplayRecord, null> = Object.create(null);
-    replay.resultBookingGroupId = 'group-1';
-    replay.resultBookingGroupAccessTokenId = 'token-record-1';
-    idempotency.findReplayMock.mockResolvedValue(replay);
+    idempotency.findReplayMock.mockRestore();
 
     const result = await service.complete('attempt-1', 'idem-1');
 
