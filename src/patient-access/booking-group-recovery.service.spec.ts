@@ -3,6 +3,7 @@ import {
   CommandType,
 } from '../../generated/prisma/client';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
 type CreateAttemptArgs = {
@@ -30,11 +31,10 @@ describe('BookingGroupRecoveryService', () => {
   };
 
   function buildService(transaction: Record<string, unknown>) {
-    const prisma = {
-      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
-        callback(transaction),
-      ),
-    };
+    const prisma = Object.create(PrismaService.prototype) as PrismaService;
+    jest
+      .spyOn(prisma, '$transaction')
+      .mockImplementation(async (callback) => callback(transaction as never));
     const mobile = { protect: jest.fn().mockReturnValue(protectedMobile) };
     const otpGenerator = { generate: jest.fn().mockReturnValue('123456') };
     const otpService = {
@@ -128,12 +128,15 @@ describe('BookingGroupRecoveryService', () => {
   });
 
   it('returns the committed logical result on compatible replay without rotating again', async () => {
+    const replay = {
+      resultBookingGroupId: 'group-1',
+      resultBookingGroupAccessTokenId: 'token-record-1',
+    };
     const transaction = {
       commandIdempotency: {
         findUnique: jest.fn().mockResolvedValue({
+          ...replay,
           requestFingerprint: 'request-fingerprint',
-          resultBookingGroupId: 'group-1',
-          resultBookingGroupAccessTokenId: 'token-record-1',
         }),
       },
     };
