@@ -6,6 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { BookingGroupRecoveryController } from './booking-group-recovery.controller';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
+import { PatientAppointmentDashboardService } from './patient-appointment-dashboard.service';
 import { PatientBookingAccessController } from './patient-booking-access.controller';
 import { PatientBookingAccessService } from './patient-booking-access.service';
 import { PatientBookingGroupAccessController } from './patient-booking-group-access.controller';
@@ -25,11 +26,13 @@ import { PatientBookingGroupAccessService } from './patient-booking-group-access
     BookingGroupRecoveryController,
   ],
   providers: [
+    PatientAppointmentDashboardService,
     PatientBookingAccessService,
     PatientBookingGroupAccessService,
     BookingGroupRecoveryService,
   ],
   exports: [
+    PatientAppointmentDashboardService,
     PatientBookingAccessService,
     PatientBookingGroupAccessService,
     BookingGroupRecoveryService,
