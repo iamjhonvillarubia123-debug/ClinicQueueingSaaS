@@ -23,16 +23,25 @@ describe('BookingGroupRecoveryService', () => {
       hashOtp: jest.fn().mockReturnValue('otp-hash'),
       verifyOtpHash: jest.fn().mockReturnValue(true),
     };
+    const normalizeKey = jest.fn((value: string | undefined): string => value ?? '');
+    const deriveIdentity = jest.fn().mockReturnValue('command-identity');
+    const fingerprint = jest.fn().mockReturnValue('request-fingerprint');
+    const acquireCommandLock = jest.fn().mockResolvedValue(undefined);
+    const findReplay = jest.fn<Promise<{
+      resultBookingGroupId: string | null;
+      resultBookingGroupAccessTokenId: string | null;
+    } | null>, [unknown, string, string]>().mockResolvedValue(null);
+    const completionTimes = jest.fn().mockReturnValue({
+      completedAt: new Date('2026-08-18T05:00:00.000Z'),
+      expiresAt: new Date('2026-08-25T05:00:00.000Z'),
+    });
     const idempotency = {
-      normalizeKey: jest.fn((value: string) => value),
-      deriveIdentity: jest.fn().mockReturnValue('command-identity'),
-      fingerprint: jest.fn().mockReturnValue('request-fingerprint'),
-      acquireCommandLock: jest.fn().mockResolvedValue(undefined),
-      findReplay: jest.fn().mockResolvedValue(null),
-      completionTimes: jest.fn().mockReturnValue({
-        completedAt: new Date('2026-08-18T05:00:00.000Z'),
-        expiresAt: new Date('2026-08-25T05:00:00.000Z'),
-      }),
+      normalizeKey,
+      deriveIdentity,
+      fingerprint,
+      acquireCommandLock,
+      findReplay,
+      completionTimes,
     };
 
     return {
@@ -49,13 +58,14 @@ describe('BookingGroupRecoveryService', () => {
   }
 
   it('returns the same generic recovery shape when no BookingGroup candidate exists', async () => {
+    const createAttempt = jest.fn().mockResolvedValue({
+      id: 'attempt-1',
+      expiresAt: new Date('2026-08-18T06:00:00.000Z'),
+    });
     const transaction = {
       bookingGroup: { findMany: jest.fn().mockResolvedValue([]) },
       bookingGroupRecoveryAttempt: {
-        create: jest.fn().mockResolvedValue({
-          id: 'attempt-1',
-          expiresAt: new Date('2026-08-18T06:00:00.000Z'),
-        }),
+        create: createAttempt,
       },
       otpVerification: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -76,11 +86,11 @@ describe('BookingGroupRecoveryService', () => {
       'If the booking group can be recovered, verification will continue.',
     );
     expect(result.recoveryAttemptId).toBe('attempt-1');
-    expect(transaction.bookingGroupRecoveryAttempt.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ bookingGroupId: null }),
-      }),
-    );
+    expect(createAttempt).toHaveBeenCalledTimes(1);
+    const createAttemptArgs = createAttempt.mock.calls[0]?.[0] as {
+      data: { bookingGroupId: string | null };
+    };
+    expect(createAttemptArgs.data.bookingGroupId).toBeNull();
   });
 
   it('returns the committed logical result on compatible replay without rotating again', async () => {
@@ -114,6 +124,8 @@ describe('BookingGroupRecoveryService', () => {
       id: 'replacement-token-record',
       expiresAt: new Date('2026-08-27T00:00:00.000Z'),
     });
+    const updateOtp = jest.fn().mockResolvedValue({ id: 'otp-1' });
+    const createCommand = jest.fn().mockResolvedValue({ id: 'command-1' });
     const transaction = {
       $queryRaw: jest
         .fn()
@@ -143,7 +155,7 @@ describe('BookingGroupRecoveryService', () => {
           id: 'otp-1',
           expiresAt: nowFuture,
         }),
-        update: jest.fn().mockResolvedValue({ id: 'otp-1' }),
+        update: updateOtp,
       },
       bookingGroupAccessToken: {
         updateMany,
@@ -153,7 +165,7 @@ describe('BookingGroupRecoveryService', () => {
         update: jest.fn().mockResolvedValue({ id: 'attempt-1' }),
       },
       commandIdempotency: {
-        create: jest.fn().mockResolvedValue({ id: 'command-1' }),
+        create: createCommand,
       },
     };
     const { service } = buildService(transaction);
@@ -164,20 +176,28 @@ describe('BookingGroupRecoveryService', () => {
     expect(result.rawToken).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(updateMany).toHaveBeenCalledTimes(1);
     expect(createToken).toHaveBeenCalledTimes(1);
-    expect(transaction.otpVerification.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'otp-1' },
-        data: expect.objectContaining({ consumedAt: expect.any(Date) }),
-      }),
+    expect(updateOtp).toHaveBeenCalledTimes(1);
+    const updateOtpArgs = updateOtp.mock.calls[0]?.[0] as {
+      where: { id: string };
+      data: { consumedAt: Date };
+    };
+    expect(updateOtpArgs.where).toEqual({ id: 'otp-1' });
+    expect(updateOtpArgs.data.consumedAt).toBeInstanceOf(Date);
+
+    expect(createCommand).toHaveBeenCalledTimes(1);
+    const createCommandArgs = createCommand.mock.calls[0]?.[0] as {
+      data: {
+        commandType: CommandType;
+        resultBookingGroupId: string;
+        resultBookingGroupAccessTokenId: string;
+      };
+    };
+    expect(createCommandArgs.data.commandType).toBe(
+      CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
     );
-    expect(transaction.commandIdempotency.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
-          resultBookingGroupId: 'group-1',
-          resultBookingGroupAccessTokenId: 'replacement-token-record',
-        }),
-      }),
+    expect(createCommandArgs.data.resultBookingGroupId).toBe('group-1');
+    expect(createCommandArgs.data.resultBookingGroupAccessTokenId).toBe(
+      'replacement-token-record',
     );
   });
 });
