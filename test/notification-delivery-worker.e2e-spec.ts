@@ -78,7 +78,11 @@ describe('Notification delivery worker orchestration controls (e2e)', () => {
       .update(`m9s4-command|${scope}`, 'utf8')
       .digest('hex');
     const providerIdempotencyKey = `m9s4-provider-${scope}`;
-    const mobile = `+63920${scope.slice(0, 7)}`;
+    const numericSuffix = Array.from(scope.slice(0, 7), (character) =>
+      (Number.parseInt(character, 16) % 10).toString(),
+    ).join('');
+    const mobile = `+63920${numericSuffix}`;
+    const protectedMobile = mobileNumberService.protect(mobile);
     const messageBody = `M9S4 delivery ${scope.slice(0, 8)}`;
 
     const doctor = await prisma.user.create({
@@ -114,7 +118,7 @@ describe('Notification delivery worker orchestration controls (e2e)', () => {
         status: NotificationOutboxStatus.PENDING,
         practiceLocationId: null,
         commandIdempotencyId: command.id,
-        recipientMobileEncrypted: mobileNumberService.encryptCanonical(mobile),
+        recipientMobileEncrypted: protectedMobile.encrypted,
         recipientEmailEncrypted: null,
         messageBodyEncrypted: payloadService.encryptMessage(messageBody),
         providerIdempotencyKey,
