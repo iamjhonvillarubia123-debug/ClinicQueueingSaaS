@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   NotificationAttemptOutcome,
+  NotificationChannel,
   NotificationOutboxStatus,
+  NotificationType,
   Prisma,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -55,8 +57,8 @@ export class NotificationDeliveryAttemptService {
       const rows = await transaction.$queryRaw<
         Array<{
           id: string;
-          notificationType: string;
-          channel: string;
+          notificationType: NotificationType;
+          channel: NotificationChannel;
           status: NotificationOutboxStatus;
           attemptCount: number;
           processingWorkerId: string | null;
@@ -67,8 +69,8 @@ export class NotificationDeliveryAttemptService {
         Prisma.sql`
           SELECT
             "id",
-            "notificationType"::text,
-            "channel"::text,
+            "notificationType",
+            "channel",
             "status",
             "attemptCount",
             "processingWorkerId",
