@@ -1,7 +1,17 @@
-import { Body, Controller, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { EstablishPatientBookingAccessDto } from './dto/establish-patient-booking-access.dto';
+import { PatientAppointmentDashboardService } from './patient-appointment-dashboard.service';
 import {
   PATIENT_BOOKING_ACCESS_COOKIE,
   PatientBookingAccessService,
@@ -11,6 +21,7 @@ import {
 export class PatientBookingAccessController {
   constructor(
     private readonly patientBookingAccess: PatientBookingAccessService,
+    private readonly dashboardService: PatientAppointmentDashboardService,
   ) {}
 
   @UseGuards(CsrfOriginGuard)
@@ -34,5 +45,14 @@ export class PatientBookingAccessController {
       bookingReference: access.appointment.bookingReference,
       expiresAt: access.expiresAt,
     };
+  }
+
+  @Get(':bookingReference/dashboard')
+  dashboard(
+    @Param('bookingReference') bookingReference: string,
+    @Headers('cookie') cookieHeader: string | undefined,
+  ) {
+    const rawToken = this.patientBookingAccess.readCookie(cookieHeader);
+    return this.dashboardService.read(bookingReference, rawToken);
   }
 }
