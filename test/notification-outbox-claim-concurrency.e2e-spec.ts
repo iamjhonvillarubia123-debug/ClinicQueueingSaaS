@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { App } from 'supertest/types';
 import {
   NotificationChannel,
@@ -56,9 +56,12 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
   it('lets only one worker claim one due outbox', async () => {
     const scope = randomUUID().replaceAll('-', '');
     const now = new Date();
+    const deliveryIdentityKey = createHash('sha256')
+      .update(`m9s1|${scope}`, 'utf8')
+      .digest('hex');
     const outbox = await prisma.notificationOutbox.create({
       data: {
-        deliveryIdentityKey: scope,
+        deliveryIdentityKey,
         notificationType: NotificationType.SECURITY_NOTIFICATION,
         channel: NotificationChannel.SMS,
         status: NotificationOutboxStatus.PENDING,
