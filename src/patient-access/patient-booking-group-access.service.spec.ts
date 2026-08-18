@@ -31,6 +31,23 @@ type TokenFixture = {
   };
 };
 
+type FindUniqueArgs = {
+  select: {
+    bookingGroup: {
+      select: {
+        appointments: {
+          where: { anonymizedAt: null };
+        };
+      };
+    };
+  };
+};
+
+type UpdateArgs = {
+  where: { id: string };
+  data: { lastUsedAt: Date };
+};
+
 describe('PatientBookingGroupAccessService', () => {
   const rawToken = 'a'.repeat(43);
 
@@ -70,8 +87,12 @@ describe('PatientBookingGroupAccessService', () => {
   }
 
   function createService(tokenResult: TokenFixture | null) {
-    const update = jest.fn().mockResolvedValue({ id: 'group-token-1' });
-    const findUnique = jest.fn().mockResolvedValue(tokenResult);
+    const update = jest.fn<Promise<{ id: string }>, [UpdateArgs]>(() =>
+      Promise.resolve({ id: 'group-token-1' }),
+    );
+    const findUnique = jest.fn<Promise<TokenFixture | null>, [FindUniqueArgs]>(
+      () => Promise.resolve(tokenResult),
+    );
     const transaction = {
       bookingGroupAccessToken: {
         findUnique,
@@ -100,27 +121,14 @@ describe('PatientBookingGroupAccessService', () => {
     expect(access.bookingGroup.members).toHaveLength(1);
     expect(access.bookingGroup.members[0].bookingReference).toBe('BOOK-1');
 
-    const findArgs = findUnique.mock.calls[0]?.[0] as {
-      select: {
-        bookingGroup: {
-          select: {
-            appointments: {
-              where: { anonymizedAt: null };
-            };
-          };
-        };
-      };
-    };
-    expect(findArgs.select.bookingGroup.select.appointments.where).toEqual({
+    const [findArgs] = findUnique.mock.calls[0] ?? [];
+    expect(findArgs?.select.bookingGroup.select.appointments.where).toEqual({
       anonymizedAt: null,
     });
 
-    const updateArgs = update.mock.calls[0]?.[0] as {
-      where: { id: string };
-      data: { lastUsedAt: Date };
-    };
-    expect(updateArgs.where).toEqual({ id: 'group-token-1' });
-    expect(updateArgs.data.lastUsedAt).toBeInstanceOf(Date);
+    const [updateArgs] = update.mock.calls[0] ?? [];
+    expect(updateArgs?.where).toEqual({ id: 'group-token-1' });
+    expect(updateArgs?.data.lastUsedAt).toBeInstanceOf(Date);
   });
 
   it.each<[string, TokenFixture | null]>([
