@@ -62,8 +62,8 @@ describe('NotificationDeliveryAttemptService', () => {
         Promise.resolve([row]),
       ),
       notificationLog: {
-        create: jest.fn<Promise<{ id: string }>, [NotificationLogCreateArgs]>(() =>
-          Promise.resolve({ id: 'log-1' }),
+        create: jest.fn<Promise<{ id: string }>, [NotificationLogCreateArgs]>(
+          () => Promise.resolve({ id: 'log-1' }),
         ),
       },
       notificationOutbox: {
