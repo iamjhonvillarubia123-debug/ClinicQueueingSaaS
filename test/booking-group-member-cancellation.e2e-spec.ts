@@ -1,11 +1,9 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { randomUUID } from 'crypto';
-import request from 'supertest';
-import { App } from 'supertest/types';
+import { createHash, randomUUID } from 'crypto';
 import {
   AdministrativeRestrictionStatus,
   AppointmentStatus,
+  BookingGroupAccessTokenPurpose,
   ClinicDayStatus,
   CommandType,
   NotificationType,
@@ -20,7 +18,6 @@ import {
 import { AppModule } from './../src/app.module';
 import { BookingGroupMemberCancellationService } from './../src/booking/booking-group-member-cancellation.service';
 import { CommandIdempotencyService } from './../src/idempotency/command-idempotency.service';
-import { NotificationPayloadService } from './../src/notification/notification-payload.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { NextPatientOutcome } from './../src/queue/dto/next-patient.dto';
 import { NextPatientService } from './../src/queue/next-patient.service';
@@ -40,7 +37,6 @@ type GroupFixture = {
 };
 
 describe('BookingGroup member cancellation controls (e2e)', () => {
-  let app: INestApplication<App>;
   let prisma: PrismaService;
   let cancellation: BookingGroupMemberCancellationService;
   let nextPatient: NextPatientService;
@@ -75,29 +71,23 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       new CommandIdempotencyService(),
       new ScheduleTimeService(),
     );
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-    await app.init();
   });
 
   afterAll(async () => {
-    await app.close();
+    await prisma.$disconnect();
     for (const [key, value] of Object.entries(originalEnvironment)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   });
 
-  it('cancels exactly one member, preserves Queue Number/group membership, and writes audit/idempotency/notification atomically', async () => {
+  it('cancels exactly one member and persists audit, idempotency, and notification atomically', async () => {
     const fixture = await createGroupFixture(3);
-    const targetId = fixture.memberIds[1]!;
-    const expectedQueueNumber = fixture.queueNumbers[1]!;
+    const targetId = memberId(fixture, 1);
+    const expectedQueueNumber = fixture.queueNumbers[1];
+    if (expectedQueueNumber === undefined) {
+      throw new Error('Expected Queue Number fixture was not created.');
+    }
 
     const result = await cancellation.cancel(
       fixture.bookingGroupId,
@@ -109,7 +99,9 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
     const [appointment, event, command, outbox] = await Promise.all([
       prisma.appointment.findUniqueOrThrow({ where: { id: targetId } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
+      prisma.queueEvent.findUniqueOrThrow({
+        where: { id: result.queueEventId },
+      }),
       prisma.commandIdempotency.findFirstOrThrow({
         where: {
           commandType: CommandType.BOOKING_GROUP_CANCEL_MEMBER,
@@ -143,7 +135,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
   it('replays the exact member command and rejects a changed fingerprint', async () => {
     const fixture = await createGroupFixture(2);
-    const targetId = fixture.memberIds[0]!;
+    const targetId = memberId(fixture, 0);
     const key = `member-replay-${fixture.scope}`;
 
     const first = await cancellation.cancel(
@@ -189,7 +181,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     await expect(
       cancellation.cancel(
         invalid.bookingGroupId,
-        invalid.memberIds[0]!,
+        memberId(invalid, 0),
         'not-the-real-token',
         { reason: 'PATIENT_REQUESTED' },
         `invalid-token-${invalid.scope}`,
@@ -207,7 +199,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     await expect(
       cancellation.cancel(
         revoked.bookingGroupId,
-        revoked.memberIds[0]!,
+        memberId(revoked, 0),
         revoked.controllerToken,
         { reason: 'PATIENT_REQUESTED' },
         `revoked-token-${revoked.scope}`,
@@ -225,7 +217,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     await expect(
       cancellation.cancel(
         expired.bookingGroupId,
-        expired.memberIds[0]!,
+        memberId(expired, 0),
         expired.controllerToken,
         { reason: 'PATIENT_REQUESTED' },
         `expired-token-${expired.scope}`,
@@ -235,11 +227,13 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
   it('ends active group protection when cancellation breaks the remaining protected block and never revives it', async () => {
     const fixture = await createGroupFixture(3);
-    const [firstId, secondId, thirdId] = fixture.memberIds;
+    const firstId = memberId(fixture, 0);
+    const secondId = memberId(fixture, 1);
+    const thirdId = memberId(fixture, 2);
     const now = new Date();
 
     await prisma.appointment.update({
-      where: { id: firstId! },
+      where: { id: firstId },
       data: {
         status: AppointmentStatus.CALLED,
         calledAt: now,
@@ -248,14 +242,14 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       },
     });
     await prisma.appointment.update({
-      where: { id: secondId! },
+      where: { id: secondId },
       data: {
         servingOrderKey: new Prisma.Decimal(1),
         waitingPlacementType: WaitingPlacementType.ORDINARY,
       },
     });
     await prisma.appointment.update({
-      where: { id: thirdId! },
+      where: { id: thirdId },
       data: {
         servingOrderKey: new Prisma.Decimal(2),
         waitingPlacementType: WaitingPlacementType.ORDINARY,
@@ -264,7 +258,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
     const result = await cancellation.cancel(
       fixture.bookingGroupId,
-      secondId!,
+      secondId,
       fixture.controllerToken,
       { reason: 'PATIENT_REQUESTED' },
       `protection-end-${fixture.scope}`,
@@ -276,10 +270,11 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     });
     expect(ended.servingProtectionEndedAt).not.toBeNull();
     const endedAt = ended.servingProtectionEndedAt;
+    if (!endedAt) throw new Error('Protection end timestamp was not persisted.');
 
     await cancellation.cancel(
       fixture.bookingGroupId,
-      thirdId!,
+      thirdId,
       fixture.controllerToken,
       { reason: 'PATIENT_REQUESTED' },
       `protection-no-revive-${fixture.scope}`,
@@ -288,12 +283,14 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     const after = await prisma.bookingGroup.findUniqueOrThrow({
       where: { id: fixture.bookingGroupId },
     });
-    expect(after.servingProtectionEndedAt?.getTime()).toBe(endedAt?.getTime());
+    expect(after.servingProtectionEndedAt?.getTime()).toBe(endedAt.getTime());
   });
 
   it('serializes controller cancellation versus NEXT PATIENT without stale contradictory queue state', async () => {
     const fixture = await createGroupFixture(3);
-    const [currentId, targetId, fallbackId] = fixture.memberIds;
+    const currentId = memberId(fixture, 0);
+    const targetId = memberId(fixture, 1);
+    const fallbackId = memberId(fixture, 2);
     const now = new Date();
 
     await prisma.clinicDay.create({
@@ -307,7 +304,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       },
     });
     await prisma.appointment.update({
-      where: { id: currentId! },
+      where: { id: currentId },
       data: {
         status: AppointmentStatus.CALLED,
         calledAt: now,
@@ -316,17 +313,15 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       },
     });
     await prisma.appointment.update({
-      where: { id: targetId! },
+      where: { id: targetId },
       data: {
-        status: AppointmentStatus.WAITING,
         servingOrderKey: new Prisma.Decimal(1),
         waitingPlacementType: WaitingPlacementType.ORDINARY,
       },
     });
     await prisma.appointment.update({
-      where: { id: fallbackId! },
+      where: { id: fallbackId },
       data: {
-        status: AppointmentStatus.WAITING,
         servingOrderKey: new Prisma.Decimal(2),
         waitingPlacementType: WaitingPlacementType.ORDINARY,
       },
@@ -344,7 +339,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       ),
       cancellation.cancel(
         fixture.bookingGroupId,
-        targetId!,
+        targetId,
         fixture.controllerToken,
         { reason: 'PATIENT_REQUESTED' },
         `group-race-cancel-${fixture.scope}`,
@@ -353,23 +348,23 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
     expect(cancelResult.status).toBe('fulfilled');
     const target = await prisma.appointment.findUniqueOrThrow({
-      where: { id: targetId! },
+      where: { id: targetId },
     });
     expect(target.status).toBe(AppointmentStatus.CANCELLED);
     expect(target.servingOrderKey).toBeNull();
 
     if (nextResult.status === 'fulfilled') {
       const current = await prisma.appointment.findUniqueOrThrow({
-        where: { id: currentId! },
+        where: { id: currentId },
       });
       const fallback = await prisma.appointment.findUniqueOrThrow({
-        where: { id: fallbackId! },
+        where: { id: fallbackId },
       });
       expect(current.status).toBe(AppointmentStatus.COMPLETED);
       expect(fallback.status).toBe(AppointmentStatus.CALLED);
     } else {
       const current = await prisma.appointment.findUniqueOrThrow({
-        where: { id: currentId! },
+        where: { id: currentId },
       });
       expect(current.status).toBe(AppointmentStatus.CALLED);
     }
@@ -416,15 +411,25 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
         practiceLocationId: location.id,
         serviceDate,
         controllingMobileNumberEncrypted: 'controller-mobile-encrypted',
-        controllingMobileNumberHash: randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64),
+        controllingMobileNumberHash: hash(`${scope}|controller-mobile`),
         controllingMobileLastFour: '1234',
       },
     });
-    const token = await moduleToken(group.id, serviceDate);
-    const appointments = [];
-    for (let index = 0; index < memberCount; index += 1) {
-      appointments.push(
-        await prisma.appointment.create({
+
+    const controllerToken =
+      randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+    await prisma.bookingGroupAccessToken.create({
+      data: {
+        bookingGroupId: group.id,
+        tokenHash: hash(controllerToken),
+        purpose: BookingGroupAccessTokenPurpose.CONTROLLER_ACCESS,
+        expiresAt: new Date(serviceDate.getTime() + 7 * DAY_MS),
+      },
+    });
+
+    const appointments = await Promise.all(
+      Array.from({ length: memberCount }, async (_, index) =>
+        prisma.appointment.create({
           data: {
             bookingReference: `M7GC-${scope.slice(0, 8)}-${index + 1}`,
             practiceLocationId: location.id,
@@ -437,11 +442,13 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
             waitingPlacementType: WaitingPlacementType.ORDINARY,
             firstName: `Member${index + 1}`,
             lastName: 'Group',
-            activeAppointmentKey: randomUUID().replaceAll('-', '').padEnd(64, 'a').slice(0, 64),
+            activeAppointmentKey: hash(
+              `${scope}|${serviceDate.toISOString()}|${index + 1}`,
+            ),
           },
         }),
-      );
-    }
+      ),
+    );
 
     return {
       scope,
@@ -449,31 +456,20 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       practiceLocationId: location.id,
       doctorUserId: doctor.id,
       bookingGroupId: group.id,
-      controllerToken: token.rawToken,
+      controllerToken,
       memberIds: appointments.map((item) => item.id),
       queueNumbers: appointments.map((item) => item.queueNumber),
     };
   }
-
-  async function moduleToken(bookingGroupId: string, serviceDate: Date) {
-    const issuer = app.get('BookingGroupAccessTokenIssuerService' as never) as never;
-    void issuer;
-    const rawToken = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
-    const tokenHash = createHashValue(rawToken);
-    await prisma.bookingGroupAccessToken.create({
-      data: {
-        bookingGroupId,
-        tokenHash,
-        purpose: 'CONTROLLER_ACCESS',
-        expiresAt: new Date(serviceDate.getTime() + 7 * DAY_MS),
-      },
-    });
-    return { rawToken };
-  }
 });
 
-function createHashValue(value: string): string {
-  const { createHash } = require('crypto') as typeof import('crypto');
+function memberId(fixture: GroupFixture, index: number): string {
+  const id = fixture.memberIds[index];
+  if (!id) throw new Error(`BookingGroup member fixture ${index} is missing.`);
+  return id;
+}
+
+function hash(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
