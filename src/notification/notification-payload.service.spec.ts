@@ -21,7 +21,9 @@ describe('NotificationPayloadService', () => {
       }),
     };
 
-    return new NotificationPayloadService(configService as ConfigService);
+    return new NotificationPayloadService(
+      configService as unknown as ConfigService,
+    );
   }
 
   it('encrypts and decrypts a notification message without exposing plaintext in the envelope', () => {
