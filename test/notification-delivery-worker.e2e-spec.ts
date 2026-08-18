@@ -82,6 +82,7 @@ describe('Notification delivery worker orchestration controls (e2e)', () => {
       (Number.parseInt(character, 16) % 10).toString(),
     ).join('');
     const mobile = `+63920${numericSuffix}`;
+    const canonicalMobile = mobileNumberService.normalize(mobile).canonical;
     const protectedMobile = mobileNumberService.protect(mobile);
     const messageBody = `M9S4 delivery ${scope.slice(0, 8)}`;
 
@@ -164,7 +165,7 @@ describe('Notification delivery worker orchestration controls (e2e)', () => {
       notificationType: NotificationType.SECURITY_NOTIFICATION,
       channel: NotificationChannel.SMS,
       providerIdempotencyKey,
-      recipient: mobile,
+      recipient: canonicalMobile,
       messageBody,
     });
 
