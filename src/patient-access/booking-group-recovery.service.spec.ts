@@ -59,14 +59,14 @@ describe('BookingGroupRecoveryService', () => {
     const normalizeKey = jest.fn(
       (value: string | undefined): string => value ?? '',
     );
-    const deriveIdentity = jest.fn(
-      (_input: Parameters<CommandIdempotencyService['deriveIdentity']>[0]) =>
-        'command-identity',
-    );
-    const fingerprint = jest.fn(
-      (_input: Parameters<CommandIdempotencyService['fingerprint']>[0]) =>
-        'request-fingerprint',
-    );
+    const deriveIdentity = jest.fn<
+      string,
+      Parameters<CommandIdempotencyService['deriveIdentity']>
+    >(() => 'command-identity');
+    const fingerprint = jest.fn<
+      string,
+      Parameters<CommandIdempotencyService['fingerprint']>
+    >(() => 'request-fingerprint');
     const acquireCommandLock = jest.fn<
       ReturnType<CommandIdempotencyService['acquireCommandLock']>,
       Parameters<CommandIdempotencyService['acquireCommandLock']>
@@ -77,12 +77,13 @@ describe('BookingGroupRecoveryService', () => {
         Parameters<CommandIdempotencyService['findReplay']>
       >()
       .mockResolvedValue(null);
-    const completionTimes = jest.fn(
-      (_now?: Date): ReturnType<CommandIdempotencyService['completionTimes']> => ({
-        completedAt: new Date('2026-08-18T05:00:00.000Z'),
-        expiresAt: new Date('2026-08-25T05:00:00.000Z'),
-      }),
-    );
+    const completionTimes = jest.fn<
+      ReturnType<CommandIdempotencyService['completionTimes']>,
+      Parameters<CommandIdempotencyService['completionTimes']>
+    >(() => ({
+      completedAt: new Date('2026-08-18T05:00:00.000Z'),
+      expiresAt: new Date('2026-08-25T05:00:00.000Z'),
+    }));
 
     const idempotency: PublicIdempotencyContract = {
       normalizeKey,
@@ -159,10 +160,9 @@ describe('BookingGroupRecoveryService', () => {
   it('returns the committed logical result on compatible replay without rotating again', async () => {
     const transaction = {};
     const { service, idempotency } = buildService(transaction);
-    const replay = {
-      resultBookingGroupId: 'group-1',
-      resultBookingGroupAccessTokenId: 'token-record-1',
-    } as Exclude<ReplayRecord, null>;
+    const replay: Exclude<ReplayRecord, null> = Object.create(null);
+    replay.resultBookingGroupId = 'group-1';
+    replay.resultBookingGroupAccessTokenId = 'token-record-1';
     idempotency.findReplayMock.mockResolvedValue(replay);
 
     const result = await service.complete('attempt-1', 'idem-1');
