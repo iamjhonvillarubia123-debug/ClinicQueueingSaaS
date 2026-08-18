@@ -14,6 +14,7 @@ export const PATIENT_BOOKING_ACCESS_COOKIE = 'cq_booking_access';
 
 export type PatientBookingAccess = {
   tokenRecordId: string;
+  purpose: BookingAccessTokenPurpose;
   expiresAt: Date;
   appointment: {
     id: string;
@@ -35,9 +36,17 @@ export class PatientBookingAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
   async establish(rawToken: string): Promise<PatientBookingAccess> {
-    return this.prisma.$transaction(async (transaction) => {
-      return this.validateToken(transaction, rawToken, undefined, false);
-    });
+    return this.prisma.$transaction((transaction) =>
+      this.validateToken(transaction, rawToken, undefined, false),
+    );
+  }
+
+  async validateReadToken(
+    transaction: TransactionClient,
+    rawToken: string,
+    bookingReference: string,
+  ): Promise<PatientBookingAccess> {
+    return this.validateToken(transaction, rawToken, bookingReference, false);
   }
 
   async validateManagementToken(
@@ -124,6 +133,7 @@ export class PatientBookingAccessService {
 
     return {
       tokenRecordId: token.id,
+      purpose: token.purpose,
       expiresAt: token.expiresAt,
       appointment: token.appointment,
     };
