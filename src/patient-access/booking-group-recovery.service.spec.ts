@@ -9,6 +9,16 @@ type ReplayRecord = Awaited<
   ReturnType<CommandIdempotencyService['findReplay']>
 >;
 
+type PublicIdempotencyContract = Pick<
+  CommandIdempotencyService,
+  | 'normalizeKey'
+  | 'deriveIdentity'
+  | 'fingerprint'
+  | 'acquireCommandLock'
+  | 'findReplay'
+  | 'completionTimes'
+>;
+
 type CreateAttemptArgs = {
   data: { bookingGroupId: string | null };
 };
@@ -25,64 +35,6 @@ type CreateCommandArgs = {
     resultBookingGroupAccessTokenId: string;
   };
 };
-
-class TestCommandIdempotencyService extends CommandIdempotencyService {
-  readonly normalizeKeyMock = jest.fn(
-    (value: string | undefined): string => value ?? '',
-  );
-  readonly deriveIdentityMock = jest.fn().mockReturnValue('command-identity');
-  readonly fingerprintMock = jest.fn().mockReturnValue('request-fingerprint');
-  readonly acquireCommandLockMock = jest.fn().mockResolvedValue(undefined);
-  readonly findReplayMock = jest
-    .fn<
-      Promise<ReplayRecord>,
-      Parameters<CommandIdempotencyService['findReplay']>
-    >()
-    .mockResolvedValue(null);
-  readonly completionTimesMock = jest.fn().mockReturnValue({
-    completedAt: new Date('2026-08-18T05:00:00.000Z'),
-    expiresAt: new Date('2026-08-25T05:00:00.000Z'),
-  });
-
-  override normalizeKey(value: string | undefined): string {
-    return this.normalizeKeyMock(value);
-  }
-
-  override deriveIdentity(
-    input: Parameters<CommandIdempotencyService['deriveIdentity']>[0],
-  ): string {
-    return this.deriveIdentityMock(input);
-  }
-
-  override fingerprint(
-    input: Parameters<CommandIdempotencyService['fingerprint']>[0],
-  ): string {
-    return this.fingerprintMock(input);
-  }
-
-  override acquireCommandLock(
-    transaction: Parameters<CommandIdempotencyService['acquireCommandLock']>[0],
-    commandIdentityKey: string,
-  ): Promise<void> {
-    return this.acquireCommandLockMock(transaction, commandIdentityKey);
-  }
-
-  override findReplay(
-    transaction: Parameters<CommandIdempotencyService['findReplay']>[0],
-    commandIdentityKey: string,
-    requestFingerprint: string,
-  ): ReturnType<CommandIdempotencyService['findReplay']> {
-    return this.findReplayMock(
-      transaction,
-      commandIdentityKey,
-      requestFingerprint,
-    );
-  }
-
-  override completionTimes(now?: Date) {
-    return this.completionTimesMock(now);
-  }
-}
 
 describe('BookingGroupRecoveryService', () => {
   const protectedMobile = {
@@ -103,7 +55,43 @@ describe('BookingGroupRecoveryService', () => {
       hashOtp: jest.fn().mockReturnValue('otp-hash'),
       verifyOtpHash: jest.fn().mockReturnValue(true),
     };
-    const idempotency = new TestCommandIdempotencyService();
+
+    const normalizeKey = jest.fn(
+      (value: string | undefined): string => value ?? '',
+    );
+    const deriveIdentity = jest.fn(
+      (_input: Parameters<CommandIdempotencyService['deriveIdentity']>[0]) =>
+        'command-identity',
+    );
+    const fingerprint = jest.fn(
+      (_input: Parameters<CommandIdempotencyService['fingerprint']>[0]) =>
+        'request-fingerprint',
+    );
+    const acquireCommandLock = jest.fn<
+      ReturnType<CommandIdempotencyService['acquireCommandLock']>,
+      Parameters<CommandIdempotencyService['acquireCommandLock']>
+    >(() => Promise.resolve());
+    const findReplay = jest
+      .fn<
+        ReturnType<CommandIdempotencyService['findReplay']>,
+        Parameters<CommandIdempotencyService['findReplay']>
+      >()
+      .mockResolvedValue(null);
+    const completionTimes = jest.fn(
+      (_now?: Date): ReturnType<CommandIdempotencyService['completionTimes']> => ({
+        completedAt: new Date('2026-08-18T05:00:00.000Z'),
+        expiresAt: new Date('2026-08-25T05:00:00.000Z'),
+      }),
+    );
+
+    const idempotency: PublicIdempotencyContract = {
+      normalizeKey,
+      deriveIdentity,
+      fingerprint,
+      acquireCommandLock,
+      findReplay,
+      completionTimes,
+    };
 
     return {
       service: new BookingGroupRecoveryService(
@@ -111,9 +99,17 @@ describe('BookingGroupRecoveryService', () => {
         mobile as never,
         otpGenerator as never,
         otpService as never,
-        idempotency,
+        idempotency as CommandIdempotencyService,
       ),
-      idempotency,
+      idempotency: {
+        ...idempotency,
+        normalizeKeyMock: normalizeKey,
+        deriveIdentityMock: deriveIdentity,
+        fingerprintMock: fingerprint,
+        acquireCommandLockMock: acquireCommandLock,
+        findReplayMock: findReplay,
+        completionTimesMock: completionTimes,
+      },
       mobile,
     };
   }
