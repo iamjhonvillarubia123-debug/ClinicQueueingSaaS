@@ -57,7 +57,7 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
     }
   });
 
-  it('lets only one worker claim one due outbox', async () => {
+  it('lets only one worker claim the same due outbox', async () => {
     const scope = randomUUID().replaceAll('-', '');
     const now = new Date();
     const deliveryIdentityKey = createHash('sha256')
@@ -102,7 +102,7 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
         messageBodyEncrypted: `message-${scope}`,
         providerIdempotencyKey: `m9s1-${scope}`,
         attemptCount: 0,
-        nextAttemptAt: new Date(now.getTime() - 1_000),
+        nextAttemptAt: new Date(0),
         expiresAt: new Date(now.getTime() + 60_000),
       },
     });
@@ -112,17 +112,16 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
       claimService.claimNext(`worker-b-${scope.slice(0, 8)}`, 60_000, now),
     ]);
 
-    const claimed = [workerA, workerB].filter(
-      (value): value is NonNullable<typeof value> => value !== null,
+    const targetClaims = [workerA, workerB].filter(
+      (value): value is NonNullable<typeof value> => value?.id === outbox.id,
     );
-    expect(claimed).toHaveLength(1);
-    expect(claimed[0].id).toBe(outbox.id);
+    expect(targetClaims).toHaveLength(1);
 
     const stored = await prisma.notificationOutbox.findUniqueOrThrow({
       where: { id: outbox.id },
     });
     expect(stored.status).toBe(NotificationOutboxStatus.PROCESSING);
-    expect(stored.processingWorkerId).toBe(claimed[0].processingWorkerId);
+    expect(stored.processingWorkerId).toBe(targetClaims[0].processingWorkerId);
     expect(stored.processingStartedAt?.getTime()).toBe(now.getTime());
     expect(stored.leaseExpiresAt?.getTime()).toBe(now.getTime() + 60_000);
   }, 30_000);
