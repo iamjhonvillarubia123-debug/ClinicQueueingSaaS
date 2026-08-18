@@ -100,7 +100,7 @@ describe('BookingGroupRecoveryService', () => {
         mobile as never,
         otpGenerator as never,
         otpService as never,
-        idempotency as CommandIdempotencyService,
+        idempotency,
       ),
       idempotency: {
         ...idempotency,
@@ -160,7 +160,7 @@ describe('BookingGroupRecoveryService', () => {
   it('returns the committed logical result on compatible replay without rotating again', async () => {
     const transaction = {};
     const { service, idempotency } = buildService(transaction);
-    const replay = Object.create(null) as Exclude<ReplayRecord, null>;
+    const replay: Exclude<ReplayRecord, null> = Object.create(null);
     replay.resultBookingGroupId = 'group-1';
     replay.resultBookingGroupAccessTokenId = 'token-record-1';
     idempotency.findReplayMock.mockResolvedValue(replay);
