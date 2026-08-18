@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   NotificationAttemptOutcome,
+  NotificationChannel,
   NotificationOutboxStatus,
+  NotificationType,
   Prisma,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,6 +27,17 @@ type FinalizedAttempt = {
   notificationLogId: string;
   attemptNumber: number;
   outboxStatus: NotificationOutboxStatus;
+};
+
+type LockedOutbox = {
+  id: string;
+  notificationType: NotificationType;
+  channel: NotificationChannel;
+  status: NotificationOutboxStatus;
+  attemptCount: number;
+  processingWorkerId: string | null;
+  leaseExpiresAt: Date | null;
+  providerIdempotencyKey: string;
 };
 
 @Injectable()
@@ -52,33 +65,20 @@ export class NotificationDeliveryAttemptService {
     }
 
     return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<
-        Array<{
-          id: string;
-          notificationType: string;
-          channel: string;
-          status: NotificationOutboxStatus;
-          attemptCount: number;
-          processingWorkerId: string | null;
-          leaseExpiresAt: Date | null;
-          providerIdempotencyKey: string;
-        }>
-      >(
-        Prisma.sql`
-          SELECT
-            "id",
-            "notificationType"::text,
-            "channel"::text,
-            "status",
-            "attemptCount",
-            "processingWorkerId",
-            "leaseExpiresAt",
-            "providerIdempotencyKey"
-          FROM "NotificationOutbox"
-          WHERE "id" = ${outboxId}
-          FOR UPDATE
-        `,
-      );
+      const rows = await transaction.$queryRaw<LockedOutbox[]>(Prisma.sql`
+        SELECT
+          "id",
+          "notificationType",
+          "channel",
+          "status",
+          "attemptCount",
+          "processingWorkerId",
+          "leaseExpiresAt",
+          "providerIdempotencyKey"
+        FROM "NotificationOutbox"
+        WHERE "id" = ${outboxId}
+        FOR UPDATE
+      `);
 
       const outbox = rows[0];
       if (!outbox) {
@@ -124,7 +124,11 @@ export class NotificationDeliveryAttemptService {
         },
       });
 
-      const update = this.outboxTransition(result.outcome, result.nextAttemptAt, now);
+      const update = this.outboxTransition(
+        result.outcome,
+        result.nextAttemptAt,
+        now,
+      );
       const updated = await transaction.notificationOutbox.update({
         where: { id: outbox.id },
         data: {
@@ -163,7 +167,7 @@ export class NotificationDeliveryAttemptService {
       case NotificationAttemptOutcome.RETRYABLE_FAILURE:
         return {
           status: NotificationOutboxStatus.PENDING,
-          nextAttemptAt: nextAttemptAt!,
+          nextAttemptAt,
           ...clearLease,
         };
       case NotificationAttemptOutcome.PERMANENT_FAILURE:
