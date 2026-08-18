@@ -60,16 +60,18 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
     const deliveryIdentityKey = createHash('sha256')
       .update(`m9s1|${scope}`, 'utf8')
       .digest('hex');
+    const commandIdentityKey = createHash('sha256')
+      .update(`m9s1-command|${scope}`, 'utf8')
+      .digest('hex');
     const command = await prisma.commandIdempotency.create({
       data: {
         idempotencyKey: `m9s1-${scope}`,
+        commandIdentityKey,
         commandType: CommandType.DOCTOR_DISABLE_ACCOUNT,
-        requestHash: deliveryIdentityKey,
-        status: 'COMPLETED',
-        responseCode: 200,
-        responseBody: {},
+        requestFingerprint: deliveryIdentityKey,
         completedAt: now,
         expiresAt: new Date(now.getTime() + 60_000),
+        createdAt: now,
       },
     });
     const outbox = await prisma.notificationOutbox.create({
