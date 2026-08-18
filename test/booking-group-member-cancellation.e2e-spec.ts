@@ -107,7 +107,9 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
     const [appointment, event, command, outbox] = await Promise.all([
       prisma.appointment.findUniqueOrThrow({ where: { id: targetId } }),
-      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
+      prisma.queueEvent.findUniqueOrThrow({
+        where: { id: result.queueEventId },
+      }),
       prisma.commandIdempotency.findFirstOrThrow({
         where: {
           commandType: CommandType.BOOKING_GROUP_CANCEL_MEMBER,

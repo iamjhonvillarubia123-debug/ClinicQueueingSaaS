@@ -357,9 +357,7 @@ describe('Milestone 7 cross-command queue races (e2e)', () => {
     await prisma.bookingAccessToken.create({
       data: {
         appointmentId,
-        tokenHash: createHash('sha256')
-          .update(rawToken, 'utf8')
-          .digest('hex'),
+        tokenHash: createHash('sha256').update(rawToken, 'utf8').digest('hex'),
         purpose: BookingAccessTokenPurpose.VIEW_AND_MANAGE_BOOKING,
         expiresAt: new Date(serviceDate.getTime() + 10 * 24 * 60 * 60 * 1000),
       },
