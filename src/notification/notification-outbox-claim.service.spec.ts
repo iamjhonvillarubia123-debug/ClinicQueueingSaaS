@@ -33,9 +33,8 @@ describe('NotificationOutboxClaimService', () => {
       notificationOutbox: { update },
     };
     const prisma = {
-      $transaction: jest.fn(
-        (callback: (tx: typeof transaction) => unknown) =>
-          Promise.resolve(callback(transaction)),
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+        Promise.resolve(callback(transaction)),
       ),
     };
 
@@ -68,7 +67,9 @@ describe('NotificationOutboxClaimService', () => {
   it('returns null when no PENDING outbox is claimable', async () => {
     const { service, update } = createService(null);
 
-    await expect(service.claimNext('worker-1', 60_000, now)).resolves.toBeNull();
+    await expect(
+      service.claimNext('worker-1', 60_000, now),
+    ).resolves.toBeNull();
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -82,8 +83,8 @@ describe('NotificationOutboxClaimService', () => {
   ])('rejects invalid worker/lease input', async (workerId, leaseMs) => {
     const { service } = createService(null);
 
-    await expect(service.claimNext(workerId, leaseMs, now)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.claimNext(workerId, leaseMs, now),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
