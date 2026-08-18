@@ -12,7 +12,6 @@ import {
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
 import { NotificationDeliveryAttemptService } from './../src/notification/notification-delivery-attempt.service';
-import { NotificationOutboxClaimService } from './../src/notification/notification-outbox-claim.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -20,7 +19,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 describe('Notification delivery attempt persistence controls (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
-  let claimService: NotificationOutboxClaimService;
   let attemptService: NotificationDeliveryAttemptService;
 
   const testEnvironment: Record<string, string> = {
@@ -47,7 +45,6 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
     }).compile();
 
     prisma = moduleFixture.get(PrismaService);
-    claimService = moduleFixture.get(NotificationOutboxClaimService);
     attemptService = moduleFixture.get(NotificationDeliveryAttemptService);
     app = moduleFixture.createNestApplication();
     await app.init();
@@ -97,12 +94,14 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
       },
     });
 
+    const workerId = `worker-${scope.slice(0, 8)}`;
+    const firstLeaseExpiresAt = new Date(now.getTime() + 60_000);
     const outbox = await prisma.notificationOutbox.create({
       data: {
         deliveryIdentityKey,
         notificationType: NotificationType.SECURITY_NOTIFICATION,
         channel: NotificationChannel.SMS,
-        status: NotificationOutboxStatus.PENDING,
+        status: NotificationOutboxStatus.PROCESSING,
         practiceLocationId: null,
         commandIdempotencyId: command.id,
         recipientMobileEncrypted: `enc-${scope}`,
@@ -110,14 +109,13 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
         messageBodyEncrypted: `message-${scope}`,
         providerIdempotencyKey,
         attemptCount: 0,
-        nextAttemptAt: new Date(now.getTime() - 1_000),
+        processingStartedAt: now,
+        leaseExpiresAt: firstLeaseExpiresAt,
+        processingWorkerId: workerId,
+        nextAttemptAt: now,
         expiresAt: new Date(now.getTime() + DAY_MS),
       },
     });
-
-    const workerId = `worker-${scope.slice(0, 8)}`;
-    const firstClaim = await claimService.claimNext(workerId, 60_000, now);
-    expect(firstClaim?.id).toBe(outbox.id);
 
     const retryAt = new Date(now.getTime() + 5 * 60_000);
     await attemptService.finalizeAttempt(
@@ -141,14 +139,20 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
     expect(afterRetry.status).toBe(NotificationOutboxStatus.PENDING);
     expect(afterRetry.attemptCount).toBe(1);
     expect(afterRetry.nextAttemptAt.getTime()).toBe(retryAt.getTime());
+    expect(afterRetry.processingStartedAt).toBeNull();
+    expect(afterRetry.leaseExpiresAt).toBeNull();
+    expect(afterRetry.processingWorkerId).toBeNull();
 
     const secondNow = new Date(retryAt.getTime() + 1_000);
-    const secondClaim = await claimService.claimNext(
-      workerId,
-      60_000,
-      secondNow,
-    );
-    expect(secondClaim?.id).toBe(outbox.id);
+    await prisma.notificationOutbox.update({
+      where: { id: outbox.id },
+      data: {
+        status: NotificationOutboxStatus.PROCESSING,
+        processingStartedAt: secondNow,
+        leaseExpiresAt: new Date(secondNow.getTime() + 60_000),
+        processingWorkerId: workerId,
+      },
+    });
 
     await attemptService.finalizeAttempt(
       outbox.id,
@@ -170,6 +174,9 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
     expect(finalOutbox.status).toBe(NotificationOutboxStatus.SENT);
     expect(finalOutbox.attemptCount).toBe(2);
     expect(finalOutbox.sentAt?.getTime()).toBe(secondNow.getTime());
+    expect(finalOutbox.processingStartedAt).toBeNull();
+    expect(finalOutbox.leaseExpiresAt).toBeNull();
+    expect(finalOutbox.processingWorkerId).toBeNull();
 
     const logs = await prisma.notificationLog.findMany({
       where: { notificationOutboxId: outbox.id },
