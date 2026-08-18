@@ -146,6 +146,16 @@ describe('Notification uncertain reconciliation persistence controls (e2e)', () 
     );
     expect(uncertainLogsBefore[0].resolvedAt).toBeNull();
 
+    const isolatedProcessingStartedAt = new Date('2000-01-01T00:00:00.000Z');
+    const isolatedLeaseExpiresAt = new Date('2000-01-01T00:01:00.000Z');
+    await prisma.notificationOutbox.update({
+      where: { id: outbox.id },
+      data: {
+        processingStartedAt: isolatedProcessingStartedAt,
+        leaseExpiresAt: isolatedLeaseExpiresAt,
+      },
+    });
+
     const reconciliationNow = new Date(now.getTime() + 61_000);
     const reconciliationWorkerId = `reconcile-${scope.slice(0, 8)}`;
     const candidate = await reconciliationService.claimExpiredForReconciliation(
