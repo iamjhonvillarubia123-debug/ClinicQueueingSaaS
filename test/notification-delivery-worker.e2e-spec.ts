@@ -135,24 +135,16 @@ describe('Notification delivery worker orchestration controls (e2e)', () => {
     const submit = jest.fn<
       ReturnType<NotificationProviderAdapter['submit']>,
       Parameters<NotificationProviderAdapter['submit']>
-    >((request) => {
-      expect(request).toEqual({
-        notificationOutboxId: outbox.id,
-        notificationType: NotificationType.SECURITY_NOTIFICATION,
-        channel: NotificationChannel.SMS,
-        providerIdempotencyKey,
-        recipient: mobile,
-        messageBody,
-      });
-      return Promise.resolve({
+    >(() =>
+      Promise.resolve({
         outcome: NotificationAttemptOutcome.SUCCESS,
         providerName: 'provider-a',
         providerReference: `provider-ref-${scope}`,
         providerStatus: 'accepted',
         submittedAt: now,
         resolvedAt: now,
-      });
-    });
+      }),
+    );
 
     const adapter: NotificationProviderAdapter = {
       providerName: 'provider-a',
@@ -167,6 +159,14 @@ describe('Notification delivery worker orchestration controls (e2e)', () => {
 
     expect(result.outboxStatus).toBe(NotificationOutboxStatus.SENT);
     expect(submit).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledWith({
+      notificationOutboxId: outbox.id,
+      notificationType: NotificationType.SECURITY_NOTIFICATION,
+      channel: NotificationChannel.SMS,
+      providerIdempotencyKey,
+      recipient: mobile,
+      messageBody,
+    });
 
     const finalOutbox = await prisma.notificationOutbox.findUniqueOrThrow({
       where: { id: outbox.id },
