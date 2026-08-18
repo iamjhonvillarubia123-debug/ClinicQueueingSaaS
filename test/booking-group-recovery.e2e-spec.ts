@@ -127,9 +127,12 @@ describe('BookingGroup recovery controls (e2e)', () => {
         otpHashKeyVersion: 1,
         purpose: OtpPurpose.BOOKING_GROUP_RECOVERY,
         activeContextKey: `BOOKING_GROUP_RECOVERY:${attempt.id}`,
-        verifiedAt: now,
         expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
       },
+    });
+    await prisma.otpVerification.update({
+      where: { id: otp.id },
+      data: { verifiedAt: new Date() },
     });
 
     const key = `m8s2-recovery-${fixture.scope}`;
@@ -242,7 +245,7 @@ describe('BookingGroup recovery controls (e2e)', () => {
         expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
       },
     });
-    await prisma.otpVerification.create({
+    const otp = await prisma.otpVerification.create({
       data: {
         bookingGroupRecoveryAttemptId: attempt.id,
         mobileNumberHash: protectedMobile.hash,
@@ -255,9 +258,12 @@ describe('BookingGroup recovery controls (e2e)', () => {
         otpHashKeyVersion: 1,
         purpose: OtpPurpose.BOOKING_GROUP_RECOVERY,
         activeContextKey: `BOOKING_GROUP_RECOVERY:${attempt.id}`,
-        verifiedAt: now,
         expiresAt: new Date(now.getTime() + 5 * 60 * 1000),
       },
+    });
+    await prisma.otpVerification.update({
+      where: { id: otp.id },
+      data: { verifiedAt: new Date() },
     });
 
     const key = `m8s2-http-${fixture.scope}`;
