@@ -3,7 +3,6 @@ import {
   CommandType,
 } from '../../generated/prisma/client';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
 type CreateAttemptArgs = {
@@ -23,19 +22,6 @@ type CreateCommandArgs = {
   };
 };
 
-function buildPrismaService(
-  transaction: Record<string, unknown>,
-): PrismaService {
-  const prisma = Object.create(PrismaService.prototype);
-  Object.defineProperty(prisma, '$transaction', {
-    configurable: true,
-    value: jest.fn((callback: (tx: unknown) => unknown) =>
-      Promise.resolve(callback(transaction)),
-    ),
-  });
-  return prisma;
-}
-
 describe('BookingGroupRecoveryService', () => {
   const protectedMobile = {
     encrypted: 'encrypted-mobile',
@@ -44,7 +30,10 @@ describe('BookingGroupRecoveryService', () => {
   };
 
   function buildService(transaction: Record<string, unknown>) {
-    const prisma = buildPrismaService(transaction);
+    const prisma = {
+      $transaction: (callback: (tx: Record<string, unknown>) => unknown) =>
+        Promise.resolve(callback(transaction)),
+    };
     const mobile = { protect: jest.fn().mockReturnValue(protectedMobile) };
     const otpGenerator = { generate: jest.fn().mockReturnValue('123456') };
     const otpService = {
@@ -77,7 +66,7 @@ describe('BookingGroupRecoveryService', () => {
 
     return {
       service: new BookingGroupRecoveryService(
-        prisma,
+        prisma as never,
         mobile as never,
         otpGenerator as never,
         otpService as never,
