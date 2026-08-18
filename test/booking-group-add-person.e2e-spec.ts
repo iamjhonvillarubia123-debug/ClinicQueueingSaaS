@@ -480,7 +480,7 @@ describe('BookingGroup Add Person controls (e2e)', () => {
     lastName: string,
   ) {
     return request(app.getHttpServer())
-      .post(`/patient-booking-groups/${fixture.bookingGroupId}/members`)
+      .post(`/patient-booking-groups/${fixture.bookingGroupId}/add-person`)
       .set('Cookie', `cq_booking_group_access=${fixture.rawGroupToken}`)
       .set('Idempotency-Key', idempotencyKey)
       .set('Origin', testEnvironment.WEB_APP_ORIGIN)
@@ -492,18 +492,17 @@ describe('BookingGroup Add Person controls (e2e)', () => {
       });
   }
 
-  function startClinic(fixture: Fixture) {
-    return loginDoctor(fixture.doctorUserId).then((cookie) =>
-      request(app.getHttpServer())
-        .post('/queue/start-clinic')
-        .set('Cookie', cookie)
-        .set('Idempotency-Key', `m8s3-race-start-${fixture.scope}`)
-        .set('Origin', testEnvironment.WEB_APP_ORIGIN)
-        .send({
-          practiceLocationId: fixture.locationId,
-          serviceDate: fixture.serviceDateText,
-        }),
-    );
+  async function startClinic(fixture: Fixture) {
+    const authCookie = await loginDoctor(fixture.doctorUserId);
+    return request(app.getHttpServer())
+      .post('/queue/start-clinic')
+      .set('Cookie', authCookie)
+      .set('Idempotency-Key', `m8s3-race-start-${fixture.scope}`)
+      .set('Origin', testEnvironment.WEB_APP_ORIGIN)
+      .send({
+        practiceLocationId: fixture.locationId,
+        serviceDate: fixture.serviceDateText,
+      });
   }
 
   async function loginDoctor(doctorUserId: string): Promise<string> {
@@ -518,8 +517,9 @@ describe('BookingGroup Add Person controls (e2e)', () => {
         email: user.email,
         password: 'irrelevant-e2e-password',
       });
-    const setCookie = response.headers['set-cookie'] as string[] | undefined;
-    if (!setCookie?.[0]) {
+    const header = response.headers['set-cookie'];
+    const setCookie = Array.isArray(header) ? header : header ? [header] : [];
+    if (!setCookie[0]) {
       throw new Error('Doctor login did not return an authentication cookie.');
     }
     return setCookie[0].split(';')[0];
@@ -535,7 +535,9 @@ describe('BookingGroup Add Person controls (e2e)', () => {
       Weekday.FRIDAY,
       Weekday.SATURDAY,
     ];
-    return weekdays[date.getUTCDay()]!;
+    const weekday = weekdays[date.getUTCDay()];
+    if (!weekday) throw new Error('Unable to resolve fixture weekday.');
+    return weekday;
   }
 
   function timeValue(hour: number, minute: number): Date {
