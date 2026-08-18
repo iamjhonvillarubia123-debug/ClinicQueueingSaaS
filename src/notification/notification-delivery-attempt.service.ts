@@ -41,7 +41,9 @@ export class NotificationDeliveryAttemptService {
   ): Promise<FinalizedAttempt> {
     const normalizedWorkerId = workerId.trim();
     if (!outboxId.trim() || !normalizedWorkerId) {
-      throw new BadRequestException('Notification attempt identity is invalid.');
+      throw new BadRequestException(
+        'Notification attempt identity is invalid.',
+      );
     }
 
     if (
