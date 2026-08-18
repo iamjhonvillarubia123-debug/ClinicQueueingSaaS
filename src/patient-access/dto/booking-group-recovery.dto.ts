@@ -1,4 +1,10 @@
-import { IsDateString, IsNotEmpty, IsString, IsUUID, Length } from 'class-validator';
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+  Length,
+} from 'class-validator';
 
 export class RequestBookingGroupRecoveryDto {
   @IsUUID()
