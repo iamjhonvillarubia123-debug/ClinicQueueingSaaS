@@ -23,6 +23,19 @@ type CreateCommandArgs = {
   };
 };
 
+function buildPrismaService(
+  transaction: Record<string, unknown>,
+): PrismaService {
+  const prisma = Object.create(PrismaService.prototype);
+  Object.defineProperty(prisma, '$transaction', {
+    configurable: true,
+    value: jest.fn((callback: (tx: unknown) => unknown) =>
+      Promise.resolve(callback(transaction)),
+    ),
+  });
+  return prisma;
+}
+
 describe('BookingGroupRecoveryService', () => {
   const protectedMobile = {
     encrypted: 'encrypted-mobile',
@@ -31,11 +44,7 @@ describe('BookingGroupRecoveryService', () => {
   };
 
   function buildService(transaction: Record<string, unknown>) {
-    const prisma = Object.assign(Object.create(PrismaService.prototype), {
-      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
-        callback(transaction),
-      ),
-    }) as PrismaService;
+    const prisma = buildPrismaService(transaction);
     const mobile = { protect: jest.fn().mockReturnValue(protectedMobile) };
     const otpGenerator = { generate: jest.fn().mockReturnValue('123456') };
     const otpService = {
