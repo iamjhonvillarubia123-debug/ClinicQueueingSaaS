@@ -7,7 +7,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-type ClaimedOutboxRow = {
+export type ClaimedOutboxRow = {
   id: string;
   notificationType: NotificationType;
   channel: NotificationChannel;
