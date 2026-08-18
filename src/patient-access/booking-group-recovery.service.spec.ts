@@ -1,8 +1,13 @@
+import { Test } from '@nestjs/testing';
 import {
   BookingGroupRecoveryAttemptStatus,
   CommandType,
 } from '../../generated/prisma/client';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
+import { OtpGenerator } from '../otp/otp.generator';
+import { OtpService } from '../otp/otp.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
 type CreateAttemptArgs = {
@@ -29,7 +34,7 @@ describe('BookingGroupRecoveryService', () => {
     lastFour: '1234',
   };
 
-  function buildService(transaction: Record<string, unknown>) {
+  async function buildService(transaction: Record<string, unknown>) {
     const prisma = {
       $transaction: (callback: (tx: Record<string, unknown>) => unknown) =>
         Promise.resolve(callback(transaction)),
@@ -64,14 +69,19 @@ describe('BookingGroupRecoveryService', () => {
         expiresAt: new Date('2026-08-25T05:00:00.000Z'),
       });
 
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BookingGroupRecoveryService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: MobileNumberService, useValue: mobile },
+        { provide: OtpGenerator, useValue: otpGenerator },
+        { provide: OtpService, useValue: otpService },
+        { provide: CommandIdempotencyService, useValue: idempotency },
+      ],
+    }).compile();
+
     return {
-      service: new BookingGroupRecoveryService(
-        prisma,
-        mobile as never,
-        otpGenerator as never,
-        otpService as never,
-        idempotency,
-      ),
+      service: moduleRef.get(BookingGroupRecoveryService),
       idempotency: {
         normalizeKeyMock,
         deriveIdentityMock,
@@ -109,7 +119,7 @@ describe('BookingGroupRecoveryService', () => {
         create: jest.fn().mockResolvedValue({ id: 'otp-1' }),
       },
     };
-    const { service } = buildService(transaction);
+    const { service } = await buildService(transaction);
 
     const result = await service.request({
       practiceLocationId: '11111111-1111-4111-8111-111111111111',
@@ -136,7 +146,7 @@ describe('BookingGroupRecoveryService', () => {
         }),
       },
     };
-    const { service, idempotency } = buildService(transaction);
+    const { service, idempotency } = await buildService(transaction);
     idempotency.findReplayMock.mockRestore();
 
     const result = await service.complete('attempt-1', 'idem-1');
@@ -210,7 +220,7 @@ describe('BookingGroupRecoveryService', () => {
         create: createCommand,
       },
     };
-    const { service } = buildService(transaction);
+    const { service } = await buildService(transaction);
 
     const result = await service.complete('attempt-1', 'idem-1');
 
