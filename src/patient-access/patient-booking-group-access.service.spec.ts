@@ -27,7 +27,7 @@ describe('PatientBookingGroupAccessService', () => {
             queueNumber: 11,
             status: AppointmentStatus.WAITING,
             servingOrderKey: null,
-            waitingPlacementType: WaitingPlacementType.NORMAL,
+            waitingPlacementType: WaitingPlacementType.ORDINARY,
             firstName: 'Ana',
             middleName: null,
             lastName: 'Santos',
@@ -90,10 +90,7 @@ describe('PatientBookingGroupAccessService', () => {
     ['unknown token', null],
     ['revoked token', buildToken({ revokedAt: new Date() })],
     ['expired token', buildToken({ expiresAt: new Date(Date.now() - 1_000) })],
-    [
-      'wrong-purpose token',
-      buildToken({ purpose: 'NOT_CONTROLLER_ACCESS' }),
-    ],
+    ['wrong-purpose token', buildToken({ purpose: 'NOT_CONTROLLER_ACCESS' })],
     [
       'group with no controller-visible members',
       buildToken({
