@@ -33,6 +33,9 @@ type Fixture = {
   financialAccountId: string;
 };
 
+type ErrorBody = { message?: string };
+type DashboardBody = { canUseImHere?: boolean };
+
 describe('Patient Appointment dashboard authorization controls (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -124,7 +127,9 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       `cq_booking_access=${fixture.targetToken}`,
     );
     expect(cross.status).toBe(401);
-    expect(cross.body.message).toBe('Patient booking access is unavailable.');
+    expect(errorBody(cross).message).toBe(
+      'Patient booking access is unavailable.',
+    );
   }, 30_000);
 
   it('rejects group-token misuse, revoked/expired Appointment tokens, and anonymized access generically', async () => {
@@ -134,7 +139,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       `cq_booking_access=${groupMisuse.groupToken}`,
     );
     expect(groupResponse.status).toBe(401);
-    expect(groupResponse.body.message).toBe(
+    expect(errorBody(groupResponse).message).toBe(
       'Patient booking access is unavailable.',
     );
 
@@ -179,7 +184,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       `cq_booking_access=${anonymized.targetToken}`,
     );
     expect(anonymizedResponse.status).toBe(401);
-    expect(anonymizedResponse.body.message).toBe(
+    expect(errorBody(anonymizedResponse).message).toBe(
       'Patient booking access is unavailable.',
     );
   }, 30_000);
@@ -191,7 +196,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       `cq_booking_access=${individual.targetToken}`,
     );
     expect(individualResponse.status).toBe(200);
-    expect(individualResponse.body.canUseImHere).toBe(true);
+    expect(dashboardBody(individualResponse).canUseImHere).toBe(true);
 
     const grouped = await createFixture({
       targetTemporarilyAbsent: true,
@@ -202,7 +207,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       `cq_booking_access=${grouped.targetToken}`,
     );
     expect(groupedResponse.status).toBe(200);
-    expect(groupedResponse.body.canUseImHere).toBe(false);
+    expect(dashboardBody(groupedResponse).canUseImHere).toBe(false);
   }, 30_000);
 
   it('returns neutral service-unavailable without cancelling the Appointment when subscription access lapses', async () => {
@@ -220,7 +225,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       `cq_booking_access=${fixture.targetToken}`,
     );
     expect(response.status).toBe(503);
-    expect(response.body.message).toContain(
+    expect(errorBody(response).message).toContain(
       'Your existing appointment has not been cancelled',
     );
 
@@ -333,7 +338,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
     });
 
     let bookingGroupId: string | undefined;
-    let groupToken = `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`;
+    const groupToken = `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`;
     if (options.targetInGroup) {
       const group = await prisma.bookingGroup.create({
         data: {
@@ -441,8 +446,18 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
 
   function dashboard(bookingReference: string, cookie: string) {
     return request(app.getHttpServer())
-      .get(`/patient-bookings/${encodeURIComponent(bookingReference)}/dashboard`)
+      .get(
+        `/patient-bookings/${encodeURIComponent(bookingReference)}/dashboard`,
+      )
       .set('Cookie', cookie);
+  }
+
+  function errorBody(response: { body: unknown }): ErrorBody {
+    return response.body as ErrorBody;
+  }
+
+  function dashboardBody(response: { body: unknown }): DashboardBody {
+    return response.body as DashboardBody;
   }
 
   function tokenHash(rawToken: string): string {
