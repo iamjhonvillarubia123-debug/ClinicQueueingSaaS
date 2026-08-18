@@ -1,8 +1,10 @@
 import { createHash } from 'crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
+  AppointmentStatus,
   BookingGroupAccessTokenPurpose,
   Prisma,
+  WaitingPlacementType,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -21,9 +23,9 @@ export type PatientBookingGroupAccess = {
     members: Array<{
       bookingReference: string;
       queueNumber: number;
-      status: string;
+      status: AppointmentStatus;
       servingOrderKey: Prisma.Decimal | null;
-      waitingPlacementType: string | null;
+      waitingPlacementType: WaitingPlacementType | null;
       firstName: string | null;
       middleName: string | null;
       lastName: string | null;
@@ -36,9 +38,16 @@ export type PatientBookingGroupAccess = {
 export class PatientBookingGroupAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async establish(rawToken: string): Promise<PatientBookingGroupAccess> {
+  async establish(
+    rawToken: string,
+    expectedBookingGroupId?: string,
+  ): Promise<PatientBookingGroupAccess> {
     return this.prisma.$transaction(async (transaction) => {
-      return this.validateToken(transaction, rawToken);
+      return this.validateToken(
+        transaction,
+        rawToken,
+        expectedBookingGroupId,
+      );
     });
   }
 
@@ -95,7 +104,7 @@ export class PatientBookingGroupAccessService {
             servingProtectionEndedAt: true,
             appointments: {
               where: { anonymizedAt: null },
-              orderBy: [{ queueNumber: 'asc' }],
+              orderBy: { queueNumber: 'asc' },
               select: {
                 bookingReference: true,
                 queueNumber: true,
