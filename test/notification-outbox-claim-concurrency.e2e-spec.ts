@@ -13,6 +13,8 @@ import { AppModule } from './../src/app.module';
 import { NotificationOutboxClaimService } from './../src/notification/notification-outbox-claim.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 describe('NotificationOutbox claim concurrency controls (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
@@ -83,7 +85,7 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
         actorUserId: doctor.id,
         accountUserId: doctor.id,
         completedAt: now,
-        expiresAt: new Date(now.getTime() + 60_000),
+        expiresAt: new Date(now.getTime() + 7 * DAY_MS),
         createdAt: now,
       },
     });
