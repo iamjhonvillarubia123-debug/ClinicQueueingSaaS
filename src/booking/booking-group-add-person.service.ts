@@ -190,12 +190,13 @@ export class BookingGroupAddPersonService {
         group.practiceLocationId,
         group.serviceDate,
       );
-      const servingOrderKey = await this.servingOrder.calculateGroupTailPlacement(
-        transaction,
-        group.practiceLocationId,
-        group.serviceDate,
-        group.id,
-      );
+      const servingOrderKey =
+        await this.servingOrder.calculateGroupTailPlacement(
+          transaction,
+          group.practiceLocationId,
+          group.serviceDate,
+          group.id,
+        );
 
       const appointment = await transaction.appointment.create({
         data: {
@@ -287,7 +288,8 @@ export class BookingGroupAddPersonService {
           bookingGroupId: group.id,
           commandIdempotencyId: command.id,
           recipientMobileEncrypted: group.controllingMobileNumberEncrypted,
-          messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
+          messageBodyEncrypted:
+            this.notificationPayload.encryptMessage(message),
           providerIdempotencyKey: `booking-group-add-person:${commandIdentityKey}`,
           attemptCount: 0,
           nextAttemptAt: completedAt,
@@ -361,7 +363,10 @@ export class BookingGroupAddPersonService {
       throw new ConflictException('Add Person is currently unavailable.');
     }
 
-    const preparedAnswers = this.answers.prepareAnswers(questions, dto.answers);
+    const preparedAnswers = this.answers.prepareAnswers(
+      questions,
+      dto.answers,
+    );
     if (!this.answers.requiredAnswersComplete(questions, preparedAnswers)) {
       throw new ConflictException(
         'Required BookingQuestions are incomplete for Add Person.',
@@ -428,16 +433,16 @@ export class BookingGroupAddPersonService {
     practiceLocationId: string,
     serviceDate: Date,
   ): Promise<void> {
-    const rows = await transaction.$queryRaw<Array<{ status: ClinicDayStatus }>>(
-      Prisma.sql`
-        SELECT "status"
-        FROM "ClinicDay"
-        WHERE "practiceLocationId" = ${practiceLocationId}
-          AND "serviceDate" = ${serviceDate}
-        LIMIT 1
-        FOR UPDATE
-      `,
-    );
+    const rows = await transaction.$queryRaw<
+      Array<{ status: ClinicDayStatus }>
+    >(Prisma.sql`
+      SELECT "status"
+      FROM "ClinicDay"
+      WHERE "practiceLocationId" = ${practiceLocationId}
+        AND "serviceDate" = ${serviceDate}
+      LIMIT 1
+      FOR UPDATE
+    `);
     if (rows[0]?.status === ClinicDayStatus.STARTED) {
       throw new ConflictException(
         'Add Person is unavailable after START CLINIC.',
