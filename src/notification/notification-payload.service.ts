@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createCipheriv, createHmac, randomBytes } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  randomBytes,
+} from 'crypto';
 
 const KEY_DERIVATION_PURPOSE = 'notification-outbox-message-v1';
+const MESSAGE_PURPOSE = 'notification-outbox:message';
 
 @Injectable()
 export class NotificationPayloadService {
@@ -36,8 +42,7 @@ export class NotificationPayloadService {
   encryptMessage(plaintext: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
-    const purpose = 'notification-outbox:message';
-    cipher.setAAD(Buffer.from(purpose, 'utf8'));
+    cipher.setAAD(Buffer.from(MESSAGE_PURPOSE, 'utf8'));
 
     const ciphertext = Buffer.concat([
       cipher.update(plaintext, 'utf8'),
@@ -47,10 +52,55 @@ export class NotificationPayloadService {
     return [
       'v1',
       this.activeKeyId,
-      purpose,
+      MESSAGE_PURPOSE,
       iv.toString('base64url'),
       cipher.getAuthTag().toString('base64url'),
       ciphertext.toString('base64url'),
     ].join('.');
+  }
+
+  decryptMessage(envelope: string): string {
+    const parts = envelope.split('.');
+    if (parts.length !== 6) {
+      throw new Error('Invalid notification message encryption envelope.');
+    }
+
+    const [
+      formatVersion,
+      keyId,
+      purpose,
+      ivBase64Url,
+      authenticationTagBase64Url,
+      ciphertextBase64Url,
+    ] = parts;
+
+    if (formatVersion !== 'v1') {
+      throw new Error('Unsupported notification message encryption format.');
+    }
+    if (keyId !== this.activeKeyId) {
+      throw new Error('Unknown notification message encryption key.');
+    }
+    if (purpose !== MESSAGE_PURPOSE) {
+      throw new Error('Invalid notification message encryption purpose.');
+    }
+
+    try {
+      const iv = Buffer.from(ivBase64Url, 'base64url');
+      const authenticationTag = Buffer.from(
+        authenticationTagBase64Url,
+        'base64url',
+      );
+      const ciphertext = Buffer.from(ciphertextBase64Url, 'base64url');
+      const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey, iv);
+      decipher.setAAD(Buffer.from(MESSAGE_PURPOSE, 'utf8'));
+      decipher.setAuthTag(authenticationTag);
+
+      return Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch {
+      throw new Error('Unable to decrypt protected notification message.');
+    }
   }
 }
