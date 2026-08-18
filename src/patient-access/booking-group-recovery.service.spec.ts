@@ -73,7 +73,7 @@ describe('BookingGroupRecoveryService', () => {
         mobile as never,
         otpGenerator as never,
         otpService as never,
-        idempotency,
+        idempotency as never,
       ),
       idempotency,
       mobile,
