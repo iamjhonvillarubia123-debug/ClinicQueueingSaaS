@@ -139,36 +139,42 @@ describe('BookingGroup recovery controls (e2e)', () => {
     expect(first.bookingGroupId).toBe(fixture.bookingGroupId);
     expect(first.rawToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
-    const [oldTokens, activeTokens, completedAttempt, consumedOtp, command, afterAppointments] =
-      await Promise.all([
-        prisma.bookingGroupAccessToken.findMany({
-          where: { id: { in: fixture.oldTokenIds } },
-          orderBy: { createdAt: 'asc' },
-        }),
-        prisma.bookingGroupAccessToken.findMany({
-          where: {
-            bookingGroupId: fixture.bookingGroupId,
-            revokedAt: null,
-            expiresAt: { gt: new Date() },
-            tokenHash: { not: null },
-          },
-        }),
-        prisma.bookingGroupRecoveryAttempt.findUniqueOrThrow({
-          where: { id: attempt.id },
-        }),
-        prisma.otpVerification.findUniqueOrThrow({ where: { id: otp.id } }),
-        prisma.commandIdempotency.findFirstOrThrow({
-          where: {
-            commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
-            bookingGroupRecoveryAttemptId: attempt.id,
-          },
-        }),
-        prisma.appointment.findMany({
-          where: { bookingGroupId: fixture.bookingGroupId },
-          orderBy: { queueNumber: 'asc' },
-          select: { id: true, queueNumber: true, status: true },
-        }),
-      ]);
+    const [
+      oldTokens,
+      activeTokens,
+      completedAttempt,
+      consumedOtp,
+      command,
+      afterAppointments,
+    ] = await Promise.all([
+      prisma.bookingGroupAccessToken.findMany({
+        where: { id: { in: fixture.oldTokenIds } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.bookingGroupAccessToken.findMany({
+        where: {
+          bookingGroupId: fixture.bookingGroupId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+          tokenHash: { not: null },
+        },
+      }),
+      prisma.bookingGroupRecoveryAttempt.findUniqueOrThrow({
+        where: { id: attempt.id },
+      }),
+      prisma.otpVerification.findUniqueOrThrow({ where: { id: otp.id } }),
+      prisma.commandIdempotency.findFirstOrThrow({
+        where: {
+          commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
+          bookingGroupRecoveryAttemptId: attempt.id,
+        },
+      }),
+      prisma.appointment.findMany({
+        where: { bookingGroupId: fixture.bookingGroupId },
+        orderBy: { queueNumber: 'asc' },
+        select: { id: true, queueNumber: true, status: true },
+      }),
+    ]);
 
     expect(oldTokens).toHaveLength(2);
     expect(oldTokens.every((token) => token.revokedAt !== null)).toBe(true);
@@ -385,7 +391,9 @@ describe('BookingGroup recovery controls (e2e)', () => {
       const token = await prisma.bookingGroupAccessToken.create({
         data: {
           bookingGroupId: group.id,
-          tokenHash: createHash('sha256').update(rawToken, 'utf8').digest('hex'),
+          tokenHash: createHash('sha256')
+            .update(rawToken, 'utf8')
+            .digest('hex'),
           purpose: BookingGroupAccessTokenPurpose.CONTROLLER_ACCESS,
           expiresAt: new Date(serviceDate.getTime() + 7 * DAY_MS),
         },
