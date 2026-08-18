@@ -9,16 +9,6 @@ type ReplayRecord = Awaited<
   ReturnType<CommandIdempotencyService['findReplay']>
 >;
 
-type PublicIdempotencyContract = Pick<
-  CommandIdempotencyService,
-  | 'normalizeKey'
-  | 'deriveIdentity'
-  | 'fingerprint'
-  | 'acquireCommandLock'
-  | 'findReplay'
-  | 'completionTimes'
->;
-
 type CreateAttemptArgs = {
   data: { bookingGroupId: string | null };
 };
@@ -56,43 +46,28 @@ describe('BookingGroupRecoveryService', () => {
       verifyOtpHash: jest.fn().mockReturnValue(true),
     };
 
-    const normalizeKey = jest.fn(
-      (value: string | undefined): string => value ?? '',
-    );
-    const deriveIdentity = jest.fn<
-      string,
-      Parameters<CommandIdempotencyService['deriveIdentity']>
-    >(() => 'command-identity');
-    const fingerprint = jest.fn<
-      string,
-      Parameters<CommandIdempotencyService['fingerprint']>
-    >(() => 'request-fingerprint');
-    const acquireCommandLock = jest.fn<
-      ReturnType<CommandIdempotencyService['acquireCommandLock']>,
-      Parameters<CommandIdempotencyService['acquireCommandLock']>
-    >(() => Promise.resolve());
-    const findReplay = jest
-      .fn<
-        ReturnType<CommandIdempotencyService['findReplay']>,
-        Parameters<CommandIdempotencyService['findReplay']>
-      >()
+    const idempotency = new CommandIdempotencyService();
+    const normalizeKeyMock = jest
+      .spyOn(idempotency, 'normalizeKey')
+      .mockImplementation((value: string | undefined): string => value ?? '');
+    const deriveIdentityMock = jest
+      .spyOn(idempotency, 'deriveIdentity')
+      .mockReturnValue('command-identity');
+    const fingerprintMock = jest
+      .spyOn(idempotency, 'fingerprint')
+      .mockReturnValue('request-fingerprint');
+    const acquireCommandLockMock = jest
+      .spyOn(idempotency, 'acquireCommandLock')
+      .mockResolvedValue(undefined);
+    const findReplayMock = jest
+      .spyOn(idempotency, 'findReplay')
       .mockResolvedValue(null);
-    const completionTimes = jest.fn<
-      ReturnType<CommandIdempotencyService['completionTimes']>,
-      Parameters<CommandIdempotencyService['completionTimes']>
-    >(() => ({
-      completedAt: new Date('2026-08-18T05:00:00.000Z'),
-      expiresAt: new Date('2026-08-25T05:00:00.000Z'),
-    }));
-
-    const idempotency: PublicIdempotencyContract = {
-      normalizeKey,
-      deriveIdentity,
-      fingerprint,
-      acquireCommandLock,
-      findReplay,
-      completionTimes,
-    };
+    const completionTimesMock = jest
+      .spyOn(idempotency, 'completionTimes')
+      .mockReturnValue({
+        completedAt: new Date('2026-08-18T05:00:00.000Z'),
+        expiresAt: new Date('2026-08-25T05:00:00.000Z'),
+      });
 
     return {
       service: new BookingGroupRecoveryService(
@@ -103,13 +78,12 @@ describe('BookingGroupRecoveryService', () => {
         idempotency,
       ),
       idempotency: {
-        ...idempotency,
-        normalizeKeyMock: normalizeKey,
-        deriveIdentityMock: deriveIdentity,
-        fingerprintMock: fingerprint,
-        acquireCommandLockMock: acquireCommandLock,
-        findReplayMock: findReplay,
-        completionTimesMock: completionTimes,
+        normalizeKeyMock,
+        deriveIdentityMock,
+        fingerprintMock,
+        acquireCommandLockMock,
+        findReplayMock,
+        completionTimesMock,
       },
       mobile,
     };
