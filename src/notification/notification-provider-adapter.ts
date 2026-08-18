@@ -9,8 +9,8 @@ export type NotificationProviderSubmissionRequest = {
   notificationType: NotificationType;
   channel: NotificationChannel;
   providerIdempotencyKey: string;
-  recipientEncrypted: string;
-  messageBodyEncrypted: string;
+  recipient: string;
+  messageBody: string;
 };
 
 export type NotificationProviderSubmissionResult = {
