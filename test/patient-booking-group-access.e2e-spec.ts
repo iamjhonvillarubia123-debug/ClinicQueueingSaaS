@@ -56,18 +56,18 @@ describe('Patient BookingGroup controller access (e2e)', () => {
   });
 
   it('authorizes exactly one BookingGroup, reloads current members, and updates lastUsedAt', async () => {
-    const { groupId, rawToken, tokenId } = await createGroupFixture();
+    const fixture = await createGroupFixture();
 
-    const access = await service.establish(rawToken, groupId);
+    const access = await service.establish(fixture.rawToken, fixture.groupId);
 
-    expect(access.bookingGroup.id).toBe(groupId);
+    expect(access.bookingGroup.id).toBe(fixture.groupId);
     expect(access.bookingGroup.members).toHaveLength(2);
-    expect(access.bookingGroup.members.map((member) => member.queueNumber)).toEqual([
-      1, 2,
-    ]);
+    expect(access.bookingGroup.members.map((member) => member.queueNumber)).toEqual(
+      fixture.queueNumbers,
+    );
 
     const storedToken = await prisma.bookingGroupAccessToken.findUniqueOrThrow({
-      where: { id: tokenId },
+      where: { id: fixture.tokenId },
     });
     expect(storedToken.lastUsedAt).not.toBeNull();
   });
@@ -76,9 +76,9 @@ describe('Patient BookingGroup controller access (e2e)', () => {
     const first = await createGroupFixture();
     const second = await createGroupFixture();
 
-    await expect(service.establish(first.rawToken, second.groupId)).rejects.toMatchObject({
-      status: 401,
-    });
+    await expect(
+      service.establish(first.rawToken, second.groupId),
+    ).rejects.toMatchObject({ status: 401 });
   });
 
   it('rejects revoked and expired group credentials without updating lastUsedAt', async () => {
@@ -88,14 +88,14 @@ describe('Patient BookingGroup controller access (e2e)', () => {
       data: { revokedAt: new Date() },
     });
 
-    await expect(service.establish(revoked.rawToken, revoked.groupId)).rejects.toMatchObject({
-      status: 401,
-    });
+    await expect(
+      service.establish(revoked.rawToken, revoked.groupId),
+    ).rejects.toMatchObject({ status: 401 });
 
     const expired = await createGroupFixture({ expired: true });
-    await expect(service.establish(expired.rawToken, expired.groupId)).rejects.toMatchObject({
-      status: 401,
-    });
+    await expect(
+      service.establish(expired.rawToken, expired.groupId),
+    ).rejects.toMatchObject({ status: 401 });
 
     const [revokedStored, expiredStored] = await Promise.all([
       prisma.bookingGroupAccessToken.findUniqueOrThrow({
@@ -123,7 +123,9 @@ describe('Patient BookingGroup controller access (e2e)', () => {
 
     const partial = await service.establish(fixture.rawToken, fixture.groupId);
     expect(partial.bookingGroup.members).toHaveLength(1);
-    expect(partial.bookingGroup.members[0]?.queueNumber).toBe(2);
+    expect(partial.bookingGroup.members[0]?.queueNumber).toBe(
+      fixture.queueNumbers[1],
+    );
 
     await prisma.appointment.update({
       where: { id: appointments[1]!.id },
@@ -137,6 +139,11 @@ describe('Patient BookingGroup controller access (e2e)', () => {
 
   async function createGroupFixture(options?: { expired?: boolean }) {
     const serviceDate = new Date('2026-10-15T00:00:00.000Z');
+    const existingCount = await prisma.appointment.count({
+      where: { practiceLocationId, serviceDate },
+    });
+    const queueNumbers = [existingCount + 1, existingCount + 2];
+
     const group = await prisma.bookingGroup.create({
       data: {
         practiceLocationId,
@@ -157,7 +164,7 @@ describe('Patient BookingGroup controller access (e2e)', () => {
           bookingGroupId: group.id,
           serviceDate,
           estimatedServiceMinutes: 15,
-          queueNumber: 1,
+          queueNumber: queueNumbers[0],
           status: 'WAITING',
           firstName: 'Alpha',
           lastName: 'Member',
@@ -169,7 +176,7 @@ describe('Patient BookingGroup controller access (e2e)', () => {
           bookingGroupId: group.id,
           serviceDate,
           estimatedServiceMinutes: 15,
-          queueNumber: 2,
+          queueNumber: queueNumbers[1],
           status: 'WAITING',
           firstName: 'Beta',
           lastName: 'Member',
@@ -178,8 +185,11 @@ describe('Patient BookingGroup controller access (e2e)', () => {
       ],
     });
 
-    const rawToken = randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
-    const tokenHash = createHash('sha256').update(rawToken, 'utf8').digest('hex');
+    const rawToken =
+      randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+    const tokenHash = createHash('sha256')
+      .update(rawToken, 'utf8')
+      .digest('hex');
     const now = new Date();
     const createdAt = options?.expired
       ? new Date(now.getTime() - 2 * 60 * 60 * 1000)
@@ -198,6 +208,11 @@ describe('Patient BookingGroup controller access (e2e)', () => {
       },
     });
 
-    return { groupId: group.id, rawToken, tokenId: token.id };
+    return {
+      groupId: group.id,
+      rawToken,
+      tokenId: token.id,
+      queueNumbers,
+    };
   }
 });
