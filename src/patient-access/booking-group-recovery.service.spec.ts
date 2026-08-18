@@ -164,28 +164,9 @@ describe('BookingGroupRecoveryService', () => {
     const transaction = {};
     const { service, idempotency } = buildService(transaction);
     const replay = {
-      id: 'command-1',
-      commandIdentityKey: 'command-identity',
-      idempotencyKey: 'idem-1',
-      commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
-      requestFingerprint: 'request-fingerprint',
-      practiceLocationId: null,
-      serviceDate: null,
-      clinicDayId: null,
-      appointmentId: null,
-      bookingGroupId: 'group-1',
-      bookingDraftId: null,
-      bookingGroupRecoveryAttemptId: 'attempt-1',
-      resultAppointmentId: null,
       resultBookingGroupId: 'group-1',
-      resultBookingAccessTokenId: null,
       resultBookingGroupAccessTokenId: 'token-record-1',
-      resultQueueNumber: null,
-      resultClinicDayStatus: null,
-      completedAt: new Date('2026-08-18T05:00:00.000Z'),
-      expiresAt: new Date('2026-08-25T05:00:00.000Z'),
-      createdAt: new Date('2026-08-18T05:00:00.000Z'),
-    } satisfies Exclude<ReplayRecord, null>;
+    } as Exclude<ReplayRecord, null>;
     idempotency.findReplayMock.mockResolvedValue(replay);
 
     const result = await service.complete('attempt-1', 'idem-1');
