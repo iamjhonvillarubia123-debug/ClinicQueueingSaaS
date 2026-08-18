@@ -337,7 +337,8 @@ export class BookingGroupRecoveryService {
         },
       });
 
-      const completion = this.idempotency.completionTimes(now);
+      const completedAt = new Date();
+      const completion = this.idempotency.completionTimes(completedAt);
       await transaction.commandIdempotency.create({
         data: {
           idempotencyKey: key,
@@ -352,6 +353,7 @@ export class BookingGroupRecoveryService {
           resultBookingGroupAccessTokenId: replacement.id,
           completedAt: completion.completedAt,
           expiresAt: completion.expiresAt,
+          createdAt: completion.completedAt,
         },
       });
 
