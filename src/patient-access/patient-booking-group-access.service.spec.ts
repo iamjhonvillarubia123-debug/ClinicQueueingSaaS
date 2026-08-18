@@ -86,35 +86,41 @@ describe('PatientBookingGroupAccessService', () => {
     return {
       service: new PatientBookingGroupAccessService(prisma as never),
       transaction,
+      findUnique,
       update,
     };
   }
 
   it('authorizes one active controller token and re-reads current visible members', async () => {
-    const { service, transaction, update } = createService(buildToken());
+    const { service, findUnique, update } = createService(buildToken());
 
     const access = await service.establish(rawToken);
 
     expect(access.bookingGroup.id).toBe('group-1');
     expect(access.bookingGroup.members).toHaveLength(1);
     expect(access.bookingGroup.members[0].bookingReference).toBe('BOOK-1');
-    expect(transaction.bookingGroupAccessToken.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        select: expect.objectContaining({
-          bookingGroup: expect.objectContaining({
-            select: expect.objectContaining({
-              appointments: expect.objectContaining({
-                where: { anonymizedAt: null },
-              }),
-            }),
-          }),
-        }),
-      }),
-    );
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'group-token-1' },
-      data: { lastUsedAt: expect.any(Date) },
+
+    const findArgs = findUnique.mock.calls[0]?.[0] as {
+      select: {
+        bookingGroup: {
+          select: {
+            appointments: {
+              where: { anonymizedAt: null };
+            };
+          };
+        };
+      };
+    };
+    expect(findArgs.select.bookingGroup.select.appointments.where).toEqual({
+      anonymizedAt: null,
     });
+
+    const updateArgs = update.mock.calls[0]?.[0] as {
+      where: { id: string };
+      data: { lastUsedAt: Date };
+    };
+    expect(updateArgs.where).toEqual({ id: 'group-token-1' });
+    expect(updateArgs.data.lastUsedAt).toBeInstanceOf(Date);
   });
 
   it.each<[string, TokenFixture | null]>([
