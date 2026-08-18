@@ -68,6 +68,37 @@ export class QueueServingOrderPlacementService {
     return this.keyForInsertion(transaction, waiting, insertionIndex);
   }
 
+  async calculateGroupTailPlacement(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+    serviceDate: Date,
+    bookingGroupId: string,
+  ): Promise<Prisma.Decimal> {
+    const waiting = await this.lockWaitingRows(
+      transaction,
+      practiceLocationId,
+      serviceDate,
+    );
+    if (waiting.length === 0) {
+      throw new ConflictException(
+        'Protected BookingGroup placement is unavailable.',
+      );
+    }
+
+    this.assertValidWaitingRows(waiting);
+    const insertionIndex = await this.activeGroupTailInsertionIndex(
+      transaction,
+      waiting,
+      bookingGroupId,
+    );
+    if (insertionIndex === null) {
+      throw new ConflictException(
+        'Protected BookingGroup placement is unavailable.',
+      );
+    }
+    return this.keyForInsertion(transaction, waiting, insertionIndex);
+  }
+
   async calculateStaffReinsertPlacement(
     transaction: TransactionClient,
     practiceLocationId: string,
