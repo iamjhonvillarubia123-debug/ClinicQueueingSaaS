@@ -49,11 +49,10 @@ export class PatientBookingGroupAccessController {
     @Headers('cookie') cookieHeader: string | undefined,
   ) {
     const rawToken = this.patientBookingGroupAccess.readCookie(cookieHeader);
-    const access = await this.patientBookingGroupAccess.establish(rawToken);
-
-    if (access.bookingGroup.id !== bookingGroupId) {
-      return this.patientBookingGroupAccess.reject();
-    }
+    const access = await this.patientBookingGroupAccess.establish(
+      rawToken,
+      bookingGroupId,
+    );
 
     return {
       bookingGroup: access.bookingGroup,
