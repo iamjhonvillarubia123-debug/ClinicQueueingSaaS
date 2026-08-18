@@ -144,7 +144,9 @@ describe('BookingGroup Add Person controls (e2e)', () => {
         .map((item) => item.queueNumber),
     ).toEqual(fixture.originalQueueNumbers);
 
-    const added = appointments.find((item) => item.id === firstBody.appointment.id);
+    const added = appointments.find(
+      (item) => item.id === firstBody.appointment.id,
+    );
     expect(added?.mobileNumberEncrypted).toBeNull();
     expect(added?.mobileNumberHash).toBeNull();
     expect(added?.mobileNumberLastFour).toBeNull();
@@ -178,7 +180,9 @@ describe('BookingGroup Add Person controls (e2e)', () => {
     expect(response.status).toBe(409);
 
     const [appointments, commands, outboxes, afterCounter] = await Promise.all([
-      prisma.appointment.findMany({ where: { bookingGroupId: fixture.bookingGroupId } }),
+      prisma.appointment.findMany({
+        where: { bookingGroupId: fixture.bookingGroupId },
+      }),
       prisma.commandIdempotency.findMany({
         where: {
           bookingGroupId: fixture.bookingGroupId,
@@ -225,7 +229,9 @@ describe('BookingGroup Add Person controls (e2e)', () => {
     expect(response.status).toBe(401);
 
     const [appointments, commands] = await Promise.all([
-      prisma.appointment.findMany({ where: { bookingGroupId: fixture.bookingGroupId } }),
+      prisma.appointment.findMany({
+        where: { bookingGroupId: fixture.bookingGroupId },
+      }),
       prisma.commandIdempotency.findMany({
         where: {
           bookingGroupId: fixture.bookingGroupId,
@@ -517,12 +523,17 @@ describe('BookingGroup Add Person controls (e2e)', () => {
         email: user.email,
         password: 'irrelevant-e2e-password',
       });
-    const header = response.headers['set-cookie'];
-    const setCookie = Array.isArray(header) ? header : header ? [header] : [];
-    if (!setCookie[0]) {
+    const header: unknown = response.headers['set-cookie'];
+    const setCookie: string[] = Array.isArray(header)
+      ? header.filter((value): value is string => typeof value === 'string')
+      : typeof header === 'string'
+        ? [header]
+        : [];
+    const authHeader = setCookie[0];
+    if (!authHeader) {
       throw new Error('Doctor login did not return an authentication cookie.');
     }
-    return setCookie[0].split(';')[0];
+    return authHeader.split(';')[0] ?? authHeader;
   }
 
   function weekdayFromDate(date: Date): Weekday {
