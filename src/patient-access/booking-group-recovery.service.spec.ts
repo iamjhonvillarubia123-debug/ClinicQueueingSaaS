@@ -67,7 +67,7 @@ describe('BookingGroupRecoveryService', () => {
 
     return {
       service: new BookingGroupRecoveryService(
-        prisma as never,
+        prisma,
         mobile as never,
         otpGenerator as never,
         otpService as never,
