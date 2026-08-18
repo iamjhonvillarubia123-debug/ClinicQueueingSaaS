@@ -1,9 +1,10 @@
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createHash, randomUUID } from 'crypto';
+import { App } from 'supertest/types';
 import {
   AdministrativeRestrictionStatus,
   AppointmentStatus,
-  BookingGroupAccessTokenPurpose,
   ClinicDayStatus,
   CommandType,
   NotificationType,
@@ -37,6 +38,7 @@ type GroupFixture = {
 };
 
 describe('BookingGroup member cancellation controls (e2e)', () => {
+  let app: INestApplication<App>;
   let prisma: PrismaService;
   let cancellation: BookingGroupMemberCancellationService;
   let nextPatient: NextPatientService;
@@ -71,23 +73,29 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       new CommandIdempotencyService(),
       new ScheduleTimeService(),
     );
+    app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
+    await app.init();
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    await app.close();
     for (const [key, value] of Object.entries(originalEnvironment)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   });
 
-  it('cancels exactly one member and persists audit, idempotency, and notification atomically', async () => {
+  it('cancels exactly one member, preserves Queue Number/group membership, and writes audit/idempotency/notification atomically', async () => {
     const fixture = await createGroupFixture(3);
     const targetId = memberId(fixture, 1);
     const expectedQueueNumber = fixture.queueNumbers[1];
-    if (expectedQueueNumber === undefined) {
-      throw new Error('Expected Queue Number fixture was not created.');
-    }
 
     const result = await cancellation.cancel(
       fixture.bookingGroupId,
@@ -99,9 +107,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
     const [appointment, event, command, outbox] = await Promise.all([
       prisma.appointment.findUniqueOrThrow({ where: { id: targetId } }),
-      prisma.queueEvent.findUniqueOrThrow({
-        where: { id: result.queueEventId },
-      }),
+      prisma.queueEvent.findUniqueOrThrow({ where: { id: result.queueEventId } }),
       prisma.commandIdempotency.findFirstOrThrow({
         where: {
           commandType: CommandType.BOOKING_GROUP_CANCEL_MEMBER,
@@ -206,14 +212,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       ),
     ).rejects.toThrow('controller access is invalid');
 
-    const expired = await createGroupFixture(2);
-    const expiredToken = await prisma.bookingGroupAccessToken.findFirstOrThrow({
-      where: { bookingGroupId: expired.bookingGroupId },
-    });
-    await prisma.bookingGroupAccessToken.update({
-      where: { id: expiredToken.id },
-      data: { expiresAt: new Date(Date.now() - DAY_MS) },
-    });
+    const expired = await createGroupFixture(2, { expiredToken: true });
     await expect(
       cancellation.cancel(
         expired.bookingGroupId,
@@ -270,7 +269,6 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     });
     expect(ended.servingProtectionEndedAt).not.toBeNull();
     const endedAt = ended.servingProtectionEndedAt;
-    if (!endedAt) throw new Error('Protection end timestamp was not persisted.');
 
     await cancellation.cancel(
       fixture.bookingGroupId,
@@ -283,7 +281,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     const after = await prisma.bookingGroup.findUniqueOrThrow({
       where: { id: fixture.bookingGroupId },
     });
-    expect(after.servingProtectionEndedAt?.getTime()).toBe(endedAt.getTime());
+    expect(after.servingProtectionEndedAt?.getTime()).toBe(endedAt?.getTime());
   });
 
   it('serializes controller cancellation versus NEXT PATIENT without stale contradictory queue state', async () => {
@@ -315,6 +313,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     await prisma.appointment.update({
       where: { id: targetId },
       data: {
+        status: AppointmentStatus.WAITING,
         servingOrderKey: new Prisma.Decimal(1),
         waitingPlacementType: WaitingPlacementType.ORDINARY,
       },
@@ -322,6 +321,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     await prisma.appointment.update({
       where: { id: fallbackId },
       data: {
+        status: AppointmentStatus.WAITING,
         servingOrderKey: new Prisma.Decimal(2),
         waitingPlacementType: WaitingPlacementType.ORDINARY,
       },
@@ -370,7 +370,10 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
     }
   });
 
-  async function createGroupFixture(memberCount: number): Promise<GroupFixture> {
+  async function createGroupFixture(
+    memberCount: number,
+    options: { expiredToken?: boolean } = {},
+  ): Promise<GroupFixture> {
     const scope = randomUUID().replaceAll('-', '');
     const serviceDate = new Date();
     serviceDate.setUTCDate(serviceDate.getUTCDate() + 4);
@@ -411,24 +414,32 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
         practiceLocationId: location.id,
         serviceDate,
         controllingMobileNumberEncrypted: 'controller-mobile-encrypted',
-        controllingMobileNumberHash: hash(`${scope}|controller-mobile`),
+        controllingMobileNumberHash: createHash('sha256')
+          .update(`controller-${scope}`)
+          .digest('hex'),
         controllingMobileLastFour: '1234',
       },
     });
 
-    const controllerToken =
-      randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '');
+    const rawToken = `${randomUUID().replaceAll('-', '')}${randomUUID().replaceAll('-', '')}`;
+    const createdAt = options.expiredToken
+      ? new Date(Date.now() - 3 * DAY_MS)
+      : new Date();
+    const expiresAt = options.expiredToken
+      ? new Date(Date.now() - DAY_MS)
+      : new Date(serviceDate.getTime() + 7 * DAY_MS);
     await prisma.bookingGroupAccessToken.create({
       data: {
         bookingGroupId: group.id,
-        tokenHash: hash(controllerToken),
-        purpose: BookingGroupAccessTokenPurpose.CONTROLLER_ACCESS,
-        expiresAt: new Date(serviceDate.getTime() + 7 * DAY_MS),
+        tokenHash: createHash('sha256').update(rawToken, 'utf8').digest('hex'),
+        purpose: 'CONTROLLER_ACCESS',
+        createdAt,
+        expiresAt,
       },
     });
 
     const appointments = await Promise.all(
-      Array.from({ length: memberCount }, async (_, index) =>
+      Array.from({ length: memberCount }, (_, index) =>
         prisma.appointment.create({
           data: {
             bookingReference: `M7GC-${scope.slice(0, 8)}-${index + 1}`,
@@ -442,9 +453,9 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
             waitingPlacementType: WaitingPlacementType.ORDINARY,
             firstName: `Member${index + 1}`,
             lastName: 'Group',
-            activeAppointmentKey: hash(
-              `${scope}|${serviceDate.toISOString()}|${index + 1}`,
-            ),
+            activeAppointmentKey: createHash('sha256')
+              .update(`${scope}|${index + 1}|active`)
+              .digest('hex'),
           },
         }),
       ),
@@ -456,7 +467,7 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
       practiceLocationId: location.id,
       doctorUserId: doctor.id,
       bookingGroupId: group.id,
-      controllerToken,
+      controllerToken: rawToken,
       memberIds: appointments.map((item) => item.id),
       queueNumbers: appointments.map((item) => item.queueNumber),
     };
@@ -465,12 +476,8 @@ describe('BookingGroup member cancellation controls (e2e)', () => {
 
 function memberId(fixture: GroupFixture, index: number): string {
   const id = fixture.memberIds[index];
-  if (!id) throw new Error(`BookingGroup member fixture ${index} is missing.`);
+  if (!id) throw new Error(`Missing BookingGroup member at index ${index}.`);
   return id;
-}
-
-function hash(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
 function dateValue(value: string): Date {
