@@ -7,11 +7,45 @@ import {
 } from '../../generated/prisma/client';
 import { NotificationDeliveryAttemptService } from './notification-delivery-attempt.service';
 
+type OutboxRow = {
+  id: string;
+  notificationType: NotificationType;
+  channel: NotificationChannel;
+  status: NotificationOutboxStatus;
+  attemptCount: number;
+  processingWorkerId: string | null;
+  leaseExpiresAt: Date | null;
+  providerIdempotencyKey: string;
+};
+
+type OutboxUpdateArgs = {
+  where: { id: string };
+  data: { status: NotificationOutboxStatus; [key: string]: unknown };
+  select: { status: true };
+};
+
+type NotificationLogCreateArgs = {
+  data: Record<string, unknown>;
+};
+
+type MockTransaction = {
+  $queryRaw: jest.Mock<Promise<OutboxRow[]>, unknown[]>;
+  notificationLog: {
+    create: jest.Mock<Promise<{ id: string }>, [NotificationLogCreateArgs]>;
+  };
+  notificationOutbox: {
+    update: jest.Mock<
+      Promise<{ status: NotificationOutboxStatus }>,
+      [OutboxUpdateArgs]
+    >;
+  };
+};
+
 describe('NotificationDeliveryAttemptService', () => {
   const now = new Date('2026-08-18T12:00:00.000Z');
   const leaseExpiresAt = new Date('2026-08-18T12:05:00.000Z');
 
-  const outboxRow = {
+  const outboxRow: OutboxRow = {
     id: 'outbox-1',
     notificationType: NotificationType.OTP_VERIFICATION,
     channel: NotificationChannel.SMS,
@@ -22,22 +56,27 @@ describe('NotificationDeliveryAttemptService', () => {
     providerIdempotencyKey: 'provider-key-1',
   };
 
-  function createService(row = outboxRow) {
-    const transaction = {
-      $queryRaw: jest.fn().mockResolvedValue([row]),
+  function createService(row: OutboxRow = outboxRow) {
+    const transaction: MockTransaction = {
+      $queryRaw: jest.fn<Promise<OutboxRow[]>, unknown[]>(() =>
+        Promise.resolve([row]),
+      ),
       notificationLog: {
-        create: jest.fn().mockResolvedValue({ id: 'log-1' }),
-      },
-      notificationOutbox: {
-        update: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ status: data.status }),
+        create: jest.fn<Promise<{ id: string }>, [NotificationLogCreateArgs]>(() =>
+          Promise.resolve({ id: 'log-1' }),
         ),
       },
+      notificationOutbox: {
+        update: jest.fn<
+          Promise<{ status: NotificationOutboxStatus }>,
+          [OutboxUpdateArgs]
+        >(({ data }) => Promise.resolve({ status: data.status })),
+      },
     };
+
     const prisma = {
-      $transaction: jest.fn().mockImplementation(async (callback) =>
+      $transaction: <T>(callback: (tx: MockTransaction) => Promise<T>) =>
         callback(transaction),
-      ),
     };
 
     return {
@@ -68,29 +107,31 @@ describe('NotificationDeliveryAttemptService', () => {
       attemptNumber: 1,
       outboxStatus: NotificationOutboxStatus.SENT,
     });
-    expect(transaction.notificationLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        notificationOutboxId: outboxRow.id,
-        attemptNumber: 1,
-        notificationType: NotificationType.OTP_VERIFICATION,
-        channel: NotificationChannel.SMS,
-        outcome: NotificationAttemptOutcome.SUCCESS,
-        providerIdempotencyKeyUsed: 'provider-key-1',
-        submittedAt,
-        resolvedAt: now,
-        retryRecommended: false,
-      }),
+
+    const [logCreateCall] = transaction.notificationLog.create.mock.calls;
+    expect(logCreateCall[0].data).toMatchObject({
+      notificationOutboxId: outboxRow.id,
+      attemptNumber: 1,
+      notificationType: NotificationType.OTP_VERIFICATION,
+      channel: NotificationChannel.SMS,
+      outcome: NotificationAttemptOutcome.SUCCESS,
+      providerIdempotencyKeyUsed: 'provider-key-1',
+      submittedAt,
+      resolvedAt: now,
+      retryRecommended: false,
     });
-    expect(transaction.notificationOutbox.update).toHaveBeenCalledWith({
+
+    const [outboxUpdateCall] = transaction.notificationOutbox.update.mock.calls;
+    expect(outboxUpdateCall[0]).toMatchObject({
       where: { id: outboxRow.id },
-      data: expect.objectContaining({
+      data: {
         status: NotificationOutboxStatus.SENT,
         attemptCount: 1,
         sentAt: now,
         processingStartedAt: null,
         leaseExpiresAt: null,
         processingWorkerId: null,
-      }),
+      },
       select: { status: true },
     });
   });
@@ -113,21 +154,22 @@ describe('NotificationDeliveryAttemptService', () => {
       now,
     );
 
-    expect(transaction.notificationLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        attemptNumber: 1,
-        outcome: NotificationAttemptOutcome.RETRYABLE_FAILURE,
-        retryRecommended: true,
-        providerIdempotencyKeyUsed: 'provider-key-1',
-      }),
+    const [logCreateCall] = transaction.notificationLog.create.mock.calls;
+    expect(logCreateCall[0].data).toMatchObject({
+      attemptNumber: 1,
+      outcome: NotificationAttemptOutcome.RETRYABLE_FAILURE,
+      retryRecommended: true,
+      providerIdempotencyKeyUsed: 'provider-key-1',
     });
-    expect(transaction.notificationOutbox.update).toHaveBeenCalledWith({
+
+    const [outboxUpdateCall] = transaction.notificationOutbox.update.mock.calls;
+    expect(outboxUpdateCall[0]).toMatchObject({
       where: { id: outboxRow.id },
-      data: expect.objectContaining({
+      data: {
         status: NotificationOutboxStatus.PENDING,
         nextAttemptAt,
         attemptCount: 1,
-      }),
+      },
       select: { status: true },
     });
   });
@@ -145,13 +187,14 @@ describe('NotificationDeliveryAttemptService', () => {
       now,
     );
 
-    expect(transaction.notificationOutbox.update).toHaveBeenCalledWith({
+    const [outboxUpdateCall] = transaction.notificationOutbox.update.mock.calls;
+    expect(outboxUpdateCall[0]).toMatchObject({
       where: { id: outboxRow.id },
-      data: expect.objectContaining({
+      data: {
         status: NotificationOutboxStatus.FAILED,
         failedAt: now,
         attemptCount: 1,
-      }),
+      },
       select: { status: true },
     });
   });
@@ -170,15 +213,16 @@ describe('NotificationDeliveryAttemptService', () => {
       now,
     );
 
-    expect(transaction.notificationLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        outcome: NotificationAttemptOutcome.UNCERTAIN,
-        resolvedAt: null,
-        retryRecommended: false,
-        providerIdempotencyKeyUsed: 'provider-key-1',
-      }),
+    const [logCreateCall] = transaction.notificationLog.create.mock.calls;
+    expect(logCreateCall[0].data).toMatchObject({
+      outcome: NotificationAttemptOutcome.UNCERTAIN,
+      resolvedAt: null,
+      retryRecommended: false,
+      providerIdempotencyKeyUsed: 'provider-key-1',
     });
-    expect(transaction.notificationOutbox.update).toHaveBeenCalledWith({
+
+    const [outboxUpdateCall] = transaction.notificationOutbox.update.mock.calls;
+    expect(outboxUpdateCall[0]).toEqual({
       where: { id: outboxRow.id },
       data: {
         status: NotificationOutboxStatus.PROCESSING,
@@ -205,6 +249,7 @@ describe('NotificationDeliveryAttemptService', () => {
         now,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+
     expect(transaction.notificationLog.create).not.toHaveBeenCalled();
     expect(transaction.notificationOutbox.update).not.toHaveBeenCalled();
   });
