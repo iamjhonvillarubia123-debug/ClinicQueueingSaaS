@@ -249,7 +249,7 @@ describe('Milestone 8 patient access scope boundaries (e2e)', () => {
   ) {
     return prisma.appointment.create({
       data: {
-        bookingReference: `M8C-${identity.slice(0, 20)}`,
+        bookingReference: `M8C-${identity}`,
         practiceLocationId,
         bookingGroupId,
         serviceDate,
