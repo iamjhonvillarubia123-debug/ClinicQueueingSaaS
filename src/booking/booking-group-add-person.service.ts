@@ -74,7 +74,13 @@ export class BookingGroupAddPersonService {
       suffix: dto.suffix?.trim() || null,
       existingPatientResponse: dto.existingPatientResponse,
       selectedServiceIds: [...dto.selectedServiceIds].sort(),
-      answers: dto.answers ?? [],
+      answers: (dto.answers ?? []).map((answer) => ({
+        bookingQuestionId: answer.bookingQuestionId,
+        answerText: answer.answerText ?? null,
+        answerNumber: answer.answerNumber ?? null,
+        answerBoolean: answer.answerBoolean ?? null,
+        selectedOptionValue: answer.selectedOptionValue ?? null,
+      })),
     });
 
     return this.prisma.$transaction(async (transaction) => {
