@@ -12,11 +12,29 @@ import { NotificationOutboxClaimService } from './../src/notification/notificati
 import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('NotificationOutbox claim concurrency controls (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
   let claimService: NotificationOutboxClaimService;
 
+  const testEnvironment: Record<string, string> = {
+    JWT_SECRET: 'm9s1-e2e-only-jwt-secret-not-for-production',
+    MOBILE_ENCRYPTION_KEY_V1: Buffer.alloc(32, 91).toString('base64'),
+    MOBILE_LOOKUP_HMAC_KEY_V1: Buffer.alloc(32, 92).toString('base64'),
+    MOBILE_ENCRYPTION_ACTIVE_KEY_ID: 'm9s1-mobile-encryption-v1',
+    MOBILE_LOOKUP_ACTIVE_KEY_ID: 'm9s1-mobile-lookup-v1',
+    OTP_HMAC_KEY_V1: Buffer.alloc(32, 93).toString('base64'),
+    OTP_HMAC_ACTIVE_KEY_ID: 'm9s1-otp-hmac-v1',
+    PUBLIC_APP_BASE_URL: 'https://app.example.test',
+    WEB_APP_ORIGIN: 'https://app.example.test',
+  };
+  const originalEnvironment: Record<string, string | undefined> = {};
+
   beforeAll(async () => {
+    for (const [key, value] of Object.entries(testEnvironment)) {
+      originalEnvironment[key] = process.env[key];
+      process.env[key] = value;
+    }
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -28,7 +46,11 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
+    for (const [key, value] of Object.entries(originalEnvironment)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   });
 
   it('lets only one worker claim one due outbox', async () => {
