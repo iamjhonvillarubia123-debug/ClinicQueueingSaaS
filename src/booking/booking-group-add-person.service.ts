@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import {
   AppointmentStatus,
-  BookingGroupAccessTokenPurpose,
   ClinicDayStatus,
   CommandType,
   NotificationChannel,
@@ -21,11 +20,9 @@ import { NotificationPayloadService } from '../notification/notification-payload
 import { PatientBookingGroupAccessService } from '../patient-access/patient-booking-group-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueueNumberAllocationService } from '../queue/queue-number-allocation.service';
+import { QueueServingOrderPlacementService } from '../queue/queue-serving-order-placement.service';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
-import {
-  ActiveBookingQuestion,
-  BookingAnswerValidationService,
-} from './booking-answer-validation.service';
+import { BookingAnswerValidationService } from './booking-answer-validation.service';
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
 import { AddBookingGroupPersonDto } from './dto/add-booking-group-person.dto';
@@ -42,12 +39,6 @@ type LockedGroup = {
   controllingMobileNumberEncrypted: string | null;
 };
 
-type ServiceSnapshot = {
-  id: string;
-  name: string;
-  durationMinutes: number;
-};
-
 @Injectable()
 export class BookingGroupAddPersonService {
   constructor(
@@ -58,6 +49,7 @@ export class BookingGroupAddPersonService {
     private readonly admission: BookingConfirmationAdmissionService,
     private readonly availability: PublicServiceDateAvailabilityService,
     private readonly queueNumbers: QueueNumberAllocationService,
+    private readonly servingOrder: QueueServingOrderPlacementService,
     private readonly bookingReferenceGenerator: BookingReferenceGenerator,
     private readonly notificationPayload: NotificationPayloadService,
   ) {}
@@ -192,11 +184,11 @@ export class BookingGroupAddPersonService {
         group.practiceLocationId,
         group.serviceDate,
       );
-      const servingOrderKey = await this.nextProtectedGroupTailOrder(
+      const servingOrderKey = await this.servingOrder.calculateGroupTailPlacement(
         transaction,
-        group.id,
         group.practiceLocationId,
         group.serviceDate,
+        group.id,
       );
 
       const appointment = await transaction.appointment.create({
@@ -363,16 +355,8 @@ export class BookingGroupAddPersonService {
       throw new ConflictException('Add Person is currently unavailable.');
     }
 
-    const preparedAnswers = this.answers.prepareAnswers(
-      questions as ActiveBookingQuestion[],
-      dto.answers,
-    );
-    if (
-      !this.answers.requiredAnswersComplete(
-        questions as ActiveBookingQuestion[],
-        preparedAnswers,
-      )
-    ) {
+    const preparedAnswers = this.answers.prepareAnswers(questions, dto.answers);
+    if (!this.answers.requiredAnswersComplete(questions, preparedAnswers)) {
       throw new ConflictException(
         'Required BookingQuestions are incomplete for Add Person.',
       );
@@ -388,15 +372,14 @@ export class BookingGroupAddPersonService {
     const estimatedServiceMinutes =
       maximum === null ? selectedMinutes : Math.min(selectedMinutes, maximum);
 
-    if (!Number.isInteger(estimatedServiceMinutes) || estimatedServiceMinutes < 1) {
+    if (
+      !Number.isInteger(estimatedServiceMinutes) ||
+      estimatedServiceMinutes < 1
+    ) {
       throw new ConflictException('Add Person duration is invalid.');
     }
 
-    return {
-      services: services as ServiceSnapshot[],
-      estimatedServiceMinutes,
-      preparedAnswers,
-    };
+    return { services, estimatedServiceMinutes, preparedAnswers };
   }
 
   private async acquireQueueScopeLock(
@@ -454,45 +437,5 @@ export class BookingGroupAddPersonService {
         'Add Person is unavailable after START CLINIC.',
       );
     }
-  }
-
-  private async nextProtectedGroupTailOrder(
-    transaction: TransactionClient,
-    bookingGroupId: string,
-    practiceLocationId: string,
-    serviceDate: Date,
-  ): Promise<Prisma.Decimal> {
-    const groupTailRows = await transaction.$queryRaw<
-      Array<{ groupTail: Prisma.Decimal | null }>
-    >(Prisma.sql`
-      SELECT MAX("servingOrderKey") AS "groupTail"
-      FROM "Appointment"
-      WHERE "bookingGroupId" = ${bookingGroupId}
-        AND "status" = 'WAITING'::"AppointmentStatus"
-        AND "servingOrderKey" IS NOT NULL
-    `);
-    const groupTail = groupTailRows[0]?.groupTail;
-    if (!groupTail) {
-      throw new ConflictException('Add Person is currently unavailable.');
-    }
-
-    const nextRows = await transaction.$queryRaw<
-      Array<{ nextOrder: Prisma.Decimal | null }>
-    >(Prisma.sql`
-      SELECT "servingOrderKey" AS "nextOrder"
-      FROM "Appointment"
-      WHERE "practiceLocationId" = ${practiceLocationId}
-        AND "serviceDate" = ${serviceDate}
-        AND "status" = 'WAITING'::"AppointmentStatus"
-        AND "servingOrderKey" > ${groupTail}
-      ORDER BY "servingOrderKey" ASC, "queueNumber" ASC, "id" ASC
-      LIMIT 1
-      FOR UPDATE
-    `);
-    const nextOrder = nextRows[0]?.nextOrder;
-    if (!nextOrder) {
-      return groupTail.plus(1);
-    }
-    return groupTail.plus(nextOrder).dividedBy(2);
   }
 }
