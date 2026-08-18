@@ -59,12 +59,26 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
     const deliveryIdentityKey = createHash('sha256')
       .update(`m9s1|${scope}`, 'utf8')
       .digest('hex');
+    const command = await prisma.commandIdempotency.create({
+      data: {
+        idempotencyKey: `m9s1-${scope}`,
+        commandType: 'DOCTOR_PERMANENT_DELETE',
+        requestHash: deliveryIdentityKey,
+        status: 'COMPLETED',
+        responseCode: 200,
+        responseBody: {},
+        completedAt: now,
+        expiresAt: new Date(now.getTime() + 60_000),
+      },
+    });
     const outbox = await prisma.notificationOutbox.create({
       data: {
         deliveryIdentityKey,
         notificationType: NotificationType.SECURITY_NOTIFICATION,
         channel: NotificationChannel.SMS,
         status: NotificationOutboxStatus.PENDING,
+        practiceLocationId: null,
+        commandIdempotencyId: command.id,
         recipientMobileEncrypted: `enc-${scope}`,
         recipientEmailEncrypted: null,
         messageBodyEncrypted: `message-${scope}`,
