@@ -160,7 +160,7 @@ describe('BookingGroupRecoveryService', () => {
   it('returns the committed logical result on compatible replay without rotating again', async () => {
     const transaction = {};
     const { service, idempotency } = buildService(transaction);
-    const replay: Exclude<ReplayRecord, null> = Object.create(null);
+    const replay = Object.create(null) as Exclude<ReplayRecord, null>;
     replay.resultBookingGroupId = 'group-1';
     replay.resultBookingGroupAccessTokenId = 'token-record-1';
     idempotency.findReplayMock.mockResolvedValue(replay);
