@@ -160,7 +160,9 @@ export class PatientAppointmentDashboardService {
     return appointment;
   }
 
-  private assertOnlineServiceAvailable(appointment: DashboardAppointment): void {
+  private assertOnlineServiceAvailable(
+    appointment: DashboardAppointment,
+  ): void {
     const now = new Date();
     const eligible =
       appointment.practiceLocationLifecycleStatus ===
