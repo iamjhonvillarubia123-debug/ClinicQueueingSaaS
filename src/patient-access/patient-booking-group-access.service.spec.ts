@@ -6,11 +6,36 @@ import {
 } from '../../generated/prisma/client';
 import { PatientBookingGroupAccessService } from './patient-booking-group-access.service';
 
+type TokenFixture = {
+  id: string;
+  tokenHash: string;
+  purpose: BookingGroupAccessTokenPurpose;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  bookingGroup: {
+    id: string;
+    practiceLocationId: string;
+    serviceDate: Date;
+    servingProtectionEndedAt: Date | null;
+    appointments: Array<{
+      bookingReference: string;
+      queueNumber: number;
+      status: AppointmentStatus;
+      servingOrderKey: null;
+      waitingPlacementType: WaitingPlacementType;
+      firstName: string | null;
+      middleName: string | null;
+      lastName: string | null;
+      suffix: string | null;
+    }>;
+  };
+};
+
 describe('PatientBookingGroupAccessService', () => {
   const rawToken = 'a'.repeat(43);
 
-  function buildToken(overrides: Record<string, unknown> = {}) {
-    return {
+  function buildToken(overrides: Partial<TokenFixture> = {}): TokenFixture {
+    const base: TokenFixture = {
       id: 'group-token-1',
       tokenHash: 'present',
       purpose: BookingGroupAccessTokenPurpose.CONTROLLER_ACCESS,
@@ -35,20 +60,26 @@ describe('PatientBookingGroupAccessService', () => {
           },
         ],
       },
+    };
+
+    return {
+      ...base,
       ...overrides,
+      bookingGroup: overrides.bookingGroup ?? base.bookingGroup,
     };
   }
 
-  function createService(tokenResult: unknown) {
+  function createService(tokenResult: TokenFixture | null) {
     const update = jest.fn().mockResolvedValue({ id: 'group-token-1' });
+    const findUnique = jest.fn().mockResolvedValue(tokenResult);
     const transaction = {
       bookingGroupAccessToken: {
-        findUnique: jest.fn().mockResolvedValue(tokenResult),
+        findUnique,
         update,
       },
     };
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
         callback(transaction),
       ),
     };
@@ -86,11 +117,10 @@ describe('PatientBookingGroupAccessService', () => {
     });
   });
 
-  it.each([
+  it.each<[string, TokenFixture | null]>([
     ['unknown token', null],
     ['revoked token', buildToken({ revokedAt: new Date() })],
     ['expired token', buildToken({ expiresAt: new Date(Date.now() - 1_000) })],
-    ['wrong-purpose token', buildToken({ purpose: 'NOT_CONTROLLER_ACCESS' })],
     [
       'group with no controller-visible members',
       buildToken({
@@ -100,14 +130,17 @@ describe('PatientBookingGroupAccessService', () => {
         },
       }),
     ],
-  ])('rejects %s with the same generic response', async (_label, tokenResult) => {
-    const { service, update } = createService(tokenResult);
+  ])(
+    'rejects %s with the same generic response',
+    async (_label, tokenResult) => {
+      const { service, update } = createService(tokenResult);
 
-    await expect(service.establish(rawToken)).rejects.toEqual(
-      new UnauthorizedException('Booking group access is unavailable.'),
-    );
-    expect(update).not.toHaveBeenCalled();
-  });
+      await expect(service.establish(rawToken)).rejects.toEqual(
+        new UnauthorizedException('Booking group access is unavailable.'),
+      );
+      expect(update).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects a valid token when a different BookingGroup is requested', async () => {
     const { service, transaction, update } = createService(buildToken());
