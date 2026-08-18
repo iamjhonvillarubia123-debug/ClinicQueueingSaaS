@@ -49,8 +49,7 @@ export class PatientBookingGroupAccessController {
     return {
       practiceLocationId: access.bookingGroup.practiceLocationId,
       serviceDate: access.bookingGroup.serviceDate,
-      servingProtectionEndedAt:
-        access.bookingGroup.servingProtectionEndedAt,
+      servingProtectionEndedAt: access.bookingGroup.servingProtectionEndedAt,
       visibleMemberCount: access.bookingGroup.members.length,
       members: access.bookingGroup.members,
     };
