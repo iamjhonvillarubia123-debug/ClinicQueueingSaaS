@@ -73,7 +73,7 @@ describe('BookingGroupRecoveryService', () => {
         mobile as never,
         otpGenerator as never,
         otpService as never,
-        idempotency as never,
+        idempotency,
       ),
       idempotency,
       mobile,
@@ -118,8 +118,8 @@ describe('BookingGroupRecoveryService', () => {
     );
     expect(result.recoveryAttemptId).toBe('attempt-1');
     expect(createAttempt).toHaveBeenCalledTimes(1);
-    const firstCreateCall = createAttempt.mock.calls.at(0);
-    expect(firstCreateCall?.[0].data.bookingGroupId).toBeNull();
+    const [createAttemptArgs] = createAttempt.mock.calls[0] ?? [];
+    expect(createAttemptArgs?.data.bookingGroupId).toBeNull();
   });
 
   it('returns the committed logical result on compatible replay without rotating again', async () => {
@@ -210,20 +210,18 @@ describe('BookingGroupRecoveryService', () => {
     expect(updateMany).toHaveBeenCalledTimes(1);
     expect(createToken).toHaveBeenCalledTimes(1);
     expect(updateOtp).toHaveBeenCalledTimes(1);
-    const firstOtpUpdateCall = updateOtp.mock.calls.at(0);
-    expect(firstOtpUpdateCall?.[0].where).toEqual({ id: 'otp-1' });
-    expect(firstOtpUpdateCall?.[0].data.consumedAt).toBeInstanceOf(Date);
+    const [updateOtpArgs] = updateOtp.mock.calls[0] ?? [];
+    expect(updateOtpArgs?.where).toEqual({ id: 'otp-1' });
+    expect(updateOtpArgs?.data.consumedAt).toBeInstanceOf(Date);
 
     expect(createCommand).toHaveBeenCalledTimes(1);
-    const firstCommandCreateCall = createCommand.mock.calls.at(0);
-    expect(firstCommandCreateCall?.[0].data.commandType).toBe(
+    const [createCommandArgs] = createCommand.mock.calls[0] ?? [];
+    expect(createCommandArgs?.data.commandType).toBe(
       CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
     );
-    expect(firstCommandCreateCall?.[0].data.resultBookingGroupId).toBe(
-      'group-1',
+    expect(createCommandArgs?.data.resultBookingGroupId).toBe('group-1');
+    expect(createCommandArgs?.data.resultBookingGroupAccessTokenId).toBe(
+      'replacement-token-record',
     );
-    expect(
-      firstCommandCreateCall?.[0].data.resultBookingGroupAccessTokenId,
-    ).toBe('replacement-token-record');
   });
 });
