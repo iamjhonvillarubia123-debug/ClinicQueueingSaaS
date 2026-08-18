@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOG_RETENTION_MS = 30 * DAY_MS;
 
-type ProviderAttemptResult = {
+export type ProviderAttemptResult = {
   outcome: NotificationAttemptOutcome;
   providerName?: string | null;
   providerReference?: string | null;
@@ -23,7 +23,7 @@ type ProviderAttemptResult = {
   nextAttemptAt?: Date | null;
 };
 
-type FinalizedAttempt = {
+export type FinalizedAttempt = {
   notificationLogId: string;
   attemptNumber: number;
   outboxStatus: NotificationOutboxStatus;
