@@ -2,6 +2,7 @@ import {
   BookingGroupRecoveryAttemptStatus,
   CommandType,
 } from '../../generated/prisma/client';
+import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
 type ReplayRecord = {
@@ -26,6 +27,59 @@ type CreateCommandArgs = {
   };
 };
 
+class TestCommandIdempotencyService extends CommandIdempotencyService {
+  readonly normalizeKeyMock = jest.fn(
+    (value: string | undefined): string => value ?? '',
+  );
+  readonly deriveIdentityMock = jest.fn().mockReturnValue('command-identity');
+  readonly fingerprintMock = jest.fn().mockReturnValue('request-fingerprint');
+  readonly acquireCommandLockMock = jest.fn().mockResolvedValue(undefined);
+  readonly findReplayMock = jest
+    .fn<Promise<ReplayRecord | null>, [unknown, string, string]>()
+    .mockResolvedValue(null);
+  readonly completionTimesMock = jest.fn().mockReturnValue({
+    completedAt: new Date('2026-08-18T05:00:00.000Z'),
+    expiresAt: new Date('2026-08-25T05:00:00.000Z'),
+  });
+
+  override normalizeKey(value: string | undefined): string {
+    return this.normalizeKeyMock(value);
+  }
+
+  override deriveIdentity(input: Parameters<CommandIdempotencyService['deriveIdentity']>[0]): string {
+    return this.deriveIdentityMock(input);
+  }
+
+  override fingerprint(
+    input: Parameters<CommandIdempotencyService['fingerprint']>[0],
+  ): string {
+    return this.fingerprintMock(input);
+  }
+
+  override acquireCommandLock(
+    transaction: Parameters<CommandIdempotencyService['acquireCommandLock']>[0],
+    commandIdentityKey: string,
+  ): Promise<void> {
+    return this.acquireCommandLockMock(transaction, commandIdentityKey);
+  }
+
+  override findReplay(
+    transaction: Parameters<CommandIdempotencyService['findReplay']>[0],
+    commandIdentityKey: string,
+    requestFingerprint: string,
+  ) {
+    return this.findReplayMock(
+      transaction,
+      commandIdentityKey,
+      requestFingerprint,
+    );
+  }
+
+  override completionTimes(now?: Date) {
+    return this.completionTimesMock(now);
+  }
+}
+
 describe('BookingGroupRecoveryService', () => {
   const protectedMobile = {
     encrypted: 'encrypted-mobile',
@@ -45,27 +99,7 @@ describe('BookingGroupRecoveryService', () => {
       hashOtp: jest.fn().mockReturnValue('otp-hash'),
       verifyOtpHash: jest.fn().mockReturnValue(true),
     };
-    const normalizeKey = jest.fn(
-      (value: string | undefined): string => value ?? '',
-    );
-    const deriveIdentity = jest.fn().mockReturnValue('command-identity');
-    const fingerprint = jest.fn().mockReturnValue('request-fingerprint');
-    const acquireCommandLock = jest.fn().mockResolvedValue(undefined);
-    const findReplay = jest
-      .fn<Promise<ReplayRecord | null>, [unknown, string, string]>()
-      .mockResolvedValue(null);
-    const completionTimes = jest.fn().mockReturnValue({
-      completedAt: new Date('2026-08-18T05:00:00.000Z'),
-      expiresAt: new Date('2026-08-25T05:00:00.000Z'),
-    });
-    const idempotency = {
-      normalizeKey,
-      deriveIdentity,
-      fingerprint,
-      acquireCommandLock,
-      findReplay,
-      completionTimes,
-    };
+    const idempotency = new TestCommandIdempotencyService();
 
     return {
       service: new BookingGroupRecoveryService(
@@ -73,7 +107,7 @@ describe('BookingGroupRecoveryService', () => {
         mobile as never,
         otpGenerator as never,
         otpService as never,
-        idempotency as never,
+        idempotency,
       ),
       idempotency,
       mobile,
@@ -125,7 +159,7 @@ describe('BookingGroupRecoveryService', () => {
   it('returns the committed logical result on compatible replay without rotating again', async () => {
     const transaction = {};
     const { service, idempotency } = buildService(transaction);
-    idempotency.findReplay.mockResolvedValue({
+    idempotency.findReplayMock.mockResolvedValue({
       resultBookingGroupId: 'group-1',
       resultBookingGroupAccessTokenId: 'token-record-1',
     });
@@ -138,7 +172,7 @@ describe('BookingGroupRecoveryService', () => {
       replacementTokenRecordId: 'token-record-1',
       rawToken: null,
     });
-    expect(idempotency.deriveIdentity).toHaveBeenCalledWith({
+    expect(idempotency.deriveIdentityMock).toHaveBeenCalledWith({
       idempotencyKey: 'idem-1',
       commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
       scope: { bookingGroupRecoveryAttemptId: 'attempt-1' },
