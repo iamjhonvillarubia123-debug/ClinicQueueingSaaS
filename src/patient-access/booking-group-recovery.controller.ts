@@ -50,7 +50,7 @@ export class BookingGroupRecoveryController {
       idempotencyKey,
     );
 
-    if (result.rawToken && result.expiresAt) {
+    if ('expiresAt' in result && result.rawToken && result.expiresAt) {
       response.cookie(PATIENT_BOOKING_GROUP_ACCESS_COOKIE, result.rawToken, {
         httpOnly: true,
         secure: true,
@@ -63,7 +63,9 @@ export class BookingGroupRecoveryController {
     return {
       replayed: result.replayed,
       accessRestored: true,
-      credentialTransport: result.rawToken ? 'HTTP_ONLY_COOKIE' : 'ALREADY_ISSUED',
+      credentialTransport: result.rawToken
+        ? 'HTTP_ONLY_COOKIE'
+        : 'ALREADY_ISSUED',
     };
   }
 }
