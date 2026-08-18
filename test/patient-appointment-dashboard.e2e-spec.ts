@@ -215,7 +215,7 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
     await prisma.doctorSubscriptionEntitlement.update({
       where: { doctorFinancialAccountId: fixture.financialAccountId },
       data: {
-        paidThrough: new Date(Date.now() - 2 * DAY_MS),
+        paidThrough: new Date(Date.now() - 8 * DAY_MS),
         graceEndsAt: new Date(Date.now() - DAY_MS),
       },
     });
@@ -289,12 +289,14 @@ describe('Patient Appointment dashboard authorization controls (e2e)', () => {
       },
     });
 
+    const clinicStartedAt = new Date();
     await prisma.clinicDay.create({
       data: {
         practiceLocationId: location.id,
         serviceDate,
         status: ClinicDayStatus.STARTED,
-        startedAt: new Date(),
+        createdAt: clinicStartedAt,
+        startedAt: clinicStartedAt,
       },
     });
 
