@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createHash, randomUUID } from 'crypto';
 import { App } from 'supertest/types';
 import {
+  CommandType,
   NotificationChannel,
   NotificationOutboxStatus,
   NotificationType,
@@ -62,7 +63,7 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
     const command = await prisma.commandIdempotency.create({
       data: {
         idempotencyKey: `m9s1-${scope}`,
-        commandType: 'DOCTOR_PERMANENT_DELETE',
+        commandType: CommandType.DOCTOR_DISABLE_ACCOUNT,
         requestHash: deliveryIdentityKey,
         status: 'COMPLETED',
         responseCode: 200,
