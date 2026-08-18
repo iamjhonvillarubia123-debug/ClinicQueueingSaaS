@@ -23,7 +23,10 @@ type UpdateArgs = {
 type MockTransaction = {
   $queryRaw: jest.Mock<Promise<OutboxRow[]>, unknown[]>;
   notificationOutbox: {
-    update: jest.Mock<Promise<{ status: NotificationOutboxStatus }>, [UpdateArgs]>;
+    update: jest.Mock<
+      Promise<{ status: NotificationOutboxStatus }>,
+      [UpdateArgs]
+    >;
   };
 };
 
