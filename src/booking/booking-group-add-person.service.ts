@@ -363,10 +363,7 @@ export class BookingGroupAddPersonService {
       throw new ConflictException('Add Person is currently unavailable.');
     }
 
-    const preparedAnswers = this.answers.prepareAnswers(
-      questions,
-      dto.answers,
-    );
+    const preparedAnswers = this.answers.prepareAnswers(questions, dto.answers);
     if (!this.answers.requiredAnswersComplete(questions, preparedAnswers)) {
       throw new ConflictException(
         'Required BookingQuestions are incomplete for Add Person.',
