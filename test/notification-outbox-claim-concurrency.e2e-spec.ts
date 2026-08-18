@@ -7,6 +7,7 @@ import {
   NotificationChannel,
   NotificationOutboxStatus,
   NotificationType,
+  UserRole,
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
 import { NotificationOutboxClaimService } from './../src/notification/notification-outbox-claim.service';
@@ -63,12 +64,24 @@ describe('NotificationOutbox claim concurrency controls (e2e)', () => {
     const commandIdentityKey = createHash('sha256')
       .update(`m9s1-command|${scope}`, 'utf8')
       .digest('hex');
+    const doctor = await prisma.user.create({
+      data: {
+        email: `m9s1-${scope}@example.test`,
+        firstName: 'M9S1',
+        lastName: 'Doctor',
+        mobileNumber: `+63917${scope.slice(0, 7)}`,
+        passwordHash: 'm9s1-e2e-fixture-not-a-real-password-hash',
+        role: UserRole.DOCTOR,
+      },
+    });
     const command = await prisma.commandIdempotency.create({
       data: {
         idempotencyKey: `m9s1-${scope}`,
         commandIdentityKey,
         commandType: CommandType.DOCTOR_DISABLE_ACCOUNT,
         requestFingerprint: deliveryIdentityKey,
+        actorUserId: doctor.id,
+        accountUserId: doctor.id,
         completedAt: now,
         expiresAt: new Date(now.getTime() + 60_000),
         createdAt: now,
