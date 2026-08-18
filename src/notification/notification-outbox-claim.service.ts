@@ -59,7 +59,7 @@ export class NotificationOutboxClaimService {
       const candidate = candidates[0];
       if (!candidate) return null;
 
-      return transaction.notificationOutbox.update({
+      const claimed = await transaction.notificationOutbox.update({
         where: { id: candidate.id },
         data: {
           status: NotificationOutboxStatus.PROCESSING,
@@ -76,11 +76,15 @@ export class NotificationOutboxClaimService {
           messageBodyEncrypted: true,
           providerIdempotencyKey: true,
           attemptCount: true,
-          processingStartedAt: true,
-          leaseExpiresAt: true,
-          processingWorkerId: true,
         },
       });
+
+      return {
+        ...claimed,
+        processingStartedAt: now,
+        leaseExpiresAt,
+        processingWorkerId: normalizedWorkerId,
+      };
     });
   }
 }
