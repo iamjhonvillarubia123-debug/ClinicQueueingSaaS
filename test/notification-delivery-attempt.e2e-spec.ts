@@ -143,7 +143,11 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
     expect(afterRetry.nextAttemptAt.getTime()).toBe(retryAt.getTime());
 
     const secondNow = new Date(retryAt.getTime() + 1_000);
-    const secondClaim = await claimService.claimNext(workerId, 60_000, secondNow);
+    const secondClaim = await claimService.claimNext(
+      workerId,
+      60_000,
+      secondNow,
+    );
     expect(secondClaim?.id).toBe(outbox.id);
 
     await attemptService.finalizeAttempt(
