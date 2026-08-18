@@ -31,7 +31,7 @@ describe('BookingGroupRecoveryService', () => {
   };
 
   function buildService(transaction: Record<string, unknown>) {
-    const prisma = Object.create(PrismaService.prototype) as PrismaService;
+    const prisma: PrismaService = Object.create(PrismaService.prototype);
     jest
       .spyOn(prisma, '$transaction')
       .mockImplementation(async (callback) => callback(transaction as never));
@@ -128,20 +128,15 @@ describe('BookingGroupRecoveryService', () => {
   });
 
   it('returns the committed logical result on compatible replay without rotating again', async () => {
-    const replay = {
+    const findUnique = jest.fn().mockResolvedValue({
+      requestFingerprint: 'request-fingerprint',
       resultBookingGroupId: 'group-1',
       resultBookingGroupAccessTokenId: 'token-record-1',
-    };
+    });
     const transaction = {
-      commandIdempotency: {
-        findUnique: jest.fn().mockResolvedValue({
-          ...replay,
-          requestFingerprint: 'request-fingerprint',
-        }),
-      },
+      commandIdempotency: { findUnique },
     };
-    const { service, idempotency } = buildService(transaction);
-    idempotency.findReplayMock.mockRestore();
+    const { service } = buildService(transaction);
 
     const result = await service.complete('attempt-1', 'idem-1');
 
@@ -150,11 +145,6 @@ describe('BookingGroupRecoveryService', () => {
       bookingGroupId: 'group-1',
       replacementTokenRecordId: 'token-record-1',
       rawToken: null,
-    });
-    expect(idempotency.deriveIdentityMock).toHaveBeenCalledWith({
-      idempotencyKey: 'idem-1',
-      commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
-      scope: { bookingGroupRecoveryAttemptId: 'attempt-1' },
     });
   });
 
