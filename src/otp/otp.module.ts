@@ -8,6 +8,6 @@ import { OtpService } from './otp.service';
 @Module({
   imports: [ConfigModule, PrismaModule],
   providers: [OtpGenerator, OtpService],
-  exports: [OtpService],
+  exports: [OtpGenerator, OtpService],
 })
 export class OtpModule {}
