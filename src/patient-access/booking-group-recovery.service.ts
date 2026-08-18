@@ -119,7 +119,12 @@ export class BookingGroupRecoveryService {
       const attempt = await this.lockAttempt(transaction, recoveryAttemptId);
       this.assertPendingAttempt(attempt, now);
       if (!attempt.mobileNumberHash) this.fail();
-      await this.issueOtp(transaction, attempt.id, attempt.mobileNumberHash, now);
+      await this.issueOtp(
+        transaction,
+        attempt.id,
+        attempt.mobileNumberHash,
+        now,
+      );
       return { message: GENERIC_RECOVERY_MESSAGE, recoveryAttemptId };
     });
   }
@@ -127,7 +132,10 @@ export class BookingGroupRecoveryService {
   async verify(dto: VerifyBookingGroupRecoveryOtpDto) {
     const now = new Date();
     return this.prisma.$transaction(async (transaction) => {
-      const attempt = await this.lockAttempt(transaction, dto.recoveryAttemptId);
+      const attempt = await this.lockAttempt(
+        transaction,
+        dto.recoveryAttemptId,
+      );
       this.assertPendingAttempt(attempt, now);
       const activeContextKey = this.activeContextKey(attempt.id);
       const rows = await transaction.$queryRaw<LockedRecoveryOtp[]>(Prisma.sql`
@@ -161,7 +169,11 @@ export class BookingGroupRecoveryService {
         this.fail();
       }
 
-      const failures = await this.contextFailureCount(transaction, attempt.id, now);
+      const failures = await this.contextFailureCount(
+        transaction,
+        attempt.id,
+        now,
+      );
       if (failures >= MAX_FAILED_SUBMISSIONS_PER_CONTEXT) this.fail();
 
       const matches = this.otpService.verifyOtpHash(
@@ -201,7 +213,10 @@ export class BookingGroupRecoveryService {
     });
   }
 
-  async complete(recoveryAttemptId: string, idempotencyKey: string | undefined) {
+  async complete(
+    recoveryAttemptId: string,
+    idempotencyKey: string | undefined,
+  ) {
     const key = this.idempotency.normalizeKey(idempotencyKey);
     const commandIdentityKey = this.idempotency.deriveIdentity({
       idempotencyKey: key,
@@ -213,7 +228,10 @@ export class BookingGroupRecoveryService {
     });
 
     return this.prisma.$transaction(async (transaction) => {
-      await this.idempotency.acquireCommandLock(transaction, commandIdentityKey);
+      await this.idempotency.acquireCommandLock(
+        transaction,
+        commandIdentityKey,
+      );
       const replay = await this.idempotency.findReplay(
         transaction,
         commandIdentityKey,
@@ -277,7 +295,9 @@ export class BookingGroupRecoveryService {
         orderBy: { verifiedAt: 'desc' },
         select: { id: true, expiresAt: true },
       });
-      if (!verifiedOtp || verifiedOtp.expiresAt.getTime() <= now.getTime()) this.fail();
+      if (!verifiedOtp || verifiedOtp.expiresAt.getTime() <= now.getTime()) {
+        this.fail();
+      }
 
       await transaction.bookingGroupAccessToken.updateMany({
         where: {
@@ -290,7 +310,9 @@ export class BookingGroupRecoveryService {
       });
 
       const rawToken = randomBytes(TOKEN_BYTES).toString('base64url');
-      const tokenHash = createHash('sha256').update(rawToken, 'utf8').digest('hex');
+      const tokenHash = createHash('sha256')
+        .update(rawToken, 'utf8')
+        .digest('hex');
       const replacement = await transaction.bookingGroupAccessToken.create({
         data: {
           bookingGroupId: group.id,
@@ -357,7 +379,10 @@ export class BookingGroupRecoveryService {
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
-    if (latest && now.getTime() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS) {
+    if (
+      latest &&
+      now.getTime() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS
+    ) {
       throw new BadRequestException(GENERIC_FAILURE);
     }
     const challengeCount = await transaction.otpVerification.count({
@@ -421,7 +446,9 @@ export class BookingGroupRecoveryService {
     transaction: Prisma.TransactionClient,
     recoveryAttemptId: string,
   ): Promise<LockedRecoveryAttempt> {
-    const rows = await transaction.$queryRaw<LockedRecoveryAttempt[]>(Prisma.sql`
+    const rows = await transaction.$queryRaw<
+      LockedRecoveryAttempt[]
+    >(Prisma.sql`
       SELECT
         "id", "practiceLocationId", "serviceDate", "mobileNumberHash",
         "bookingGroupId", "status", "expiresAt", "completedAt"
@@ -432,7 +459,10 @@ export class BookingGroupRecoveryService {
     return rows[0] ?? this.fail();
   }
 
-  private assertPendingAttempt(attempt: LockedRecoveryAttempt, now: Date): void {
+  private assertPendingAttempt(
+    attempt: LockedRecoveryAttempt,
+    now: Date,
+  ): void {
     if (
       attempt.status !== BookingGroupRecoveryAttemptStatus.PENDING_OTP ||
       attempt.completedAt ||
