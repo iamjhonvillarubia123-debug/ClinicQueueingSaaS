@@ -5,10 +5,9 @@ import {
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
-type ReplayRecord = {
-  resultBookingGroupId: string | null;
-  resultBookingGroupAccessTokenId: string | null;
-};
+type ReplayRecord = Awaited<
+  ReturnType<CommandIdempotencyService['findReplay']>
+>;
 
 type CreateAttemptArgs = {
   data: { bookingGroupId: string | null };
@@ -35,7 +34,10 @@ class TestCommandIdempotencyService extends CommandIdempotencyService {
   readonly fingerprintMock = jest.fn().mockReturnValue('request-fingerprint');
   readonly acquireCommandLockMock = jest.fn().mockResolvedValue(undefined);
   readonly findReplayMock = jest
-    .fn<Promise<ReplayRecord | null>, [unknown, string, string]>()
+    .fn<
+      Promise<ReplayRecord>,
+      Parameters<CommandIdempotencyService['findReplay']>
+    >()
     .mockResolvedValue(null);
   readonly completionTimesMock = jest.fn().mockReturnValue({
     completedAt: new Date('2026-08-18T05:00:00.000Z'),
@@ -46,7 +48,9 @@ class TestCommandIdempotencyService extends CommandIdempotencyService {
     return this.normalizeKeyMock(value);
   }
 
-  override deriveIdentity(input: Parameters<CommandIdempotencyService['deriveIdentity']>[0]): string {
+  override deriveIdentity(
+    input: Parameters<CommandIdempotencyService['deriveIdentity']>[0],
+  ): string {
     return this.deriveIdentityMock(input);
   }
 
@@ -67,7 +71,7 @@ class TestCommandIdempotencyService extends CommandIdempotencyService {
     transaction: Parameters<CommandIdempotencyService['findReplay']>[0],
     commandIdentityKey: string,
     requestFingerprint: string,
-  ) {
+  ): ReturnType<CommandIdempotencyService['findReplay']> {
     return this.findReplayMock(
       transaction,
       commandIdentityKey,
@@ -159,10 +163,30 @@ describe('BookingGroupRecoveryService', () => {
   it('returns the committed logical result on compatible replay without rotating again', async () => {
     const transaction = {};
     const { service, idempotency } = buildService(transaction);
-    idempotency.findReplayMock.mockResolvedValue({
+    const replay = {
+      id: 'command-1',
+      commandIdentityKey: 'command-identity',
+      idempotencyKey: 'idem-1',
+      commandType: CommandType.BOOKING_GROUP_RECOVERY_COMPLETE,
+      requestFingerprint: 'request-fingerprint',
+      practiceLocationId: null,
+      serviceDate: null,
+      clinicDayId: null,
+      appointmentId: null,
+      bookingGroupId: 'group-1',
+      bookingDraftId: null,
+      bookingGroupRecoveryAttemptId: 'attempt-1',
+      resultAppointmentId: null,
       resultBookingGroupId: 'group-1',
+      resultBookingAccessTokenId: null,
       resultBookingGroupAccessTokenId: 'token-record-1',
-    });
+      resultQueueNumber: null,
+      resultClinicDayStatus: null,
+      completedAt: new Date('2026-08-18T05:00:00.000Z'),
+      expiresAt: new Date('2026-08-25T05:00:00.000Z'),
+      createdAt: new Date('2026-08-18T05:00:00.000Z'),
+    } satisfies Exclude<ReplayRecord, null>;
+    idempotency.findReplayMock.mockResolvedValue(replay);
 
     const result = await service.complete('attempt-1', 'idem-1');
 
