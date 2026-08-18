@@ -17,6 +17,8 @@ import { BookingDraftCleanupService } from './booking-draft-cleanup.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingGroupAccessTokenIssuerService } from './booking-group-access-token-issuer.service';
+import { BookingGroupAddPersonController } from './booking-group-add-person.controller';
+import { BookingGroupAddPersonService } from './booking-group-add-person.service';
 import { BookingGroupMemberCancellationController } from './booking-group-member-cancellation.controller';
 import { BookingGroupMemberCancellationService } from './booking-group-member-cancellation.service';
 import { BookingReferenceGenerator } from './booking-reference.generator';
@@ -34,7 +36,11 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     PatientAccessModule,
     QueueModule,
   ],
-  controllers: [BookingController, BookingGroupMemberCancellationController],
+  controllers: [
+    BookingController,
+    BookingGroupAddPersonController,
+    BookingGroupMemberCancellationController,
+  ],
   providers: [
     BookingService,
     BookingConfigurationService,
@@ -47,6 +53,7 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     BookingConfirmationAdmissionService,
     BookingAccessTokenIssuerService,
     BookingGroupAccessTokenIssuerService,
+    BookingGroupAddPersonService,
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
@@ -57,6 +64,7 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     BookingConfirmationAdmissionService,
     BookingAccessTokenIssuerService,
     BookingGroupAccessTokenIssuerService,
+    BookingGroupAddPersonService,
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
