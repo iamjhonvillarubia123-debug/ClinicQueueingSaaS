@@ -4,7 +4,10 @@ import { NotificationOtpPayloadPurgeService } from './notification-otp-payload-p
 type MockTransaction = {
   $queryRaw: jest.Mock<Promise<Array<{ id: string }>>, unknown[]>;
   notificationOutbox: {
-    updateMany: jest.Mock<Promise<{ count: number }>, [Record<string, unknown>]>;
+    updateMany: jest.Mock<
+      Promise<{ count: number }>,
+      [Record<string, unknown>]
+    >;
   };
 };
 
