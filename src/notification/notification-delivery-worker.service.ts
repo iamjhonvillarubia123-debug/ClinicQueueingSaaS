@@ -88,6 +88,7 @@ export class NotificationDeliveryWorkerService {
       this.providerContractService.assertSubmissionResult(
         adapter,
         providerResult,
+        [recipient, messageBody],
       );
       result = providerResult;
     } catch {
