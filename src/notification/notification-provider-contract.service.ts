@@ -128,7 +128,16 @@ export class NotificationProviderContractService {
       throw new BadRequestException(`${fieldName} is required.`);
     }
 
-    if (!value.trim() || value.length > maxLength || /[\r\n\u0000]/u.test(value)) {
+    const hasUnsafeControlCharacter = [...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return code === 0 || code === 10 || code === 13;
+    });
+
+    if (
+      !value.trim() ||
+      value.length > maxLength ||
+      hasUnsafeControlCharacter
+    ) {
       throw new BadRequestException(`${fieldName} is invalid.`);
     }
   }
