@@ -8,6 +8,7 @@ import { PracticeLocationModule } from './practice-location/practice-location.mo
 import { PracticeStaffModule } from './practice-staff/practice-staff.module';
 import { PatientModule } from './patient/patient.module';
 import { BookingModule } from './booking/booking.module';
+import { NotificationModule } from './notification/notification.module';
 import { QueueModule } from './queue/queue.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { SecretaryModule } from './secretary/secretary.module';
@@ -21,6 +22,7 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     }),
     AuthModule,
     PrismaModule,
+    NotificationModule,
     DoctorModule,
     SecretaryModule,
     SecretarySettingsDraftModule,
