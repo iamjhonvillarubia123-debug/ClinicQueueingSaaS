@@ -74,13 +74,22 @@ describe('Notification source identity uniqueness (e2e)', () => {
       data: {
         userId: user.id,
         status: PasswordResetStatus.PENDING,
+        tokenHash: createHash('sha256')
+          .update(`token:${scope}:first`, 'utf8')
+          .digest('hex'),
+        activeResetKey: createHash('sha256')
+          .update(`active:${scope}:first`, 'utf8')
+          .digest('hex'),
         expiresAt,
       },
     });
     const secondReset = await prisma.passwordReset.create({
       data: {
         userId: user.id,
-        status: PasswordResetStatus.PENDING,
+        status: PasswordResetStatus.REVOKED,
+        tokenHash: null,
+        activeResetKey: null,
+        revokedAt: now,
         expiresAt,
       },
     });
