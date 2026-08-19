@@ -1,11 +1,16 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const schema = readFileSync(join(process.cwd(), 'prisma', 'schema.prisma'), 'utf8');
+const schema = readFileSync(
+  join(process.cwd(), 'prisma', 'schema.prisma'),
+  'utf8',
+);
 
 function notificationLogBlock(): string {
   const match = schema.match(/model NotificationLog \{([\s\S]*?)\n\}/u);
-  if (!match) throw new Error('NotificationLog model was not found in Prisma schema.');
+  if (!match) {
+    throw new Error('NotificationLog model was not found in Prisma schema.');
+  }
   return match[1];
 }
 
