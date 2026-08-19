@@ -134,7 +134,9 @@ export class ScheduledReminderCancellationService {
       reminder.status === ScheduledReminderStatus.SENT ||
       outbox.status === NotificationOutboxStatus.SENT
     ) {
-      throw new BadRequestException('A sent scheduled reminder cannot be cancelled.');
+      throw new BadRequestException(
+        'A sent scheduled reminder cannot be cancelled.',
+      );
     }
 
     if (reminder.status !== ScheduledReminderStatus.PROCESSING) {
