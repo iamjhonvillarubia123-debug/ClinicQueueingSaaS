@@ -32,7 +32,7 @@ describe('NotificationDeliveryWorkerService', () => {
       decryptMessage: jest.fn(() => 'Your verification code is 123456.'),
     };
     const attemptService = {
-      finalizeAttempt: jest.fn(() =>
+      finalizeReservedAttempt: jest.fn(() =>
         Promise.resolve({
           notificationLogId: 'log-1',
           attemptNumber: 1,
@@ -40,16 +40,21 @@ describe('NotificationDeliveryWorkerService', () => {
         }),
       ),
     };
+    const submissionBoundaryService = {
+      reserveAttempt: jest.fn(() => Promise.resolve({ attemptNumber: 1 })),
+    };
 
     return {
       service: new NotificationDeliveryWorkerService(
         mobileNumberService as never,
         payloadService as never,
         attemptService as never,
+        submissionBoundaryService as never,
       ),
       mobileNumberService,
       payloadService,
       attemptService,
+      submissionBoundaryService,
     };
   }
 
@@ -66,21 +71,27 @@ describe('NotificationDeliveryWorkerService', () => {
     };
   }
 
-  it('decrypts protected SMS payload only for the provider adapter and finalizes success', async () => {
+  it('reserves an attempt before provider submission and finalizes that exact attempt', async () => {
     const fixture = createService();
+    const callOrder: string[] = [];
+    fixture.submissionBoundaryService.reserveAttempt.mockImplementation(() => {
+      callOrder.push('reserve');
+      return Promise.resolve({ attemptNumber: 1 });
+    });
     const submit = jest.fn<
       ReturnType<NotificationProviderAdapter['submit']>,
       Parameters<NotificationProviderAdapter['submit']>
-    >(() =>
-      Promise.resolve({
+    >(() => {
+      callOrder.push('submit');
+      return Promise.resolve({
         outcome: NotificationAttemptOutcome.SUCCESS,
         providerName: 'provider-a',
         providerReference: 'provider-message-1',
         providerStatus: 'accepted',
         submittedAt: now,
         resolvedAt: now,
-      }),
-    );
+      });
+    });
     const adapter = createAdapter(submit);
 
     const result = await fixture.service.deliverClaimed(claimed, adapter, now);
@@ -91,6 +102,12 @@ describe('NotificationDeliveryWorkerService', () => {
     expect(fixture.payloadService.decryptMessage).toHaveBeenCalledWith(
       'enc-message',
     );
+    expect(fixture.submissionBoundaryService.reserveAttempt).toHaveBeenCalledWith(
+      claimed.id,
+      claimed.processingWorkerId,
+      now,
+    );
+    expect(callOrder).toEqual(['reserve', 'submit']);
     expect(submit).toHaveBeenCalledWith({
       notificationOutboxId: claimed.id,
       notificationType: NotificationType.OTP_VERIFICATION,
@@ -99,9 +116,10 @@ describe('NotificationDeliveryWorkerService', () => {
       recipient: '+639171234567',
       messageBody: 'Your verification code is 123456.',
     });
-    expect(fixture.attemptService.finalizeAttempt).toHaveBeenCalledWith(
+    expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledWith(
       claimed.id,
       claimed.processingWorkerId,
+      1,
       expect.objectContaining({
         outcome: NotificationAttemptOutcome.SUCCESS,
         providerReference: 'provider-message-1',
@@ -111,7 +129,7 @@ describe('NotificationDeliveryWorkerService', () => {
     expect(result.outboxStatus).toBe(NotificationOutboxStatus.SENT);
   });
 
-  it('records a thrown provider submission as uncertain rather than retrying', async () => {
+  it('records a thrown provider submission as uncertain on the reserved attempt rather than retrying', async () => {
     const fixture = createService();
     const submit = jest.fn<
       ReturnType<NotificationProviderAdapter['submit']>,
@@ -121,11 +139,17 @@ describe('NotificationDeliveryWorkerService', () => {
 
     await fixture.service.deliverClaimed(claimed, adapter, now);
 
+    expect(fixture.submissionBoundaryService.reserveAttempt).toHaveBeenCalledTimes(
+      1,
+    );
     expect(submit).toHaveBeenCalledTimes(1);
-    expect(fixture.attemptService.finalizeAttempt).toHaveBeenCalledTimes(1);
-    expect(fixture.attemptService.finalizeAttempt).toHaveBeenCalledWith(
+    expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledWith(
       claimed.id,
       claimed.processingWorkerId,
+      1,
       {
         outcome: NotificationAttemptOutcome.UNCERTAIN,
         providerName: 'provider-a',
@@ -137,6 +161,25 @@ describe('NotificationDeliveryWorkerService', () => {
       },
       now,
     );
+  });
+
+  it('does not call the provider when attempt reservation fails', async () => {
+    const fixture = createService();
+    fixture.submissionBoundaryService.reserveAttempt.mockRejectedValue(
+      new BadRequestException('cancelled before submission'),
+    );
+    const submit = jest.fn<
+      ReturnType<NotificationProviderAdapter['submit']>,
+      Parameters<NotificationProviderAdapter['submit']>
+    >();
+    const adapter = createAdapter(submit);
+
+    await expect(
+      fixture.service.deliverClaimed(claimed, adapter, now),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(fixture.attemptService.finalizeReservedAttempt).not.toHaveBeenCalled();
   });
 
   it('rejects an adapter whose channel does not match the claimed outbox', async () => {
@@ -155,6 +198,7 @@ describe('NotificationDeliveryWorkerService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(fixture.mobileNumberService.decrypt).not.toHaveBeenCalled();
     expect(fixture.payloadService.decryptMessage).not.toHaveBeenCalled();
-    expect(fixture.attemptService.finalizeAttempt).not.toHaveBeenCalled();
+    expect(fixture.submissionBoundaryService.reserveAttempt).not.toHaveBeenCalled();
+    expect(fixture.attemptService.finalizeReservedAttempt).not.toHaveBeenCalled();
   });
 });
