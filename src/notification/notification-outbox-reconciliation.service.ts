@@ -305,13 +305,13 @@ export class NotificationOutboxReconciliationService {
     const synchronized = await transaction.scheduledReminder.updateMany({
       where: {
         id: scheduledReminderId,
-        status: ScheduledReminderStatus.HANDED_OFF,
+        status: ScheduledReminderStatus.PROCESSING,
       },
       data: update,
     });
     if (synchronized.count !== 1) {
       throw new BadRequestException(
-        'Scheduled reminder state could not be synchronized with delivery.',
+        'Scheduled reminder reconciliation state is inconsistent with its outbox.',
       );
     }
   }
@@ -320,33 +320,40 @@ export class NotificationOutboxReconciliationService {
     result: NotificationProviderReconciliationResult,
     now: Date,
   ): Prisma.NotificationOutboxUpdateInput {
+    const clearLease = {
+      processingStartedAt: null,
+      leaseExpiresAt: null,
+      processingWorkerId: null,
+    };
+
     switch (result.outcome) {
       case NotificationProviderReconciliationOutcome.CONFIRMED_SUCCESS:
         return {
           status: NotificationOutboxStatus.SENT,
           sentAt: result.providerConfirmedAt ?? now,
-          processingStartedAt: null,
-          leaseExpiresAt: null,
-          processingWorkerId: null,
+          ...clearLease,
         };
       case NotificationProviderReconciliationOutcome.RETRY_SAFE_NOT_ACCEPTED:
+        if (!result.nextAttemptAt) {
+          throw new BadRequestException(
+            'Safe notification retry requires a future retry time.',
+          );
+        }
         return {
           status: NotificationOutboxStatus.PENDING,
           nextAttemptAt: result.nextAttemptAt,
-          processingStartedAt: null,
-          leaseExpiresAt: null,
-          processingWorkerId: null,
+          ...clearLease,
         };
       case NotificationProviderReconciliationOutcome.CONFIRMED_PERMANENT_FAILURE:
         return {
           status: NotificationOutboxStatus.FAILED,
           failedAt: result.providerConfirmedAt ?? now,
-          processingStartedAt: null,
-          leaseExpiresAt: null,
-          processingWorkerId: null,
+          ...clearLease,
         };
       case NotificationProviderReconciliationOutcome.STILL_UNCERTAIN:
-        return { status: NotificationOutboxStatus.PROCESSING };
+        return {
+          status: NotificationOutboxStatus.PROCESSING,
+        };
     }
   }
 }
