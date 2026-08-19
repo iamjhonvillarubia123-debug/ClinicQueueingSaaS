@@ -207,6 +207,8 @@ describe('NotificationOutboxReconciliationService', () => {
         now,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(fixture.transaction.notificationOutbox.update).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.update,
+    ).not.toHaveBeenCalled();
   });
 });
