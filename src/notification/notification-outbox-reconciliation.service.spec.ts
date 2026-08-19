@@ -16,7 +16,7 @@ type OutboxRow = {
   attemptCount: number;
   processingWorkerId: string | null;
   leaseExpiresAt: Date | null;
-  processingStartedAt: Date | null;
+  processingStartedAtEpochMs: number | null;
 };
 
 type UpdateArgs = {
@@ -52,7 +52,7 @@ describe('NotificationOutboxReconciliationService', () => {
     attemptCount: 1,
     processingWorkerId: 'reconciler-1',
     leaseExpiresAt,
-    processingStartedAt: now,
+    processingStartedAtEpochMs: now.getTime(),
   };
 
   function createService(row: OutboxRow = outboxRow) {
