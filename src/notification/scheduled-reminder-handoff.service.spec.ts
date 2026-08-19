@@ -74,17 +74,20 @@ describe('ScheduledReminderHandoffService', () => {
     expect(fixture.notificationPayload.encryptMessage).toHaveBeenCalledWith(
       'Please schedule your follow-up.\n\nBook again: https://app.example.test/book/location-1',
     );
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: NotificationOutboxStatus.PENDING,
-          scheduledReminderId: 'reminder-1',
-          recipientMobileEncrypted: 'encrypted-mobile',
-          providerIdempotencyKey: 'scheduled-reminder:reminder-1',
-        }),
-      }),
+    const createCall = fixture.transaction.notificationOutbox.create.mock
+      .calls[0]?.[0] as {
+      data: {
+        status: NotificationOutboxStatus;
+        scheduledReminderId: string;
+        recipientMobileEncrypted: string;
+        providerIdempotencyKey: string;
+      };
+    };
+    expect(createCall.data.status).toBe(NotificationOutboxStatus.PENDING);
+    expect(createCall.data.scheduledReminderId).toBe('reminder-1');
+    expect(createCall.data.recipientMobileEncrypted).toBe('encrypted-mobile');
+    expect(createCall.data.providerIdempotencyKey).toBe(
+      'scheduled-reminder:reminder-1',
     );
     expect(fixture.transaction.scheduledReminder.update).toHaveBeenCalledWith({
       where: { id: 'reminder-1' },
@@ -110,9 +113,7 @@ describe('ScheduledReminderHandoffService', () => {
       notificationOutboxId: null,
       disposition: 'CANCELLED',
     });
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).not.toHaveBeenCalled();
+    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
     expect(fixture.transaction.scheduledReminder.update).toHaveBeenCalledWith({
       where: { id: 'reminder-1' },
       data: {
@@ -136,9 +137,7 @@ describe('ScheduledReminderHandoffService', () => {
       notificationOutboxId: null,
       disposition: 'EXPIRED',
     });
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).not.toHaveBeenCalled();
+    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
     expect(fixture.transaction.scheduledReminder.update).toHaveBeenCalledWith({
       where: { id: 'reminder-1' },
       data: {
@@ -163,8 +162,6 @@ describe('ScheduledReminderHandoffService', () => {
       notificationOutboxId: 'outbox-1',
       disposition: 'ALREADY_HANDED_OFF',
     });
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).not.toHaveBeenCalled();
+    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
   });
 });
