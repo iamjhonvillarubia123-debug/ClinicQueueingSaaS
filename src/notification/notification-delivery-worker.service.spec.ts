@@ -45,9 +45,7 @@ describe('NotificationDeliveryWorkerService', () => {
       reserveAttempt: jest.fn<
         Promise<NotificationSubmissionBoundaryResult>,
         [string, string, Date]
-      >(() =>
-        Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 }),
-      ),
+      >(() => Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 })),
     };
 
     return {
