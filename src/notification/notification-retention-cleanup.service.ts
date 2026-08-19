@@ -28,8 +28,14 @@ export class NotificationRetentionCleanupService {
     now = new Date(),
     batchSize = DEFAULT_BATCH_SIZE,
   ): Promise<NotificationRetentionCleanupResult> {
-    if (!Number.isInteger(batchSize) || batchSize <= 0 || batchSize > MAX_BATCH_SIZE) {
-      throw new BadRequestException('Notification cleanup batch size is invalid.');
+    if (
+      !Number.isInteger(batchSize) ||
+      batchSize <= 0 ||
+      batchSize > MAX_BATCH_SIZE
+    ) {
+      throw new BadRequestException(
+        'Notification cleanup batch size is invalid.',
+      );
     }
 
     return this.prisma.$transaction(async (transaction) => {
