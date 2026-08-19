@@ -54,9 +54,11 @@ export class NotificationOutboxReconciliationService {
     const leaseExpiresAt = new Date(now.getTime() + leaseDurationMs);
 
     return this.prisma.$transaction(async (transaction) => {
-      const candidates = await transaction.$queryRaw<Array<{ id: string }>>(
+      const candidates = await transaction.$queryRaw<
+        Array<{ id: string; processingStartedAt: Date | null }>
+      >(
         Prisma.sql`
-          SELECT "id"
+          SELECT "id", "processingStartedAt"
           FROM "NotificationOutbox"
           WHERE "status" = ${NotificationOutboxStatus.PROCESSING}::"NotificationOutboxStatus"
             AND "leaseExpiresAt" < ${now}
@@ -71,6 +73,11 @@ export class NotificationOutboxReconciliationService {
 
       const candidate = candidates[0];
       if (!candidate) return null;
+      if (!candidate.processingStartedAt) {
+        throw new BadRequestException(
+          'Notification reconciliation is missing its original processing start.',
+        );
+      }
 
       const latestUncertain = await transaction.notificationLog.findFirst({
         where: {
@@ -97,14 +104,8 @@ export class NotificationOutboxReconciliationService {
           notificationType: true,
           channel: true,
           providerIdempotencyKey: true,
-          processingStartedAt: true,
         },
       });
-      if (!outbox.processingStartedAt) {
-        throw new BadRequestException(
-          'Notification reconciliation is missing its original processing start.',
-        );
-      }
 
       return {
         id: outbox.id,
@@ -115,7 +116,7 @@ export class NotificationOutboxReconciliationService {
         providerReference: latestUncertain?.providerReference ?? null,
         providerStatus: latestUncertain?.providerStatus ?? null,
         latestAttemptNumber: latestUncertain?.attemptNumber ?? null,
-        processingStartedAt: outbox.processingStartedAt,
+        processingStartedAt: candidate.processingStartedAt,
         leaseExpiresAt,
         processingWorkerId: normalizedWorkerId,
       };
@@ -151,6 +152,7 @@ export class NotificationOutboxReconciliationService {
           status: NotificationOutboxStatus;
           processingWorkerId: string | null;
           leaseExpiresAt: Date | null;
+          processingStartedAt: Date | null;
         }>
       >(
         Prisma.sql`
@@ -158,7 +160,8 @@ export class NotificationOutboxReconciliationService {
             "id",
             "status",
             "processingWorkerId",
-            "leaseExpiresAt"
+            "leaseExpiresAt",
+            "processingStartedAt"
           FROM "NotificationOutbox"
           WHERE "id" = ${outboxId}
           FOR UPDATE
@@ -179,6 +182,11 @@ export class NotificationOutboxReconciliationService {
           'Notification worker does not own an active reconciliation lease.',
         );
       }
+      if (!locked.processingStartedAt) {
+        throw new BadRequestException(
+          'Notification reconciliation is missing its original processing start.',
+        );
+      }
 
       const outbox = await transaction.notificationOutbox.findUniqueOrThrow({
         where: { id: locked.id },
@@ -188,7 +196,6 @@ export class NotificationOutboxReconciliationService {
           channel: true,
           scheduledReminderId: true,
           attemptCount: true,
-          processingStartedAt: true,
           providerIdempotencyKey: true,
         },
       });
@@ -236,7 +243,7 @@ export class NotificationOutboxReconciliationService {
                 : 'reconciled-confirmed-permanent-failure',
             retryRecommended: false,
             providerIdempotencyKeyUsed: outbox.providerIdempotencyKey,
-            submittedAt: outbox.processingStartedAt ?? now,
+            submittedAt: locked.processingStartedAt,
             resolvedAt,
             expiresAt: new Date(resolvedAt.getTime() + LOG_RETENTION_MS),
           },
@@ -298,13 +305,13 @@ export class NotificationOutboxReconciliationService {
     const synchronized = await transaction.scheduledReminder.updateMany({
       where: {
         id: scheduledReminderId,
-        status: ScheduledReminderStatus.PROCESSING,
+        status: ScheduledReminderStatus.HANDED_OFF,
       },
       data: update,
     });
     if (synchronized.count !== 1) {
       throw new BadRequestException(
-        'Scheduled reminder reconciliation state is inconsistent with its outbox.',
+        'Scheduled reminder state could not be synchronized with delivery.',
       );
     }
   }
@@ -313,40 +320,33 @@ export class NotificationOutboxReconciliationService {
     result: NotificationProviderReconciliationResult,
     now: Date,
   ): Prisma.NotificationOutboxUpdateInput {
-    const clearLease = {
-      processingStartedAt: null,
-      leaseExpiresAt: null,
-      processingWorkerId: null,
-    };
-
     switch (result.outcome) {
       case NotificationProviderReconciliationOutcome.CONFIRMED_SUCCESS:
         return {
           status: NotificationOutboxStatus.SENT,
           sentAt: result.providerConfirmedAt ?? now,
-          ...clearLease,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
+          processingWorkerId: null,
         };
       case NotificationProviderReconciliationOutcome.RETRY_SAFE_NOT_ACCEPTED:
-        if (!result.nextAttemptAt) {
-          throw new BadRequestException(
-            'Safe notification retry requires a future retry time.',
-          );
-        }
         return {
           status: NotificationOutboxStatus.PENDING,
           nextAttemptAt: result.nextAttemptAt,
-          ...clearLease,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
+          processingWorkerId: null,
         };
       case NotificationProviderReconciliationOutcome.CONFIRMED_PERMANENT_FAILURE:
         return {
           status: NotificationOutboxStatus.FAILED,
           failedAt: result.providerConfirmedAt ?? now,
-          ...clearLease,
+          processingStartedAt: null,
+          leaseExpiresAt: null,
+          processingWorkerId: null,
         };
       case NotificationProviderReconciliationOutcome.STILL_UNCERTAIN:
-        return {
-          status: NotificationOutboxStatus.PROCESSING,
-        };
+        return { status: NotificationOutboxStatus.PROCESSING };
     }
   }
 }
