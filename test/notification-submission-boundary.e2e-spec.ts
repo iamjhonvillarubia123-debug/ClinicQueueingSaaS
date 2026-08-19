@@ -48,7 +48,9 @@ describe('Notification provider submission boundary crash recovery (e2e)', () =>
     }).compile();
 
     prisma = moduleFixture.get(PrismaService);
-    submissionBoundary = moduleFixture.get(NotificationSubmissionBoundaryService);
+    submissionBoundary = moduleFixture.get(
+      NotificationSubmissionBoundaryService,
+    );
     reconciliationService = moduleFixture.get(
       NotificationOutboxReconciliationService,
     );
