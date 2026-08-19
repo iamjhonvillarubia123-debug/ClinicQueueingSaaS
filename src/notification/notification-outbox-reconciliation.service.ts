@@ -5,12 +5,16 @@ import {
   NotificationOutboxStatus,
   NotificationType,
   Prisma,
+  ScheduledReminderStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   NotificationProviderReconciliationOutcome,
   NotificationProviderReconciliationResult,
 } from './notification-provider-adapter';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LOG_RETENTION_MS = 30 * DAY_MS;
 
 type ReconciliationCandidate = {
   id: string;
@@ -136,19 +140,29 @@ export class NotificationOutboxReconciliationService {
       const rows = await transaction.$queryRaw<
         Array<{
           id: string;
+          notificationType: NotificationType;
+          channel: NotificationChannel;
+          scheduledReminderId: string | null;
           status: NotificationOutboxStatus;
           attemptCount: number;
           processingWorkerId: string | null;
+          processingStartedAt: Date | null;
           leaseExpiresAt: Date | null;
+          providerIdempotencyKey: string;
         }>
       >(
         Prisma.sql`
           SELECT
             "id",
+            "notificationType",
+            "channel",
+            "scheduledReminderId",
             "status",
             "attemptCount",
             "processingWorkerId",
-            "leaseExpiresAt"
+            "processingStartedAt",
+            "leaseExpiresAt",
+            "providerIdempotencyKey"
           FROM "NotificationOutbox"
           WHERE "id" = ${outboxId}
           FOR UPDATE
@@ -170,6 +184,56 @@ export class NotificationOutboxReconciliationService {
         );
       }
 
+      const latestLog = await transaction.notificationLog.findFirst({
+        where: { notificationOutboxId: outbox.id },
+        orderBy: { attemptNumber: 'desc' },
+        select: { attemptNumber: true },
+      });
+      const latestRecordedAttempt = latestLog?.attemptNumber ?? 0;
+      if (
+        outbox.attemptCount < latestRecordedAttempt ||
+        outbox.attemptCount > latestRecordedAttempt + 1
+      ) {
+        throw new BadRequestException(
+          'Notification attempt history is inconsistent with its outbox.',
+        );
+      }
+
+      const hasReservedGap = outbox.attemptCount === latestRecordedAttempt + 1;
+      if (
+        hasReservedGap &&
+        (result.outcome ===
+          NotificationProviderReconciliationOutcome.CONFIRMED_SUCCESS ||
+          result.outcome ===
+            NotificationProviderReconciliationOutcome.CONFIRMED_PERMANENT_FAILURE)
+      ) {
+        const terminalOutcome =
+          result.outcome ===
+          NotificationProviderReconciliationOutcome.CONFIRMED_SUCCESS
+            ? NotificationAttemptOutcome.SUCCESS
+            : NotificationAttemptOutcome.PERMANENT_FAILURE;
+        const resolvedAt = result.providerConfirmedAt ?? now;
+
+        await transaction.notificationLog.create({
+          data: {
+            notificationOutboxId: outbox.id,
+            attemptNumber: outbox.attemptCount,
+            notificationType: outbox.notificationType,
+            channel: outbox.channel,
+            outcome: terminalOutcome,
+            providerStatus:
+              terminalOutcome === NotificationAttemptOutcome.SUCCESS
+                ? 'reconciled-confirmed-success'
+                : 'reconciled-confirmed-permanent-failure',
+            retryRecommended: false,
+            providerIdempotencyKeyUsed: outbox.providerIdempotencyKey,
+            submittedAt: outbox.processingStartedAt ?? now,
+            resolvedAt,
+            expiresAt: new Date(resolvedAt.getTime() + LOG_RETENTION_MS),
+          },
+        });
+      }
+
       const update = this.reconciliationTransition(result, now);
       const updated = await transaction.notificationOutbox.update({
         where: { id: outbox.id },
@@ -177,8 +241,63 @@ export class NotificationOutboxReconciliationService {
         select: { status: true },
       });
 
+      await this.synchronizeScheduledReminder(
+        transaction,
+        outbox.notificationType,
+        outbox.scheduledReminderId,
+        result,
+        now,
+      );
+
       return { outboxStatus: updated.status };
     });
+  }
+
+  private async synchronizeScheduledReminder(
+    transaction: Prisma.TransactionClient,
+    notificationType: NotificationType,
+    scheduledReminderId: string | null,
+    result: NotificationProviderReconciliationResult,
+    now: Date,
+  ): Promise<void> {
+    if (notificationType !== NotificationType.SCHEDULED_REMINDER) return;
+    if (!scheduledReminderId) {
+      throw new BadRequestException(
+        'Scheduled reminder notification is missing its source reminder.',
+      );
+    }
+
+    if (
+      result.outcome ===
+        NotificationProviderReconciliationOutcome.RETRY_SAFE_NOT_ACCEPTED ||
+      result.outcome ===
+        NotificationProviderReconciliationOutcome.STILL_UNCERTAIN
+    ) {
+      return;
+    }
+
+    const status =
+      result.outcome ===
+      NotificationProviderReconciliationOutcome.CONFIRMED_SUCCESS
+        ? ScheduledReminderStatus.SENT
+        : ScheduledReminderStatus.FAILED;
+    const update =
+      status === ScheduledReminderStatus.SENT
+        ? { status, sentAt: result.providerConfirmedAt ?? now }
+        : { status, failedAt: result.providerConfirmedAt ?? now };
+
+    const synchronized = await transaction.scheduledReminder.updateMany({
+      where: {
+        id: scheduledReminderId,
+        status: ScheduledReminderStatus.PROCESSING,
+      },
+      data: update,
+    });
+    if (synchronized.count !== 1) {
+      throw new BadRequestException(
+        'Scheduled reminder reconciliation state is inconsistent with its outbox.',
+      );
+    }
   }
 
   private reconciliationTransition(
