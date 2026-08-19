@@ -33,6 +33,7 @@ export class ScheduledReminderCancellationService {
           notificationType: NotificationType;
           status: NotificationOutboxStatus;
           scheduledReminderId: string | null;
+          attemptCount: number;
         }>
       >(
         Prisma.sql`
@@ -40,7 +41,8 @@ export class ScheduledReminderCancellationService {
             "id",
             "notificationType",
             "status",
-            "scheduledReminderId"
+            "scheduledReminderId",
+            "attemptCount"
           FROM "NotificationOutbox"
           WHERE "scheduledReminderId" = ${reminderId}
           FOR UPDATE
@@ -126,18 +128,37 @@ export class ScheduledReminderCancellationService {
         );
       }
 
-      if (
-        reminder.status !== ScheduledReminderStatus.PROCESSING ||
-        outbox.status !== NotificationOutboxStatus.PENDING
-      ) {
-        if (outbox.status === NotificationOutboxStatus.PROCESSING) {
+      if (reminder.status !== ScheduledReminderStatus.PROCESSING) {
+        throw new BadRequestException(
+          'Scheduled reminder cannot be cancelled in its current delivery state.',
+        );
+      }
+
+      if (outbox.status === NotificationOutboxStatus.PROCESSING) {
+        const latestLog = await transaction.notificationLog.findFirst({
+          where: { notificationOutboxId: outbox.id },
+          orderBy: { attemptNumber: 'desc' },
+          select: { attemptNumber: true },
+        });
+        const latestRecordedAttempt = latestLog?.attemptNumber ?? 0;
+
+        if (
+          outbox.attemptCount < latestRecordedAttempt ||
+          outbox.attemptCount > latestRecordedAttempt + 1
+        ) {
+          throw new BadRequestException(
+            'Notification attempt history is inconsistent with its outbox.',
+          );
+        }
+
+        if (outbox.attemptCount > latestRecordedAttempt) {
           return {
             reminderStatus: reminder.status,
             outboxStatus: outbox.status,
             reconciliationRequired: true,
           };
         }
-
+      } else if (outbox.status !== NotificationOutboxStatus.PENDING) {
         throw new BadRequestException(
           'Scheduled reminder cannot be cancelled in its current delivery state.',
         );
