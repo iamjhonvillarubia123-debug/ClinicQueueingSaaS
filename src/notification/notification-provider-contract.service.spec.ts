@@ -50,7 +50,10 @@ describe('NotificationProviderContractService', () => {
       ),
     ).toThrow(BadRequestException);
     expect(() =>
-      service.assertAdapter(adapter({ providerName: ' provider-a ' }), NotificationChannel.SMS),
+      service.assertAdapter(
+        adapter({ providerName: ' provider-a ' }),
+        NotificationChannel.SMS,
+      ),
     ).toThrow(BadRequestException);
   });
 
