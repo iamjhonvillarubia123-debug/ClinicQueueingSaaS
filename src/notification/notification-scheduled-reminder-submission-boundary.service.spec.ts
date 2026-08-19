@@ -93,7 +93,9 @@ describe('NotificationSubmissionBoundaryService scheduled reminder revalidation'
         ),
       },
       notificationOutbox: {
-        update: jest.fn(() => Promise.resolve({})),
+        update: jest.fn((args: { data: Record<string, unknown> }) =>
+          Promise.resolve(args),
+        ),
       },
       scheduledReminder: {
         updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
@@ -137,13 +139,13 @@ describe('NotificationSubmissionBoundaryService scheduled reminder revalidation'
       outboxStatus: NotificationOutboxStatus.CANCELLED,
     });
 
-    const cancellationUpdate = transaction.notificationOutbox.update.mock.calls[0]?.[0] as
-      | { data?: Record<string, unknown> }
-      | undefined;
-    expect(cancellationUpdate?.data).toMatchObject({
-      status: NotificationOutboxStatus.CANCELLED,
-      cancelledAt: now,
-      protectedPayloadPurgedAt: now,
+    expect(transaction.notificationOutbox.update).toHaveBeenCalledWith({
+      where: { id: 'outbox-1' },
+      data: expect.objectContaining({
+        status: NotificationOutboxStatus.CANCELLED,
+        cancelledAt: now,
+        protectedPayloadPurgedAt: now,
+      }) as Record<string, unknown>,
     });
     expect(transaction.scheduledReminder.updateMany).toHaveBeenCalledWith({
       where: {
