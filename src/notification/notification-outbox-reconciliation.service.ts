@@ -54,11 +54,9 @@ export class NotificationOutboxReconciliationService {
     const leaseExpiresAt = new Date(now.getTime() + leaseDurationMs);
 
     return this.prisma.$transaction(async (transaction) => {
-      const candidates = await transaction.$queryRaw<
-        Array<{ id: string; processingStartedAt: Date }>
-      >(
+      const candidates = await transaction.$queryRaw<Array<{ id: string }>>(
         Prisma.sql`
-          SELECT "id", "processingStartedAt"
+          SELECT "id"
           FROM "NotificationOutbox"
           WHERE "status" = ${NotificationOutboxStatus.PROCESSING}::"NotificationOutboxStatus"
             AND "leaseExpiresAt" < ${now}
@@ -99,16 +97,25 @@ export class NotificationOutboxReconciliationService {
           notificationType: true,
           channel: true,
           providerIdempotencyKey: true,
+          processingStartedAt: true,
         },
       });
+      if (!outbox.processingStartedAt) {
+        throw new BadRequestException(
+          'Notification reconciliation is missing its original processing start.',
+        );
+      }
 
       return {
-        ...outbox,
+        id: outbox.id,
+        notificationType: outbox.notificationType,
+        channel: outbox.channel,
+        providerIdempotencyKey: outbox.providerIdempotencyKey,
         providerName: latestUncertain?.providerName ?? null,
         providerReference: latestUncertain?.providerReference ?? null,
         providerStatus: latestUncertain?.providerStatus ?? null,
         latestAttemptNumber: latestUncertain?.attemptNumber ?? null,
-        processingStartedAt: candidate.processingStartedAt,
+        processingStartedAt: outbox.processingStartedAt,
         leaseExpiresAt,
         processingWorkerId: normalizedWorkerId,
       };
