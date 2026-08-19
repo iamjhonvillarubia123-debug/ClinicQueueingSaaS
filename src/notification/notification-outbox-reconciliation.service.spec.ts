@@ -1,5 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
-import { NotificationOutboxStatus } from '../../generated/prisma/client';
+import {
+  NotificationChannel,
+  NotificationOutboxStatus,
+  NotificationType,
+} from '../../generated/prisma/client';
 import {
   NotificationProviderReconciliationOutcome,
   NotificationProviderReconciliationResult,
@@ -23,6 +27,7 @@ type UpdateArgs = {
 type MockTransaction = {
   $queryRaw: jest.Mock<Promise<OutboxRow[]>, unknown[]>;
   notificationOutbox: {
+    findUniqueOrThrow: jest.Mock<Promise<Record<string, unknown>>, unknown[]>;
     update: jest.Mock<
       Promise<{ status: NotificationOutboxStatus }>,
       [UpdateArgs]
@@ -54,6 +59,17 @@ describe('NotificationOutboxReconciliationService', () => {
         Promise.resolve([row]),
       ),
       notificationOutbox: {
+        findUniqueOrThrow: jest.fn(() =>
+          Promise.resolve({
+            id: row.id,
+            notificationType: NotificationType.SECURITY_NOTIFICATION,
+            channel: NotificationChannel.SMS,
+            scheduledReminderId: null,
+            attemptCount: row.attemptCount,
+            processingStartedAt: now,
+            providerIdempotencyKey: 'provider-key-1',
+          }),
+        ),
         update: jest.fn<
           Promise<{ status: NotificationOutboxStatus }>,
           [UpdateArgs]
