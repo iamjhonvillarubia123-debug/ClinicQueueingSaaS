@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AppController } from './app/app.controller';
 import { DoctorModule } from './doctor/doctor.module';
+import { FinancialModule } from './financial/financial.module';
 import { PracticeLocationModule } from './practice-location/practice-location.module';
 import { PracticeStaffModule } from './practice-staff/practice-staff.module';
 import { PatientModule } from './patient/patient.module';
@@ -23,6 +24,7 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     AuthModule,
     PrismaModule,
     NotificationModule,
+    FinancialModule,
     DoctorModule,
     SecretaryModule,
     SecretarySettingsDraftModule,
