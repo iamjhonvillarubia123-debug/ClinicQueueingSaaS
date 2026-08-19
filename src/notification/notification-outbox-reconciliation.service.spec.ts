@@ -28,6 +28,13 @@ type MockTransaction = {
       [UpdateArgs]
     >;
   };
+  notificationLog: {
+    findFirst: jest.Mock<
+      Promise<{ attemptNumber: number } | null>,
+      [Record<string, unknown>]
+    >;
+    create: jest.Mock<Promise<{ id: string }>, [Record<string, unknown>]>;
+  };
 };
 
 describe('NotificationOutboxReconciliationService', () => {
@@ -51,6 +58,18 @@ describe('NotificationOutboxReconciliationService', () => {
           Promise<{ status: NotificationOutboxStatus }>,
           [UpdateArgs]
         >(({ data }) => Promise.resolve({ status: data.status })),
+      },
+      notificationLog: {
+        findFirst: jest.fn((args: Record<string, unknown>) => {
+          void args;
+          return Promise.resolve(
+            row.attemptCount > 0 ? { attemptNumber: row.attemptCount } : null,
+          );
+        }),
+        create: jest.fn((args: Record<string, unknown>) => {
+          void args;
+          return Promise.resolve({ id: 'reconciliation-log-1' });
+        }),
       },
     };
 
@@ -87,6 +106,7 @@ describe('NotificationOutboxReconciliationService', () => {
     });
 
     expect(applied.outboxStatus).toBe(NotificationOutboxStatus.SENT);
+    expect(transaction.notificationLog.create).not.toHaveBeenCalled();
     const [call] = transaction.notificationOutbox.update.mock.calls;
     expect(call[0]).toEqual({
       where: { id: outboxRow.id },
@@ -110,6 +130,7 @@ describe('NotificationOutboxReconciliationService', () => {
     });
 
     expect(applied.outboxStatus).toBe(NotificationOutboxStatus.PENDING);
+    expect(transaction.notificationLog.create).not.toHaveBeenCalled();
     const [call] = transaction.notificationOutbox.update.mock.calls;
     expect(call[0].data).toEqual({
       status: NotificationOutboxStatus.PENDING,
@@ -127,6 +148,7 @@ describe('NotificationOutboxReconciliationService', () => {
     });
 
     expect(applied.outboxStatus).toBe(NotificationOutboxStatus.FAILED);
+    expect(transaction.notificationLog.create).not.toHaveBeenCalled();
     const [call] = transaction.notificationOutbox.update.mock.calls;
     expect(call[0].data).toEqual({
       status: NotificationOutboxStatus.FAILED,
@@ -143,6 +165,7 @@ describe('NotificationOutboxReconciliationService', () => {
     });
 
     expect(applied.outboxStatus).toBe(NotificationOutboxStatus.PROCESSING);
+    expect(transaction.notificationLog.create).not.toHaveBeenCalled();
     const [call] = transaction.notificationOutbox.update.mock.calls;
     expect(call[0].data).toEqual({
       status: NotificationOutboxStatus.PROCESSING,
