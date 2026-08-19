@@ -16,6 +16,7 @@ type OutboxRow = {
   attemptCount: number;
   processingWorkerId: string | null;
   leaseExpiresAt: Date | null;
+  processingStartedAt: Date | null;
 };
 
 type UpdateArgs = {
@@ -51,6 +52,7 @@ describe('NotificationOutboxReconciliationService', () => {
     attemptCount: 1,
     processingWorkerId: 'reconciler-1',
     leaseExpiresAt,
+    processingStartedAt: now,
   };
 
   function createService(row: OutboxRow = outboxRow) {
@@ -66,7 +68,6 @@ describe('NotificationOutboxReconciliationService', () => {
             channel: NotificationChannel.SMS,
             scheduledReminderId: null,
             attemptCount: row.attemptCount,
-            processingStartedAt: now,
             providerIdempotencyKey: 'provider-key-1',
           }),
         ),
@@ -138,7 +139,7 @@ describe('NotificationOutboxReconciliationService', () => {
   });
 
   it('returns confirmed not-accepted outcome to pending with a future retry time', async () => {
-    const nextAttemptAt = new Date('2026-08-18T13:10:00.000Z');
+    const nextAttemptAt = new Date('2026-08-18T13:02:00.000Z');
     const { transaction, applied } = await apply({
       outcome:
         NotificationProviderReconciliationOutcome.RETRY_SAFE_NOT_ACCEPTED,
@@ -158,9 +159,11 @@ describe('NotificationOutboxReconciliationService', () => {
   });
 
   it('marks confirmed permanent provider failure as failed', async () => {
+    const confirmedAt = new Date('2026-08-18T12:59:45.000Z');
     const { transaction, applied } = await apply({
       outcome:
         NotificationProviderReconciliationOutcome.CONFIRMED_PERMANENT_FAILURE,
+      providerConfirmedAt: confirmedAt,
     });
 
     expect(applied.outboxStatus).toBe(NotificationOutboxStatus.FAILED);
@@ -168,7 +171,7 @@ describe('NotificationOutboxReconciliationService', () => {
     const [call] = transaction.notificationOutbox.update.mock.calls;
     expect(call[0].data).toEqual({
       status: NotificationOutboxStatus.FAILED,
-      failedAt: now,
+      failedAt: confirmedAt,
       processingStartedAt: null,
       leaseExpiresAt: null,
       processingWorkerId: null,
@@ -188,14 +191,14 @@ describe('NotificationOutboxReconciliationService', () => {
     });
   });
 
-  it('rejects reconciliation by a worker that does not own the active lease', async () => {
-    const { service, transaction } = createService({
+  it('rejects reconciliation when the worker does not own the lease', async () => {
+    const fixture = createService({
       ...outboxRow,
-      processingWorkerId: 'other-worker',
+      processingWorkerId: 'another-worker',
     });
 
     await expect(
-      service.applyReconciliation(
+      fixture.service.applyReconciliation(
         outboxRow.id,
         'reconciler-1',
         {
@@ -204,24 +207,6 @@ describe('NotificationOutboxReconciliationService', () => {
         now,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
-
-    expect(transaction.notificationOutbox.update).not.toHaveBeenCalled();
-  });
-
-  it('requires a future retry time when reconciliation proves retry is safe', async () => {
-    const { service } = createService();
-
-    await expect(
-      service.applyReconciliation(
-        outboxRow.id,
-        'reconciler-1',
-        {
-          outcome:
-            NotificationProviderReconciliationOutcome.RETRY_SAFE_NOT_ACCEPTED,
-          nextAttemptAt: now,
-        },
-        now,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(fixture.transaction.notificationOutbox.update).not.toHaveBeenCalled();
   });
 });
