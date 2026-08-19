@@ -1,13 +1,26 @@
-import { Prisma } from '../../generated/prisma/client';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+const schema = readFileSync(join(process.cwd(), 'prisma', 'schema.prisma'), 'utf8');
+
+function notificationLogBlock(): string {
+  const match = schema.match(/model NotificationLog \{([\s\S]*?)\n\}/u);
+  if (!match) throw new Error('NotificationLog model was not found in Prisma schema.');
+  return match[1];
+}
+
+function fieldNames(block: string): string[] {
+  return block
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('@@'))
+    .map((line) => line.split(/\s+/u)[0])
+    .filter((name) => name !== undefined);
+}
 
 describe('NotificationLog privacy schema contract', () => {
   it('contains only approved provider-attempt audit fields and the outbox relation', () => {
-    const model = Prisma.dmmf.datamodel.models.find(
-      (candidate) => candidate.name === 'NotificationLog',
-    );
-    expect(model).toBeDefined();
-
-    const actualFields = model?.fields.map((field) => field.name).sort();
+    const actualFields = fieldNames(notificationLogBlock()).sort();
     const approvedFields = [
       'attemptNumber',
       'channel',
@@ -33,10 +46,7 @@ describe('NotificationLog privacy schema contract', () => {
   });
 
   it('does not expose direct patient, recipient, message, credential, or business-scope fields', () => {
-    const model = Prisma.dmmf.datamodel.models.find(
-      (candidate) => candidate.name === 'NotificationLog',
-    );
-    const fieldNames = new Set(model?.fields.map((field) => field.name) ?? []);
+    const fields = new Set(fieldNames(notificationLogBlock()));
 
     for (const forbiddenField of [
       'patientId',
@@ -59,7 +69,7 @@ describe('NotificationLog privacy schema contract', () => {
       'tokenHash',
       'activeResetKey',
     ]) {
-      expect(fieldNames.has(forbiddenField)).toBe(false);
+      expect(fields.has(forbiddenField)).toBe(false);
     }
   });
 });
