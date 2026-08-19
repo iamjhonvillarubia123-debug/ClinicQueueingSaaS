@@ -41,10 +41,12 @@ describe('ApplicationNotificationService', () => {
       notification,
     ]);
 
-    await expect(fixture.service.listForRecipient('doctor-1')).resolves.toEqual([
-      notification,
-    ]);
-    expect(fixture.prisma.applicationNotification.findMany).toHaveBeenCalledWith(
+    await expect(
+      fixture.service.listForRecipient('doctor-1'),
+    ).resolves.toEqual([notification]);
+    expect(
+      fixture.prisma.applicationNotification.findMany,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({ where: { recipientUserId: 'doctor-1' } }),
     );
   });
@@ -107,7 +109,9 @@ describe('ApplicationNotificationService', () => {
 
   it('does not allow the affected secretary or any non-recipient to mark the notification read', async () => {
     const fixture = createFixture();
-    fixture.transaction.applicationNotification.findFirst.mockResolvedValue(null);
+    fixture.transaction.applicationNotification.findFirst.mockResolvedValue(
+      null,
+    );
 
     await expect(
       fixture.service.markRead('secretary-1', notification.id),
