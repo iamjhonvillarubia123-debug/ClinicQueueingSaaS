@@ -43,8 +43,8 @@ describe('PasswordReset notification source identity', () => {
       get: jest.fn(() => 'https://app.example.test'),
     };
     const payload = {
-      encrypt: jest.fn((value: string, purpose: string) =>
-        `enc:${purpose}:${value}`,
+      encrypt: jest.fn(
+        (value: string, purpose: string) => `enc:${purpose}:${value}`,
       ),
     };
     const passwordSecurity = {
