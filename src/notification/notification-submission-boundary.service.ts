@@ -1,13 +1,20 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   NotificationOutboxStatus,
+  NotificationType,
   Prisma,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type ReservedNotificationAttempt = {
-  attemptNumber: number;
-};
+export type NotificationSubmissionBoundaryResult =
+  | {
+      disposition: 'RESERVED';
+      attemptNumber: number;
+    }
+  | {
+      disposition: 'CANCELLED';
+      outboxStatus: NotificationOutboxStatus;
+    };
 
 @Injectable()
 export class NotificationSubmissionBoundaryService {
@@ -17,7 +24,7 @@ export class NotificationSubmissionBoundaryService {
     outboxId: string,
     workerId: string,
     now = new Date(),
-  ): Promise<ReservedNotificationAttempt> {
+  ): Promise<NotificationSubmissionBoundaryResult> {
     const normalizedOutboxId = outboxId.trim();
     const normalizedWorkerId = workerId.trim();
     if (!normalizedOutboxId || !normalizedWorkerId) {
@@ -30,7 +37,9 @@ export class NotificationSubmissionBoundaryService {
       const rows = await transaction.$queryRaw<
         Array<{
           id: string;
+          notificationType: NotificationType;
           status: NotificationOutboxStatus;
+          otpVerificationId: string | null;
           attemptCount: number;
           processingWorkerId: string | null;
           leaseExpiresAt: Date | null;
@@ -39,7 +48,9 @@ export class NotificationSubmissionBoundaryService {
         Prisma.sql`
           SELECT
             "id",
+            "notificationType",
             "status",
+            "otpVerificationId",
             "attemptCount",
             "processingWorkerId",
             "leaseExpiresAt"
@@ -81,7 +92,71 @@ export class NotificationSubmissionBoundaryService {
       }
 
       if (outbox.attemptCount === latestRecordedAttempt + 1) {
-        return { attemptNumber: outbox.attemptCount };
+        return {
+          disposition: 'RESERVED',
+          attemptNumber: outbox.attemptCount,
+        };
+      }
+
+      if (outbox.notificationType === NotificationType.OTP_VERIFICATION) {
+        if (!outbox.otpVerificationId) {
+          throw new BadRequestException(
+            'OTP notification is missing its verification context.',
+          );
+        }
+
+        const otpRows = await transaction.$queryRaw<
+          Array<{
+            id: string;
+            expiresAt: Date;
+            consumedAt: Date | null;
+            invalidatedAt: Date | null;
+          }>
+        >(
+          Prisma.sql`
+            SELECT
+              "id",
+              "expiresAt",
+              "consumedAt",
+              "invalidatedAt"
+            FROM "OtpVerification"
+            WHERE "id" = ${outbox.otpVerificationId}
+            FOR UPDATE
+          `,
+        );
+        const otp = otpRows[0];
+        if (!otp) {
+          throw new BadRequestException(
+            'OTP notification verification context was not found.',
+          );
+        }
+
+        const isStale =
+          otp.expiresAt.getTime() <= now.getTime() ||
+          otp.consumedAt !== null ||
+          otp.invalidatedAt !== null;
+
+        if (isStale) {
+          await transaction.notificationOutbox.update({
+            where: { id: outbox.id },
+            data: {
+              status: NotificationOutboxStatus.CANCELLED,
+              cancelledAt: now,
+              processingStartedAt: null,
+              leaseExpiresAt: null,
+              processingWorkerId: null,
+              recipientMobileEncrypted: null,
+              recipientEmailEncrypted: null,
+              messageBodyEncrypted: null,
+              protectedPayloadPurgedAt: now,
+            },
+          });
+
+          return {
+            disposition: 'CANCELLED',
+            outboxStatus: NotificationOutboxStatus.CANCELLED,
+          };
+        }
       }
 
       const attemptNumber = latestRecordedAttempt + 1;
@@ -90,7 +165,7 @@ export class NotificationSubmissionBoundaryService {
         data: { attemptCount: attemptNumber },
       });
 
-      return { attemptNumber };
+      return { disposition: 'RESERVED', attemptNumber };
     });
   }
 }
