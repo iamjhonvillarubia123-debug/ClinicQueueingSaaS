@@ -4,12 +4,14 @@ import { NotificationRetentionCleanupService } from './notification-retention-cl
 describe('NotificationRetentionCleanupService', () => {
   const now = new Date('2026-08-19T15:00:00.000Z');
 
-  function createService(options: {
-    candidateIds?: string[];
-    retainedLogCounts?: Record<string, number>;
-    deletedLogCounts?: Record<string, number>;
-    deletedOutboxCounts?: Record<string, number>;
-  } = {}) {
+  function createService(
+    options: {
+      candidateIds?: string[];
+      retainedLogCounts?: Record<string, number>;
+      deletedLogCounts?: Record<string, number>;
+      deletedOutboxCounts?: Record<string, number>;
+    } = {},
+  ) {
     const candidateIds = options.candidateIds ?? ['outbox-1'];
     const retainedLogCounts = options.retainedLogCounts ?? {};
     const deletedLogCounts = options.deletedLogCounts ?? {};
