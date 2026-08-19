@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
+import { ApplicationNotificationController } from './application-notification.controller';
+import { ApplicationNotificationService } from './application-notification.service';
 import { NotificationDeliveryAttemptService } from './notification-delivery-attempt.service';
 import { NotificationDeliveryWorkerService } from './notification-delivery-worker.service';
 import { NotificationOtpPayloadPurgeService } from './notification-otp-payload-purge.service';
@@ -14,7 +16,9 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
 
 @Module({
   imports: [ConfigModule, MobileNumberModule],
+  controllers: [ApplicationNotificationController],
   providers: [
+    ApplicationNotificationService,
     NotificationPayloadService,
     NotificationOutboxClaimService,
     NotificationDeliveryAttemptService,
@@ -27,6 +31,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     ScheduledReminderCancellationService,
   ],
   exports: [
+    ApplicationNotificationService,
     NotificationPayloadService,
     NotificationOutboxClaimService,
     NotificationDeliveryAttemptService,
