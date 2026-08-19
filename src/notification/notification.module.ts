@@ -8,6 +8,7 @@ import { NotificationOutboxClaimService } from './notification-outbox-claim.serv
 import { NotificationOutboxReconciliationService } from './notification-outbox-reconciliation.service';
 import { NotificationPayloadService } from './notification-payload.service';
 import { NotificationProtectedPayloadPurgeService } from './notification-protected-payload-purge.service';
+import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 import { ScheduledReminderCancellationService } from './scheduled-reminder-cancellation.service';
 
@@ -20,6 +21,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     NotificationOutboxReconciliationService,
     NotificationProtectedPayloadPurgeService,
     NotificationOtpPayloadPurgeService,
+    NotificationProviderContractService,
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
     ScheduledReminderCancellationService,
@@ -31,6 +33,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     NotificationOutboxReconciliationService,
     NotificationProtectedPayloadPurgeService,
     NotificationOtpPayloadPurgeService,
+    NotificationProviderContractService,
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
     ScheduledReminderCancellationService,
