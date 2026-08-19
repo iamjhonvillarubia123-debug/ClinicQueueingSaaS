@@ -41,9 +41,9 @@ describe('ApplicationNotificationService', () => {
       notification,
     ]);
 
-    await expect(
-      fixture.service.listForRecipient('doctor-1'),
-    ).resolves.toEqual([notification]);
+    await expect(fixture.service.listForRecipient('doctor-1')).resolves.toEqual(
+      [notification],
+    );
     expect(
       fixture.prisma.applicationNotification.findMany,
     ).toHaveBeenCalledWith(
