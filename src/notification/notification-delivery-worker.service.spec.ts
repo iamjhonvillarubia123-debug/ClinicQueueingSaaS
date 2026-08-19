@@ -141,9 +141,9 @@ describe('NotificationDeliveryWorkerService', () => {
       fixture.submissionBoundaryService.reserveAttempt,
     ).toHaveBeenCalledTimes(1);
     expect(submit).toHaveBeenCalledTimes(1);
-    expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      fixture.attemptService.finalizeReservedAttempt,
+    ).toHaveBeenCalledTimes(1);
     expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledWith(
       claimed.id,
       claimed.processingWorkerId,
