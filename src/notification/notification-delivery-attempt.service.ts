@@ -145,21 +145,6 @@ export class NotificationDeliveryAttemptService {
         );
       }
 
-      const existingLog = await transaction.notificationLog.findUnique({
-        where: {
-          notificationOutboxId_attemptNumber: {
-            notificationOutboxId: outbox.id,
-            attemptNumber,
-          },
-        },
-        select: { id: true },
-      });
-      if (existingLog) {
-        throw new BadRequestException(
-          'Reserved notification attempt has already been finalized.',
-        );
-      }
-
       const resolvedAt =
         result.outcome === NotificationAttemptOutcome.UNCERTAIN
           ? null
