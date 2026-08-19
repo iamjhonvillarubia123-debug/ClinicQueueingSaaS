@@ -102,11 +102,9 @@ describe('NotificationDeliveryWorkerService', () => {
     expect(fixture.payloadService.decryptMessage).toHaveBeenCalledWith(
       'enc-message',
     );
-    expect(fixture.submissionBoundaryService.reserveAttempt).toHaveBeenCalledWith(
-      claimed.id,
-      claimed.processingWorkerId,
-      now,
-    );
+    expect(
+      fixture.submissionBoundaryService.reserveAttempt,
+    ).toHaveBeenCalledWith(claimed.id, claimed.processingWorkerId, now);
     expect(callOrder).toEqual(['reserve', 'submit']);
     expect(submit).toHaveBeenCalledWith({
       notificationOutboxId: claimed.id,
@@ -139,9 +137,9 @@ describe('NotificationDeliveryWorkerService', () => {
 
     await fixture.service.deliverClaimed(claimed, adapter, now);
 
-    expect(fixture.submissionBoundaryService.reserveAttempt).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      fixture.submissionBoundaryService.reserveAttempt,
+    ).toHaveBeenCalledTimes(1);
     expect(submit).toHaveBeenCalledTimes(1);
     expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledTimes(
       1,
@@ -179,7 +177,9 @@ describe('NotificationDeliveryWorkerService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(submit).not.toHaveBeenCalled();
-    expect(fixture.attemptService.finalizeReservedAttempt).not.toHaveBeenCalled();
+    expect(
+      fixture.attemptService.finalizeReservedAttempt,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects an adapter whose channel does not match the claimed outbox', async () => {
@@ -198,7 +198,11 @@ describe('NotificationDeliveryWorkerService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(fixture.mobileNumberService.decrypt).not.toHaveBeenCalled();
     expect(fixture.payloadService.decryptMessage).not.toHaveBeenCalled();
-    expect(fixture.submissionBoundaryService.reserveAttempt).not.toHaveBeenCalled();
-    expect(fixture.attemptService.finalizeReservedAttempt).not.toHaveBeenCalled();
+    expect(
+      fixture.submissionBoundaryService.reserveAttempt,
+    ).not.toHaveBeenCalled();
+    expect(
+      fixture.attemptService.finalizeReservedAttempt,
+    ).not.toHaveBeenCalled();
   });
 });
