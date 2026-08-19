@@ -41,7 +41,9 @@ describe('NotificationDeliveryWorkerService', () => {
       ),
     };
     const submissionBoundaryService = {
-      reserveAttempt: jest.fn(() => Promise.resolve({ attemptNumber: 1 })),
+      reserveAttempt: jest.fn(() =>
+        Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 } as const),
+      ),
     };
 
     return {
@@ -71,12 +73,20 @@ describe('NotificationDeliveryWorkerService', () => {
     };
   }
 
-  it('reserves an attempt before provider submission and finalizes that exact attempt', async () => {
+  it('reserves an attempt before decrypting protected payload and provider submission', async () => {
     const fixture = createService();
     const callOrder: string[] = [];
     fixture.submissionBoundaryService.reserveAttempt.mockImplementation(() => {
       callOrder.push('reserve');
-      return Promise.resolve({ attemptNumber: 1 });
+      return Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 } as const);
+    });
+    fixture.mobileNumberService.decrypt.mockImplementation(() => {
+      callOrder.push('decrypt-mobile');
+      return '+639171234567';
+    });
+    fixture.payloadService.decryptMessage.mockImplementation(() => {
+      callOrder.push('decrypt-message');
+      return 'Your verification code is 123456.';
     });
     const submit = jest.fn<
       ReturnType<NotificationProviderAdapter['submit']>,
@@ -96,16 +106,21 @@ describe('NotificationDeliveryWorkerService', () => {
 
     const result = await fixture.service.deliverClaimed(claimed, adapter, now);
 
+    expect(
+      fixture.submissionBoundaryService.reserveAttempt,
+    ).toHaveBeenCalledWith(claimed.id, claimed.processingWorkerId, now);
     expect(fixture.mobileNumberService.decrypt).toHaveBeenCalledWith(
       'enc-mobile',
     );
     expect(fixture.payloadService.decryptMessage).toHaveBeenCalledWith(
       'enc-message',
     );
-    expect(
-      fixture.submissionBoundaryService.reserveAttempt,
-    ).toHaveBeenCalledWith(claimed.id, claimed.processingWorkerId, now);
-    expect(callOrder).toEqual(['reserve', 'submit']);
+    expect(callOrder).toEqual([
+      'reserve',
+      'decrypt-mobile',
+      'decrypt-message',
+      'submit',
+    ]);
     expect(submit).toHaveBeenCalledWith({
       notificationOutboxId: claimed.id,
       notificationType: NotificationType.OTP_VERIFICATION,
@@ -125,6 +140,34 @@ describe('NotificationDeliveryWorkerService', () => {
       now,
     );
     expect(result.outboxStatus).toBe(NotificationOutboxStatus.SENT);
+  });
+
+  it('returns cancelled without decrypting or calling the provider when the boundary rejects a stale OTP', async () => {
+    const fixture = createService();
+    fixture.submissionBoundaryService.reserveAttempt.mockResolvedValue({
+      disposition: 'CANCELLED',
+      outboxStatus: NotificationOutboxStatus.CANCELLED,
+    } as const);
+    const submit = jest.fn<
+      ReturnType<NotificationProviderAdapter['submit']>,
+      Parameters<NotificationProviderAdapter['submit']>
+    >();
+    const adapter = createAdapter(submit);
+
+    await expect(
+      fixture.service.deliverClaimed(claimed, adapter, now),
+    ).resolves.toEqual({
+      notificationLogId: null,
+      attemptNumber: null,
+      outboxStatus: NotificationOutboxStatus.CANCELLED,
+    });
+
+    expect(fixture.mobileNumberService.decrypt).not.toHaveBeenCalled();
+    expect(fixture.payloadService.decryptMessage).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    expect(
+      fixture.attemptService.finalizeReservedAttempt,
+    ).not.toHaveBeenCalled();
   });
 
   it('records a thrown provider submission as uncertain on the reserved attempt rather than retrying', async () => {
@@ -161,7 +204,7 @@ describe('NotificationDeliveryWorkerService', () => {
     );
   });
 
-  it('does not call the provider when attempt reservation fails', async () => {
+  it('does not decrypt or call the provider when attempt reservation fails', async () => {
     const fixture = createService();
     fixture.submissionBoundaryService.reserveAttempt.mockRejectedValue(
       new BadRequestException('cancelled before submission'),
@@ -176,6 +219,8 @@ describe('NotificationDeliveryWorkerService', () => {
       fixture.service.deliverClaimed(claimed, adapter, now),
     ).rejects.toBeInstanceOf(BadRequestException);
 
+    expect(fixture.mobileNumberService.decrypt).not.toHaveBeenCalled();
+    expect(fixture.payloadService.decryptMessage).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     expect(
       fixture.attemptService.finalizeReservedAttempt,
