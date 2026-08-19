@@ -77,7 +77,9 @@ describe('Notification outbox transaction rollback (e2e)', () => {
         tokenHash: createHash('sha256')
           .update(`rollback-token-${scope}`, 'utf8')
           .digest('hex'),
-        activeResetKey: `rollback-active-${scope}`,
+        activeResetKey: createHash('sha256')
+          .update(`${NotificationType.PASSWORD_RESET}:${user.id}`, 'utf8')
+          .digest('hex'),
         expiresAt,
       },
     });
