@@ -2,7 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   NotificationOutboxStatus,
   NotificationType,
+  PracticeLocationLifecycleStatus,
   Prisma,
+  ScheduledReminderStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -39,6 +41,8 @@ export class NotificationSubmissionBoundaryService {
           id: string;
           notificationType: NotificationType;
           status: NotificationOutboxStatus;
+          practiceLocationId: string | null;
+          scheduledReminderId: string | null;
           otpVerificationId: string | null;
           attemptCount: number;
           processingWorkerId: string | null;
@@ -50,6 +54,8 @@ export class NotificationSubmissionBoundaryService {
             "id",
             "notificationType",
             "status",
+            "practiceLocationId",
+            "scheduledReminderId",
             "otpVerificationId",
             "attemptCount",
             "processingWorkerId",
@@ -137,18 +143,107 @@ export class NotificationSubmissionBoundaryService {
           otp.invalidatedAt !== null;
 
         if (isStale) {
-          await transaction.notificationOutbox.update({
-            where: { id: outbox.id },
+          await this.cancelUnsubmittedOutbox(transaction, outbox.id, now);
+          return {
+            disposition: 'CANCELLED',
+            outboxStatus: NotificationOutboxStatus.CANCELLED,
+          };
+        }
+      }
+
+      if (outbox.notificationType === NotificationType.SCHEDULED_REMINDER) {
+        if (!outbox.scheduledReminderId || !outbox.practiceLocationId) {
+          throw new BadRequestException(
+            'Scheduled reminder notification is missing its delivery context.',
+          );
+        }
+
+        const reminderRows = await transaction.$queryRaw<
+          Array<{
+            id: string;
+            practiceLocationId: string;
+            contactPreferenceId: string;
+            status: ScheduledReminderStatus;
+            expiresAt: Date;
+          }>
+        >(
+          Prisma.sql`
+            SELECT
+              "id",
+              "practiceLocationId",
+              "contactPreferenceId",
+              "status",
+              "expiresAt"
+            FROM "ScheduledReminder"
+            WHERE "id" = ${outbox.scheduledReminderId}
+            FOR UPDATE
+          `,
+        );
+        const reminder = reminderRows[0];
+        if (!reminder || reminder.practiceLocationId !== outbox.practiceLocationId) {
+          throw new BadRequestException(
+            'Scheduled reminder delivery context is inconsistent.',
+          );
+        }
+
+        const preferenceRows = await transaction.$queryRaw<
+          Array<{
+            id: string;
+            withdrawnAt: Date | null;
+            allowFollowUpReminder: boolean;
+          }>
+        >(
+          Prisma.sql`
+            SELECT "id", "withdrawnAt", "allowFollowUpReminder"
+            FROM "ContactPreference"
+            WHERE "id" = ${reminder.contactPreferenceId}
+            FOR UPDATE
+          `,
+        );
+        const preference = preferenceRows[0];
+        if (!preference) {
+          throw new BadRequestException(
+            'Scheduled reminder permission provenance was not found.',
+          );
+        }
+
+        const locationRows = await transaction.$queryRaw<
+          Array<{
+            id: string;
+            lifecycleStatus: PracticeLocationLifecycleStatus;
+          }>
+        >(
+          Prisma.sql`
+            SELECT "id", "lifecycleStatus"
+            FROM "PracticeLocation"
+            WHERE "id" = ${outbox.practiceLocationId}
+            FOR UPDATE
+          `,
+        );
+        const location = locationRows[0];
+        if (!location) {
+          throw new BadRequestException(
+            'Scheduled reminder PracticeLocation was not found.',
+          );
+        }
+
+        const deliveryStillValid =
+          reminder.status === ScheduledReminderStatus.PROCESSING &&
+          reminder.expiresAt.getTime() > now.getTime() &&
+          preference.withdrawnAt === null &&
+          preference.allowFollowUpReminder &&
+          location.lifecycleStatus === PracticeLocationLifecycleStatus.ACTIVE;
+
+        if (!deliveryStillValid) {
+          await this.cancelUnsubmittedOutbox(transaction, outbox.id, now);
+          await transaction.scheduledReminder.updateMany({
+            where: {
+              id: reminder.id,
+              status: ScheduledReminderStatus.PROCESSING,
+            },
             data: {
-              status: NotificationOutboxStatus.CANCELLED,
+              status: ScheduledReminderStatus.CANCELLED,
               cancelledAt: now,
-              processingStartedAt: null,
-              leaseExpiresAt: null,
-              processingWorkerId: null,
-              recipientMobileEncrypted: null,
-              recipientEmailEncrypted: null,
-              messageBodyEncrypted: null,
-              protectedPayloadPurgedAt: now,
             },
           });
 
@@ -166,6 +261,27 @@ export class NotificationSubmissionBoundaryService {
       });
 
       return { disposition: 'RESERVED', attemptNumber };
+    });
+  }
+
+  private async cancelUnsubmittedOutbox(
+    transaction: Prisma.TransactionClient,
+    outboxId: string,
+    now: Date,
+  ): Promise<void> {
+    await transaction.notificationOutbox.update({
+      where: { id: outboxId },
+      data: {
+        status: NotificationOutboxStatus.CANCELLED,
+        cancelledAt: now,
+        processingStartedAt: null,
+        leaseExpiresAt: null,
+        processingWorkerId: null,
+        recipientMobileEncrypted: null,
+        recipientEmailEncrypted: null,
+        messageBodyEncrypted: null,
+        protectedPayloadPurgedAt: now,
+      },
     });
   }
 }
