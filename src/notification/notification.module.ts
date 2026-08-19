@@ -14,6 +14,7 @@ import { NotificationProtectedPayloadPurgeService } from './notification-protect
 import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 import { ScheduledReminderCancellationService } from './scheduled-reminder-cancellation.service';
+import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.service';
 
 @Module({
   imports: [AuthModule, ConfigModule, MobileNumberModule],
@@ -30,6 +31,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
     ScheduledReminderCancellationService,
+    ScheduledReminderHandoffService,
   ],
   exports: [
     ApplicationNotificationService,
@@ -43,6 +45,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
     ScheduledReminderCancellationService,
+    ScheduledReminderHandoffService,
   ],
 })
 export class NotificationModule {}
