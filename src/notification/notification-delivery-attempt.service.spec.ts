@@ -356,7 +356,9 @@ describe('NotificationDeliveryAttemptService', () => {
       notificationType: NotificationType.SCHEDULED_REMINDER,
       scheduledReminderId: 'reminder-4',
     });
-    transaction.scheduledReminder.updateMany.mockResolvedValueOnce({ count: 0 });
+    transaction.scheduledReminder.updateMany.mockResolvedValueOnce({
+      count: 0,
+    });
 
     await expect(
       service.finalizeAttempt(
