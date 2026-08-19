@@ -54,9 +54,11 @@ export class NotificationOutboxReconciliationService {
     const leaseExpiresAt = new Date(now.getTime() + leaseDurationMs);
 
     return this.prisma.$transaction(async (transaction) => {
-      const candidates = await transaction.$queryRaw<Array<{ id: string }>>(
+      const candidates = await transaction.$queryRaw<
+        Array<{ id: string; processingStartedAt: Date }>
+      >(
         Prisma.sql`
-          SELECT "id"
+          SELECT "id", "processingStartedAt"
           FROM "NotificationOutbox"
           WHERE "status" = ${NotificationOutboxStatus.PROCESSING}::"NotificationOutboxStatus"
             AND "leaseExpiresAt" < ${now}
@@ -89,7 +91,6 @@ export class NotificationOutboxReconciliationService {
       const outbox = await transaction.notificationOutbox.update({
         where: { id: candidate.id },
         data: {
-          processingStartedAt: now,
           leaseExpiresAt,
           processingWorkerId: normalizedWorkerId,
         },
@@ -107,7 +108,7 @@ export class NotificationOutboxReconciliationService {
         providerReference: latestUncertain?.providerReference ?? null,
         providerStatus: latestUncertain?.providerStatus ?? null,
         latestAttemptNumber: latestUncertain?.attemptNumber ?? null,
-        processingStartedAt: now,
+        processingStartedAt: candidate.processingStartedAt,
         leaseExpiresAt,
         processingWorkerId: normalizedWorkerId,
       };
