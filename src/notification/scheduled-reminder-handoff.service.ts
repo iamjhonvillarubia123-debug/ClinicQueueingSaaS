@@ -28,7 +28,12 @@ export type ScheduledReminderHandoffResult = {
   scheduledReminderId: string;
   status: ScheduledReminderStatus;
   notificationOutboxId: string | null;
-  disposition: 'HANDED_OFF' | 'NOT_DUE' | 'EXPIRED' | 'CANCELLED' | 'ALREADY_HANDED_OFF';
+  disposition:
+    | 'HANDED_OFF'
+    | 'NOT_DUE'
+    | 'EXPIRED'
+    | 'CANCELLED'
+    | 'ALREADY_HANDED_OFF';
 };
 
 @Injectable()
