@@ -4,6 +4,7 @@ import {
   NotificationChannel,
   NotificationOutboxStatus,
   NotificationType,
+  ScheduledReminderStatus,
 } from '../../generated/prisma/client';
 import { NotificationDeliveryAttemptService } from './notification-delivery-attempt.service';
 
@@ -12,6 +13,7 @@ type OutboxRow = {
   notificationType: NotificationType;
   channel: NotificationChannel;
   status: NotificationOutboxStatus;
+  scheduledReminderId: string | null;
   attemptCount: number;
   processingWorkerId: string | null;
   leaseExpiresAt: Date | null;
@@ -28,6 +30,18 @@ type NotificationLogCreateArgs = {
   data: Record<string, unknown>;
 };
 
+type ScheduledReminderUpdateManyArgs = {
+  where: {
+    id: string;
+    status: ScheduledReminderStatus;
+  };
+  data: {
+    status: ScheduledReminderStatus;
+    sentAt?: Date;
+    failedAt?: Date;
+  };
+};
+
 type MockTransaction = {
   $queryRaw: jest.Mock<Promise<OutboxRow[]>, unknown[]>;
   notificationLog: {
@@ -37,6 +51,12 @@ type MockTransaction = {
     update: jest.Mock<
       Promise<{ status: NotificationOutboxStatus }>,
       [OutboxUpdateArgs]
+    >;
+  };
+  scheduledReminder: {
+    updateMany: jest.Mock<
+      Promise<{ count: number }>,
+      [ScheduledReminderUpdateManyArgs]
     >;
   };
 };
@@ -50,6 +70,7 @@ describe('NotificationDeliveryAttemptService', () => {
     notificationType: NotificationType.OTP_VERIFICATION,
     channel: NotificationChannel.SMS,
     status: NotificationOutboxStatus.PROCESSING,
+    scheduledReminderId: null,
     attemptCount: 0,
     processingWorkerId: 'worker-1',
     leaseExpiresAt,
@@ -71,6 +92,12 @@ describe('NotificationDeliveryAttemptService', () => {
           Promise<{ status: NotificationOutboxStatus }>,
           [OutboxUpdateArgs]
         >(({ data }) => Promise.resolve({ status: data.status })),
+      },
+      scheduledReminder: {
+        updateMany: jest.fn<
+          Promise<{ count: number }>,
+          [ScheduledReminderUpdateManyArgs]
+        >(() => Promise.resolve({ count: 1 })),
       },
     };
 
@@ -134,6 +161,8 @@ describe('NotificationDeliveryAttemptService', () => {
       },
       select: { status: true },
     });
+
+    expect(transaction.scheduledReminder.updateMany).not.toHaveBeenCalled();
   });
 
   it('records retryable failure and returns the same logical outbox to pending', async () => {
@@ -230,6 +259,116 @@ describe('NotificationDeliveryAttemptService', () => {
       },
       select: { status: true },
     });
+  });
+
+  it('synchronizes scheduled reminder to sent when provider delivery succeeds', async () => {
+    const scheduledReminderId = 'reminder-1';
+    const { service, transaction } = createService({
+      ...outboxRow,
+      notificationType: NotificationType.SCHEDULED_REMINDER,
+      scheduledReminderId,
+    });
+
+    await service.finalizeAttempt(
+      outboxRow.id,
+      'worker-1',
+      {
+        outcome: NotificationAttemptOutcome.SUCCESS,
+        submittedAt: now,
+      },
+      now,
+    );
+
+    expect(transaction.scheduledReminder.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: scheduledReminderId,
+        status: ScheduledReminderStatus.PROCESSING,
+      },
+      data: {
+        status: ScheduledReminderStatus.SENT,
+        sentAt: now,
+      },
+    });
+  });
+
+  it('synchronizes scheduled reminder to failed on permanent delivery failure', async () => {
+    const scheduledReminderId = 'reminder-2';
+    const { service, transaction } = createService({
+      ...outboxRow,
+      notificationType: NotificationType.SCHEDULED_REMINDER,
+      scheduledReminderId,
+    });
+
+    await service.finalizeAttempt(
+      outboxRow.id,
+      'worker-1',
+      {
+        outcome: NotificationAttemptOutcome.PERMANENT_FAILURE,
+        submittedAt: now,
+      },
+      now,
+    );
+
+    expect(transaction.scheduledReminder.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: scheduledReminderId,
+        status: ScheduledReminderStatus.PROCESSING,
+      },
+      data: {
+        status: ScheduledReminderStatus.FAILED,
+        failedAt: now,
+      },
+    });
+  });
+
+  it.each([
+    NotificationAttemptOutcome.RETRYABLE_FAILURE,
+    NotificationAttemptOutcome.UNCERTAIN,
+  ])(
+    'leaves scheduled reminder processing for %s provider outcome',
+    async (outcome) => {
+      const { service, transaction } = createService({
+        ...outboxRow,
+        notificationType: NotificationType.SCHEDULED_REMINDER,
+        scheduledReminderId: 'reminder-3',
+      });
+
+      await service.finalizeAttempt(
+        outboxRow.id,
+        'worker-1',
+        {
+          outcome,
+          submittedAt: now,
+          ...(outcome === NotificationAttemptOutcome.RETRYABLE_FAILURE
+            ? { nextAttemptAt: new Date('2026-08-18T12:10:00.000Z') }
+            : {}),
+        },
+        now,
+      );
+
+      expect(transaction.scheduledReminder.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects scheduled reminder terminal synchronization when the reminder is not processing', async () => {
+    const { service, transaction } = createService({
+      ...outboxRow,
+      notificationType: NotificationType.SCHEDULED_REMINDER,
+      scheduledReminderId: 'reminder-4',
+    });
+    transaction.scheduledReminder.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      service.finalizeAttempt(
+        outboxRow.id,
+        'worker-1',
+        {
+          outcome: NotificationAttemptOutcome.SUCCESS,
+          submittedAt: now,
+        },
+        now,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects finalization when the worker does not own an active lease', async () => {
