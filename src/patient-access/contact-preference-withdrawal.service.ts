@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { Prisma, ScheduledReminderStatus } from '../../generated/prisma/client';
 import { ScheduledReminderCancellationService } from '../notification/scheduled-reminder-cancellation.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,11 +27,10 @@ export class ContactPreferenceWithdrawalService {
       const rows = await transaction.$queryRaw<
         Array<{
           id: string;
-          allowFollowUpReminder: boolean;
           withdrawnAt: Date | null;
         }>
       >(Prisma.sql`
-        SELECT "id", "allowFollowUpReminder", "withdrawnAt"
+        SELECT "id", "withdrawnAt"
         FROM "ContactPreference"
         WHERE "appointmentId" = ${access.appointment.id}
         LIMIT 1
@@ -83,7 +82,9 @@ export class ContactPreferenceWithdrawalService {
           );
         if (result.reconciliationRequired) {
           reconciliationRequired = true;
-        } else if (result.reminderStatus === ScheduledReminderStatus.CANCELLED) {
+        } else if (
+          result.reminderStatus === ScheduledReminderStatus.CANCELLED
+        ) {
           cancelledReminderCount += 1;
         }
       }
@@ -98,6 +99,6 @@ export class ContactPreferenceWithdrawalService {
   }
 
   private fail(): never {
-    throw new Error('Contact preference is unavailable.');
+    throw new UnauthorizedException('Patient booking access is unavailable.');
   }
 }
