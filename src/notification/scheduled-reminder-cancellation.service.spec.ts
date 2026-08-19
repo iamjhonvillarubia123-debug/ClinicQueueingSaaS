@@ -63,7 +63,7 @@ describe('ScheduledReminderCancellationService', () => {
         ),
       },
       notificationLog: {
-        findFirst: jest.fn(() =>
+        findFirst: jest.fn((_args: Record<string, unknown>) =>
           Promise.resolve(
             latestRecordedAttempt > 0
               ? { attemptNumber: latestRecordedAttempt }
