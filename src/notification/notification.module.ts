@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { NotificationDeliveryAttemptService } from './notification-delivery-attempt.service';
 import { NotificationDeliveryWorkerService } from './notification-delivery-worker.service';
+import { NotificationOtpPayloadPurgeService } from './notification-otp-payload-purge.service';
 import { NotificationOutboxClaimService } from './notification-outbox-claim.service';
 import { NotificationOutboxReconciliationService } from './notification-outbox-reconciliation.service';
 import { NotificationPayloadService } from './notification-payload.service';
@@ -18,6 +19,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
     NotificationProtectedPayloadPurgeService,
+    NotificationOtpPayloadPurgeService,
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
     ScheduledReminderCancellationService,
@@ -28,6 +30,7 @@ import { ScheduledReminderCancellationService } from './scheduled-reminder-cance
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
     NotificationProtectedPayloadPurgeService,
+    NotificationOtpPayloadPurgeService,
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
     ScheduledReminderCancellationService,
