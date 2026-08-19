@@ -99,7 +99,9 @@ describe('ContactPreferenceWithdrawalService', () => {
       reconciliationRequired: false,
     });
     expect(fixture.transaction.contactPreference.update).not.toHaveBeenCalled();
-    expect(fixture.transaction.scheduledReminder.findMany).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.scheduledReminder.findMany,
+    ).not.toHaveBeenCalled();
   });
 
   it('requires a management token scoped to the same Appointment', async () => {
