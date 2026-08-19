@@ -52,6 +52,7 @@ export class NotificationProviderContractService {
   assertSubmissionResult(
     adapter: NotificationProviderAdapter,
     result: NotificationProviderSubmissionResult,
+    protectedValues: readonly string[] = [],
   ): void {
     if (result.providerName !== adapter.providerName) {
       throw new BadRequestException(
@@ -90,6 +91,28 @@ export class NotificationProviderContractService {
       true,
     );
 
+    const sensitiveFragments = this.deriveSensitiveFragments(protectedValues);
+    this.assertNoSensitiveContent(
+      result.providerReference,
+      'Notification provider reference',
+      sensitiveFragments,
+    );
+    this.assertNoSensitiveContent(
+      result.providerStatus,
+      'Notification provider status',
+      sensitiveFragments,
+    );
+    this.assertNoSensitiveContent(
+      result.providerErrorCode,
+      'Notification provider error code',
+      sensitiveFragments,
+    );
+    this.assertNoSensitiveContent(
+      result.failureDetailSanitized,
+      'Notification provider failure detail',
+      sensitiveFragments,
+    );
+
     this.assertValidDate(result.submittedAt, 'Notification submittedAt');
     if (result.resolvedAt !== undefined && result.resolvedAt !== null) {
       this.assertValidDate(result.resolvedAt, 'Notification resolvedAt');
@@ -113,6 +136,41 @@ export class NotificationProviderContractService {
     ) {
       throw new BadRequestException(
         'Only retryable notification failure may schedule another attempt.',
+      );
+    }
+  }
+
+  private deriveSensitiveFragments(values: readonly string[]): string[] {
+    const fragments = new Set<string>();
+
+    for (const rawValue of values) {
+      const value = rawValue.trim();
+      if (value.length >= 4) fragments.add(value);
+
+      for (const match of value.matchAll(/https?:\/\/\S+/giu)) {
+        fragments.add(match[0]);
+      }
+      for (const match of value.matchAll(/\b\d{6,}\b/gu)) {
+        fragments.add(match[0]);
+      }
+      for (const match of value.matchAll(/\b[A-Za-z0-9_-]{16,}\b/gu)) {
+        fragments.add(match[0]);
+      }
+    }
+
+    return [...fragments];
+  }
+
+  private assertNoSensitiveContent(
+    value: string | null | undefined,
+    fieldName: string,
+    sensitiveFragments: readonly string[],
+  ): void {
+    if (!value) return;
+
+    if (sensitiveFragments.some((fragment) => value.includes(fragment))) {
+      throw new BadRequestException(
+        `${fieldName} contains protected delivery content.`,
       );
     }
   }
