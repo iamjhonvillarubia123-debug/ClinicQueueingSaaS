@@ -34,6 +34,22 @@ type ReconciliationApplied = {
   outboxStatus: NotificationOutboxStatus;
 };
 
+function requiredEpochDate(value: number | null): Date {
+  if (value === null || !Number.isFinite(value)) {
+    throw new BadRequestException(
+      'Notification reconciliation is missing its original processing start.',
+    );
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new BadRequestException(
+      'Notification reconciliation processing start is invalid.',
+    );
+  }
+  return date;
+}
+
 @Injectable()
 export class NotificationOutboxReconciliationService {
   constructor(private readonly prisma: PrismaService) {}
@@ -55,10 +71,13 @@ export class NotificationOutboxReconciliationService {
 
     return this.prisma.$transaction(async (transaction) => {
       const candidates = await transaction.$queryRaw<
-        Array<{ id: string; processingStartedAt: Date | null }>
+        Array<{ id: string; processingStartedAtEpochMs: number | null }>
       >(
         Prisma.sql`
-          SELECT "id", "processingStartedAt"
+          SELECT
+            "id",
+            (EXTRACT(EPOCH FROM "processingStartedAt") * 1000)::double precision
+              AS "processingStartedAtEpochMs"
           FROM "NotificationOutbox"
           WHERE "status" = ${NotificationOutboxStatus.PROCESSING}::"NotificationOutboxStatus"
             AND "leaseExpiresAt" < ${now}
@@ -73,11 +92,9 @@ export class NotificationOutboxReconciliationService {
 
       const candidate = candidates[0];
       if (!candidate) return null;
-      if (!candidate.processingStartedAt) {
-        throw new BadRequestException(
-          'Notification reconciliation is missing its original processing start.',
-        );
-      }
+      const processingStartedAt = requiredEpochDate(
+        candidate.processingStartedAtEpochMs,
+      );
 
       const latestUncertain = await transaction.notificationLog.findFirst({
         where: {
@@ -116,7 +133,7 @@ export class NotificationOutboxReconciliationService {
         providerReference: latestUncertain?.providerReference ?? null,
         providerStatus: latestUncertain?.providerStatus ?? null,
         latestAttemptNumber: latestUncertain?.attemptNumber ?? null,
-        processingStartedAt: candidate.processingStartedAt,
+        processingStartedAt,
         leaseExpiresAt,
         processingWorkerId: normalizedWorkerId,
       };
@@ -152,7 +169,7 @@ export class NotificationOutboxReconciliationService {
           status: NotificationOutboxStatus;
           processingWorkerId: string | null;
           leaseExpiresAt: Date | null;
-          processingStartedAt: Date | null;
+          processingStartedAtEpochMs: number | null;
         }>
       >(
         Prisma.sql`
@@ -161,7 +178,8 @@ export class NotificationOutboxReconciliationService {
             "status",
             "processingWorkerId",
             "leaseExpiresAt",
-            "processingStartedAt"
+            (EXTRACT(EPOCH FROM "processingStartedAt") * 1000)::double precision
+              AS "processingStartedAtEpochMs"
           FROM "NotificationOutbox"
           WHERE "id" = ${outboxId}
           FOR UPDATE
@@ -182,11 +200,9 @@ export class NotificationOutboxReconciliationService {
           'Notification worker does not own an active reconciliation lease.',
         );
       }
-      if (!locked.processingStartedAt) {
-        throw new BadRequestException(
-          'Notification reconciliation is missing its original processing start.',
-        );
-      }
+      const processingStartedAt = requiredEpochDate(
+        locked.processingStartedAtEpochMs,
+      );
 
       const outbox = await transaction.notificationOutbox.findUniqueOrThrow({
         where: { id: locked.id },
@@ -243,7 +259,7 @@ export class NotificationOutboxReconciliationService {
                 : 'reconciled-confirmed-permanent-failure',
             retryRecommended: false,
             providerIdempotencyKeyUsed: outbox.providerIdempotencyKey,
-            submittedAt: locked.processingStartedAt,
+            submittedAt: processingStartedAt,
             resolvedAt,
             expiresAt: new Date(resolvedAt.getTime() + LOG_RETENTION_MS),
           },
