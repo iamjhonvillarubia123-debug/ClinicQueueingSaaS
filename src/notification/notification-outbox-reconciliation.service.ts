@@ -148,49 +148,50 @@ export class NotificationOutboxReconciliationService {
       const rows = await transaction.$queryRaw<
         Array<{
           id: string;
-          notificationType: NotificationType;
-          channel: NotificationChannel;
-          scheduledReminderId: string | null;
           status: NotificationOutboxStatus;
-          attemptCount: number;
           processingWorkerId: string | null;
-          processingStartedAt: Date | null;
           leaseExpiresAt: Date | null;
-          providerIdempotencyKey: string;
         }>
       >(
         Prisma.sql`
           SELECT
             "id",
-            "notificationType",
-            "channel",
-            "scheduledReminderId",
             "status",
-            "attemptCount",
             "processingWorkerId",
-            "processingStartedAt",
-            "leaseExpiresAt",
-            "providerIdempotencyKey"
+            "leaseExpiresAt"
           FROM "NotificationOutbox"
           WHERE "id" = ${outboxId}
           FOR UPDATE
         `,
       );
 
-      const outbox = rows[0];
-      if (!outbox) {
+      const locked = rows[0];
+      if (!locked) {
         throw new BadRequestException('Notification outbox was not found.');
       }
       if (
-        outbox.status !== NotificationOutboxStatus.PROCESSING ||
-        outbox.processingWorkerId !== normalizedWorkerId ||
-        !outbox.leaseExpiresAt ||
-        outbox.leaseExpiresAt.getTime() < now.getTime()
+        locked.status !== NotificationOutboxStatus.PROCESSING ||
+        locked.processingWorkerId !== normalizedWorkerId ||
+        !locked.leaseExpiresAt ||
+        locked.leaseExpiresAt.getTime() < now.getTime()
       ) {
         throw new BadRequestException(
           'Notification worker does not own an active reconciliation lease.',
         );
       }
+
+      const outbox = await transaction.notificationOutbox.findUniqueOrThrow({
+        where: { id: locked.id },
+        select: {
+          id: true,
+          notificationType: true,
+          channel: true,
+          scheduledReminderId: true,
+          attemptCount: true,
+          processingStartedAt: true,
+          providerIdempotencyKey: true,
+        },
+      });
 
       const latestLog = await transaction.notificationLog.findFirst({
         where: { notificationOutboxId: outbox.id },
