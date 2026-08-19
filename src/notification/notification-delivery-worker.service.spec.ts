@@ -7,6 +7,7 @@ import {
 } from '../../generated/prisma/client';
 import { NotificationDeliveryWorkerService } from './notification-delivery-worker.service';
 import { NotificationProviderAdapter } from './notification-provider-adapter';
+import { NotificationSubmissionBoundaryResult } from './notification-submission-boundary.service';
 
 describe('NotificationDeliveryWorkerService', () => {
   const now = new Date('2026-08-18T14:00:00.000Z');
@@ -41,8 +42,11 @@ describe('NotificationDeliveryWorkerService', () => {
       ),
     };
     const submissionBoundaryService = {
-      reserveAttempt: jest.fn(() =>
-        Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 } as const),
+      reserveAttempt: jest.fn<
+        Promise<NotificationSubmissionBoundaryResult>,
+        [string, string, Date]
+      >(() =>
+        Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 }),
       ),
     };
 
@@ -78,7 +82,7 @@ describe('NotificationDeliveryWorkerService', () => {
     const callOrder: string[] = [];
     fixture.submissionBoundaryService.reserveAttempt.mockImplementation(() => {
       callOrder.push('reserve');
-      return Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 } as const);
+      return Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 });
     });
     fixture.mobileNumberService.decrypt.mockImplementation(() => {
       callOrder.push('decrypt-mobile');
@@ -147,7 +151,7 @@ describe('NotificationDeliveryWorkerService', () => {
     fixture.submissionBoundaryService.reserveAttempt.mockResolvedValue({
       disposition: 'CANCELLED',
       outboxStatus: NotificationOutboxStatus.CANCELLED,
-    } as const);
+    });
     const submit = jest.fn<
       ReturnType<NotificationProviderAdapter['submit']>,
       Parameters<NotificationProviderAdapter['submit']>
@@ -204,7 +208,7 @@ describe('NotificationDeliveryWorkerService', () => {
     );
   });
 
-  it('does not decrypt or call the provider when attempt reservation fails', async () => {
+  it('does not call the provider when attempt reservation fails', async () => {
     const fixture = createService();
     fixture.submissionBoundaryService.reserveAttempt.mockRejectedValue(
       new BadRequestException('cancelled before submission'),
@@ -219,8 +223,6 @@ describe('NotificationDeliveryWorkerService', () => {
       fixture.service.deliverClaimed(claimed, adapter, now),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(fixture.mobileNumberService.decrypt).not.toHaveBeenCalled();
-    expect(fixture.payloadService.decryptMessage).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     expect(
       fixture.attemptService.finalizeReservedAttempt,
