@@ -7,6 +7,7 @@ import {
 } from '../../generated/prisma/client';
 import { NotificationDeliveryWorkerService } from './notification-delivery-worker.service';
 import { NotificationProviderAdapter } from './notification-provider-adapter';
+import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryResult } from './notification-submission-boundary.service';
 
 describe('NotificationDeliveryWorkerService', () => {
@@ -47,6 +48,7 @@ describe('NotificationDeliveryWorkerService', () => {
         [string, string, Date]
       >(() => Promise.resolve({ disposition: 'RESERVED', attemptNumber: 1 })),
     };
+    const providerContractService = new NotificationProviderContractService();
 
     return {
       service: new NotificationDeliveryWorkerService(
@@ -54,6 +56,7 @@ describe('NotificationDeliveryWorkerService', () => {
         payloadService as never,
         attemptService as never,
         submissionBoundaryService as never,
+        providerContractService,
       ),
       mobileNumberService,
       payloadService,
@@ -202,6 +205,36 @@ describe('NotificationDeliveryWorkerService', () => {
         submittedAt: now,
         resolvedAt: null,
       },
+      now,
+    );
+  });
+
+  it('records invalid provider output as uncertain instead of trusting it', async () => {
+    const fixture = createService();
+    const submit = jest.fn<
+      ReturnType<NotificationProviderAdapter['submit']>,
+      Parameters<NotificationProviderAdapter['submit']>
+    >(() =>
+      Promise.resolve({
+        outcome: NotificationAttemptOutcome.SUCCESS,
+        providerName: 'different-provider',
+        providerStatus: 'accepted',
+        submittedAt: now,
+        resolvedAt: now,
+      }),
+    );
+
+    await fixture.service.deliverClaimed(claimed, createAdapter(submit), now);
+
+    expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledWith(
+      claimed.id,
+      claimed.processingWorkerId,
+      1,
+      expect.objectContaining({
+        outcome: NotificationAttemptOutcome.UNCERTAIN,
+        providerName: 'provider-a',
+        providerStatus: 'submission-result-unavailable',
+      }),
       now,
     );
   });
