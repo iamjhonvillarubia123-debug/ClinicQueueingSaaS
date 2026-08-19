@@ -25,7 +25,9 @@ describe('ScheduledReminderHandoffService', () => {
       getOrThrow: jest.fn().mockReturnValue('https://app.example.test/'),
     };
     const notificationPayload = {
-      encryptMessage: jest.fn().mockReturnValue('encrypted-final-message'),
+      encryptMessage: jest
+        .fn<string, [string]>()
+        .mockReturnValue('encrypted-final-message'),
     };
     const service = new ScheduledReminderHandoffService(
       prisma as never,
@@ -72,7 +74,9 @@ describe('ScheduledReminderHandoffService', () => {
     expect(fixture.notificationPayload.encryptMessage).toHaveBeenCalledWith(
       'Please schedule your follow-up.\n\nBook again: https://app.example.test/book/location-1',
     );
-    expect(fixture.transaction.notificationOutbox.create).toHaveBeenCalledWith(
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: NotificationOutboxStatus.PENDING,
@@ -106,7 +110,9 @@ describe('ScheduledReminderHandoffService', () => {
       notificationOutboxId: null,
       disposition: 'CANCELLED',
     });
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
     expect(fixture.transaction.scheduledReminder.update).toHaveBeenCalledWith({
       where: { id: 'reminder-1' },
       data: {
@@ -130,7 +136,9 @@ describe('ScheduledReminderHandoffService', () => {
       notificationOutboxId: null,
       disposition: 'EXPIRED',
     });
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
     expect(fixture.transaction.scheduledReminder.update).toHaveBeenCalledWith({
       where: { id: 'reminder-1' },
       data: {
@@ -149,14 +157,14 @@ describe('ScheduledReminderHandoffService', () => {
       id: 'outbox-1',
     });
 
-    await expect(
-      fixture.service.handoffOne('reminder-1'),
-    ).resolves.toEqual({
+    await expect(fixture.service.handoffOne('reminder-1')).resolves.toEqual({
       scheduledReminderId: 'reminder-1',
       status: ScheduledReminderStatus.PROCESSING,
       notificationOutboxId: 'outbox-1',
       disposition: 'ALREADY_HANDED_OFF',
     });
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
   });
 });
