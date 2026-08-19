@@ -134,8 +134,7 @@ export class NotificationDeliveryAttemptService {
         );
       }
 
-      const attemptNumber =
-        reservedAttemptNumber ?? outbox.attemptCount + 1;
+      const attemptNumber = reservedAttemptNumber ?? outbox.attemptCount + 1;
       if (
         reservedAttemptNumber !== null &&
         outbox.attemptCount !== reservedAttemptNumber
