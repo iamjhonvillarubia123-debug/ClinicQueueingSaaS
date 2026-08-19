@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from '../auth/auth.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { ApplicationNotificationController } from './application-notification.controller';
 import { ApplicationNotificationService } from './application-notification.service';
@@ -15,7 +16,7 @@ import { NotificationSubmissionBoundaryService } from './notification-submission
 import { ScheduledReminderCancellationService } from './scheduled-reminder-cancellation.service';
 
 @Module({
-  imports: [ConfigModule, MobileNumberModule],
+  imports: [AuthModule, ConfigModule, MobileNumberModule],
   controllers: [ApplicationNotificationController],
   providers: [
     ApplicationNotificationService,
