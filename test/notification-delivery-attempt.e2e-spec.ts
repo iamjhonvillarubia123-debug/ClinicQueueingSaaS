@@ -196,4 +196,108 @@ describe('Notification delivery attempt persistence controls (e2e)', () => {
     expect(logs[0].retryRecommended).toBe(true);
     expect(logs[1].retryRecommended).toBe(false);
   }, 30_000);
+
+  it('rejects duplicate processing of the same provider success and keeps one terminal attempt', async () => {
+    const scope = randomUUID().replaceAll('-', '');
+    const now = new Date();
+    const deliveryIdentityKey = createHash('sha256')
+      .update(`m9-duplicate-provider|${scope}`, 'utf8')
+      .digest('hex');
+    const commandIdentityKey = createHash('sha256')
+      .update(`m9-duplicate-provider-command|${scope}`, 'utf8')
+      .digest('hex');
+    const providerIdempotencyKey = `m9-duplicate-provider-${scope}`;
+    const workerId = `duplicate-worker-${scope.slice(0, 8)}`;
+
+    const doctor = await prisma.user.create({
+      data: {
+        email: `m9-duplicate-${scope}@example.test`,
+        firstName: 'Duplicate',
+        lastName: 'Provider',
+        mobileNumber: `+63919${scope.slice(0, 7)}`,
+        passwordHash: 'm9-duplicate-e2e-fixture-not-a-real-password-hash',
+        role: UserRole.DOCTOR,
+      },
+    });
+
+    const command = await prisma.commandIdempotency.create({
+      data: {
+        idempotencyKey: `m9-duplicate-${scope}`,
+        commandIdentityKey,
+        commandType: CommandType.DOCTOR_DISABLE_ACCOUNT,
+        requestFingerprint: deliveryIdentityKey,
+        actorUserId: doctor.id,
+        accountUserId: doctor.id,
+        completedAt: now,
+        expiresAt: new Date(now.getTime() + 7 * DAY_MS),
+        createdAt: now,
+      },
+    });
+
+    const outbox = await prisma.notificationOutbox.create({
+      data: {
+        deliveryIdentityKey,
+        notificationType: NotificationType.SECURITY_NOTIFICATION,
+        channel: NotificationChannel.SMS,
+        status: NotificationOutboxStatus.PROCESSING,
+        practiceLocationId: null,
+        commandIdempotencyId: command.id,
+        recipientMobileEncrypted: `enc-${scope}`,
+        recipientEmailEncrypted: null,
+        messageBodyEncrypted: `message-${scope}`,
+        providerIdempotencyKey,
+        attemptCount: 1,
+        processingStartedAt: now,
+        leaseExpiresAt: new Date(now.getTime() + 60_000),
+        processingWorkerId: workerId,
+        nextAttemptAt: now,
+        expiresAt: new Date(now.getTime() + DAY_MS),
+      },
+    });
+
+    const providerResult = {
+      outcome: NotificationAttemptOutcome.SUCCESS,
+      providerName: 'provider-a',
+      providerReference: `provider-message-${scope}`,
+      providerStatus: 'accepted',
+      submittedAt: now,
+      resolvedAt: now,
+    };
+
+    await attemptService.finalizeReservedAttempt(
+      outbox.id,
+      workerId,
+      1,
+      providerResult,
+      now,
+    );
+
+    await expect(
+      attemptService.finalizeReservedAttempt(
+        outbox.id,
+        workerId,
+        1,
+        providerResult,
+        now,
+      ),
+    ).rejects.toThrow(
+      'Notification worker does not own an active processing lease.',
+    );
+
+    const finalOutbox = await prisma.notificationOutbox.findUniqueOrThrow({
+      where: { id: outbox.id },
+    });
+    expect(finalOutbox.status).toBe(NotificationOutboxStatus.SENT);
+    expect(finalOutbox.attemptCount).toBe(1);
+    expect(finalOutbox.sentAt?.getTime()).toBe(now.getTime());
+
+    const logs = await prisma.notificationLog.findMany({
+      where: { notificationOutboxId: outbox.id },
+      orderBy: { attemptNumber: 'asc' },
+    });
+    expect(logs).toHaveLength(1);
+    expect(logs[0].attemptNumber).toBe(1);
+    expect(logs[0].outcome).toBe(NotificationAttemptOutcome.SUCCESS);
+    expect(logs[0].providerIdempotencyKeyUsed).toBe(providerIdempotencyKey);
+  }, 30_000);
 });
