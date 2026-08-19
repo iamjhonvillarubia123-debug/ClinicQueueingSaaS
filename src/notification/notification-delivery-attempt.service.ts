@@ -40,6 +40,38 @@ export class NotificationDeliveryAttemptService {
     result: ProviderAttemptResult,
     now = new Date(),
   ): Promise<FinalizedAttempt> {
+    return this.finalizeInternal(outboxId, workerId, null, result, now);
+  }
+
+  async finalizeReservedAttempt(
+    outboxId: string,
+    workerId: string,
+    attemptNumber: number,
+    result: ProviderAttemptResult,
+    now = new Date(),
+  ): Promise<FinalizedAttempt> {
+    if (!Number.isInteger(attemptNumber) || attemptNumber <= 0) {
+      throw new BadRequestException(
+        'Reserved notification attempt number is invalid.',
+      );
+    }
+
+    return this.finalizeInternal(
+      outboxId,
+      workerId,
+      attemptNumber,
+      result,
+      now,
+    );
+  }
+
+  private async finalizeInternal(
+    outboxId: string,
+    workerId: string,
+    reservedAttemptNumber: number | null,
+    result: ProviderAttemptResult,
+    now: Date,
+  ): Promise<FinalizedAttempt> {
     const normalizedWorkerId = workerId.trim();
     if (!outboxId.trim() || !normalizedWorkerId) {
       throw new BadRequestException(
@@ -102,7 +134,32 @@ export class NotificationDeliveryAttemptService {
         );
       }
 
-      const attemptNumber = outbox.attemptCount + 1;
+      const attemptNumber =
+        reservedAttemptNumber ?? outbox.attemptCount + 1;
+      if (
+        reservedAttemptNumber !== null &&
+        outbox.attemptCount !== reservedAttemptNumber
+      ) {
+        throw new BadRequestException(
+          'Reserved notification attempt does not match the outbox state.',
+        );
+      }
+
+      const existingLog = await transaction.notificationLog.findUnique({
+        where: {
+          notificationOutboxId_attemptNumber: {
+            notificationOutboxId: outbox.id,
+            attemptNumber,
+          },
+        },
+        select: { id: true },
+      });
+      if (existingLog) {
+        throw new BadRequestException(
+          'Reserved notification attempt has already been finalized.',
+        );
+      }
+
       const resolvedAt =
         result.outcome === NotificationAttemptOutcome.UNCERTAIN
           ? null
