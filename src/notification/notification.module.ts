@@ -6,6 +6,7 @@ import { NotificationDeliveryWorkerService } from './notification-delivery-worke
 import { NotificationOutboxClaimService } from './notification-outbox-claim.service';
 import { NotificationOutboxReconciliationService } from './notification-outbox-reconciliation.service';
 import { NotificationPayloadService } from './notification-payload.service';
+import { ScheduledReminderCancellationService } from './scheduled-reminder-cancellation.service';
 
 @Module({
   imports: [ConfigModule, MobileNumberModule],
@@ -15,6 +16,7 @@ import { NotificationPayloadService } from './notification-payload.service';
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
     NotificationDeliveryWorkerService,
+    ScheduledReminderCancellationService,
   ],
   exports: [
     NotificationPayloadService,
@@ -22,6 +24,7 @@ import { NotificationPayloadService } from './notification-payload.service';
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
     NotificationDeliveryWorkerService,
+    ScheduledReminderCancellationService,
   ],
 })
 export class NotificationModule {}
