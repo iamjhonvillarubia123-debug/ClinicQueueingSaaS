@@ -21,6 +21,7 @@ type MockTransaction = {
 type OtpRow = {
   id: string;
   expiresAt: Date;
+  verifiedAt: Date | null;
   consumedAt: Date | null;
   invalidatedAt: Date | null;
 };
@@ -31,6 +32,7 @@ describe('NotificationSubmissionBoundaryService', () => {
   const freshOtp: OtpRow = {
     id: 'otp-1',
     expiresAt: new Date('2026-08-19T05:10:00.000Z'),
+    verifiedAt: null,
     consumedAt: null,
     invalidatedAt: null,
   };
@@ -179,11 +181,14 @@ describe('NotificationSubmissionBoundaryService', () => {
     });
   });
 
-  it('reserves a still-usable OTP because verification alone does not consume it', async () => {
+  it('reserves a verified but not consumed OTP while it remains unexpired', async () => {
     const { service, transaction } = createService(0, 0, {
       notificationType: NotificationType.OTP_VERIFICATION,
       otpVerificationId: 'otp-1',
-      otp: freshOtp,
+      otp: {
+        ...freshOtp,
+        verifiedAt: new Date(now.getTime() - 1_000),
+      },
     });
 
     await expect(
