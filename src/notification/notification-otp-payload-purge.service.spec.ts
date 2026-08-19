@@ -17,9 +17,10 @@ describe('NotificationOtpPayloadPurgeService', () => {
         Promise.resolve(candidateIds.map((id) => ({ id }))),
       ),
       notificationOutbox: {
-        updateMany: jest.fn(() =>
-          Promise.resolve({ count: candidateIds.length }),
-        ),
+        updateMany: jest.fn<
+          Promise<{ count: number }>,
+          [Record<string, unknown>]
+        >(() => Promise.resolve({ count: candidateIds.length })),
       },
     };
     const prisma = {
