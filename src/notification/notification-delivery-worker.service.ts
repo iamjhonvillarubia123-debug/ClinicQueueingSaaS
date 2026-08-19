@@ -13,6 +13,7 @@ import {
 import { ClaimedOutboxRow } from './notification-outbox-claim.service';
 import { NotificationPayloadService } from './notification-payload.service';
 import { NotificationProviderAdapter } from './notification-provider-adapter';
+import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 
 export type NotificationDeliveryResult =
@@ -30,6 +31,7 @@ export class NotificationDeliveryWorkerService {
     private readonly payloadService: NotificationPayloadService,
     private readonly attemptService: NotificationDeliveryAttemptService,
     private readonly submissionBoundaryService: NotificationSubmissionBoundaryService,
+    private readonly providerContractService: NotificationProviderContractService,
   ) {}
 
   async deliverClaimed(
@@ -37,11 +39,8 @@ export class NotificationDeliveryWorkerService {
     adapter: NotificationProviderAdapter,
     now?: Date,
   ): Promise<NotificationDeliveryResult> {
-    if (claimed.channel !== adapter.channel) {
-      throw new BadRequestException(
-        'Notification provider adapter channel does not match the claimed outbox.',
-      );
-    }
+    this.providerContractService.assertAdapter(adapter, claimed.channel);
+
     if (claimed.channel !== NotificationChannel.SMS) {
       throw new BadRequestException(
         'Notification delivery orchestration currently supports SMS only.',
@@ -78,7 +77,7 @@ export class NotificationDeliveryWorkerService {
 
     let result: ProviderAttemptResult;
     try {
-      result = await adapter.submit({
+      const providerResult = await adapter.submit({
         notificationOutboxId: claimed.id,
         notificationType: claimed.notificationType,
         channel: claimed.channel,
@@ -86,6 +85,11 @@ export class NotificationDeliveryWorkerService {
         recipient,
         messageBody,
       });
+      this.providerContractService.assertSubmissionResult(
+        adapter,
+        providerResult,
+      );
+      result = providerResult;
     } catch {
       result = {
         outcome: NotificationAttemptOutcome.UNCERTAIN,
