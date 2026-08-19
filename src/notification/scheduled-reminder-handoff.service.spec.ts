@@ -59,16 +59,15 @@ describe('ScheduledReminderHandoffService', () => {
       allowFollowUpReminder: true,
       withdrawnAt: null,
     });
-    const createInput = {
-      data: {
-        status: NotificationOutboxStatus.PENDING,
-        scheduledReminderId: 'reminder-1',
-        recipientMobileEncrypted: 'encrypted-mobile',
-        providerIdempotencyKey: 'scheduled-reminder:reminder-1',
-      },
-    };
     fixture.transaction.notificationOutbox.create.mockImplementation(
-      (input: typeof createInput) => {
+      (input: {
+        data: {
+          status: NotificationOutboxStatus;
+          scheduledReminderId: string;
+          recipientMobileEncrypted: string;
+          providerIdempotencyKey: string;
+        };
+      }) => {
         expect(input.data.status).toBe(NotificationOutboxStatus.PENDING);
         expect(input.data.scheduledReminderId).toBe('reminder-1');
         expect(input.data.recipientMobileEncrypted).toBe('encrypted-mobile');
