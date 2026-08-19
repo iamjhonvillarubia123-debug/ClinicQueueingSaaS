@@ -12,11 +12,7 @@ export class ContactPreferenceWithdrawalService {
     private readonly reminderCancellation: ScheduledReminderCancellationService,
   ) {}
 
-  async withdraw(
-    bookingReference: string,
-    rawToken: string,
-    now = new Date(),
-  ) {
+  async withdraw(bookingReference: string, rawToken: string, now = new Date()) {
     return this.prisma.$transaction(async (transaction) => {
       const access = await this.patientBookingAccess.validateManagementToken(
         transaction,
