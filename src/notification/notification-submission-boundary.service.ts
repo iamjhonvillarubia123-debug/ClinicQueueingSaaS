@@ -180,7 +180,10 @@ export class NotificationSubmissionBoundaryService {
           `,
         );
         const reminder = reminderRows[0];
-        if (!reminder || reminder.practiceLocationId !== outbox.practiceLocationId) {
+        if (
+          !reminder ||
+          reminder.practiceLocationId !== outbox.practiceLocationId
+        ) {
           throw new BadRequestException(
             'Scheduled reminder delivery context is inconsistent.',
           );
