@@ -12,6 +12,7 @@ import {
 import { ClaimedOutboxRow } from './notification-outbox-claim.service';
 import { NotificationPayloadService } from './notification-payload.service';
 import { NotificationProviderAdapter } from './notification-provider-adapter';
+import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 
 @Injectable()
 export class NotificationDeliveryWorkerService {
@@ -19,6 +20,7 @@ export class NotificationDeliveryWorkerService {
     private readonly mobileNumberService: MobileNumberService,
     private readonly payloadService: NotificationPayloadService,
     private readonly attemptService: NotificationDeliveryAttemptService,
+    private readonly submissionBoundaryService: NotificationSubmissionBoundaryService,
   ) {}
 
   async deliverClaimed(
@@ -50,6 +52,12 @@ export class NotificationDeliveryWorkerService {
       claimed.messageBodyEncrypted,
     );
 
+    const reservation = await this.submissionBoundaryService.reserveAttempt(
+      claimed.id,
+      claimed.processingWorkerId,
+      submittedAt,
+    );
+
     let result: ProviderAttemptResult;
     try {
       result = await adapter.submit({
@@ -73,9 +81,10 @@ export class NotificationDeliveryWorkerService {
     }
 
     const finalizedAt = now ?? new Date();
-    return this.attemptService.finalizeAttempt(
+    return this.attemptService.finalizeReservedAttempt(
       claimed.id,
       claimed.processingWorkerId,
+      reservation.attemptNumber,
       result,
       finalizedAt,
     );
