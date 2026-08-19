@@ -88,6 +88,34 @@ describe('NotificationProviderContractService', () => {
     ).toThrow(BadRequestException);
   });
 
+  it('rejects recipient, OTP, secure URL, and long-token leakage in provider metadata', () => {
+    const current = adapter();
+    const recipient = '+639171234567';
+    const messageBody =
+      'Your verification code is 123456. Continue at https://app.example.test/verify?token=abcdefghijklmnopQRSTUVWX.';
+
+    for (const failureDetailSanitized of [
+      `Recipient ${recipient} rejected`,
+      'OTP 123456 rejected',
+      'Failed URL https://app.example.test/verify?token=abcdefghijklmnopQRSTUVWX.',
+      'Credential abcdefghijklmnopQRSTUVWX invalid',
+    ]) {
+      expect(() =>
+        service.assertSubmissionResult(
+          current,
+          {
+            outcome: NotificationAttemptOutcome.PERMANENT_FAILURE,
+            providerName: 'provider-a',
+            failureDetailSanitized,
+            submittedAt: now,
+            resolvedAt: now,
+          },
+          [recipient, messageBody],
+        ),
+      ).toThrow(BadRequestException);
+    }
+  });
+
   it('rejects contradictory retry and uncertain timing metadata', () => {
     const current = adapter();
     expect(() =>
