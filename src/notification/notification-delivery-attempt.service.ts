@@ -5,6 +5,7 @@ import {
   NotificationOutboxStatus,
   NotificationType,
   Prisma,
+  ScheduledReminderStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -62,6 +63,7 @@ export class NotificationDeliveryAttemptService {
           notificationType: NotificationType;
           channel: NotificationChannel;
           status: NotificationOutboxStatus;
+          scheduledReminderId: string | null;
           attemptCount: number;
           processingWorkerId: string | null;
           leaseExpiresAt: Date | null;
@@ -74,6 +76,7 @@ export class NotificationDeliveryAttemptService {
             "notificationType",
             "channel",
             "status",
+            "scheduledReminderId",
             "attemptCount",
             "processingWorkerId",
             "leaseExpiresAt",
@@ -138,12 +141,78 @@ export class NotificationDeliveryAttemptService {
         select: { status: true },
       });
 
+      await this.synchronizeScheduledReminder(
+        transaction,
+        outbox.notificationType,
+        outbox.scheduledReminderId,
+        result,
+        now,
+      );
+
       return {
         notificationLogId: log.id,
         attemptNumber,
         outboxStatus: updated.status,
       };
     });
+  }
+
+  private async synchronizeScheduledReminder(
+    transaction: Prisma.TransactionClient,
+    notificationType: NotificationType,
+    scheduledReminderId: string | null,
+    result: ProviderAttemptResult,
+    now: Date,
+  ): Promise<void> {
+    if (notificationType !== NotificationType.SCHEDULED_REMINDER) return;
+
+    if (!scheduledReminderId) {
+      throw new BadRequestException(
+        'Scheduled reminder notification is missing its source reminder.',
+      );
+    }
+
+    let synchronizedCount: number;
+
+    switch (result.outcome) {
+      case NotificationAttemptOutcome.SUCCESS:
+        synchronizedCount = (
+          await transaction.scheduledReminder.updateMany({
+            where: {
+              id: scheduledReminderId,
+              status: ScheduledReminderStatus.PROCESSING,
+            },
+            data: {
+              status: ScheduledReminderStatus.SENT,
+              sentAt: now,
+            },
+          })
+        ).count;
+        break;
+      case NotificationAttemptOutcome.PERMANENT_FAILURE:
+        synchronizedCount = (
+          await transaction.scheduledReminder.updateMany({
+            where: {
+              id: scheduledReminderId,
+              status: ScheduledReminderStatus.PROCESSING,
+            },
+            data: {
+              status: ScheduledReminderStatus.FAILED,
+              failedAt: now,
+            },
+          })
+        ).count;
+        break;
+      case NotificationAttemptOutcome.RETRYABLE_FAILURE:
+      case NotificationAttemptOutcome.UNCERTAIN:
+        return;
+    }
+
+    if (synchronizedCount !== 1) {
+      throw new BadRequestException(
+        'Scheduled reminder delivery state is inconsistent with its outbox.',
+      );
+    }
   }
 
   private outboxTransition(
