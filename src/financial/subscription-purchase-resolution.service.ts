@@ -12,10 +12,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialAccountLockService } from './financial-account-lock.service';
 
-type TerminalPurchaseStatus =
-  | SubscriptionPurchaseStatus.FAILED
-  | SubscriptionPurchaseStatus.EXPIRED;
-
 @Injectable()
 export class SubscriptionPurchaseResolutionService {
   constructor(
@@ -43,10 +39,27 @@ export class SubscriptionPurchaseResolutionService {
 
   private async resolvePurchase(
     purchaseId: string,
-    purchaseStatus: TerminalPurchaseStatus,
-    paymentStatus: SubscriptionPaymentStatus.FAILED | SubscriptionPaymentStatus.EXPIRED,
+    purchaseStatus: SubscriptionPurchaseStatus,
+    paymentStatus: SubscriptionPaymentStatus,
     resolvedAt: Date,
   ) {
+    if (
+      purchaseStatus !== SubscriptionPurchaseStatus.FAILED &&
+      purchaseStatus !== SubscriptionPurchaseStatus.EXPIRED
+    ) {
+      throw new InternalServerErrorException(
+        'Invalid terminal subscription purchase status.',
+      );
+    }
+    if (
+      paymentStatus !== SubscriptionPaymentStatus.FAILED &&
+      paymentStatus !== SubscriptionPaymentStatus.EXPIRED
+    ) {
+      throw new InternalServerErrorException(
+        'Invalid terminal subscription payment status.',
+      );
+    }
+
     return this.prisma.$transaction(async (transaction) => {
       const purchase = await this.lockPurchase(transaction, purchaseId);
       if (!purchase) {
@@ -120,7 +133,10 @@ export class SubscriptionPurchaseResolutionService {
           },
           select: { id: true, entryType: true },
         });
-        if (terminalEntry?.entryType === SubscriptionCreditEntryType.PURCHASE_CONSUMED) {
+        if (
+          terminalEntry?.entryType ===
+          SubscriptionCreditEntryType.PURCHASE_CONSUMED
+        ) {
           throw new InternalServerErrorException(
             'Consumed subscription credit cannot be released from a failed purchase.',
           );
