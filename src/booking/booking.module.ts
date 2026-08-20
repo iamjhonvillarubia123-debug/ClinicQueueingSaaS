@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { FinancialModule } from '../financial/financial.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
 import { OtpModule } from '../otp/otp.module';
@@ -35,6 +36,7 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     NotificationModule,
     PatientAccessModule,
     QueueModule,
+    FinancialModule,
   ],
   controllers: [
     BookingController,
