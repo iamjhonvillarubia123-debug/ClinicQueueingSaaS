@@ -87,15 +87,16 @@ export class SubscriptionEntitlementTransitionService {
                 'Your subscription access is currently unavailable. Please renew your subscription to restore access.',
             };
 
-      const existing =
-        await transaction.subscriptionEntitlementEvent.findFirst({
+      const existing = await transaction.subscriptionEntitlementEvent.findFirst(
+        {
           where: {
             doctorSubscriptionEntitlementId: entitlement.id,
             eventType: transition.eventType,
             effectiveAt: transition.effectiveAt,
           },
           select: { id: true },
-        });
+        },
+      );
 
       const event =
         existing ??
@@ -198,9 +199,7 @@ export class SubscriptionEntitlementTransitionService {
         providerIdempotencyKey: `financial:${deliveryIdentityKey}`,
         attemptCount: 0,
         nextAttemptAt: now,
-        expiresAt: new Date(
-          now.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS,
-        ),
+        expiresAt: new Date(now.getTime() + OUTBOX_PROVISIONAL_RETENTION_MS),
         createdAt: now,
       },
     });
