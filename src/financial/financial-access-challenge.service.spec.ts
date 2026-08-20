@@ -8,7 +8,9 @@ describe('FinancialAccessChallengeService', () => {
   function createFixture() {
     const transaction = {
       doctorFinancialAccount: {
-        findFirst: jest.fn(() => Promise.resolve({ id: 'financial-1' })),
+        findFirst: jest.fn<Promise<{ id: string } | null>, []>(() =>
+          Promise.resolve({ id: 'financial-1' }),
+        ),
       },
       financialAccessChallenge: {
         updateMany: jest.fn(() => Promise.resolve({ count: 1 })),
