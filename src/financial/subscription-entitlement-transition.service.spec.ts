@@ -118,17 +118,21 @@ describe('SubscriptionEntitlementTransitionService', () => {
       fixture.service.reconcileFinancialAccount('financial-1', now),
     ).resolves.toMatchObject({ state: 'GRACE', created: true });
 
-    const eventCreate = fixture.transaction.subscriptionEntitlementEvent.create.mock.calls[0]?.[0];
+    const eventCreate =
+      fixture.transaction.subscriptionEntitlementEvent.create.mock.calls[0]?.[0];
     expect(eventCreate?.data.eventType).toBe(
       SubscriptionEntitlementEventType.GRACE_ENTERED,
     );
     expect(eventCreate?.data.effectiveAt).toEqual(paidThrough);
 
-    const outboxCreate = fixture.transaction.notificationOutbox.create.mock.calls[0]?.[0];
+    const outboxCreate =
+      fixture.transaction.notificationOutbox.create.mock.calls[0]?.[0];
     expect(outboxCreate?.data.notificationType).toBe(
       NotificationType.SUBSCRIPTION_GRACE_ENTERED,
     );
-    expect(outboxCreate?.data.subscriptionEntitlementEventId).toBe('event-1');
+    expect(outboxCreate?.data.subscriptionEntitlementEventId).toBe(
+      'event-1',
+    );
   });
 
   it('creates SUSPENDED without manufacturing a late grace event', async () => {
@@ -148,7 +152,8 @@ describe('SubscriptionEntitlementTransitionService', () => {
 
     await fixture.service.reconcileFinancialAccount('financial-1', now);
 
-    const eventCreate = fixture.transaction.subscriptionEntitlementEvent.create.mock.calls[0]?.[0];
+    const eventCreate =
+      fixture.transaction.subscriptionEntitlementEvent.create.mock.calls[0]?.[0];
     expect(eventCreate?.data.eventType).toBe(
       SubscriptionEntitlementEventType.SUSPENDED,
     );
