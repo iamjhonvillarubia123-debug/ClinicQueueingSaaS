@@ -33,9 +33,12 @@ describe('SubscriptionPurchaseResolutionService', () => {
         create: jest.fn().mockResolvedValue({ id: 'release-1' }),
       },
       subscriptionPurchase: {
-        update: jest.fn().mockImplementation(({ data }: { data: { status: SubscriptionPurchaseStatus } }) =>
-          Promise.resolve({ ...purchase, status: data.status }),
-        ),
+        update: jest
+          .fn()
+          .mockImplementation(
+            ({ data }: { data: { status: SubscriptionPurchaseStatus } }) =>
+              Promise.resolve({ ...purchase, status: data.status }),
+          ),
       },
     };
     const prisma = {
@@ -61,19 +64,23 @@ describe('SubscriptionPurchaseResolutionService', () => {
       fixture.transaction,
       'financial-1',
     );
-    expect(fixture.transaction.subscriptionPayment.updateMany).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.subscriptionPayment.updateMany,
+    ).toHaveBeenCalledWith({
       where: {
         subscriptionPurchaseId: 'purchase-1',
         status: SubscriptionPaymentStatus.PENDING,
       },
       data: { status: SubscriptionPaymentStatus.FAILED, failedAt: resolvedAt },
     });
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         entryType: SubscriptionCreditEntryType.PURCHASE_RELEASED,
         amount: fixture.purchase.creditAmountApplied,
         relatedCreditEntryId: fixture.reservation.id,
-      }),
+      }) as object,
     });
     expect(result.purchase.status).toBe(SubscriptionPurchaseStatus.FAILED);
     expect(result.replayed).toBe(false);
@@ -83,28 +90,41 @@ describe('SubscriptionPurchaseResolutionService', () => {
     const fixture = makeFixture('0.00');
     const resolvedAt = new Date('2026-08-20T03:00:00.000Z');
 
-    const result = await fixture.service.expirePurchase('purchase-1', resolvedAt);
+    const result = await fixture.service.expirePurchase(
+      'purchase-1',
+      resolvedAt,
+    );
 
-    expect(fixture.transaction.subscriptionPayment.updateMany).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.subscriptionPayment.updateMany,
+    ).toHaveBeenCalledWith({
       where: {
         subscriptionPurchaseId: 'purchase-1',
         status: SubscriptionPaymentStatus.PENDING,
       },
       data: { status: SubscriptionPaymentStatus.EXPIRED, failedAt: resolvedAt },
     });
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
     expect(result.purchase.status).toBe(SubscriptionPurchaseStatus.EXPIRED);
   });
 
   it('refuses to fail a purchase that already has successful payment evidence', async () => {
     const fixture = makeFixture();
-    fixture.transaction.subscriptionPayment.findFirst.mockResolvedValue({ id: 'payment-1' });
+    fixture.transaction.subscriptionPayment.findFirst.mockResolvedValue({
+      id: 'payment-1',
+    });
 
-    await expect(fixture.service.failPurchase('purchase-1')).rejects.toBeInstanceOf(
-      InternalServerErrorException,
-    );
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
-    expect(fixture.transaction.subscriptionPurchase.update).not.toHaveBeenCalled();
+    await expect(
+      fixture.service.failPurchase('purchase-1'),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionPurchase.update,
+    ).not.toHaveBeenCalled();
   });
 
   it('does not create a second release when the reservation is already released', async () => {
@@ -119,7 +139,9 @@ describe('SubscriptionPurchaseResolutionService', () => {
 
     const result = await fixture.service.failPurchase('purchase-1');
 
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
     expect(result.purchase.status).toBe(SubscriptionPurchaseStatus.FAILED);
   });
 });
