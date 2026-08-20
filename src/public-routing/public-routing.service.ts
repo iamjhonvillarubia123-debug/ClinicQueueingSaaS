@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { SubscriptionEntitlementService } from '../financial/subscription-entitlement.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -82,6 +86,9 @@ export class PublicRoutingService {
       .filter((location) => location.lifecycleStatus === 'ACTIVE')
       .map((location) => ({
         publicIdentifier: location.publicIdentifier,
+        publicUrl: this.buildPracticeLocationPublicUrl(
+          location.publicIdentifier,
+        ),
         name: location.name,
         cityMunicipality: location.cityMunicipality,
         province: location.province,
@@ -107,9 +114,13 @@ export class PublicRoutingService {
       routeStatus = PublicRouteStatus.AVAILABLE;
     }
 
+    const publicUrl = this.buildDoctorPublicUrl(profile.publicIdentifier);
+
     return {
       publicIdentifier: profile.publicIdentifier,
       publicSlug: profile.publicSlug,
+      publicUrl,
+      qrPayload: publicUrl,
       routeStatus,
       message,
       bookingEntryAllowed: routeStatus === PublicRouteStatus.AVAILABLE,
@@ -194,9 +205,17 @@ export class PublicRoutingService {
       : location.lifecycleStatus === 'DISABLED'
         ? 'This practice location is currently unavailable. View other practice locations for this doctor.'
         : 'Online booking is temporarily unavailable. Please try again later.';
+    const publicUrl = this.buildPracticeLocationPublicUrl(
+      location.publicIdentifier,
+    );
 
     return {
       publicIdentifier: location.publicIdentifier,
+      publicUrl,
+      qrPayload: publicUrl,
+      doctorPublicUrl: this.buildDoctorPublicUrl(
+        location.doctorProfile.publicIdentifier,
+      ),
       routeStatus,
       message,
       bookingEntryAllowed,
@@ -226,6 +245,42 @@ export class PublicRoutingService {
         now,
       );
     return evaluation.allowsNewSubscriptionGatedActivity;
+  }
+
+  private buildDoctorPublicUrl(publicIdentifier: string): string {
+    return this.buildPublicUrl('doctors', publicIdentifier);
+  }
+
+  private buildPracticeLocationPublicUrl(publicIdentifier: string): string {
+    return this.buildPublicUrl('practice-locations', publicIdentifier);
+  }
+
+  private buildPublicUrl(resource: string, publicIdentifier: string): string {
+    const configuredBaseUrl = process.env.PUBLIC_APP_BASE_URL?.trim();
+    if (!configuredBaseUrl) {
+      throw new InternalServerErrorException(
+        'PUBLIC_APP_BASE_URL environment variable is not defined.',
+      );
+    }
+
+    let baseUrl: URL;
+    try {
+      baseUrl = new URL(configuredBaseUrl);
+    } catch {
+      throw new InternalServerErrorException(
+        'PUBLIC_APP_BASE_URL environment variable is invalid.',
+      );
+    }
+
+    if (baseUrl.protocol !== 'http:' && baseUrl.protocol !== 'https:') {
+      throw new InternalServerErrorException(
+        'PUBLIC_APP_BASE_URL must use http or https.',
+      );
+    }
+
+    const normalizedBaseUrl = baseUrl.toString().replace(/\/$/, '');
+    const encodedIdentifier = encodeURIComponent(publicIdentifier);
+    return `${normalizedBaseUrl}/public/${resource}/${encodedIdentifier}`;
   }
 
   private mapDoctorIdentity(profile: {
