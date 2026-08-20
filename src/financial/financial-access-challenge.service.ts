@@ -129,7 +129,9 @@ export class FinancialAccessChallengeService {
         challenge.invalidatedAt ||
         challenge.attemptCount >= MAX_ATTEMPTS
       ) {
-        throw new UnauthorizedException('Financial access verification failed.');
+        throw new UnauthorizedException(
+          'Financial access verification failed.',
+        );
       }
       if (challenge.verifiedAt) {
         return { challengeId: challenge.id, verifiedAt: challenge.verifiedAt };
@@ -148,7 +150,9 @@ export class FinancialAccessChallengeService {
             invalidatedAt: nextAttemptCount >= MAX_ATTEMPTS ? now : null,
           },
         });
-        throw new UnauthorizedException('Financial access verification failed.');
+        throw new UnauthorizedException(
+          'Financial access verification failed.',
+        );
       }
 
       const verified = await transaction.financialAccessChallenge.update({
