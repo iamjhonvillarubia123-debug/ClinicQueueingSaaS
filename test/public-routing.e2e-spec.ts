@@ -59,7 +59,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
   });
 
   function getApp(): INestApplication<App> {
-    if (!app) throw new Error('Public routing E2E application did not initialize.');
+    if (!app) {
+      throw new Error('Public routing E2E application did not initialize.');
+    }
     return app;
   }
 
