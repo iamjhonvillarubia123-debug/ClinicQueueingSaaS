@@ -22,10 +22,11 @@ export class SubscriptionEntitlementService {
     doctorFinancialAccountId: string,
     now = new Date(),
   ): Promise<SubscriptionEntitlementEvaluation> {
-    const entitlement = await this.prisma.doctorSubscriptionEntitlement.findUnique({
-      where: { doctorFinancialAccountId },
-      select: { paidThrough: true, graceEndsAt: true },
-    });
+    const entitlement =
+      await this.prisma.doctorSubscriptionEntitlement.findUnique({
+        where: { doctorFinancialAccountId },
+        select: { paidThrough: true, graceEndsAt: true },
+      });
 
     if (!entitlement) {
       return {
