@@ -8,6 +8,7 @@ import {
   UserRole,
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
+import { PasswordSecurityService } from './../src/auth/security/password-security.service';
 import { FinancialAccountLockService } from './../src/financial/financial-account-lock.service';
 import { SubscriptionCreditRecoveryService } from './../src/financial/subscription-credit-recovery.service';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -19,6 +20,7 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
   let prisma: PrismaService;
   let recovery: SubscriptionCreditRecoveryService;
   let accountLocks: FinancialAccountLockService;
+  let passwordSecurity: PasswordSecurityService;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm10-credit-recovery-e2e-only-jwt-secret-not-for-production',
@@ -45,6 +47,7 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
     prisma = moduleFixture.get(PrismaService);
     recovery = moduleFixture.get(SubscriptionCreditRecoveryService);
     accountLocks = moduleFixture.get(FinancialAccountLockService);
+    passwordSecurity = moduleFixture.get(PasswordSecurityService);
   });
 
   afterAll(async () => {
@@ -211,11 +214,12 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
     const recoveryEmailHash = createHash('sha256')
       .update(`recovery-${scope}@example.test`, 'utf8')
       .digest('hex');
+    const challengeCodeHash = await passwordSecurity.hash('123456');
     const challenge = await prisma.financialAccessChallenge.create({
       data: {
         recoveryEmailHash,
         recipientEmailEncrypted: 'e2e-encrypted-email-placeholder',
-        codeHash: 'e2e-code-hash-placeholder',
+        codeHash: challengeCodeHash,
         expiresAt: new Date(Date.now() + SESSION_TTL_MS),
         verifiedAt: new Date(),
         consumedAt: new Date(),
