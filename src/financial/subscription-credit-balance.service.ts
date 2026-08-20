@@ -1,5 +1,8 @@
-import { InternalServerErrorException, Injectable } from '@nestjs/common';
-import { Prisma, SubscriptionCreditEntryType } from '../../generated/prisma/client';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  Prisma,
+  SubscriptionCreditEntryType,
+} from '../../generated/prisma/client';
 
 type TransactionClient = Prisma.TransactionClient;
 
