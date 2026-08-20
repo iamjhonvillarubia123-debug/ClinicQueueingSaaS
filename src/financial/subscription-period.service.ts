@@ -18,7 +18,8 @@ export class SubscriptionPeriodService {
     }
 
     const periodStart =
-      existingPaidThrough && existingPaidThrough.getTime() > successfulActivationAt.getTime()
+      existingPaidThrough &&
+      existingPaidThrough.getTime() > successfulActivationAt.getTime()
         ? existingPaidThrough
         : successfulActivationAt;
     const periodEnd = this.addCalendarMonths(periodStart, monthsPurchased);
@@ -40,7 +41,9 @@ export class SubscriptionPeriodService {
     const targetMonthIndex = month + months;
     const targetYear = year + Math.floor(targetMonthIndex / 12);
     const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
-    const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+    const lastDay = new Date(
+      Date.UTC(targetYear, targetMonth + 1, 0),
+    ).getUTCDate();
 
     return new Date(
       Date.UTC(
