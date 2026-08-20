@@ -54,7 +54,8 @@ describe('RefundProcessingService', () => {
             id: 'admin-1',
             role: UserRole.SYSTEM_ADMIN,
             accountStatus: UserAccountStatus.ACTIVE,
-            administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+            administrativeRestrictionStatus:
+              AdministrativeRestrictionStatus.NONE,
           })
           .mockResolvedValueOnce({ email: 'doctor@example.com' }),
       },
@@ -113,13 +114,17 @@ describe('RefundProcessingService', () => {
     });
 
     expect(result.refundRequest.status).toBe(RefundRequestStatus.COMPLETED);
-    expect(fixture.transaction.refundProcessingAttempt.create).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.refundProcessingAttempt.create,
+    ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         outcome: 'TRANSFER_COMPLETED',
         processedBySystemAdminUserId: 'admin-1',
       }) as object,
     });
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
     expect(fixture.refundNotifications.create).toHaveBeenCalledWith(
       fixture.transaction,
       expect.objectContaining({
@@ -144,7 +149,9 @@ describe('RefundProcessingService', () => {
     });
 
     expect(result.refundRequest.status).toBe(RefundRequestStatus.FAILED);
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         entryType: SubscriptionCreditEntryType.REFUND_FAILED_RELEASED,
         relatedCreditEntryId: 'reservation-1',
