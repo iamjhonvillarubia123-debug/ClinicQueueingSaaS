@@ -152,6 +152,11 @@ export class SubscriptionCreditRecoveryService {
           !transferIn ||
           transferOut.doctorFinancialAccountId !== sourceFinancialAccountId ||
           transferIn.doctorFinancialAccountId !== targetFinancialAccount.id ||
+          transferOut.counterpartyDoctorFinancialAccountId !==
+            targetFinancialAccount.id ||
+          transferIn.counterpartyDoctorFinancialAccountId !==
+            sourceFinancialAccountId ||
+          transferIn.relatedCreditEntryId !== transferOut.id ||
           !transferOut.amount.equals(transferIn.amount)
         ) {
           throw new InternalServerErrorException(
@@ -223,6 +228,7 @@ export class SubscriptionCreditRecoveryService {
           doctorFinancialAccountId: sourceFinancialAccountId,
           entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_OUT,
           amount: recoveredAmount,
+          counterpartyDoctorFinancialAccountId: targetFinancialAccount.id,
           commandIdempotencyId: command.id,
           occurredAt: recoveredAt,
         },
@@ -233,6 +239,7 @@ export class SubscriptionCreditRecoveryService {
           doctorFinancialAccountId: targetFinancialAccount.id,
           entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
           amount: recoveredAmount,
+          counterpartyDoctorFinancialAccountId: sourceFinancialAccountId,
           relatedCreditEntryId: transferOut.id,
           commandIdempotencyId: command.id,
           occurredAt: recoveredAt,
