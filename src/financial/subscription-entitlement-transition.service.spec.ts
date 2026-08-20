@@ -13,6 +13,11 @@ type EntitlementRow = {
   paidThrough: Date;
   graceEndsAt: Date;
 } | null;
+type CreatedEvent = { id: string };
+type CreatedOutbox = { id: string };
+type FinancialAccountRow = {
+  doctorUser: { email: string };
+} | null;
 
 describe('SubscriptionEntitlementTransitionService', () => {
   const now = new Date('2026-08-20T12:00:00.000Z');
@@ -28,16 +33,20 @@ describe('SubscriptionEntitlementTransitionService', () => {
         findFirst: jest.fn<Promise<ExistingEvent>, []>(() =>
           Promise.resolve(null),
         ),
-        create: jest.fn(() => Promise.resolve({ id: 'event-1' })),
+        create: jest.fn<Promise<CreatedEvent>, []>(() =>
+          Promise.resolve({ id: 'event-1' }),
+        ),
       },
       notificationOutbox: {
         findUnique: jest.fn<Promise<ExistingOutbox>, []>(() =>
           Promise.resolve(null),
         ),
-        create: jest.fn(() => Promise.resolve({ id: 'outbox-1' })),
+        create: jest.fn<Promise<CreatedOutbox>, []>(() =>
+          Promise.resolve({ id: 'outbox-1' }),
+        ),
       },
       doctorFinancialAccount: {
-        findUnique: jest.fn(() =>
+        findUnique: jest.fn<Promise<FinancialAccountRow>, []>(() =>
           Promise.resolve({ doctorUser: { email: 'doctor@example.com' } }),
         ),
       },
@@ -107,7 +116,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
         }),
       }),
     );
-    expect(fixture.transaction.notificationOutbox.create).toHaveBeenCalledWith(
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           notificationType: NotificationType.SUBSCRIPTION_GRACE_ENTERED,
@@ -161,9 +172,7 @@ describe('SubscriptionEntitlementTransitionService', () => {
       entitlement,
     );
     fixture.transaction.subscriptionEntitlementEvent.findFirst.mockResolvedValueOnce(
-      {
-        id: 'existing-event',
-      },
+      { id: 'existing-event' },
     );
     fixture.transaction.notificationOutbox.findUnique.mockResolvedValueOnce({
       id: 'existing-outbox',
@@ -178,7 +187,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).not.toHaveBeenCalled();
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('does nothing while entitlement is still PAID', async () => {
@@ -200,6 +211,8 @@ describe('SubscriptionEntitlementTransitionService', () => {
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).not.toHaveBeenCalled();
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
   });
 });
