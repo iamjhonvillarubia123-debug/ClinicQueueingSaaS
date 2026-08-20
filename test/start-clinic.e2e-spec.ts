@@ -10,6 +10,8 @@ import {
   WaitingPlacementType,
   Weekday,
 } from './../generated/prisma/client';
+import { SubscriptionCommercialGateService } from './../src/financial/subscription-commercial-gate.service';
+import { SubscriptionEntitlementService } from './../src/financial/subscription-entitlement.service';
 import { CommandIdempotencyService } from './../src/idempotency/command-idempotency.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { StartClinicService } from './../src/queue/start-clinic.service';
@@ -35,11 +37,17 @@ describe('START CLINIC controls (e2e)', () => {
       prisma,
       scheduleTime,
     );
+    const entitlement = new SubscriptionEntitlementService(prisma);
+    const commercialGate = new SubscriptionCommercialGateService(
+      prisma,
+      entitlement,
+    );
     service = new StartClinicService(
       prisma,
       new CommandIdempotencyService(),
       scheduleResolution,
       scheduleTime,
+      commercialGate,
     );
 
     scope = randomUUID().replaceAll('-', '');
@@ -57,6 +65,17 @@ describe('START CLINIC controls (e2e)', () => {
       },
     });
     doctorUserId = doctor.id;
+
+    const financialAccount = await prisma.doctorFinancialAccount.create({
+      data: { doctorUserId: doctor.id },
+    });
+    await prisma.doctorSubscriptionEntitlement.create({
+      data: {
+        doctorFinancialAccountId: financialAccount.id,
+        paidThrough: new Date('2026-09-30T00:00:00.000Z'),
+        graceEndsAt: new Date('2026-10-07T00:00:00.000Z'),
+      },
+    });
 
     const doctorProfile = await prisma.doctorProfile.create({
       data: {
