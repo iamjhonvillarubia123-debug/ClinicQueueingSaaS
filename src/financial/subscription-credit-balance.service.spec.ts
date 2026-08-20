@@ -1,5 +1,8 @@
 import { InternalServerErrorException } from '@nestjs/common';
-import { Prisma, SubscriptionCreditEntryType } from '../../generated/prisma/client';
+import {
+  Prisma,
+  SubscriptionCreditEntryType,
+} from '../../generated/prisma/client';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
 
 describe('SubscriptionCreditBalanceService', () => {
@@ -57,7 +60,9 @@ describe('SubscriptionCreditBalanceService', () => {
       },
     ]);
 
-    await expect(service.derive(transaction as never, 'account-1')).resolves.toEqual({
+    await expect(
+      service.derive(transaction as never, 'account-1'),
+    ).resolves.toEqual({
       available: '840.50',
       reserved: '0.00',
       consumed: '260.00',
@@ -80,7 +85,9 @@ describe('SubscriptionCreditBalanceService', () => {
       },
     ]);
 
-    await expect(service.derive(transaction as never, 'account-1')).resolves.toEqual({
+    await expect(
+      service.derive(transaction as never, 'account-1'),
+    ).resolves.toEqual({
       available: '500.00',
       reserved: '0.00',
       consumed: '0.00',
