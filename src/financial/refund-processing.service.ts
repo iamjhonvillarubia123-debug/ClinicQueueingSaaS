@@ -43,10 +43,6 @@ type FailRefundInput = {
   failedAt?: Date;
 };
 
-type LockedRefund = NonNullable<
-  Awaited<ReturnType<RefundProcessingService['lockRefundRequest']>>
->;
-
 @Injectable()
 export class RefundProcessingService {
   constructor(
