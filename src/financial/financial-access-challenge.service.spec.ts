@@ -76,9 +76,9 @@ describe('FinancialAccessChallengeService', () => {
         }) as object,
       }),
     );
-    expect(
-      transaction.financialAccessChallenge.create,
-    ).toHaveBeenCalledTimes(1);
+    expect(transaction.financialAccessChallenge.create).toHaveBeenCalledTimes(
+      1,
+    );
     expect(transaction.notificationOutbox.create).toHaveBeenCalledTimes(1);
   });
 
@@ -96,12 +96,12 @@ describe('FinancialAccessChallengeService', () => {
   it('verifies a live challenge and records verifiedAt', async () => {
     const { service, transaction } = createFixture();
 
-    await expect(
-      service.verify('challenge-1', '123456', now),
-    ).resolves.toEqual({
-      challengeId: 'challenge-1',
-      verifiedAt: now,
-    });
+    await expect(service.verify('challenge-1', '123456', now)).resolves.toEqual(
+      {
+        challengeId: 'challenge-1',
+        verifiedAt: now,
+      },
+    );
     expect(transaction.financialAccessChallenge.update).toHaveBeenCalledWith({
       where: { id: 'challenge-1' },
       data: { verifiedAt: now },
