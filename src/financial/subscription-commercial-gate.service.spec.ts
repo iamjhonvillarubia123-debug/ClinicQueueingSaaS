@@ -1,20 +1,34 @@
 import { ForbiddenException } from '@nestjs/common';
 import { SubscriptionCommercialGateService } from './subscription-commercial-gate.service';
 
+type FinancialAccountFixture = { id: string };
+type EntitlementFixture = {
+  hasEntitlementRecord: boolean;
+  state: 'PAID' | 'GRACE' | 'SUSPENDED' | null;
+  paidThrough: Date | null;
+  graceEndsAt: Date | null;
+  allowsNewSubscriptionGatedActivity: boolean;
+};
+
 describe('SubscriptionCommercialGateService', () => {
   const now = new Date('2026-08-20T18:00:00.000Z');
 
   function createFixture() {
     const prisma = {
       doctorFinancialAccount: {
-        findUnique: jest.fn(() => Promise.resolve({ id: 'financial-1' })),
+        findUnique: jest.fn<Promise<FinancialAccountFixture | null>, []>(() =>
+          Promise.resolve({ id: 'financial-1' }),
+        ),
       },
     };
     const entitlement = {
-      evaluateForFinancialAccount: jest.fn(() =>
+      evaluateForFinancialAccount: jest.fn<
+        Promise<EntitlementFixture>,
+        [string, Date]
+      >(() =>
         Promise.resolve({
           hasEntitlementRecord: true,
-          state: 'PAID' as const,
+          state: 'PAID',
           paidThrough: new Date('2026-09-01T00:00:00.000Z'),
           graceEndsAt: new Date('2026-09-08T00:00:00.000Z'),
           allowsNewSubscriptionGatedActivity: true,
