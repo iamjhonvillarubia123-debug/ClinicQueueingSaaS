@@ -5,6 +5,8 @@ import { NotificationModule } from '../notification/notification.module';
 import { FinancialAccessChallengeService } from './financial-access-challenge.service';
 import { FinancialAccessSessionService } from './financial-access-session.service';
 import { FinancialAccountLockService } from './financial-account-lock.service';
+import { RefundNotificationService } from './refund-notification.service';
+import { RefundProcessingService } from './refund-processing.service';
 import { RefundRequestService } from './refund-request.service';
 import { StandardSubscriptionPriceService } from './standard-subscription-price.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
@@ -21,6 +23,8 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     FinancialAccessChallengeService,
     FinancialAccessSessionService,
     FinancialAccountLockService,
+    RefundNotificationService,
+    RefundProcessingService,
     RefundRequestService,
     StandardSubscriptionPriceService,
     SubscriptionCreditBalanceService,
@@ -35,6 +39,8 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     FinancialAccessChallengeService,
     FinancialAccessSessionService,
     FinancialAccountLockService,
+    RefundNotificationService,
+    RefundProcessingService,
     RefundRequestService,
     StandardSubscriptionPriceService,
     SubscriptionCreditBalanceService,
