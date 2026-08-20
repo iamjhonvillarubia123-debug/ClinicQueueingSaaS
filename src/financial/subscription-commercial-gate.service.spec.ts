@@ -34,6 +34,10 @@ describe('SubscriptionCommercialGateService', () => {
           allowsNewSubscriptionGatedActivity: true,
         }),
       ),
+      evaluateDates: jest.fn<
+        'PAID' | 'GRACE' | 'SUSPENDED',
+        [Date, Date, Date]
+      >(() => 'GRACE'),
     };
     const service = new SubscriptionCommercialGateService(
       prisma as never,
@@ -98,6 +102,61 @@ describe('SubscriptionCommercialGateService', () => {
 
     await expect(
       fixture.service.assertAllowsNewActivity('doctor-1', now),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('locks and allows GRACE entitlement inside an existing transaction', async () => {
+    const fixture = createFixture();
+    const transaction = {
+      $queryRaw: jest.fn(() =>
+        Promise.resolve([
+          {
+            doctorFinancialAccountId: 'financial-1',
+            paidThrough: new Date('2026-08-19T00:00:00.000Z'),
+            graceEndsAt: new Date('2026-08-26T00:00:00.000Z'),
+          },
+        ]),
+      ),
+    };
+
+    await expect(
+      fixture.service.assertAllowsNewActivityInTransaction(
+        transaction as never,
+        'doctor-1',
+        now,
+      ),
+    ).resolves.toMatchObject({
+      doctorFinancialAccountId: 'financial-1',
+      entitlement: { state: 'GRACE' },
+    });
+    expect(fixture.entitlement.evaluateDates).toHaveBeenCalledWith(
+      new Date('2026-08-19T00:00:00.000Z'),
+      new Date('2026-08-26T00:00:00.000Z'),
+      now,
+    );
+  });
+
+  it('blocks a transaction when the locked entitlement is SUSPENDED', async () => {
+    const fixture = createFixture();
+    fixture.entitlement.evaluateDates.mockReturnValueOnce('SUSPENDED');
+    const transaction = {
+      $queryRaw: jest.fn(() =>
+        Promise.resolve([
+          {
+            doctorFinancialAccountId: 'financial-1',
+            paidThrough: new Date('2026-08-12T00:00:00.000Z'),
+            graceEndsAt: new Date('2026-08-19T00:00:00.000Z'),
+          },
+        ]),
+      ),
+    };
+
+    await expect(
+      fixture.service.assertAllowsNewActivityInTransaction(
+        transaction as never,
+        'doctor-1',
+        now,
+      ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
