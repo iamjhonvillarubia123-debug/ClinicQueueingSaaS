@@ -52,7 +52,7 @@ describe('RefundRequestService', () => {
     };
     const idempotency = {
       normalizeKey: jest.fn((value: string | undefined) => value ?? 'key-1'),
-      fingerprint: jest.fn(() => 'fingerprint-1'),
+      fingerprint: jest.fn((_: Record<string, unknown>) => 'fingerprint-1'),
       deriveIdentity: jest.fn(() => 'identity-1'),
       acquireCommandLock: jest.fn(() => Promise.resolve()),
       findReplay: jest.fn(() => Promise.resolve(null)),
@@ -122,32 +122,32 @@ describe('RefundRequestService', () => {
       fixture.transaction,
       'financial-1',
     );
-    expect(fixture.transaction.commandIdempotency.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          commandType: CommandType.DOCTOR_REQUEST_REFUND,
-          actorUserId: null,
-          accountUserId: null,
-          doctorFinancialAccountId: 'financial-1',
-        }) as object,
+    expect(fixture.transaction.commandIdempotency.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        commandType: CommandType.DOCTOR_REQUEST_REFUND,
+        actorUserId: null,
+        accountUserId: null,
+        doctorFinancialAccountId: 'financial-1',
       }),
-    );
-    expect(fixture.transaction.refundRequest.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: RefundRequestStatus.PENDING,
-          destinationLast4: '4567',
-        }) as object,
+      select: { id: true },
+    });
+    expect(fixture.transaction.refundRequest.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        doctorFinancialAccountId: 'financial-1',
+        requestedAmount: new Prisma.Decimal('250.00'),
+        method: RefundMethod.GCASH,
+        status: RefundRequestStatus.PENDING,
+        destinationLast4: '4567',
       }),
-    );
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          entryType: SubscriptionCreditEntryType.REFUND_RESERVED,
-          refundRequestId: 'refund-1',
-        }) as object,
+    });
+    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        doctorFinancialAccountId: 'financial-1',
+        entryType: SubscriptionCreditEntryType.REFUND_RESERVED,
+        amount: new Prisma.Decimal('250.00'),
+        refundRequestId: 'refund-1',
       }),
-    );
+    });
   });
 
   it('rejects a refund above available refundable credit', async () => {
