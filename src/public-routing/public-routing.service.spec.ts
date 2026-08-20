@@ -148,9 +148,8 @@ describe('PublicRoutingService', () => {
     );
     allowSubscription();
 
-    const result = await service.getPracticeLocationPublicRoute(
-      'location-public-id',
-    );
+    const result =
+      await service.getPracticeLocationPublicRoute('location-public-id');
 
     expect(result.routeStatus).toBe('TEMPORARILY_UNAVAILABLE');
     expect(result.bookingEntryAllowed).toBe(false);
