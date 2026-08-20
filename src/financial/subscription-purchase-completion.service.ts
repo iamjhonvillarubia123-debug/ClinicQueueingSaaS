@@ -237,14 +237,15 @@ export class SubscriptionPurchaseCompletionService {
           select: { id: true },
         });
       if (!existingConsumption) {
-        const reservation =
-          await transaction.subscriptionCreditEntry.findFirst({
+        const reservation = await transaction.subscriptionCreditEntry.findFirst(
+          {
             where: {
               subscriptionPurchaseId: purchase.id,
               entryType: SubscriptionCreditEntryType.PURCHASE_RESERVED,
             },
             orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-          });
+          },
+        );
         if (
           !reservation ||
           !reservation.amount.equals(purchase.creditAmountApplied)
