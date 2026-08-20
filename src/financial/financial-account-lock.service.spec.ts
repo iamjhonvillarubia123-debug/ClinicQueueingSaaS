@@ -1,17 +1,18 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { FinancialAccountLockService } from './financial-account-lock.service';
 
+type QueryArgument = { values?: unknown[] };
+
 describe('FinancialAccountLockService', () => {
   const service = new FinancialAccountLockService();
 
   function transactionFor(accounts: Record<string, string>) {
     return {
-      $queryRaw: jest.fn((query: { values?: unknown[] }) => {
-        const id = String(query.values?.[0] ?? '');
+      $queryRaw: jest.fn((query: QueryArgument) => {
+        const rawId = query.values?.[0];
+        const id = typeof rawId === 'string' ? rawId : '';
         const doctorUserId = accounts[id];
-        return Promise.resolve(
-          doctorUserId ? [{ id, doctorUserId }] : [],
-        );
+        return Promise.resolve(doctorUserId ? [{ id, doctorUserId }] : []);
       }),
     };
   }
@@ -56,14 +57,10 @@ describe('FinancialAccountLockService', () => {
       { id: 'account-a', doctorUserId: 'doctor-a' },
     ]);
 
-    const firstQuery = transaction.$queryRaw.mock.calls[0]?.[0] as {
-      values?: unknown[];
-    };
-    const secondQuery = transaction.$queryRaw.mock.calls[1]?.[0] as {
-      values?: unknown[];
-    };
-    expect(firstQuery.values?.[0]).toBe('account-a');
-    expect(secondQuery.values?.[0]).toBe('account-z');
+    const firstQuery = transaction.$queryRaw.mock.calls[0]?.[0];
+    const secondQuery = transaction.$queryRaw.mock.calls[1]?.[0];
+    expect(firstQuery?.values?.[0]).toBe('account-a');
+    expect(secondQuery?.values?.[0]).toBe('account-z');
   });
 
   it('rejects a transfer whose source and target are the same account', async () => {
