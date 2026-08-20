@@ -9,6 +9,7 @@ import { RefundNotificationService } from './refund-notification.service';
 import { RefundProcessingService } from './refund-processing.service';
 import { RefundRequestService } from './refund-request.service';
 import { StandardSubscriptionPriceService } from './standard-subscription-price.service';
+import { SubscriptionCommercialGateService } from './subscription-commercial-gate.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
 import { SubscriptionCreditRecoveryService } from './subscription-credit-recovery.service';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
@@ -28,6 +29,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     RefundProcessingService,
     RefundRequestService,
     StandardSubscriptionPriceService,
+    SubscriptionCommercialGateService,
     SubscriptionCreditBalanceService,
     SubscriptionCreditRecoveryService,
     SubscriptionEntitlementService,
@@ -45,6 +47,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     RefundProcessingService,
     RefundRequestService,
     StandardSubscriptionPriceService,
+    SubscriptionCommercialGateService,
     SubscriptionCreditBalanceService,
     SubscriptionCreditRecoveryService,
     SubscriptionEntitlementService,
