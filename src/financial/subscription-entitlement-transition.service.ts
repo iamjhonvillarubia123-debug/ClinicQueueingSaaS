@@ -1,8 +1,5 @@
 import { createHash } from 'crypto';
-import {
-  Injectable,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import {
   NotificationChannel,
   NotificationOutboxStatus,
@@ -28,7 +25,9 @@ type TransitionDefinition = {
 };
 
 type ReconciliationResult = Awaited<
-  ReturnType<SubscriptionEntitlementTransitionService['reconcileFinancialAccount']>
+  ReturnType<
+    SubscriptionEntitlementTransitionService['reconcileFinancialAccount']
+  >
 >;
 
 @Injectable()
@@ -88,14 +87,15 @@ export class SubscriptionEntitlementTransitionService {
                 'Your subscription access is currently unavailable. Please renew your subscription to restore access.',
             };
 
-      const existing = await transaction.subscriptionEntitlementEvent.findFirst({
-        where: {
-          doctorSubscriptionEntitlementId: entitlement.id,
-          eventType: transition.eventType,
-          effectiveAt: transition.effectiveAt,
-        },
-        select: { id: true },
-      });
+      const existing =
+        await transaction.subscriptionEntitlementEvent.findFirst({
+          where: {
+            doctorSubscriptionEntitlementId: entitlement.id,
+            eventType: transition.eventType,
+            effectiveAt: transition.effectiveAt,
+          },
+          select: { id: true },
+        });
 
       const event =
         existing ??
@@ -169,10 +169,11 @@ export class SubscriptionEntitlementTransitionService {
     });
     if (existingOutbox) return;
 
-    const financialAccount = await transaction.doctorFinancialAccount.findUnique({
-      where: { id: doctorFinancialAccountId },
-      select: { doctorUser: { select: { email: true } } },
-    });
+    const financialAccount =
+      await transaction.doctorFinancialAccount.findUnique({
+        where: { id: doctorFinancialAccountId },
+        select: { doctorUser: { select: { email: true } } },
+      });
     if (!financialAccount?.doctorUser.email) {
       throw new InternalServerErrorException(
         'Subscription notification email destination is unavailable.',
