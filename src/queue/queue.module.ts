@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { FinancialModule } from '../financial/financial.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
 import { PatientAccessModule } from '../patient-access/patient-access.module';
@@ -30,6 +31,7 @@ import { UndoQueueService } from './undo-queue.service';
 @Module({
   imports: [
     AuthModule,
+    FinancialModule,
     IdempotencyModule,
     NotificationModule,
     PatientAccessModule,
