@@ -8,7 +8,7 @@ describe('FinancialAccessSessionService', () => {
   function createFixture() {
     let rawQueryCount = 0;
     const transaction = {
-      $queryRaw: jest.fn(() => {
+      $queryRaw: jest.fn<Promise<unknown[]>, []>(() => {
         rawQueryCount += 1;
         if (rawQueryCount === 1) {
           return Promise.resolve([
