@@ -78,7 +78,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
     });
 
     if (!doctor.doctorProfile || !doctor.doctorFinancialAccount?.entitlement) {
-      throw new Error('Public Doctor fixture did not create required relations.');
+      throw new Error(
+        'Public Doctor fixture did not create required relations.',
+      );
     }
 
     const location = await prisma.practiceLocation.create({
@@ -144,7 +146,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       }),
     );
 
-    await request(app.getHttpServer()).get(qrPath(locationResponse)).expect(200);
+    await request(app.getHttpServer())
+      .get(qrPath(locationResponse))
+      .expect(200);
   });
 
   it('preserves the PracticeLocation QR through configuration edit, Disable and Reactivate', async () => {
@@ -255,7 +259,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       where: { id: fixture.doctorUserId },
       data: { administrativeRestrictionStatus: 'SUSPENDED' },
     });
-    const restricted = await request(app.getHttpServer()).get(route).expect(200);
+    const restricted = await request(app.getHttpServer())
+      .get(route)
+      .expect(200);
     expect((restricted.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
