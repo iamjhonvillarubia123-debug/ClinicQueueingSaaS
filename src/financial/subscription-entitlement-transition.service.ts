@@ -27,6 +27,10 @@ type TransitionDefinition = {
   message: string;
 };
 
+type ReconciliationResult = Awaited<
+  ReturnType<SubscriptionEntitlementTransitionService['reconcileFinancialAccount']>
+>;
+
 @Injectable()
 export class SubscriptionEntitlementTransitionService {
   constructor(
@@ -137,7 +141,7 @@ export class SubscriptionEntitlementTransitionService {
       select: { doctorFinancialAccountId: true },
     });
 
-    const results = [];
+    const results: ReconciliationResult[] = [];
     for (const entitlement of due) {
       results.push(
         await this.reconcileFinancialAccount(
