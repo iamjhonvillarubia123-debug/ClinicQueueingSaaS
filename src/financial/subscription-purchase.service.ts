@@ -48,7 +48,10 @@ export class SubscriptionPurchaseService {
     return this.prisma.$transaction(async (transaction) => {
       await transaction.$executeRaw(Prisma.sql`
         SELECT pg_advisory_xact_lock(
-          hashtextextended(${`doctor-financial-account:${input.authenticatedUserId}`}, 0)
+          hashtextextended(
+            ${`doctor-financial-account:${input.authenticatedUserId}`},
+            0
+          )
         )
       `);
 
@@ -73,10 +76,11 @@ export class SubscriptionPurchaseService {
         );
       }
 
-      let financialAccount = await transaction.doctorFinancialAccount.findUnique({
-        where: { doctorUserId: user.id },
-        select: { id: true, doctorUserId: true },
-      });
+      let financialAccount =
+        await transaction.doctorFinancialAccount.findUnique({
+          where: { doctorUserId: user.id },
+          select: { id: true, doctorUserId: true },
+        });
       if (!financialAccount) {
         financialAccount = await transaction.doctorFinancialAccount.create({
           data: { doctorUserId: user.id },
