@@ -68,7 +68,9 @@ describe('FinancialAccessSessionService', () => {
       id: 'session-1',
       doctorFinancialAccountId: 'financial-1',
     });
-    expect(transaction.financialAccessChallenge.updateMany).toHaveBeenCalledWith(
+    expect(
+      transaction.financialAccessChallenge.updateMany,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { consumedAt: now },
       }),
