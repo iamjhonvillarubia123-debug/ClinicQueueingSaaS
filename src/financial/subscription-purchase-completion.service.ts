@@ -33,6 +33,10 @@ type ConfirmExternalPaymentInput = {
   confirmedAt?: Date;
 };
 
+type RestorationEvent = {
+  id: string;
+};
+
 @Injectable()
 export class SubscriptionPurchaseCompletionService {
   constructor(
@@ -80,7 +84,7 @@ export class SubscriptionPurchaseCompletionService {
       }
       if (!amount.equals(purchase.externalAmountRequired)) {
         throw new ConflictException(
-          'Provider payment amount does not match the purchase balance.',
+          'Provider payment amount does not match the outstanding subscription purchase amount.',
         );
       }
 
@@ -95,69 +99,73 @@ export class SubscriptionPurchaseCompletionService {
       if (existingPayment) {
         if (
           existingPayment.subscriptionPurchaseId !== purchase.id ||
-          existingPayment.status !== SubscriptionPaymentStatus.SUCCEEDED ||
           !existingPayment.amount.equals(amount)
         ) {
           throw new ConflictException(
-            'Provider payment reference is already associated with another payment result.',
+            'Provider payment reference is already associated with another payment.',
           );
         }
-        const completed = await this.completeLockedPurchase(
-          transaction,
-          purchase,
-          existingPayment.confirmedAt ?? confirmedAt,
-        );
-        return { ...completed, payment: existingPayment, paymentReplayed: true };
+        if (existingPayment.status === SubscriptionPaymentStatus.SUCCEEDED) {
+          if (purchase.status === SubscriptionPurchaseStatus.COMPLETED) {
+            return this.loadCompletedResult(transaction, purchase.id);
+          }
+          throw new InternalServerErrorException(
+            'Successful provider payment is not synchronized with the subscription purchase.',
+          );
+        }
       }
 
-      const payment = await transaction.subscriptionPayment.create({
-        data: {
-          subscriptionPurchaseId: purchase.id,
-          provider,
-          providerPaymentReference,
-          amount,
-          status: SubscriptionPaymentStatus.SUCCEEDED,
-          initiatedAt: confirmedAt,
-          confirmedAt,
-          createdAt: confirmedAt,
-          updatedAt: confirmedAt,
-        },
-      });
-      const completed = await this.completeLockedPurchase(
-        transaction,
-        purchase,
-        confirmedAt,
-      );
-      return { ...completed, payment, paymentReplayed: false };
-    });
-  }
+      if (purchase.status === SubscriptionPurchaseStatus.COMPLETED) {
+        throw new ConflictException(
+          'Subscription purchase has already been completed.',
+        );
+      }
+      if (purchase.status !== SubscriptionPurchaseStatus.PENDING) {
+        throw new ConflictException(
+          'Subscription purchase is no longer eligible for payment confirmation.',
+        );
+      }
 
-  private async lockPurchase(
-    transaction: Prisma.TransactionClient,
-    purchaseId: string,
-  ) {
-    const rows = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT "id"
-      FROM "SubscriptionPurchase"
-      WHERE "id" = ${purchaseId}
-      FOR UPDATE
-    `);
-    if (!rows[0]) return null;
-    return transaction.subscriptionPurchase.findUnique({
-      where: { id: purchaseId },
+      if (existingPayment) {
+        await transaction.subscriptionPayment.update({
+          where: { id: existingPayment.id },
+          data: {
+            status: SubscriptionPaymentStatus.SUCCEEDED,
+            confirmedAt,
+            failedAt: null,
+          },
+        });
+      } else {
+        await transaction.subscriptionPayment.create({
+          data: {
+            subscriptionPurchaseId: purchase.id,
+            provider,
+            providerPaymentReference,
+            amount,
+            status: SubscriptionPaymentStatus.SUCCEEDED,
+            initiatedAt: confirmedAt,
+            confirmedAt,
+            createdAt: confirmedAt,
+          },
+        });
+      }
+
+      return this.completeLockedPurchase(transaction, purchase, confirmedAt);
     });
   }
 
   private async completeLockedPurchase(
     transaction: Prisma.TransactionClient,
-    purchase: NonNullable<Awaited<ReturnType<SubscriptionPurchaseCompletionService['lockPurchase']>>>,
+    purchase: Awaited<ReturnType<SubscriptionPurchaseCompletionService['lockPurchase']>> & {},
     completedAt: Date,
   ) {
     if (purchase.status === SubscriptionPurchaseStatus.COMPLETED) {
-      return { purchase, replayed: true };
+      return this.loadCompletedResult(transaction, purchase.id);
     }
     if (purchase.status !== SubscriptionPurchaseStatus.PENDING) {
-      throw new ConflictException('Subscription purchase cannot be completed.');
+      throw new ConflictException(
+        'Subscription purchase is no longer eligible for completion.',
+      );
     }
 
     await this.accountLocks.lockById(
@@ -171,68 +179,39 @@ export class SubscriptionPurchaseCompletionService {
           doctorFinancialAccountId: purchase.doctorFinancialAccountId,
         },
       });
-    const wasSuspended = existingEntitlement
-      ? this.entitlementState.evaluateDates(
-          existingEntitlement.paidThrough,
-          existingEntitlement.graceEndsAt,
-          completedAt,
-        ) === 'SUSPENDED'
-      : false;
+    const wasSuspended =
+      existingEntitlement !== null &&
+      this.entitlementState.evaluateDates(
+        existingEntitlement.paidThrough,
+        existingEntitlement.graceEndsAt,
+        completedAt,
+      ) === 'SUSPENDED';
+
     const period = this.periods.resolvePeriod(
       purchase.monthsPurchased,
       completedAt,
       existingEntitlement?.paidThrough ?? null,
     );
-    const graceEndsAt = new Date(period.periodEnd.getTime() + GRACE_DURATION_MS);
+    const graceEndsAt = new Date(
+      period.periodEnd.getTime() + GRACE_DURATION_MS,
+    );
 
     const entitlement = existingEntitlement
       ? await transaction.doctorSubscriptionEntitlement.update({
           where: { id: existingEntitlement.id },
-          data: { paidThrough: period.periodEnd, graceEndsAt },
+          data: {
+            paidThrough: period.periodEnd,
+            graceEndsAt,
+          },
         })
       : await transaction.doctorSubscriptionEntitlement.create({
           data: {
             doctorFinancialAccountId: purchase.doctorFinancialAccountId,
             paidThrough: period.periodEnd,
             graceEndsAt,
+            createdAt: completedAt,
           },
         });
-
-    if (!purchase.creditAmountApplied.equals(0)) {
-      const consumed = await transaction.subscriptionCreditEntry.findFirst({
-        where: {
-          subscriptionPurchaseId: purchase.id,
-          entryType: SubscriptionCreditEntryType.PURCHASE_CONSUMED,
-        },
-        select: { id: true },
-      });
-      if (!consumed) {
-        const reservation = await transaction.subscriptionCreditEntry.findFirst({
-          where: {
-            subscriptionPurchaseId: purchase.id,
-            entryType: SubscriptionCreditEntryType.PURCHASE_RESERVED,
-          },
-          orderBy: { occurredAt: 'asc' },
-          select: { id: true, amount: true, commandIdempotencyId: true },
-        });
-        if (!reservation || !reservation.amount.equals(purchase.creditAmountApplied)) {
-          throw new InternalServerErrorException(
-            'Subscription purchase credit reservation is inconsistent.',
-          );
-        }
-        await transaction.subscriptionCreditEntry.create({
-          data: {
-            doctorFinancialAccountId: purchase.doctorFinancialAccountId,
-            entryType: SubscriptionCreditEntryType.PURCHASE_CONSUMED,
-            amount: purchase.creditAmountApplied,
-            subscriptionPurchaseId: purchase.id,
-            relatedCreditEntryId: reservation.id,
-            commandIdempotencyId: reservation.commandIdempotencyId,
-            occurredAt: completedAt,
-          },
-        });
-      }
-    }
 
     const completedPurchase = await transaction.subscriptionPurchase.update({
       where: { id: purchase.id },
@@ -243,6 +222,41 @@ export class SubscriptionPurchaseCompletionService {
         completedAt,
       },
     });
+
+    if (!purchase.creditAmountApplied.equals(0)) {
+      const existingConsumption =
+        await transaction.subscriptionCreditEntry.findFirst({
+          where: {
+            subscriptionPurchaseId: purchase.id,
+            entryType: SubscriptionCreditEntryType.PURCHASE_CONSUMED,
+          },
+          select: { id: true },
+        });
+      if (!existingConsumption) {
+        const reservation = await transaction.subscriptionCreditEntry.findFirst({
+          where: {
+            subscriptionPurchaseId: purchase.id,
+            entryType: SubscriptionCreditEntryType.PURCHASE_RESERVED,
+          },
+          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        });
+        if (!reservation || !reservation.amount.equals(purchase.creditAmountApplied)) {
+          throw new InternalServerErrorException(
+            'Subscription purchase credit reservation is unavailable or inconsistent.',
+          );
+        }
+        await transaction.subscriptionCreditEntry.create({
+          data: {
+            doctorFinancialAccountId: purchase.doctorFinancialAccountId,
+            entryType: SubscriptionCreditEntryType.PURCHASE_CONSUMED,
+            amount: purchase.creditAmountApplied,
+            subscriptionPurchaseId: purchase.id,
+            relatedCreditEntryId: reservation.id,
+            occurredAt: completedAt,
+          },
+        });
+      }
+    }
 
     const doctor = await transaction.user.findUnique({
       where: { id: purchase.purchasedByUserId },
@@ -264,7 +278,7 @@ export class SubscriptionPurchaseCompletionService {
       completedAt,
     });
 
-    let restorationEvent = null;
+    let restorationEvent: RestorationEvent | null = null;
     if (wasSuspended) {
       restorationEvent = await transaction.subscriptionEntitlementEvent.create({
         data: {
@@ -275,6 +289,7 @@ export class SubscriptionPurchaseCompletionService {
           subscriptionPurchaseId: purchase.id,
           createdAt: completedAt,
         },
+        select: { id: true },
       });
       await this.createEmailOutbox(transaction, {
         notificationType: NotificationType.SUBSCRIPTION_RESTORED,
@@ -295,6 +310,62 @@ export class SubscriptionPurchaseCompletionService {
     };
   }
 
+  private async loadCompletedResult(
+    transaction: Prisma.TransactionClient,
+    purchaseId: string,
+  ) {
+    const purchase = await transaction.subscriptionPurchase.findUnique({
+      where: { id: purchaseId },
+    });
+    if (!purchase || purchase.status !== SubscriptionPurchaseStatus.COMPLETED) {
+      throw new InternalServerErrorException(
+        'Completed subscription purchase result is unavailable.',
+      );
+    }
+    const entitlement =
+      await transaction.doctorSubscriptionEntitlement.findUnique({
+        where: {
+          doctorFinancialAccountId: purchase.doctorFinancialAccountId,
+        },
+      });
+    if (!entitlement) {
+      throw new InternalServerErrorException(
+        'Completed subscription entitlement is unavailable.',
+      );
+    }
+    return { purchase, entitlement, restorationEvent: null, replayed: true };
+  }
+
+  private async lockPurchase(
+    transaction: Prisma.TransactionClient,
+    purchaseId: string,
+  ) {
+    const rows = await transaction.$queryRaw<
+      Array<{
+        id: string;
+        doctorFinancialAccountId: string;
+        purchasedByUserId: string;
+        monthsPurchased: number;
+        creditAmountApplied: Prisma.Decimal;
+        externalAmountRequired: Prisma.Decimal;
+        status: SubscriptionPurchaseStatus;
+      }>
+    >(Prisma.sql`
+      SELECT
+        "id",
+        "doctorFinancialAccountId",
+        "purchasedByUserId",
+        "monthsPurchased",
+        "creditAmountApplied",
+        "externalAmountRequired",
+        "status"
+      FROM "SubscriptionPurchase"
+      WHERE "id" = ${purchaseId}
+      FOR UPDATE
+    `);
+    return rows[0] ?? null;
+  }
+
   private async createEmailOutbox(
     transaction: Prisma.TransactionClient,
     input: {
@@ -307,16 +378,21 @@ export class SubscriptionPurchaseCompletionService {
       completedAt: Date;
     },
   ) {
-    const deliveryIdentityKey = createHash('sha256')
-      .update(`${input.notificationType}|${input.sourceId}`, 'utf8')
-      .digest('hex');
+    const deliveryIdentityKey = this.hash(
+      `${input.notificationType}|${input.sourceId}`,
+    );
+    const existing = await transaction.notificationOutbox.findUnique({
+      where: { deliveryIdentityKey },
+      select: { id: true },
+    });
+    if (existing) return;
+
     await transaction.notificationOutbox.create({
       data: {
         deliveryIdentityKey,
-        notificationType: input.notificationType,
         channel: NotificationChannel.EMAIL,
+        notificationType: input.notificationType,
         status: NotificationOutboxStatus.PENDING,
-        practiceLocationId: null,
         subscriptionPurchaseId: input.subscriptionPurchaseId,
         subscriptionEntitlementEventId: input.subscriptionEntitlementEventId,
         recipientMobileEncrypted: null,
@@ -336,5 +412,9 @@ export class SubscriptionPurchaseCompletionService {
         createdAt: input.completedAt,
       },
     });
+  }
+
+  private hash(value: string): string {
+    return createHash('sha256').update(value, 'utf8').digest('hex');
   }
 }
