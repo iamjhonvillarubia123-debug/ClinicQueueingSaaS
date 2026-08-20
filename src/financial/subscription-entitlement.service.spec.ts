@@ -5,9 +5,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe('SubscriptionEntitlementService', () => {
   function createService(
-    entitlement:
-      | { paidThrough: Date; graceEndsAt: Date }
-      | null = null,
+    entitlement: { paidThrough: Date; graceEndsAt: Date } | null = null,
   ) {
     const prisma = {
       doctorSubscriptionEntitlement: {
@@ -74,9 +72,9 @@ describe('SubscriptionEntitlementService', () => {
     const paidThrough = new Date('2026-09-01T00:00:00.000Z');
     const graceEndsAt = new Date(paidThrough.getTime() + 7 * DAY_MS);
 
-    expect(
-      service.evaluateDates(paidThrough, graceEndsAt, graceEndsAt),
-    ).toBe('SUSPENDED');
+    expect(service.evaluateDates(paidThrough, graceEndsAt, graceEndsAt)).toBe(
+      'SUSPENDED',
+    );
   });
 
   it('rejects entitlement dates that violate the fixed seven-day grace invariant', () => {
@@ -84,9 +82,9 @@ describe('SubscriptionEntitlementService', () => {
     const paidThrough = new Date('2026-09-01T00:00:00.000Z');
     const graceEndsAt = new Date(paidThrough.getTime() + 6 * DAY_MS);
 
-    expect(() =>
-      service.evaluateDates(paidThrough, graceEndsAt),
-    ).toThrow(InternalServerErrorException);
+    expect(() => service.evaluateDates(paidThrough, graceEndsAt)).toThrow(
+      InternalServerErrorException,
+    );
   });
 
   it('returns current entitlement dates and gated eligibility', async () => {
