@@ -167,9 +167,7 @@ export class SubscriptionPurchaseService {
           doctorFinancialAccountId: financialAccount.id,
           purchasedByUserId: user.id,
           monthsPurchased: quote.monthsPurchased,
-          monthlyPriceSnapshot: new Prisma.Decimal(
-            quote.monthlyPriceSnapshot,
-          ),
+          monthlyPriceSnapshot: new Prisma.Decimal(quote.monthlyPriceSnapshot),
           grossAmount: new Prisma.Decimal(quote.grossAmount),
           creditAmountApplied: new Prisma.Decimal(quote.creditAmountApplied),
           externalAmountRequired: new Prisma.Decimal(
