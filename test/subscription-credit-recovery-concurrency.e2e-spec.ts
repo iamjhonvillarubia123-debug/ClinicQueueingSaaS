@@ -215,14 +215,16 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
       .update(`recovery-${scope}@example.test`, 'utf8')
       .digest('hex');
     const challengeCodeHash = await passwordSecurity.hash('123456');
+    const challengeCreatedAt = new Date();
     const challenge = await prisma.financialAccessChallenge.create({
       data: {
         recoveryEmailHash,
         recipientEmailEncrypted: 'e2e-encrypted-email-placeholder',
         codeHash: challengeCodeHash,
-        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
-        verifiedAt: new Date(),
-        consumedAt: new Date(),
+        createdAt: challengeCreatedAt,
+        expiresAt: new Date(challengeCreatedAt.getTime() + SESSION_TTL_MS),
+        verifiedAt: challengeCreatedAt,
+        consumedAt: challengeCreatedAt,
       },
     });
     const financialAccessToken = `m10-recovery-token-${randomUUID()}`;
