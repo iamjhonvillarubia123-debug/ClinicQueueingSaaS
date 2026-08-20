@@ -60,7 +60,9 @@ export class RefundRequestService {
     const destinationConfirmation = input.destinationConfirmation.trim();
 
     if (!input.acknowledged) {
-      throw new BadRequestException('Final refund acknowledgement is required.');
+      throw new BadRequestException(
+        'Final refund acknowledgement is required.',
+      );
     }
     if (!reasonCode || reasonCode.length > 100) {
       throw new BadRequestException('Refund reason is invalid.');
@@ -101,7 +103,10 @@ export class RefundRequestService {
         where: { id: lockedAccount.doctorUserId },
         select: { accountStatus: true },
       });
-      if (!owner || owner.accountStatus !== UserAccountStatus.PERMANENTLY_CLOSED) {
+      if (
+        !owner ||
+        owner.accountStatus !== UserAccountStatus.PERMANENTLY_CLOSED
+      ) {
         throw new ForbiddenException(
           'Cash refund is available only for a permanently closed Doctor account.',
         );
@@ -208,7 +213,9 @@ export class RefundRequestService {
     }
     const amount = new Prisma.Decimal(normalized);
     if (!amount.greaterThan(0)) {
-      throw new BadRequestException('Requested refund must be greater than zero.');
+      throw new BadRequestException(
+        'Requested refund must be greater than zero.',
+      );
     }
     return amount;
   }
