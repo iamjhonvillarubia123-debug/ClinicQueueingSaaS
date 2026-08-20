@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   CommandType,
+  NotificationType,
   Prisma,
   RefundMethod,
   RefundRequestStatus,
@@ -23,6 +24,7 @@ describe('RefundRequestService', () => {
         findUnique: jest.fn(() =>
           Promise.resolve({
             accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
+            email: 'doctor@example.com',
           }),
         ),
       },
@@ -79,6 +81,9 @@ describe('RefundRequestService', () => {
     const protectedPayload = {
       encrypt: jest.fn((value: string) => `encrypted:${value}`),
     };
+    const refundNotifications = {
+      create: jest.fn(() => Promise.resolve()),
+    };
     const service = new RefundRequestService(
       prisma as never,
       financialAccess as never,
@@ -86,6 +91,7 @@ describe('RefundRequestService', () => {
       accountLocks as never,
       creditBalance as never,
       protectedPayload as never,
+      refundNotifications as never,
     );
     return {
       service,
@@ -95,6 +101,7 @@ describe('RefundRequestService', () => {
       accountLocks,
       creditBalance,
       protectedPayload,
+      refundNotifications,
       refundRequest,
     };
   }
@@ -112,7 +119,7 @@ describe('RefundRequestService', () => {
     acknowledged: true,
   };
 
-  it('creates one pending refund and reserves the requested credit atomically', async () => {
+  it('creates one pending refund, reserves credit, and commits the submitted email intent', async () => {
     const fixture = createFixture();
 
     await expect(fixture.service.create(input)).resolves.toMatchObject({
@@ -155,6 +162,14 @@ describe('RefundRequestService', () => {
         refundRequestId: 'refund-1',
       }) as object,
     });
+    expect(fixture.refundNotifications.create).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        notificationType: NotificationType.REFUND_REQUEST_SUBMITTED,
+        refundRequestId: 'refund-1',
+        recipientEmail: 'doctor@example.com',
+      }),
+    );
   });
 
   it('rejects a refund above available refundable credit', async () => {
