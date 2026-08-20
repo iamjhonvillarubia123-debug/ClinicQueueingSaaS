@@ -19,6 +19,7 @@ describe('PublicRoutingService', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    process.env.PUBLIC_APP_BASE_URL = 'https://booking.example.test/';
   });
 
   const doctorProfile = (overrides: Record<string, unknown> = {}) => ({
@@ -74,7 +75,7 @@ describe('PublicRoutingService', () => {
       allowsNewSubscriptionGatedActivity: true,
     });
 
-  it('returns a published Doctor route with only approved public identity fields', async () => {
+  it('returns a published Doctor route with stable public URL and QR payload', async () => {
     prisma.doctorProfile.findUnique.mockResolvedValue(doctorProfile());
     allowSubscription();
 
@@ -82,6 +83,13 @@ describe('PublicRoutingService', () => {
 
     expect(result.routeStatus).toBe('AVAILABLE');
     expect(result.bookingEntryAllowed).toBe(true);
+    expect(result.publicUrl).toBe(
+      'https://booking.example.test/public/doctors/doctor-public-id',
+    );
+    expect(result.qrPayload).toBe(result.publicUrl);
+    expect(result.practiceLocations[0].publicUrl).toBe(
+      'https://booking.example.test/public/practice-locations/location-public-id',
+    );
     expect(result.doctor).toEqual({
       publicIdentifier: 'doctor-public-id',
       publicSlug: 'dr-sample',
@@ -98,7 +106,7 @@ describe('PublicRoutingService', () => {
     expect(result).not.toHaveProperty('email');
   });
 
-  it('keeps a published Doctor route resolvable with neutral subscription unavailability', async () => {
+  it('preserves the Doctor URL and QR payload during subscription restriction', async () => {
     prisma.doctorProfile.findUnique.mockResolvedValue(doctorProfile());
     subscriptionEntitlement.evaluateForFinancialAccount.mockResolvedValue({
       allowsNewSubscriptionGatedActivity: false,
@@ -108,6 +116,10 @@ describe('PublicRoutingService', () => {
 
     expect(result.routeStatus).toBe('TEMPORARILY_UNAVAILABLE');
     expect(result.bookingEntryAllowed).toBe(false);
+    expect(result.publicUrl).toBe(
+      'https://booking.example.test/public/doctors/doctor-public-id',
+    );
+    expect(result.qrPayload).toBe(result.publicUrl);
     expect(result.message).toBe(
       'Online booking is temporarily unavailable. Please try again later.',
     );
@@ -142,7 +154,7 @@ describe('PublicRoutingService', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('keeps a disabled PracticeLocation route resolvable but non-bookable', async () => {
+  it('keeps a disabled PracticeLocation URL and QR payload stable but non-bookable', async () => {
     prisma.practiceLocation.findUnique.mockResolvedValue(
       locationRecord({ lifecycleStatus: 'DISABLED' }),
     );
@@ -153,6 +165,13 @@ describe('PublicRoutingService', () => {
 
     expect(result.routeStatus).toBe('TEMPORARILY_UNAVAILABLE');
     expect(result.bookingEntryAllowed).toBe(false);
+    expect(result.publicUrl).toBe(
+      'https://booking.example.test/public/practice-locations/location-public-id',
+    );
+    expect(result.qrPayload).toBe(result.publicUrl);
+    expect(result.doctorPublicUrl).toBe(
+      'https://booking.example.test/public/doctors/doctor-public-id',
+    );
     expect(result.services).toEqual([{ name: 'Consultation' }]);
     expect(result.message).toContain('currently unavailable');
   });
