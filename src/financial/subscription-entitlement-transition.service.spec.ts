@@ -4,6 +4,10 @@ import {
 } from '../../generated/prisma/client';
 import { SubscriptionEntitlementTransitionService } from './subscription-entitlement-transition.service';
 
+type EntitlementState = 'PAID' | 'GRACE' | 'SUSPENDED';
+type ExistingEvent = { id: string } | null;
+type ExistingOutbox = { id: string } | null;
+
 describe('SubscriptionEntitlementTransitionService', () => {
   const now = new Date('2026-08-20T12:00:00.000Z');
 
@@ -13,11 +17,15 @@ describe('SubscriptionEntitlementTransitionService', () => {
         findUnique: jest.fn(),
       },
       subscriptionEntitlementEvent: {
-        findFirst: jest.fn(() => Promise.resolve(null)),
+        findFirst: jest.fn<Promise<ExistingEvent>, []>(() =>
+          Promise.resolve(null),
+        ),
         create: jest.fn(() => Promise.resolve({ id: 'event-1' })),
       },
       notificationOutbox: {
-        findUnique: jest.fn(() => Promise.resolve(null)),
+        findUnique: jest.fn<Promise<ExistingOutbox>, []>(() =>
+          Promise.resolve(null),
+        ),
         create: jest.fn(() => Promise.resolve({ id: 'outbox-1' })),
       },
       doctorFinancialAccount: {
@@ -37,7 +45,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
       lockById: jest.fn(() => Promise.resolve()),
     };
     const entitlementState = {
-      evaluateDates: jest.fn(() => 'GRACE' as const),
+      evaluateDates: jest.fn<EntitlementState, [Date, Date, Date]>(() =>
+        'GRACE',
+      ),
     };
     const protectedAccountPayload = {
       encrypt: jest.fn(() => 'encrypted-email'),
@@ -78,7 +88,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
       fixture.service.reconcileFinancialAccount('financial-1', now),
     ).resolves.toMatchObject({ state: 'GRACE', created: true });
 
-    expect(fixture.transaction.subscriptionEntitlementEvent.create).toHaveBeenCalledWith(
+    expect(
+      fixture.transaction.subscriptionEntitlementEvent.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           eventType: SubscriptionEntitlementEventType.GRACE_ENTERED,
@@ -112,7 +124,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
 
     await fixture.service.reconcileFinancialAccount('financial-1', now);
 
-    expect(fixture.transaction.subscriptionEntitlementEvent.create).toHaveBeenCalledWith(
+    expect(
+      fixture.transaction.subscriptionEntitlementEvent.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           eventType: SubscriptionEntitlementEventType.SUSPENDED,
@@ -120,7 +134,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
         }),
       }),
     );
-    expect(fixture.transaction.subscriptionEntitlementEvent.create).toHaveBeenCalledTimes(1);
+    expect(
+      fixture.transaction.subscriptionEntitlementEvent.create,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it('reuses an existing transition occurrence and does not create another event', async () => {
@@ -133,17 +149,24 @@ describe('SubscriptionEntitlementTransitionService', () => {
         graceEndsAt: new Date('2026-08-27T00:00:00.000Z'),
       },
     );
-    fixture.transaction.subscriptionEntitlementEvent.findFirst.mockResolvedValueOnce({
-      id: 'existing-event',
-    });
+    fixture.transaction.subscriptionEntitlementEvent.findFirst.mockResolvedValueOnce(
+      {
+        id: 'existing-event',
+      },
+    );
     fixture.transaction.notificationOutbox.findUnique.mockResolvedValueOnce({
       id: 'existing-outbox',
     });
 
     await expect(
       fixture.service.reconcileFinancialAccount('financial-1', now),
-    ).resolves.toMatchObject({ created: false, event: { id: 'existing-event' } });
-    expect(fixture.transaction.subscriptionEntitlementEvent.create).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({
+      created: false,
+      event: { id: 'existing-event' },
+    });
+    expect(
+      fixture.transaction.subscriptionEntitlementEvent.create,
+    ).not.toHaveBeenCalled();
     expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
   });
 
@@ -162,7 +185,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
     await expect(
       fixture.service.reconcileFinancialAccount('financial-1', now),
     ).resolves.toMatchObject({ state: 'PAID', event: null, created: false });
-    expect(fixture.transaction.subscriptionEntitlementEvent.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionEntitlementEvent.create,
+    ).not.toHaveBeenCalled();
     expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
   });
 });
