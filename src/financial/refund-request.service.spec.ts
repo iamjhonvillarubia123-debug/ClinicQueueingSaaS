@@ -21,7 +21,9 @@ describe('RefundRequestService', () => {
     const transaction = {
       user: {
         findUnique: jest.fn(() =>
-          Promise.resolve({ accountStatus: UserAccountStatus.PERMANENTLY_CLOSED }),
+          Promise.resolve({
+            accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
+          }),
         ),
       },
       commandIdempotency: {
@@ -52,7 +54,10 @@ describe('RefundRequestService', () => {
     };
     const idempotency = {
       normalizeKey: jest.fn((value: string | undefined) => value ?? 'key-1'),
-      fingerprint: jest.fn((_: Record<string, unknown>) => 'fingerprint-1'),
+      fingerprint: jest.fn((input: Record<string, unknown>) => {
+        void input;
+        return 'fingerprint-1';
+      }),
       deriveIdentity: jest.fn(() => 'identity-1'),
       acquireCommandLock: jest.fn(() => Promise.resolve()),
       findReplay: jest.fn(() => Promise.resolve(null)),
@@ -128,7 +133,7 @@ describe('RefundRequestService', () => {
         actorUserId: null,
         accountUserId: null,
         doctorFinancialAccountId: 'financial-1',
-      }),
+      }) as object,
       select: { id: true },
     });
     expect(fixture.transaction.refundRequest.create).toHaveBeenCalledWith({
@@ -138,15 +143,17 @@ describe('RefundRequestService', () => {
         method: RefundMethod.GCASH,
         status: RefundRequestStatus.PENDING,
         destinationLast4: '4567',
-      }),
+      }) as object,
     });
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         doctorFinancialAccountId: 'financial-1',
         entryType: SubscriptionCreditEntryType.REFUND_RESERVED,
         amount: new Prisma.Decimal('250.00'),
         refundRequestId: 'refund-1',
-      }),
+      }) as object,
     });
   });
 
@@ -183,7 +190,8 @@ describe('RefundRequestService', () => {
     await fixture.service.create(input);
 
     expect(fixture.idempotency.fingerprint).toHaveBeenCalledTimes(1);
-    const fingerprintInput = fixture.idempotency.fingerprint.mock.calls[0]?.[0];
+    const fingerprintInput: Record<string, unknown> | undefined =
+      fixture.idempotency.fingerprint.mock.calls[0]?.[0];
     expect(JSON.stringify(fingerprintInput)).not.toContain('financial-token');
     expect(JSON.stringify(fingerprintInput)).not.toContain('09171234567');
   });
