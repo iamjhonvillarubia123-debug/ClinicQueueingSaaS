@@ -230,9 +230,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       }),
     );
 
-    const suspendedPaidThrough = new Date(
-      Date.now() - 9 * 24 * 60 * 60 * 1000,
-    );
+    const suspendedPaidThrough = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000);
     await prisma.doctorSubscriptionEntitlement.update({
       where: { id: fixture.entitlementId },
       data: {
