@@ -2,10 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubscriptionEntitlementService } from '../financial/subscription-entitlement.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type PublicRouteStatus =
-  | 'AVAILABLE'
-  | 'TEMPORARILY_UNAVAILABLE'
-  | 'NO_BOOKING_LOCATIONS';
+export type PublicRouteStatus = 'AVAILABLE' | 'TEMPORARILY_UNAVAILABLE' | 'NO_BOOKING_LOCATIONS';
 
 type PublicDoctorIdentity = {
   publicIdentifier: string;
