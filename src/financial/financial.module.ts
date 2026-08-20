@@ -10,6 +10,7 @@ import { RefundProcessingService } from './refund-processing.service';
 import { RefundRequestService } from './refund-request.service';
 import { StandardSubscriptionPriceService } from './standard-subscription-price.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
+import { SubscriptionCreditRecoveryService } from './subscription-credit-recovery.service';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 import { SubscriptionPeriodService } from './subscription-period.service';
 import { SubscriptionPurchaseCompletionService } from './subscription-purchase-completion.service';
@@ -28,6 +29,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     RefundRequestService,
     StandardSubscriptionPriceService,
     SubscriptionCreditBalanceService,
+    SubscriptionCreditRecoveryService,
     SubscriptionEntitlementService,
     SubscriptionPeriodService,
     SubscriptionPurchaseCompletionService,
@@ -44,6 +46,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     RefundRequestService,
     StandardSubscriptionPriceService,
     SubscriptionCreditBalanceService,
+    SubscriptionCreditRecoveryService,
     SubscriptionEntitlementService,
     SubscriptionPeriodService,
     SubscriptionPurchaseCompletionService,
