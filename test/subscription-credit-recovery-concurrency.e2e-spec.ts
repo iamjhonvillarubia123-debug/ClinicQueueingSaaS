@@ -76,17 +76,11 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
       }),
     ]);
 
-    const fulfilled = results.filter(
-      (result) => result.status === 'fulfilled',
-    );
-    const rejected = results.filter(
-      (result) => result.status === 'rejected',
-    );
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
-    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
-      BadRequestException,
-    );
+    expect(rejected[0].reason).toBeInstanceOf(BadRequestException);
 
     const transferEntries = await prisma.subscriptionCreditEntry.findMany({
       where: {
