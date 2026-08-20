@@ -52,10 +52,9 @@ describe('SubscriptionCommercialGateService', () => {
       doctorFinancialAccountId: 'financial-1',
       entitlement: { state: 'PAID' },
     });
-    expect(fixture.entitlement.evaluateForFinancialAccount).toHaveBeenCalledWith(
-      'financial-1',
-      now,
-    );
+    expect(
+      fixture.entitlement.evaluateForFinancialAccount,
+    ).toHaveBeenCalledWith('financial-1', now);
   });
 
   it('allows new activity during the seven-day grace state', async () => {
@@ -75,12 +74,16 @@ describe('SubscriptionCommercialGateService', () => {
 
   it('blocks new activity when no financial account exists', async () => {
     const fixture = createFixture();
-    fixture.prisma.doctorFinancialAccount.findUnique.mockResolvedValueOnce(null);
+    fixture.prisma.doctorFinancialAccount.findUnique.mockResolvedValueOnce(
+      null,
+    );
 
     await expect(
       fixture.service.assertAllowsNewActivity('doctor-1', now),
     ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(fixture.entitlement.evaluateForFinancialAccount).not.toHaveBeenCalled();
+    expect(
+      fixture.entitlement.evaluateForFinancialAccount,
+    ).not.toHaveBeenCalled();
   });
 
   it('blocks new activity after unresolved grace expiry', async () => {
