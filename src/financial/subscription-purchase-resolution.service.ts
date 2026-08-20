@@ -80,14 +80,15 @@ export class SubscriptionPurchaseResolutionService {
         purchase.doctorFinancialAccountId,
       );
 
-      const successfulPayment =
-        await transaction.subscriptionPayment.findFirst({
+      const successfulPayment = await transaction.subscriptionPayment.findFirst(
+        {
           where: {
             subscriptionPurchaseId: purchase.id,
             status: SubscriptionPaymentStatus.SUCCEEDED,
           },
           select: { id: true },
-        });
+        },
+      );
       if (successfulPayment) {
         throw new InternalServerErrorException(
           'Successful provider payment cannot be resolved as a failed subscription purchase.',
@@ -106,14 +107,15 @@ export class SubscriptionPurchaseResolutionService {
       });
 
       if (!purchase.creditAmountApplied.equals(0)) {
-        const reservation =
-          await transaction.subscriptionCreditEntry.findFirst({
+        const reservation = await transaction.subscriptionCreditEntry.findFirst(
+          {
             where: {
               subscriptionPurchaseId: purchase.id,
               entryType: SubscriptionCreditEntryType.PURCHASE_RESERVED,
             },
             orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-          });
+          },
+        );
         if (
           !reservation ||
           !reservation.amount.equals(purchase.creditAmountApplied)
