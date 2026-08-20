@@ -17,6 +17,8 @@ type FinancialAccountFixture = {
 type RecoveryLedgerFixture = {
   id: string;
   doctorFinancialAccountId: string;
+  counterpartyDoctorFinancialAccountId: string | null;
+  relatedCreditEntryId: string | null;
   entryType: SubscriptionCreditEntryType;
   amount: Prisma.Decimal;
 };
@@ -166,6 +168,7 @@ describe('SubscriptionCreditRecoveryService', () => {
         doctorFinancialAccountId: 'financial-old',
         entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_OUT,
         amount: new Prisma.Decimal('300.00'),
+        counterpartyDoctorFinancialAccountId: 'financial-new',
       }) as object,
       select: { id: true },
     });
@@ -176,6 +179,7 @@ describe('SubscriptionCreditRecoveryService', () => {
         doctorFinancialAccountId: 'financial-new',
         entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
         amount: new Prisma.Decimal('300.00'),
+        counterpartyDoctorFinancialAccountId: 'financial-old',
         relatedCreditEntryId: 'transfer-out-1',
       }) as object,
     });
@@ -232,12 +236,16 @@ describe('SubscriptionCreditRecoveryService', () => {
       {
         id: 'out-1',
         doctorFinancialAccountId: 'financial-old',
+        counterpartyDoctorFinancialAccountId: 'financial-new',
+        relatedCreditEntryId: null,
         entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_OUT,
         amount: new Prisma.Decimal('300.00'),
       },
       {
         id: 'in-1',
         doctorFinancialAccountId: 'financial-new',
+        counterpartyDoctorFinancialAccountId: 'financial-old',
+        relatedCreditEntryId: 'out-1',
         entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
         amount: new Prisma.Decimal('300.00'),
       },
