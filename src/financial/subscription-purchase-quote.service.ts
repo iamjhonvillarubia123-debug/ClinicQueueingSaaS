@@ -49,7 +49,9 @@ export class SubscriptionPurchaseQuoteService {
   private parseMoney(value: string, field: string, allowZero = false): bigint {
     const match = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/.exec(value.trim());
     if (!match) {
-      throw new BadRequestException(`${field} must be a non-negative amount with at most two decimal places.`);
+      throw new BadRequestException(
+        `${field} must be a non-negative amount with at most two decimal places.`,
+      );
     }
 
     const whole = BigInt(match[1]);
