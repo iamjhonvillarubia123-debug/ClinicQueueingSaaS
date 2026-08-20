@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { FinancialAccountLockService } from './financial-account-lock.service';
+import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 import { SubscriptionPeriodService } from './subscription-period.service';
 import { SubscriptionPurchaseQuoteService } from './subscription-purchase-quote.service';
@@ -7,12 +8,14 @@ import { SubscriptionPurchaseQuoteService } from './subscription-purchase-quote.
 @Module({
   providers: [
     FinancialAccountLockService,
+    SubscriptionCreditBalanceService,
     SubscriptionEntitlementService,
     SubscriptionPeriodService,
     SubscriptionPurchaseQuoteService,
   ],
   exports: [
     FinancialAccountLockService,
+    SubscriptionCreditBalanceService,
     SubscriptionEntitlementService,
     SubscriptionPeriodService,
     SubscriptionPurchaseQuoteService,
