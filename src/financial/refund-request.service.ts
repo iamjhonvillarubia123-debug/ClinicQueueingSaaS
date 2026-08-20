@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   CommandType,
+  NotificationType,
   Prisma,
   RefundMethod,
   RefundRequestStatus,
@@ -18,6 +19,7 @@ import { CommandIdempotencyService } from '../idempotency/command-idempotency.se
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialAccessSessionService } from './financial-access-session.service';
 import { FinancialAccountLockService } from './financial-account-lock.service';
+import { RefundNotificationService } from './refund-notification.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
 
 const ACCOUNT_NAME_PURPOSE = 'refund-request:account-name';
@@ -45,6 +47,7 @@ export class RefundRequestService {
     private readonly accountLocks: FinancialAccountLockService,
     private readonly creditBalance: SubscriptionCreditBalanceService,
     private readonly protectedPayload: ProtectedAccountPayloadService,
+    private readonly refundNotifications: RefundNotificationService,
   ) {}
 
   async create(input: CreateRefundRequestInput) {
@@ -101,7 +104,7 @@ export class RefundRequestService {
       );
       const owner = await transaction.user.findUnique({
         where: { id: lockedAccount.doctorUserId },
-        select: { accountStatus: true },
+        select: { accountStatus: true, email: true },
       });
       if (
         !owner ||
@@ -109,6 +112,11 @@ export class RefundRequestService {
       ) {
         throw new ForbiddenException(
           'Cash refund is available only for a permanently closed Doctor account.',
+        );
+      }
+      if (!owner.email) {
+        throw new InternalServerErrorException(
+          'Refund notification recipient is unavailable.',
         );
       }
 
@@ -198,6 +206,14 @@ export class RefundRequestService {
           commandIdempotencyId: command.id,
           occurredAt: now,
         },
+      });
+
+      await this.refundNotifications.create(transaction, {
+        notificationType: NotificationType.REFUND_REQUEST_SUBMITTED,
+        refundRequestId: refundRequest.id,
+        recipientEmail: owner.email,
+        message: `Your refund request for ${requestedAmount.toFixed(2)} has been submitted for processing.`,
+        occurredAt: now,
       });
 
       return { refundRequest, replayed: false };
