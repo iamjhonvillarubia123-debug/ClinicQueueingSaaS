@@ -19,6 +19,7 @@ import {
   UserRole,
   WaitingPlacementType,
 } from '../../generated/prisma/client';
+import { SubscriptionCommercialGateService } from '../financial/subscription-commercial-gate.service';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScheduleResolutionService } from '../schedule/schedule-resolution.service';
@@ -71,6 +72,7 @@ export class StartClinicService {
     private readonly idempotency: CommandIdempotencyService,
     private readonly scheduleResolution: ScheduleResolutionService,
     private readonly scheduleTime: ScheduleTimeService,
+    private readonly commercialGate: SubscriptionCommercialGateService,
   ) {}
 
   async start(
@@ -203,6 +205,12 @@ export class StartClinicService {
         );
 
       const now = new Date();
+      await this.commercialGate.assertAllowsNewActivityInTransaction(
+        transaction,
+        context.doctorUserId,
+        now,
+      );
+
       const clinicDay = existingClinicDay
         ? await transaction.clinicDay.update({
             where: { id: existingClinicDay.id },
