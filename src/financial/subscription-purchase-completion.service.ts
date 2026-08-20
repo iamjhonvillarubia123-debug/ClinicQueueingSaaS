@@ -37,6 +37,10 @@ type RestorationEvent = {
   id: string;
 };
 
+type LockedPurchase = NonNullable<
+  Awaited<ReturnType<SubscriptionPurchaseCompletionService['lockPurchase']>>
+>;
+
 @Injectable()
 export class SubscriptionPurchaseCompletionService {
   constructor(
@@ -156,7 +160,7 @@ export class SubscriptionPurchaseCompletionService {
 
   private async completeLockedPurchase(
     transaction: Prisma.TransactionClient,
-    purchase: Awaited<ReturnType<SubscriptionPurchaseCompletionService['lockPurchase']>> & {},
+    purchase: LockedPurchase,
     completedAt: Date,
   ) {
     if (purchase.status === SubscriptionPurchaseStatus.COMPLETED) {
@@ -233,14 +237,18 @@ export class SubscriptionPurchaseCompletionService {
           select: { id: true },
         });
       if (!existingConsumption) {
-        const reservation = await transaction.subscriptionCreditEntry.findFirst({
-          where: {
-            subscriptionPurchaseId: purchase.id,
-            entryType: SubscriptionCreditEntryType.PURCHASE_RESERVED,
-          },
-          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-        });
-        if (!reservation || !reservation.amount.equals(purchase.creditAmountApplied)) {
+        const reservation =
+          await transaction.subscriptionCreditEntry.findFirst({
+            where: {
+              subscriptionPurchaseId: purchase.id,
+              entryType: SubscriptionCreditEntryType.PURCHASE_RESERVED,
+            },
+            orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+          });
+        if (
+          !reservation ||
+          !reservation.amount.equals(purchase.creditAmountApplied)
+        ) {
           throw new InternalServerErrorException(
             'Subscription purchase credit reservation is unavailable or inconsistent.',
           );
