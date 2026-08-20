@@ -9,11 +9,13 @@ import { SubscriptionPurchaseQuoteService } from './subscription-purchase-quote.
 import { SubscriptionPurchaseService } from './subscription-purchase.service';
 
 describe('SubscriptionPurchaseService', () => {
-  function createFixture(options: {
-    replay?: boolean;
-    availableCredit?: string;
-    existingFinancialAccount?: boolean;
-  } = {}) {
+  function createFixture(
+    options: {
+      replay?: boolean;
+      availableCredit?: string;
+      existingFinancialAccount?: boolean;
+    } = {},
+  ) {
     let purchaseCreateInput: unknown;
     let creditCreateInput: unknown;
     const purchase = {
@@ -141,9 +143,15 @@ describe('SubscriptionPurchaseService', () => {
       }),
     ).resolves.toMatchObject({ replayed: false });
 
-    expect(fixture.transaction.commandIdempotency.create).toHaveBeenCalledTimes(1);
-    expect(fixture.transaction.subscriptionPurchase.create).toHaveBeenCalledTimes(1);
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenCalledTimes(1);
+    expect(fixture.transaction.commandIdempotency.create).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(
+      fixture.transaction.subscriptionPurchase.create,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).toHaveBeenCalledTimes(1);
     expect(fixture.getPurchaseCreateInput()).toBeDefined();
     expect(fixture.getCreditCreateInput()).toBeDefined();
   });
@@ -157,7 +165,9 @@ describe('SubscriptionPurchaseService', () => {
       idempotencyKey: 'idem-1',
     });
 
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('reconstructs a compatible retry without repeating financial effects', async () => {
@@ -173,8 +183,12 @@ describe('SubscriptionPurchaseService', () => {
 
     expect(fixture.accountLocks.lockById).not.toHaveBeenCalled();
     expect(fixture.creditBalance.derive).not.toHaveBeenCalled();
-    expect(fixture.transaction.subscriptionPurchase.create).not.toHaveBeenCalled();
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionPurchase.create,
+    ).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('creates the Doctor financial aggregate inside the protected transaction when absent', async () => {
@@ -186,6 +200,8 @@ describe('SubscriptionPurchaseService', () => {
       idempotencyKey: 'idem-1',
     });
 
-    expect(fixture.transaction.doctorFinancialAccount.create).toHaveBeenCalledTimes(1);
+    expect(
+      fixture.transaction.doctorFinancialAccount.create,
+    ).toHaveBeenCalledTimes(1);
   });
 });
