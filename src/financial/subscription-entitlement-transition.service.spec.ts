@@ -18,6 +18,18 @@ type CreatedOutbox = { id: string };
 type FinancialAccountRow = {
   doctorUser: { email: string };
 } | null;
+type EventCreateInput = {
+  data: {
+    eventType: SubscriptionEntitlementEventType;
+    effectiveAt: Date;
+  };
+};
+type OutboxCreateInput = {
+  data: {
+    notificationType: NotificationType;
+    subscriptionEntitlementEventId: string;
+  };
+};
 
 describe('SubscriptionEntitlementTransitionService', () => {
   const now = new Date('2026-08-20T12:00:00.000Z');
@@ -33,7 +45,7 @@ describe('SubscriptionEntitlementTransitionService', () => {
         findFirst: jest.fn<Promise<ExistingEvent>, []>(() =>
           Promise.resolve(null),
         ),
-        create: jest.fn<Promise<CreatedEvent>, []>(() =>
+        create: jest.fn<Promise<CreatedEvent>, [EventCreateInput]>(() =>
           Promise.resolve({ id: 'event-1' }),
         ),
       },
@@ -41,7 +53,7 @@ describe('SubscriptionEntitlementTransitionService', () => {
         findUnique: jest.fn<Promise<ExistingOutbox>, []>(() =>
           Promise.resolve(null),
         ),
-        create: jest.fn<Promise<CreatedOutbox>, []>(() =>
+        create: jest.fn<Promise<CreatedOutbox>, [OutboxCreateInput]>(() =>
           Promise.resolve({ id: 'outbox-1' }),
         ),
       },
@@ -106,26 +118,17 @@ describe('SubscriptionEntitlementTransitionService', () => {
       fixture.service.reconcileFinancialAccount('financial-1', now),
     ).resolves.toMatchObject({ state: 'GRACE', created: true });
 
-    expect(
-      fixture.transaction.subscriptionEntitlementEvent.create,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          eventType: SubscriptionEntitlementEventType.GRACE_ENTERED,
-          effectiveAt: paidThrough,
-        }),
-      }),
+    const eventCreate = fixture.transaction.subscriptionEntitlementEvent.create.mock.calls[0]?.[0];
+    expect(eventCreate?.data.eventType).toBe(
+      SubscriptionEntitlementEventType.GRACE_ENTERED,
     );
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          notificationType: NotificationType.SUBSCRIPTION_GRACE_ENTERED,
-          subscriptionEntitlementEventId: 'event-1',
-        }),
-      }),
+    expect(eventCreate?.data.effectiveAt).toEqual(paidThrough);
+
+    const outboxCreate = fixture.transaction.notificationOutbox.create.mock.calls[0]?.[0];
+    expect(outboxCreate?.data.notificationType).toBe(
+      NotificationType.SUBSCRIPTION_GRACE_ENTERED,
     );
+    expect(outboxCreate?.data.subscriptionEntitlementEventId).toBe('event-1');
   });
 
   it('creates SUSPENDED without manufacturing a late grace event', async () => {
@@ -145,16 +148,11 @@ describe('SubscriptionEntitlementTransitionService', () => {
 
     await fixture.service.reconcileFinancialAccount('financial-1', now);
 
-    expect(
-      fixture.transaction.subscriptionEntitlementEvent.create,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          eventType: SubscriptionEntitlementEventType.SUSPENDED,
-          effectiveAt: graceEndsAt,
-        }),
-      }),
+    const eventCreate = fixture.transaction.subscriptionEntitlementEvent.create.mock.calls[0]?.[0];
+    expect(eventCreate?.data.eventType).toBe(
+      SubscriptionEntitlementEventType.SUSPENDED,
     );
+    expect(eventCreate?.data.effectiveAt).toEqual(graceEndsAt);
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).toHaveBeenCalledTimes(1);
