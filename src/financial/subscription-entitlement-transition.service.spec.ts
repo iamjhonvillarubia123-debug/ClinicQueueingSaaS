@@ -7,6 +7,12 @@ import { SubscriptionEntitlementTransitionService } from './subscription-entitle
 type EntitlementState = 'PAID' | 'GRACE' | 'SUSPENDED';
 type ExistingEvent = { id: string } | null;
 type ExistingOutbox = { id: string } | null;
+type EntitlementRow = {
+  id: string;
+  doctorFinancialAccountId: string;
+  paidThrough: Date;
+  graceEndsAt: Date;
+} | null;
 
 describe('SubscriptionEntitlementTransitionService', () => {
   const now = new Date('2026-08-20T12:00:00.000Z');
@@ -14,7 +20,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
   function createFixture() {
     const transaction = {
       doctorSubscriptionEntitlement: {
-        findUnique: jest.fn(),
+        findUnique: jest.fn<Promise<EntitlementRow>, []>(() =>
+          Promise.resolve(null),
+        ),
       },
       subscriptionEntitlementEvent: {
         findFirst: jest.fn<Promise<ExistingEvent>, []>(() =>
@@ -45,8 +53,8 @@ describe('SubscriptionEntitlementTransitionService', () => {
       lockById: jest.fn(() => Promise.resolve()),
     };
     const entitlementState = {
-      evaluateDates: jest.fn<EntitlementState, [Date, Date, Date]>(() =>
-        'GRACE',
+      evaluateDates: jest.fn<EntitlementState, [Date, Date, Date]>(
+        () => 'GRACE',
       ),
     };
     const protectedAccountPayload = {
@@ -98,7 +106,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
         }),
       }),
     );
-    expect(fixture.transaction.notificationOutbox.create).toHaveBeenCalledWith(
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           notificationType: NotificationType.SUBSCRIPTION_GRACE_ENTERED,
@@ -167,7 +177,9 @@ describe('SubscriptionEntitlementTransitionService', () => {
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).not.toHaveBeenCalled();
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('does nothing while entitlement is still PAID', async () => {
@@ -188,6 +200,8 @@ describe('SubscriptionEntitlementTransitionService', () => {
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).not.toHaveBeenCalled();
-    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.notificationOutbox.create,
+    ).not.toHaveBeenCalled();
   });
 });
