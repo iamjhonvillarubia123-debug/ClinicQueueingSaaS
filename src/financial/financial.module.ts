@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
+import { FinancialAccessSessionService } from './financial-access-session.service';
 import { FinancialAccountLockService } from './financial-account-lock.service';
 import { StandardSubscriptionPriceService } from './standard-subscription-price.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
@@ -15,6 +16,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
 @Module({
   imports: [AuthModule, IdempotencyModule, NotificationModule],
   providers: [
+    FinancialAccessSessionService,
     FinancialAccountLockService,
     StandardSubscriptionPriceService,
     SubscriptionCreditBalanceService,
@@ -26,6 +28,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     SubscriptionPurchaseService,
   ],
   exports: [
+    FinancialAccessSessionService,
     FinancialAccountLockService,
     StandardSubscriptionPriceService,
     SubscriptionCreditBalanceService,
