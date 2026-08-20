@@ -65,18 +65,20 @@ describe('FinancialAccessChallengeService', () => {
   it('creates challenge and EMAIL outbox in one transaction for eligible closed financial owner', async () => {
     const { service, transaction } = createFixture();
 
-    await expect(
-      service.request('Doctor@Example.com', now),
-    ).resolves.toEqual({ accepted: true });
+    await expect(service.request('Doctor@Example.com', now)).resolves.toEqual({
+      accepted: true,
+    });
 
     expect(transaction.doctorFinancialAccount.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           doctorUser: { accountStatus: UserAccountStatus.PERMANENTLY_CLOSED },
-        }),
+        }) as object,
       }),
     );
-    expect(transaction.financialAccessChallenge.create).toHaveBeenCalledTimes(1);
+    expect(
+      transaction.financialAccessChallenge.create,
+    ).toHaveBeenCalledTimes(1);
     expect(transaction.notificationOutbox.create).toHaveBeenCalledTimes(1);
   });
 
@@ -94,7 +96,9 @@ describe('FinancialAccessChallengeService', () => {
   it('verifies a live challenge and records verifiedAt', async () => {
     const { service, transaction } = createFixture();
 
-    await expect(service.verify('challenge-1', '123456', now)).resolves.toEqual({
+    await expect(
+      service.verify('challenge-1', '123456', now),
+    ).resolves.toEqual({
       challengeId: 'challenge-1',
       verifiedAt: now,
     });
