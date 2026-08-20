@@ -60,21 +60,29 @@ describe('SubscriptionPurchaseCompletionService', () => {
         ),
       },
       subscriptionCreditEntry: {
-        findFirst: jest.fn(({ where }: { where: { entryType: SubscriptionCreditEntryType } }) =>
-          Promise.resolve(
-            where.entryType === SubscriptionCreditEntryType.PURCHASE_CONSUMED
-              ? null
-              : {
-                  id: 'reservation-1',
-                  amount: new Prisma.Decimal('40.00'),
-                  commandIdempotencyId: 'command-1',
-                },
-          ),
+        findFirst: jest.fn(
+          ({
+            where,
+          }: {
+            where: { entryType: SubscriptionCreditEntryType };
+          }) =>
+            Promise.resolve(
+              where.entryType ===
+                SubscriptionCreditEntryType.PURCHASE_CONSUMED
+                ? null
+                : {
+                    id: 'reservation-1',
+                    amount: new Prisma.Decimal('40.00'),
+                    commandIdempotencyId: 'command-1',
+                  },
+            ),
         ),
         create: jest.fn(() => Promise.resolve({ id: 'consumed-1' })),
       },
       user: {
-        findUnique: jest.fn(() => Promise.resolve({ email: 'doctor@example.com' })),
+        findUnique: jest.fn(() =>
+          Promise.resolve({ email: 'doctor@example.com' }),
+        ),
       },
       notificationOutbox: {
         create: jest.fn(() => Promise.resolve({ id: 'outbox-1' })),
@@ -131,7 +139,7 @@ describe('SubscriptionPurchaseCompletionService', () => {
         data: expect.objectContaining({
           status: SubscriptionPurchaseStatus.COMPLETED,
           completedAt,
-        }),
+        }) as object,
       }),
     );
     expect(transaction.notificationOutbox.create).toHaveBeenCalledTimes(1);
@@ -148,7 +156,9 @@ describe('SubscriptionPurchaseCompletionService', () => {
       confirmedAt: completedAt,
     });
 
-    expect(transaction.subscriptionEntitlementEvent.create).toHaveBeenCalledTimes(1);
+    expect(
+      transaction.subscriptionEntitlementEvent.create,
+    ).toHaveBeenCalledTimes(1);
     expect(transaction.notificationOutbox.create).toHaveBeenCalledTimes(2);
   });
 
@@ -192,7 +202,7 @@ describe('SubscriptionPurchaseCompletionService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: SubscriptionPaymentStatus.SUCCEEDED,
-        }),
+        }) as object,
       }),
     );
   });
