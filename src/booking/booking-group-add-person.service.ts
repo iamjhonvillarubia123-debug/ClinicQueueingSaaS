@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
   ServiceAvailabilityStatus,
   WaitingPlacementType,
 } from '../../generated/prisma/client';
+import { SubscriptionCommercialGateService } from '../financial/subscription-commercial-gate.service';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PatientBookingGroupAccessService } from '../patient-access/patient-booking-group-access.service';
@@ -37,6 +39,7 @@ type LockedGroup = {
   serviceDate: Date;
   servingProtectionEndedAt: Date | null;
   controllingMobileNumberEncrypted: string | null;
+  doctorUserId: string;
 };
 
 @Injectable()
@@ -52,6 +55,7 @@ export class BookingGroupAddPersonService {
     private readonly servingOrder: QueueServingOrderPlacementService,
     private readonly bookingReferenceGenerator: BookingReferenceGenerator,
     private readonly notificationPayload: NotificationPayloadService,
+    private readonly commercialGate: SubscriptionCommercialGateService,
   ) {}
 
   async addPerson(
@@ -149,6 +153,20 @@ export class BookingGroupAddPersonService {
         group.serviceDate,
       );
 
+      const now = new Date();
+      try {
+        await this.commercialGate.assertAllowsNewActivityInTransaction(
+          transaction,
+          group.doctorUserId,
+          now,
+        );
+      } catch (error) {
+        if (error instanceof ForbiddenException) {
+          throw new ConflictException('Add Person is currently unavailable.');
+        }
+        throw error;
+      }
+
       const memberCount = await transaction.appointment.count({
         where: { bookingGroupId: group.id },
       });
@@ -158,7 +176,6 @@ export class BookingGroupAddPersonService {
         );
       }
 
-      const now = new Date();
       const currentAvailability = await this.availability.resolve(
         group.practiceLocationId,
         group.serviceDate.toISOString().slice(0, 10),
@@ -409,14 +426,18 @@ export class BookingGroupAddPersonService {
   ): Promise<LockedGroup> {
     const rows = await transaction.$queryRaw<LockedGroup[]>(Prisma.sql`
       SELECT
-        "id",
-        "practiceLocationId",
-        "serviceDate",
-        "servingProtectionEndedAt",
-        "controllingMobileNumberEncrypted"
-      FROM "BookingGroup"
-      WHERE "id" = ${bookingGroupId}
-      FOR UPDATE
+        bg."id",
+        bg."practiceLocationId",
+        bg."serviceDate",
+        bg."servingProtectionEndedAt",
+        bg."controllingMobileNumberEncrypted",
+        u."id" AS "doctorUserId"
+      FROM "BookingGroup" bg
+      INNER JOIN "PracticeLocation" pl ON pl."id" = bg."practiceLocationId"
+      INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
+      INNER JOIN "User" u ON u."id" = dp."userId"
+      WHERE bg."id" = ${bookingGroupId}
+      FOR UPDATE OF bg
     `);
     const group = rows[0];
     if (!group) {
