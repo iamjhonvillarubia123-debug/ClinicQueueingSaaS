@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { FinancialAccountLockService } from './financial-account-lock.service';
 import { StandardSubscriptionPriceService } from './standard-subscription-price.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
@@ -8,6 +9,7 @@ import { SubscriptionPurchaseQuoteService } from './subscription-purchase-quote.
 import { SubscriptionPurchaseService } from './subscription-purchase.service';
 
 @Module({
+  imports: [IdempotencyModule],
   providers: [
     FinancialAccountLockService,
     StandardSubscriptionPriceService,
