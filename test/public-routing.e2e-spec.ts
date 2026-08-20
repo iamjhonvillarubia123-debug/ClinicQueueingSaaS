@@ -8,12 +8,27 @@ import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('Public routing and QR payload lifecycle (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
-  const originalPublicAppBaseUrl = process.env.PUBLIC_APP_BASE_URL;
+
+  const testEnvironment: Record<string, string> = {
+    JWT_SECRET: 'm11-public-routing-e2e-only-jwt-secret-not-for-production',
+    MOBILE_ENCRYPTION_KEY_V1: Buffer.alloc(32, 1).toString('base64'),
+    MOBILE_LOOKUP_HMAC_KEY_V1: Buffer.alloc(32, 2).toString('base64'),
+    MOBILE_ENCRYPTION_ACTIVE_KEY_ID: 'e2e-mobile-encryption-v1',
+    MOBILE_LOOKUP_ACTIVE_KEY_ID: 'e2e-mobile-lookup-v1',
+    OTP_HMAC_KEY_V1: Buffer.alloc(32, 3).toString('base64'),
+    OTP_HMAC_ACTIVE_KEY_ID: 'e2e-otp-hmac-v1',
+    PUBLIC_APP_BASE_URL: 'https://app.example.test',
+    WEB_APP_ORIGIN: 'https://app.example.test',
+  };
+  const originalEnvironment: Record<string, string | undefined> = {};
 
   beforeAll(async () => {
-    process.env.PUBLIC_APP_BASE_URL = 'https://app.example.test';
+    for (const [key, value] of Object.entries(testEnvironment)) {
+      originalEnvironment[key] = process.env[key];
+      process.env[key] = value;
+    }
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -32,17 +47,25 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
 
-    if (originalPublicAppBaseUrl === undefined) {
-      delete process.env.PUBLIC_APP_BASE_URL;
-    } else {
-      process.env.PUBLIC_APP_BASE_URL = originalPublicAppBaseUrl;
+    for (const [key, originalValue] of Object.entries(originalEnvironment)) {
+      if (originalValue === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalValue;
+      }
     }
   });
 
+  function getApp(): INestApplication<App> {
+    if (!app) throw new Error('Public routing E2E application did not initialize.');
+    return app;
+  }
+
   async function createPublicDoctorFixture() {
     const unique = randomUUID();
+    const baseNow = Date.now();
     const doctor = await prisma.user.create({
       data: {
         email: `public-routing-${unique}@example.test`,
@@ -64,8 +87,8 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
           create: {
             entitlement: {
               create: {
-                paidThrough: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                graceEndsAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
+                paidThrough: new Date(baseNow + 24 * 60 * 60 * 1000),
+                graceEndsAt: new Date(baseNow + 8 * 24 * 60 * 60 * 1000),
               },
             },
           },
@@ -107,9 +130,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
 
     return {
       doctorUserId: doctor.id,
-      doctorProfileId: doctor.doctorProfile.id,
       doctorPublicIdentifier: doctor.doctorProfile.publicIdentifier,
-      financialAccountId: doctor.doctorFinancialAccount.id,
       entitlementId: doctor.doctorFinancialAccount.entitlement.id,
       locationId: location.id,
       locationPublicIdentifier: location.publicIdentifier,
@@ -123,8 +144,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
 
   it('emits Doctor and PracticeLocation QR payloads that resolve through the real public routes', async () => {
     const fixture = await createPublicDoctorFixture();
+    const httpServer = getApp().getHttpServer();
 
-    const doctorResponse = await request(app.getHttpServer())
+    const doctorResponse = await request(httpServer)
       .get(`/public/doctors/${fixture.doctorPublicIdentifier}`)
       .expect(200);
     expect(doctorResponse.body).toEqual(
@@ -134,9 +156,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       }),
     );
 
-    await request(app.getHttpServer()).get(qrPath(doctorResponse)).expect(200);
+    await request(httpServer).get(qrPath(doctorResponse)).expect(200);
 
-    const locationResponse = await request(app.getHttpServer())
+    const locationResponse = await request(httpServer)
       .get(`/public/practice-locations/${fixture.locationPublicIdentifier}`)
       .expect(200);
     expect(locationResponse.body).toEqual(
@@ -146,23 +168,22 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       }),
     );
 
-    await request(app.getHttpServer())
-      .get(qrPath(locationResponse))
-      .expect(200);
+    await request(httpServer).get(qrPath(locationResponse)).expect(200);
   });
 
   it('preserves the PracticeLocation QR through configuration edit, Disable and Reactivate', async () => {
     const fixture = await createPublicDoctorFixture();
+    const httpServer = getApp().getHttpServer();
     const route = `/public/practice-locations/${fixture.locationPublicIdentifier}`;
 
-    const initial = await request(app.getHttpServer()).get(route).expect(200);
+    const initial = await request(httpServer).get(route).expect(200);
     const originalPayload = (initial.body as { qrPayload: string }).qrPayload;
 
     await prisma.practiceLocation.update({
       where: { id: fixture.locationId },
       data: { name: 'Renamed Public Clinic', addressLine1: '2 Updated Street' },
     });
-    const afterEdit = await request(app.getHttpServer()).get(route).expect(200);
+    const afterEdit = await request(httpServer).get(route).expect(200);
     expect((afterEdit.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
@@ -174,7 +195,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       where: { id: fixture.locationId },
       data: { lifecycleStatus: 'DISABLED' },
     });
-    const disabled = await request(app.getHttpServer()).get(route).expect(200);
+    const disabled = await request(httpServer).get(route).expect(200);
     expect((disabled.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
@@ -189,9 +210,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       where: { id: fixture.locationId },
       data: { lifecycleStatus: 'ACTIVE' },
     });
-    const reactivated = await request(app.getHttpServer())
-      .get(route)
-      .expect(200);
+    const reactivated = await request(httpServer).get(route).expect(200);
     expect((reactivated.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
@@ -205,8 +224,9 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
 
   it('keeps the Doctor QR stable in grace, suspension and administrative restriction without exposing the reason', async () => {
     const fixture = await createPublicDoctorFixture();
+    const httpServer = getApp().getHttpServer();
     const route = `/public/doctors/${fixture.doctorPublicIdentifier}`;
-    const initial = await request(app.getHttpServer()).get(route).expect(200);
+    const initial = await request(httpServer).get(route).expect(200);
     const originalPayload = (initial.body as { qrPayload: string }).qrPayload;
 
     const gracePaidThrough = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -219,7 +239,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
         ),
       },
     });
-    const grace = await request(app.getHttpServer()).get(route).expect(200);
+    const grace = await request(httpServer).get(route).expect(200);
     expect((grace.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
@@ -240,7 +260,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
         ),
       },
     });
-    const suspended = await request(app.getHttpServer()).get(route).expect(200);
+    const suspended = await request(httpServer).get(route).expect(200);
     expect((suspended.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
@@ -257,9 +277,7 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
       where: { id: fixture.doctorUserId },
       data: { administrativeRestrictionStatus: 'SUSPENDED' },
     });
-    const restricted = await request(app.getHttpServer())
-      .get(route)
-      .expect(200);
+    const restricted = await request(httpServer).get(route).expect(200);
     expect((restricted.body as { qrPayload: string }).qrPayload).toBe(
       originalPayload,
     );
@@ -270,24 +288,25 @@ describe('Public routing and QR payload lifecycle (e2e)', () => {
   });
 
   it('retires public routes only on the approved permanent states', async () => {
+    const httpServer = getApp().getHttpServer();
     const doctorFixture = await createPublicDoctorFixture();
     const doctorRoute = `/public/doctors/${doctorFixture.doctorPublicIdentifier}`;
-    await request(app.getHttpServer()).get(doctorRoute).expect(200);
+    await request(httpServer).get(doctorRoute).expect(200);
 
     await prisma.user.update({
       where: { id: doctorFixture.doctorUserId },
       data: { accountStatus: 'PERMANENTLY_CLOSED' },
     });
-    await request(app.getHttpServer()).get(doctorRoute).expect(404);
+    await request(httpServer).get(doctorRoute).expect(404);
 
     const locationFixture = await createPublicDoctorFixture();
     const locationRoute = `/public/practice-locations/${locationFixture.locationPublicIdentifier}`;
-    await request(app.getHttpServer()).get(locationRoute).expect(200);
+    await request(httpServer).get(locationRoute).expect(200);
 
     await prisma.practiceLocation.update({
       where: { id: locationFixture.locationId },
       data: { lifecycleStatus: 'PERMANENTLY_DELETED' },
     });
-    await request(app.getHttpServer()).get(locationRoute).expect(404);
+    await request(httpServer).get(locationRoute).expect(404);
   });
 });
