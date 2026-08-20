@@ -63,8 +63,7 @@ describe('SubscriptionPurchaseCompletionService', () => {
         findFirst: jest.fn(
           ({ where }: { where: { entryType: SubscriptionCreditEntryType } }) =>
             Promise.resolve(
-              where.entryType ===
-                SubscriptionCreditEntryType.PURCHASE_CONSUMED
+              where.entryType === SubscriptionCreditEntryType.PURCHASE_CONSUMED
                 ? null
                 : {
                     id: 'reservation-1',
