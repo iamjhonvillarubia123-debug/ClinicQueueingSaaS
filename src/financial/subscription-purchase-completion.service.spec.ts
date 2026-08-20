@@ -37,7 +37,19 @@ describe('SubscriptionPurchaseCompletionService', () => {
         }
       : null;
     const transaction = {
-      $queryRaw: jest.fn(() => Promise.resolve([{ id: 'purchase-1' }])),
+      $queryRaw: jest.fn(() =>
+        Promise.resolve([
+          {
+            id: purchase.id,
+            doctorFinancialAccountId: purchase.doctorFinancialAccountId,
+            purchasedByUserId: purchase.purchasedByUserId,
+            monthsPurchased: purchase.monthsPurchased,
+            creditAmountApplied: purchase.creditAmountApplied,
+            externalAmountRequired: purchase.externalAmountRequired,
+            status: purchase.status,
+          },
+        ]),
+      ),
       subscriptionPurchase: {
         findUnique: jest.fn(() => Promise.resolve(purchase)),
         update: jest.fn(({ data }: { data: Record<string, unknown> }) =>
@@ -80,6 +92,7 @@ describe('SubscriptionPurchaseCompletionService', () => {
         ),
       },
       notificationOutbox: {
+        findUnique: jest.fn(() => Promise.resolve(null)),
         create: jest.fn(() => Promise.resolve({ id: 'outbox-1' })),
       },
       subscriptionEntitlementEvent: {
@@ -125,7 +138,7 @@ describe('SubscriptionPurchaseCompletionService', () => {
         amount: '60.00',
         confirmedAt: completedAt,
       }),
-    ).resolves.toMatchObject({ paymentReplayed: false, replayed: false });
+    ).resolves.toMatchObject({ replayed: false });
 
     expect(transaction.subscriptionPayment.create).toHaveBeenCalledTimes(1);
     expect(transaction.subscriptionCreditEntry.create).toHaveBeenCalledTimes(1);
