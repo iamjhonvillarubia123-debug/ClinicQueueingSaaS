@@ -12,6 +12,7 @@ import { StandardSubscriptionPriceService } from './standard-subscription-price.
 import { SubscriptionCommercialGateService } from './subscription-commercial-gate.service';
 import { SubscriptionCreditBalanceService } from './subscription-credit-balance.service';
 import { SubscriptionCreditRecoveryService } from './subscription-credit-recovery.service';
+import { SubscriptionEntitlementTransitionService } from './subscription-entitlement-transition.service';
 import { SubscriptionEntitlementService } from './subscription-entitlement.service';
 import { SubscriptionPeriodService } from './subscription-period.service';
 import { SubscriptionPurchaseCompletionService } from './subscription-purchase-completion.service';
@@ -32,6 +33,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     SubscriptionCommercialGateService,
     SubscriptionCreditBalanceService,
     SubscriptionCreditRecoveryService,
+    SubscriptionEntitlementTransitionService,
     SubscriptionEntitlementService,
     SubscriptionPeriodService,
     SubscriptionPurchaseCompletionService,
@@ -50,6 +52,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     SubscriptionCommercialGateService,
     SubscriptionCreditBalanceService,
     SubscriptionCreditRecoveryService,
+    SubscriptionEntitlementTransitionService,
     SubscriptionEntitlementService,
     SubscriptionPeriodService,
     SubscriptionPurchaseCompletionService,
