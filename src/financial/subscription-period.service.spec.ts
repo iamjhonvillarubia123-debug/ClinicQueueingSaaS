@@ -34,15 +34,15 @@ describe('SubscriptionPeriodService', () => {
   });
 
   it('clamps end-of-month anniversaries deterministically', () => {
-    expect(service.addCalendarMonths(new Date('2027-01-31T10:15:00.000Z'), 1)).toEqual(
-      new Date('2027-02-28T10:15:00.000Z'),
-    );
-    expect(service.addCalendarMonths(new Date('2028-01-31T10:15:00.000Z'), 1)).toEqual(
-      new Date('2028-02-29T10:15:00.000Z'),
-    );
-    expect(service.addCalendarMonths(new Date('2027-01-31T10:15:00.000Z'), 2)).toEqual(
-      new Date('2027-03-31T10:15:00.000Z'),
-    );
+    expect(
+      service.addCalendarMonths(new Date('2027-01-31T10:15:00.000Z'), 1),
+    ).toEqual(new Date('2027-02-28T10:15:00.000Z'));
+    expect(
+      service.addCalendarMonths(new Date('2028-01-31T10:15:00.000Z'), 1),
+    ).toEqual(new Date('2028-02-29T10:15:00.000Z'));
+    expect(
+      service.addCalendarMonths(new Date('2027-01-31T10:15:00.000Z'), 2),
+    ).toEqual(new Date('2027-03-31T10:15:00.000Z'));
   });
 
   it('rejects non-positive month counts', () => {
