@@ -35,9 +35,7 @@ describe('SubscriptionPurchaseQuoteService', () => {
   });
 
   it('rejects more than two decimal places', () => {
-    expect(() => service.quote(1, '100.001', '0')).toThrow(
-      BadRequestException,
-    );
+    expect(() => service.quote(1, '100.001', '0')).toThrow(BadRequestException);
   });
 
   it('rejects negative or invalid available credit', () => {
