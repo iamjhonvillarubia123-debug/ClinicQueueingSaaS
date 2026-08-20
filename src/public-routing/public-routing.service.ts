@@ -2,10 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { SubscriptionEntitlementService } from '../financial/subscription-entitlement.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type PublicRouteStatus =
-  | 'AVAILABLE'
-  | 'TEMPORARILY_UNAVAILABLE'
-  | 'NO_BOOKING_LOCATIONS';
+export enum PublicRouteStatus {
+  AVAILABLE = 'AVAILABLE',
+  TEMPORARILY_UNAVAILABLE = 'TEMPORARILY_UNAVAILABLE',
+  NO_BOOKING_LOCATIONS = 'NO_BOOKING_LOCATIONS',
+}
 
 type PublicDoctorIdentity = {
   publicIdentifier: string;
@@ -95,15 +96,15 @@ export class PublicRoutingService {
     let routeStatus: PublicRouteStatus;
     let message: string | null = null;
     if (!doctorAllowsBooking) {
-      routeStatus = 'TEMPORARILY_UNAVAILABLE';
+      routeStatus = PublicRouteStatus.TEMPORARILY_UNAVAILABLE;
       message =
         'Online booking is temporarily unavailable. Please try again later.';
     } else if (bookableLocationCount === 0) {
-      routeStatus = 'NO_BOOKING_LOCATIONS';
+      routeStatus = PublicRouteStatus.NO_BOOKING_LOCATIONS;
       message =
         'No practice locations are currently available for online booking.';
     } else {
-      routeStatus = 'AVAILABLE';
+      routeStatus = PublicRouteStatus.AVAILABLE;
     }
 
     return {
@@ -111,7 +112,7 @@ export class PublicRoutingService {
       publicSlug: profile.publicSlug,
       routeStatus,
       message,
-      bookingEntryAllowed: routeStatus === 'AVAILABLE',
+      bookingEntryAllowed: routeStatus === PublicRouteStatus.AVAILABLE,
       doctor: this.mapDoctorIdentity(profile),
       practiceLocations: visibleLocations,
     };
@@ -185,9 +186,9 @@ export class PublicRoutingService {
       location.isBookingEnabled === true;
     const bookingEntryAllowed = doctorAllowsBooking && locationAllowsBooking;
 
-    const routeStatus: PublicRouteStatus = bookingEntryAllowed
-      ? 'AVAILABLE'
-      : 'TEMPORARILY_UNAVAILABLE';
+    const routeStatus = bookingEntryAllowed
+      ? PublicRouteStatus.AVAILABLE
+      : PublicRouteStatus.TEMPORARILY_UNAVAILABLE;
     const message = bookingEntryAllowed
       ? null
       : location.lifecycleStatus === 'DISABLED'
