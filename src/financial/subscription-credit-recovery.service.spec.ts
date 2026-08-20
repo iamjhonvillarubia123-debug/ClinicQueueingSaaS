@@ -9,11 +9,23 @@ import {
 } from '../../generated/prisma/client';
 import { SubscriptionCreditRecoveryService } from './subscription-credit-recovery.service';
 
+type FinancialAccountFixture = {
+  id: string;
+  doctorUserId: string;
+};
+
+type RecoveryLedgerFixture = {
+  id: string;
+  doctorFinancialAccountId: string;
+  entryType: SubscriptionCreditEntryType;
+  amount: Prisma.Decimal;
+};
+
 describe('SubscriptionCreditRecoveryService', () => {
   const recoveredAt = new Date('2026-08-20T17:00:00.000Z');
 
   function createFixture(available = '300.00') {
-    const targetAccount = {
+    const targetAccount: FinancialAccountFixture = {
       id: 'financial-new',
       doctorUserId: 'doctor-new',
     };
@@ -33,7 +45,10 @@ describe('SubscriptionCreditRecoveryService', () => {
           }),
       },
       doctorFinancialAccount: {
-        findUnique: jest.fn(() => Promise.resolve(targetAccount)),
+        findUnique: jest.fn<
+          Promise<FinancialAccountFixture | null>,
+          []
+        >(() => Promise.resolve(targetAccount)),
         create: jest.fn(() => Promise.resolve(targetAccount)),
       },
       commandIdempotency: {
@@ -41,7 +56,9 @@ describe('SubscriptionCreditRecoveryService', () => {
         create: jest.fn(() => Promise.resolve({ id: 'command-1' })),
       },
       subscriptionCreditEntry: {
-        findMany: jest.fn(() => Promise.resolve([])),
+        findMany: jest.fn<Promise<RecoveryLedgerFixture[]>, []>(() =>
+          Promise.resolve([]),
+        ),
         create: jest
           .fn()
           .mockResolvedValueOnce({ id: 'transfer-out-1' })
@@ -62,10 +79,15 @@ describe('SubscriptionCreditRecoveryService', () => {
     };
     const idempotency = {
       normalizeKey: jest.fn((value: string | undefined) => value ?? 'key-1'),
-      fingerprint: jest.fn(() => 'fingerprint-1'),
+      fingerprint: jest.fn((value: Record<string, unknown>) => {
+        void value;
+        return 'fingerprint-1';
+      }),
       deriveIdentity: jest.fn(() => 'identity-1'),
       acquireCommandLock: jest.fn(() => Promise.resolve()),
-      findReplay: jest.fn(() => Promise.resolve(null)),
+      findReplay: jest.fn<Promise<{ id: string } | null>, []>(() =>
+        Promise.resolve(null),
+      ),
       completionTimes: jest.fn(() => ({
         completedAt: recoveredAt,
         expiresAt: new Date(recoveredAt.getTime() + 60_000),
@@ -137,28 +159,26 @@ describe('SubscriptionCreditRecoveryService', () => {
       }) as object,
       select: { id: true },
     });
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenNthCalledWith(
-      1,
-      {
-        data: expect.objectContaining({
-          doctorFinancialAccountId: 'financial-old',
-          entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_OUT,
-          amount: new Prisma.Decimal('300.00'),
-        }) as object,
-        select: { id: true },
-      },
-    );
-    expect(fixture.transaction.subscriptionCreditEntry.create).toHaveBeenNthCalledWith(
-      2,
-      {
-        data: expect.objectContaining({
-          doctorFinancialAccountId: 'financial-new',
-          entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
-          amount: new Prisma.Decimal('300.00'),
-          relatedCreditEntryId: 'transfer-out-1',
-        }) as object,
-      },
-    );
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).toHaveBeenNthCalledWith(1, {
+      data: expect.objectContaining({
+        doctorFinancialAccountId: 'financial-old',
+        entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_OUT,
+        amount: new Prisma.Decimal('300.00'),
+      }) as object,
+      select: { id: true },
+    });
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).toHaveBeenNthCalledWith(2, {
+      data: expect.objectContaining({
+        doctorFinancialAccountId: 'financial-new',
+        entryType: SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
+        amount: new Prisma.Decimal('300.00'),
+        relatedCreditEntryId: 'transfer-out-1',
+      }) as object,
+    });
   });
 
   it('creates the target DoctorFinancialAccount inside the protected transaction when absent', async () => {
@@ -169,7 +189,9 @@ describe('SubscriptionCreditRecoveryService', () => {
 
     await fixture.service.recover(input);
 
-    expect(fixture.transaction.doctorFinancialAccount.create).toHaveBeenCalledWith({
+    expect(
+      fixture.transaction.doctorFinancialAccount.create,
+    ).toHaveBeenCalledWith({
       data: { doctorUserId: 'doctor-new' },
       select: { id: true, doctorUserId: true },
     });
@@ -187,7 +209,9 @@ describe('SubscriptionCreditRecoveryService', () => {
     await expect(fixture.service.recover(input)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects recovery when no eligible available historical credit remains', async () => {
@@ -196,7 +220,9 @@ describe('SubscriptionCreditRecoveryService', () => {
     await expect(fixture.service.recover(input)).rejects.toBeInstanceOf(
       BadRequestException,
     );
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('reconstructs a compatible replay without appending a second transfer pair', async () => {
@@ -224,20 +250,17 @@ describe('SubscriptionCreditRecoveryService', () => {
       replayed: true,
     });
     expect(fixture.accountLocks.lockPair).not.toHaveBeenCalled();
-    expect(fixture.transaction.subscriptionCreditEntry.create).not.toHaveBeenCalled();
+    expect(
+      fixture.transaction.subscriptionCreditEntry.create,
+    ).not.toHaveBeenCalled();
   });
 
   it('never includes the raw FinancialAccessSession token in the command fingerprint', async () => {
     const fixture = createFixture();
-    const fingerprint = jest.fn((value: Record<string, unknown>) => {
-      void value;
-      return 'fingerprint-1';
-    });
-    fixture.idempotency.fingerprint = fingerprint;
 
     await fixture.service.recover(input);
 
-    const fingerprintInput = fingerprint.mock.calls[0]?.[0];
+    const fingerprintInput = fixture.idempotency.fingerprint.mock.calls[0]?.[0];
     expect(JSON.stringify(fingerprintInput)).not.toContain('financial-token-old');
   });
 });
