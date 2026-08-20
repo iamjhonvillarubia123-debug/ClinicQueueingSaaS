@@ -9,6 +9,7 @@ import { SubscriptionEntitlementService } from './subscription-entitlement.servi
 import { SubscriptionPeriodService } from './subscription-period.service';
 import { SubscriptionPurchaseCompletionService } from './subscription-purchase-completion.service';
 import { SubscriptionPurchaseQuoteService } from './subscription-purchase-quote.service';
+import { SubscriptionPurchaseResolutionService } from './subscription-purchase-resolution.service';
 import { SubscriptionPurchaseService } from './subscription-purchase.service';
 
 @Module({
@@ -21,6 +22,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     SubscriptionPeriodService,
     SubscriptionPurchaseCompletionService,
     SubscriptionPurchaseQuoteService,
+    SubscriptionPurchaseResolutionService,
     SubscriptionPurchaseService,
   ],
   exports: [
@@ -31,6 +33,7 @@ import { SubscriptionPurchaseService } from './subscription-purchase.service';
     SubscriptionPeriodService,
     SubscriptionPurchaseCompletionService,
     SubscriptionPurchaseQuoteService,
+    SubscriptionPurchaseResolutionService,
     SubscriptionPurchaseService,
   ],
 })
