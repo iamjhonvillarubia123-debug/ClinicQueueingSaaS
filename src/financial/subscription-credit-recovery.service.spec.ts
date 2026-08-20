@@ -38,17 +38,17 @@ describe('SubscriptionCreditRecoveryService', () => {
             id: 'doctor-new',
             role: UserRole.DOCTOR,
             accountStatus: UserAccountStatus.ACTIVE,
-            administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+            administrativeRestrictionStatus:
+              AdministrativeRestrictionStatus.NONE,
           })
           .mockResolvedValueOnce({
             accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
           }),
       },
       doctorFinancialAccount: {
-        findUnique: jest.fn<
-          Promise<FinancialAccountFixture | null>,
-          []
-        >(() => Promise.resolve(targetAccount)),
+        findUnique: jest.fn<Promise<FinancialAccountFixture | null>, []>(() =>
+          Promise.resolve(targetAccount),
+        ),
         create: jest.fn(() => Promise.resolve(targetAccount)),
       },
       commandIdempotency: {
@@ -261,6 +261,8 @@ describe('SubscriptionCreditRecoveryService', () => {
     await fixture.service.recover(input);
 
     const fingerprintInput = fixture.idempotency.fingerprint.mock.calls[0]?.[0];
-    expect(JSON.stringify(fingerprintInput)).not.toContain('financial-token-old');
+    expect(JSON.stringify(fingerprintInput)).not.toContain(
+      'financial-token-old',
+    );
   });
 });
