@@ -83,13 +83,14 @@ describe('SubscriptionEntitlementTransitionService', () => {
     const fixture = createFixture();
     const paidThrough = new Date('2026-08-20T00:00:00.000Z');
     const graceEndsAt = new Date('2026-08-27T00:00:00.000Z');
+    const entitlement: Exclude<EntitlementRow, null> = {
+      id: 'entitlement-1',
+      doctorFinancialAccountId: 'financial-1',
+      paidThrough,
+      graceEndsAt,
+    };
     fixture.transaction.doctorSubscriptionEntitlement.findUnique.mockResolvedValueOnce(
-      {
-        id: 'entitlement-1',
-        doctorFinancialAccountId: 'financial-1',
-        paidThrough,
-        graceEndsAt,
-      },
+      entitlement,
     );
 
     await expect(
@@ -106,9 +107,7 @@ describe('SubscriptionEntitlementTransitionService', () => {
         }),
       }),
     );
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).toHaveBeenCalledWith(
+    expect(fixture.transaction.notificationOutbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           notificationType: NotificationType.SUBSCRIPTION_GRACE_ENTERED,
@@ -123,13 +122,14 @@ describe('SubscriptionEntitlementTransitionService', () => {
     fixture.entitlementState.evaluateDates.mockReturnValueOnce('SUSPENDED');
     const paidThrough = new Date('2026-08-10T00:00:00.000Z');
     const graceEndsAt = new Date('2026-08-17T00:00:00.000Z');
+    const entitlement: Exclude<EntitlementRow, null> = {
+      id: 'entitlement-1',
+      doctorFinancialAccountId: 'financial-1',
+      paidThrough,
+      graceEndsAt,
+    };
     fixture.transaction.doctorSubscriptionEntitlement.findUnique.mockResolvedValueOnce(
-      {
-        id: 'entitlement-1',
-        doctorFinancialAccountId: 'financial-1',
-        paidThrough,
-        graceEndsAt,
-      },
+      entitlement,
     );
 
     await fixture.service.reconcileFinancialAccount('financial-1', now);
@@ -151,13 +151,14 @@ describe('SubscriptionEntitlementTransitionService', () => {
 
   it('reuses an existing transition occurrence and does not create another event', async () => {
     const fixture = createFixture();
+    const entitlement: Exclude<EntitlementRow, null> = {
+      id: 'entitlement-1',
+      doctorFinancialAccountId: 'financial-1',
+      paidThrough: new Date('2026-08-20T00:00:00.000Z'),
+      graceEndsAt: new Date('2026-08-27T00:00:00.000Z'),
+    };
     fixture.transaction.doctorSubscriptionEntitlement.findUnique.mockResolvedValueOnce(
-      {
-        id: 'entitlement-1',
-        doctorFinancialAccountId: 'financial-1',
-        paidThrough: new Date('2026-08-20T00:00:00.000Z'),
-        graceEndsAt: new Date('2026-08-27T00:00:00.000Z'),
-      },
+      entitlement,
     );
     fixture.transaction.subscriptionEntitlementEvent.findFirst.mockResolvedValueOnce(
       {
@@ -177,21 +178,20 @@ describe('SubscriptionEntitlementTransitionService', () => {
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).not.toHaveBeenCalled();
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).not.toHaveBeenCalled();
+    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
   });
 
   it('does nothing while entitlement is still PAID', async () => {
     const fixture = createFixture();
     fixture.entitlementState.evaluateDates.mockReturnValueOnce('PAID');
+    const entitlement: Exclude<EntitlementRow, null> = {
+      id: 'entitlement-1',
+      doctorFinancialAccountId: 'financial-1',
+      paidThrough: new Date('2026-09-01T00:00:00.000Z'),
+      graceEndsAt: new Date('2026-09-08T00:00:00.000Z'),
+    };
     fixture.transaction.doctorSubscriptionEntitlement.findUnique.mockResolvedValueOnce(
-      {
-        id: 'entitlement-1',
-        doctorFinancialAccountId: 'financial-1',
-        paidThrough: new Date('2026-09-01T00:00:00.000Z'),
-        graceEndsAt: new Date('2026-09-08T00:00:00.000Z'),
-      },
+      entitlement,
     );
 
     await expect(
@@ -200,8 +200,6 @@ describe('SubscriptionEntitlementTransitionService', () => {
     expect(
       fixture.transaction.subscriptionEntitlementEvent.create,
     ).not.toHaveBeenCalled();
-    expect(
-      fixture.transaction.notificationOutbox.create,
-    ).not.toHaveBeenCalled();
+    expect(fixture.transaction.notificationOutbox.create).not.toHaveBeenCalled();
   });
 });
