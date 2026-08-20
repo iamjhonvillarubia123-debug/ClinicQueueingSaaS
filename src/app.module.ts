@@ -10,6 +10,7 @@ import { PracticeStaffModule } from './practice-staff/practice-staff.module';
 import { PatientModule } from './patient/patient.module';
 import { BookingModule } from './booking/booking.module';
 import { NotificationModule } from './notification/notification.module';
+import { PublicRoutingModule } from './public-routing/public-routing.module';
 import { QueueModule } from './queue/queue.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { SecretaryModule } from './secretary/secretary.module';
@@ -35,6 +36,7 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     ScheduleModule,
     PatientModule,
     BookingModule,
+    PublicRoutingModule,
   ],
   controllers: [AppController],
 })
