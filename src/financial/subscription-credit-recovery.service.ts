@@ -94,10 +94,11 @@ export class SubscriptionCreditRecoveryService {
           select: { id: true, doctorUserId: true },
         });
       if (!targetFinancialAccount) {
-        targetFinancialAccount = await transaction.doctorFinancialAccount.create({
-          data: { doctorUserId: targetUser.id },
-          select: { id: true, doctorUserId: true },
-        });
+        targetFinancialAccount =
+          await transaction.doctorFinancialAccount.create({
+            data: { doctorUserId: targetUser.id },
+            select: { id: true, doctorUserId: true },
+          });
       }
       if (targetFinancialAccount.id === sourceFinancialAccountId) {
         throw new BadRequestException(
@@ -143,7 +144,8 @@ export class SubscriptionCreditRecoveryService {
         );
         const transferIn = entries.find(
           (entry) =>
-            entry.entryType === SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
+            entry.entryType ===
+            SubscriptionCreditEntryType.RECOVERY_TRANSFER_IN,
         );
         if (
           !transferOut ||
