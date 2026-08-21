@@ -1,6 +1,6 @@
+import { createHash, randomUUID } from 'crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { createHash, randomUUID } from 'crypto';
 import { App } from 'supertest/types';
 import {
   AppointmentStatus,
@@ -45,7 +45,9 @@ describe('Appointment physical erasure (e2e)', () => {
 
     prisma = moduleFixture.get(PrismaService);
     erasureService = moduleFixture.get(AppointmentErasureService);
-    patientBookingAccessService = moduleFixture.get(PatientBookingAccessService);
+    patientBookingAccessService = moduleFixture.get(
+      PatientBookingAccessService,
+    );
     app = moduleFixture.createNestApplication();
     await app.init();
   });
@@ -323,13 +325,14 @@ describe('Appointment physical erasure (e2e)', () => {
         where: { appointmentId: fixture.appointment.id },
       }),
     ).toBe(0);
-    await expect(patientBookingAccessService.establish(rawToken)).rejects.toThrow(
-      'Patient booking access is unavailable.',
-    );
+    await expect(
+      patientBookingAccessService.establish(rawToken),
+    ).rejects.toThrow('Patient booking access is unavailable.');
 
-    const recoveryAfter = await prisma.bookingRecoveryAttempt.findUniqueOrThrow({
-      where: { id: recovery.id },
-    });
+    const recoveryAfter =
+      await prisma.bookingRecoveryAttempt.findUniqueOrThrow({
+        where: { id: recovery.id },
+      });
     expect(recoveryAfter.candidateAppointmentId).toBeNull();
     expect(recoveryAfter.mobileNumberEncrypted).toBeNull();
     expect(recoveryAfter.mobileNumberHash).toBeNull();
@@ -344,10 +347,11 @@ describe('Appointment physical erasure (e2e)', () => {
     expect(reminderAfter.recipientMobileEncrypted).toBe('reminder-mobile');
     expect(reminderAfter.messageBody).toBe('Independent reminder message');
 
-    const contactAfter = await prisma.contactPreference.findUniqueOrThrow({
-      where: { id: contactPreference.id },
-    });
-    expect(contactAfter.appointmentId).toBeNull();
+    const contactPreferenceAfter =
+      await prisma.contactPreference.findUniqueOrThrow({
+        where: { id: contactPreference.id },
+      });
+    expect(contactPreferenceAfter.appointmentId).toBeNull();
   });
 
   it('blocks erasure while an active RetentionHold exists', async () => {
