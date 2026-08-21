@@ -122,9 +122,7 @@ describe('NotificationDeliveryPayloadResolverService', () => {
       messageBodyEncrypted: 'v1.key.password-reset:message.iv.tag.ciphertext',
     };
 
-    expect(() => fixture.service.resolve(claimed)).toThrow(
-      BadRequestException,
-    );
+    expect(() => fixture.service.resolve(claimed)).toThrow(BadRequestException);
     expect(fixture.protectedAccountPayload.decrypt).not.toHaveBeenCalled();
   });
 });
