@@ -34,7 +34,8 @@ describe('CommandIdempotencyCleanupService', () => {
     ).resolves.toEqual({ examined: 2, deleted: 2 });
 
     expect(deleteMany).toHaveBeenCalledTimes(1);
-    const deleteManyArgument: DeleteManyArgument = deleteMany.mock.calls.at(0)![0];
+    const deleteManyArgument: DeleteManyArgument =
+      deleteMany.mock.calls.at(0)![0];
     expect(deleteManyArgument.where?.id?.in).toEqual(['one', 'two']);
   });
 
