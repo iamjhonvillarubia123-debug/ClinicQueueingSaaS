@@ -1,17 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
   NotificationAttemptOutcome,
-  NotificationChannel,
   NotificationOutboxStatus,
 } from '../../generated/prisma/client';
-import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import {
   FinalizedAttempt,
   NotificationDeliveryAttemptService,
   ProviderAttemptResult,
 } from './notification-delivery-attempt.service';
+import { NotificationDeliveryPayloadResolverService } from './notification-delivery-payload-resolver.service';
 import { ClaimedOutboxRow } from './notification-outbox-claim.service';
-import { NotificationPayloadService } from './notification-payload.service';
 import { NotificationProviderAdapter } from './notification-provider-adapter';
 import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
@@ -27,8 +25,7 @@ export type NotificationDeliveryResult =
 @Injectable()
 export class NotificationDeliveryWorkerService {
   constructor(
-    private readonly mobileNumberService: MobileNumberService,
-    private readonly payloadService: NotificationPayloadService,
+    private readonly payloadResolver: NotificationDeliveryPayloadResolverService,
     private readonly attemptService: NotificationDeliveryAttemptService,
     private readonly submissionBoundaryService: NotificationSubmissionBoundaryService,
     private readonly providerContractService: NotificationProviderContractService,
@@ -40,12 +37,6 @@ export class NotificationDeliveryWorkerService {
     now?: Date,
   ): Promise<NotificationDeliveryResult> {
     this.providerContractService.assertAdapter(adapter, claimed.channel);
-
-    if (claimed.channel !== NotificationChannel.SMS) {
-      throw new BadRequestException(
-        'Notification delivery orchestration currently supports SMS only.',
-      );
-    }
 
     const submittedAt = now ?? new Date();
     const reservation = await this.submissionBoundaryService.reserveAttempt(
@@ -62,18 +53,7 @@ export class NotificationDeliveryWorkerService {
       };
     }
 
-    if (!claimed.recipientMobileEncrypted || !claimed.messageBodyEncrypted) {
-      throw new BadRequestException(
-        'Notification protected delivery payload is unavailable.',
-      );
-    }
-
-    const recipient = this.mobileNumberService.decrypt(
-      claimed.recipientMobileEncrypted,
-    );
-    const messageBody = this.payloadService.decryptMessage(
-      claimed.messageBodyEncrypted,
-    );
+    const { recipient, messageBody } = this.payloadResolver.resolve(claimed);
 
     let result: ProviderAttemptResult;
     try {
