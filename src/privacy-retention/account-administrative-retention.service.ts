@@ -118,7 +118,10 @@ export class AccountAdministrativeRetentionService {
   }
 
   private tombstoneSuffix(userId: string): string {
-    return createHash('sha256').update(userId, 'utf8').digest('hex').slice(0, 20);
+    return createHash('sha256')
+      .update(userId, 'utf8')
+      .digest('hex')
+      .slice(0, 20);
   }
 
   private validateBatchSize(batchSize: number): void {
