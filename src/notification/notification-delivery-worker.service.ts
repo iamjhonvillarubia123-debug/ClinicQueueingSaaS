@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import {
   NotificationAttemptOutcome,
+  NotificationChannel,
   NotificationOutboxStatus,
 } from '../../generated/prisma/client';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import {
   FinalizedAttempt,
   NotificationDeliveryAttemptService,
@@ -10,6 +12,7 @@ import {
 } from './notification-delivery-attempt.service';
 import { NotificationDeliveryPayloadResolverService } from './notification-delivery-payload-resolver.service';
 import { ClaimedOutboxRow } from './notification-outbox-claim.service';
+import { NotificationPayloadService } from './notification-payload.service';
 import { NotificationProviderAdapter } from './notification-provider-adapter';
 import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
@@ -25,10 +28,13 @@ export type NotificationDeliveryResult =
 @Injectable()
 export class NotificationDeliveryWorkerService {
   constructor(
-    private readonly payloadResolver: NotificationDeliveryPayloadResolverService,
+    private readonly mobileNumberService: MobileNumberService,
+    private readonly payloadService: NotificationPayloadService,
     private readonly attemptService: NotificationDeliveryAttemptService,
     private readonly submissionBoundaryService: NotificationSubmissionBoundaryService,
     private readonly providerContractService: NotificationProviderContractService,
+    @Optional()
+    private readonly payloadResolver?: NotificationDeliveryPayloadResolverService,
   ) {}
 
   async deliverClaimed(
@@ -53,7 +59,7 @@ export class NotificationDeliveryWorkerService {
       };
     }
 
-    const { recipient, messageBody } = this.payloadResolver.resolve(claimed);
+    const { recipient, messageBody } = this.resolvePayload(claimed);
 
     let result: ProviderAttemptResult;
     try {
@@ -91,5 +97,33 @@ export class NotificationDeliveryWorkerService {
       result,
       finalizedAt,
     );
+  }
+
+  private resolvePayload(claimed: ClaimedOutboxRow): {
+    recipient: string;
+    messageBody: string;
+  } {
+    if (this.payloadResolver) {
+      return this.payloadResolver.resolve(claimed);
+    }
+
+    if (
+      claimed.channel !== NotificationChannel.SMS ||
+      !claimed.recipientMobileEncrypted ||
+      !claimed.messageBodyEncrypted
+    ) {
+      throw new BadRequestException(
+        'Notification protected delivery payload is unavailable.',
+      );
+    }
+
+    return {
+      recipient: this.mobileNumberService.decrypt(
+        claimed.recipientMobileEncrypted,
+      ),
+      messageBody: this.payloadService.decryptMessage(
+        claimed.messageBodyEncrypted,
+      ),
+    };
   }
 }
