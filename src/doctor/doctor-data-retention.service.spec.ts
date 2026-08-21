@@ -63,7 +63,8 @@ describe('DoctorDataRetentionService', () => {
       CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
     );
     expect(result.acknowledgedAt).toEqual(acknowledgedAt);
-    expect(prisma.doctorDataRetentionAcknowledgement.upsert).toHaveBeenCalledTimes(1);
+    const upsertMock = prisma.doctorDataRetentionAcknowledgement.upsert;
+    expect(upsertMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects acknowledgement access without current unrestricted Doctor authority', async () => {
@@ -84,8 +85,12 @@ describe('DoctorDataRetentionService', () => {
       null,
     );
 
-    await expect(
-      service.assertCurrentAcknowledgement(prisma as never, 'doctor-1'),
-    ).rejects.toThrow('Current Data Retention Acknowledgement is required');
+    const assertion = service.assertCurrentAcknowledgement(
+      prisma as never,
+      'doctor-1',
+    );
+    await expect(assertion).rejects.toThrow(
+      'Current Data Retention Acknowledgement is required',
+    );
   });
 });
