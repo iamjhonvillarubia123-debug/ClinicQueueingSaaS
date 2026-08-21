@@ -14,12 +14,33 @@ import { PracticeLocationDataRetentionGateService } from '../src/practice-locati
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('Doctor Data Retention activation boundary (e2e)', () => {
-  let moduleFixture: TestingModule;
+  let moduleFixture: TestingModule | undefined;
   let prisma: PrismaService;
   let gate: PracticeLocationDataRetentionGateService;
   let activation: PracticeLocationActivationService;
 
+  const testEnvironment: Record<string, string> = {
+    JWT_SECRET: 'm12s8-e2e-only-jwt-secret-not-for-production',
+    MOBILE_ENCRYPTION_KEY_V1: Buffer.alloc(32, 1).toString('base64'),
+    MOBILE_LOOKUP_HMAC_KEY_V1: Buffer.alloc(32, 2).toString('base64'),
+    MOBILE_ENCRYPTION_ACTIVE_KEY_ID: 'e2e-mobile-encryption-v1',
+    MOBILE_LOOKUP_ACTIVE_KEY_ID: 'e2e-mobile-lookup-v1',
+    OTP_HMAC_KEY_V1: Buffer.alloc(32, 3).toString('base64'),
+    OTP_HMAC_ACTIVE_KEY_ID: 'e2e-otp-hmac-v1',
+    PUBLIC_APP_BASE_URL: 'https://app.example.test',
+    WEB_APP_ORIGIN: 'https://app.example.test',
+  };
+
+  const originalEnvironment: Record<string, string | undefined> = {};
+
   beforeAll(async () => {
+    for (const [key, value] of Object.entries(testEnvironment)) {
+      originalEnvironment[key] = process.env[key];
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+
     moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -29,7 +50,15 @@ describe('Doctor Data Retention activation boundary (e2e)', () => {
   });
 
   afterAll(async () => {
-    await moduleFixture.close();
+    await moduleFixture?.close();
+
+    for (const [key, value] of Object.entries(originalEnvironment)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   it('blocks operational activation until the current Doctor acknowledgement is persisted', async () => {
