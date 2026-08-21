@@ -5,6 +5,7 @@ import { App } from 'supertest/types';
 import {
   AppointmentStatus,
   PrivacyErasureResourceType,
+  QueueEventType,
   RetentionHoldReasonCategory,
   RetentionResourceType,
 } from '../generated/prisma/client';
@@ -124,7 +125,7 @@ describe('Appointment physical erasure (e2e)', () => {
         practiceLocationId: location.id,
         serviceDate,
         queueEventSequence: BigInt(1),
-        type: 'CANCEL_APPOINTMENT',
+        type: QueueEventType.NEXT_PATIENT,
         actorType: 'SYSTEM',
         previousPrimaryStatus: AppointmentStatus.WAITING,
         newPrimaryStatus: status,
