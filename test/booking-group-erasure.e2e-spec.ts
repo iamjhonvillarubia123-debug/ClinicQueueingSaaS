@@ -182,6 +182,7 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
       data: {
         deliveryIdentityKey,
         notificationType: 'BOOKING_CONFIRMATION',
+        practiceLocationId: location.id,
         bookingGroupId: group.id,
         recipientMobileEncrypted: 'group-outbox-mobile',
         messageBodyEncrypted: 'group-confirmation-payload',
