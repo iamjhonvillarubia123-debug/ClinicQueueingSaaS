@@ -217,10 +217,16 @@ describe('DoctorLifecycleService', () => {
     );
     expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        doctorFinancialAccountId: 'financial-1',
+        commandType: CommandType.DOCTOR_DELETE_ACCOUNT,
+        actorUserId: 'doctor-1',
+        accountUserId: 'doctor-1',
       }) as unknown,
       select: { id: true },
     });
+    const createdCommand = tx.commandIdempotency.create.mock.calls[0]?.[0] as {
+      data?: { doctorFinancialAccountId?: string | null };
+    };
+    expect(createdCommand.data).not.toHaveProperty('doctorFinancialAccountId');
     expect(closureFinancialSettlement.settle).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
