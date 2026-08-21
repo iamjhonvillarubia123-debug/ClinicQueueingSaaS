@@ -50,14 +50,16 @@ describe('PhilSmsNotificationProviderAdapter', () => {
   });
 
   it('captures PhilSMS UID and accepted status on successful submission', async () => {
-    const fetchMock = jest.fn<typeof fetch>(
-      (_input: Parameters<typeof fetch>[0], _init?: RequestInit) =>
-        Promise.resolve(
-          response(200, {
-            status: 'success',
-            data: { uid: 'sms-uid-1', status: 'queued' },
-          }),
-        ),
+    const fetchMock = jest.fn<
+      Promise<Response>,
+      [RequestInfo | URL, RequestInit?]
+    >((_input, _init) =>
+      Promise.resolve(
+        response(200, {
+          status: 'success',
+          data: { uid: 'sms-uid-1', status: 'queued' },
+        }),
+      ),
     );
     global.fetch = fetchMock;
 
