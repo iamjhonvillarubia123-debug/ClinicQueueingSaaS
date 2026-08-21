@@ -59,8 +59,8 @@ export class SecurityRetentionCleanupService {
           SELECT "id"
           FROM "OtpVerification"
           WHERE ("mobileNumberHash" IS NOT NULL OR "mobileHashKeyVersion" IS NOT NULL)
-            AND COALESCE("consumedAt", "invalidatedAt", "expiresAt") <= ${protectedCutoff}
-          ORDER BY COALESCE("consumedAt", "invalidatedAt", "expiresAt"), "id"
+            AND "createdAt" <= ${protectedCutoff}
+          ORDER BY "createdAt", "id"
           LIMIT ${batchSize}
           FOR UPDATE SKIP LOCKED
         )
@@ -78,14 +78,26 @@ export class SecurityRetentionCleanupService {
             SELECT "id"
             FROM "BookingRecoveryAttempt"
             WHERE "protectedDataClearedAt" IS NULL
-              AND (
-                "expiresAt" <= ${protectedCutoff}
-                OR (
-                  "status" IN ('COMPLETED', 'REJECTED', 'EXPIRED', 'CANCELLED')
-                  AND "updatedAt" <= ${protectedCutoff}
-                )
-              )
-            ORDER BY LEAST("expiresAt", "updatedAt"), "id"
+              AND LEAST(
+                "expiresAt",
+                CASE "status"
+                  WHEN 'COMPLETED' THEN COALESCE("completedAt", "expiresAt")
+                  WHEN 'REJECTED' THEN COALESCE("rejectedAt", "expiresAt")
+                  WHEN 'EXPIRED' THEN COALESCE("expiredAt", "expiresAt")
+                  WHEN 'CANCELLED' THEN COALESCE("cancelledAt", "expiresAt")
+                  ELSE "expiresAt"
+                END
+              ) <= ${protectedCutoff}
+            ORDER BY LEAST(
+              "expiresAt",
+              CASE "status"
+                WHEN 'COMPLETED' THEN COALESCE("completedAt", "expiresAt")
+                WHEN 'REJECTED' THEN COALESCE("rejectedAt", "expiresAt")
+                WHEN 'EXPIRED' THEN COALESCE("expiredAt", "expiresAt")
+                WHEN 'CANCELLED' THEN COALESCE("cancelledAt", "expiresAt")
+                ELSE "expiresAt"
+              END
+            ), "id"
             LIMIT ${batchSize}
             FOR UPDATE SKIP LOCKED
           )
@@ -108,14 +120,26 @@ export class SecurityRetentionCleanupService {
             SELECT "id"
             FROM "BookingGroupRecoveryAttempt"
             WHERE "protectedDataClearedAt" IS NULL
-              AND (
-                "expiresAt" <= ${protectedCutoff}
-                OR (
-                  "status" IN ('COMPLETED', 'REJECTED', 'EXPIRED', 'CANCELLED')
-                  AND "updatedAt" <= ${protectedCutoff}
-                )
-              )
-            ORDER BY LEAST("expiresAt", "updatedAt"), "id"
+              AND LEAST(
+                "expiresAt",
+                CASE "status"
+                  WHEN 'COMPLETED' THEN COALESCE("completedAt", "expiresAt")
+                  WHEN 'REJECTED' THEN COALESCE("rejectedAt", "expiresAt")
+                  WHEN 'EXPIRED' THEN COALESCE("expiredAt", "expiresAt")
+                  WHEN 'CANCELLED' THEN COALESCE("cancelledAt", "expiresAt")
+                  ELSE "expiresAt"
+                END
+              ) <= ${protectedCutoff}
+            ORDER BY LEAST(
+              "expiresAt",
+              CASE "status"
+                WHEN 'COMPLETED' THEN COALESCE("completedAt", "expiresAt")
+                WHEN 'REJECTED' THEN COALESCE("rejectedAt", "expiresAt")
+                WHEN 'EXPIRED' THEN COALESCE("expiredAt", "expiresAt")
+                WHEN 'CANCELLED' THEN COALESCE("cancelledAt", "expiresAt")
+                ELSE "expiresAt"
+              END
+            ), "id"
             LIMIT ${batchSize}
             FOR UPDATE SKIP LOCKED
           )
@@ -158,8 +182,17 @@ export class SecurityRetentionCleanupService {
           WITH candidates AS (
             SELECT recovery."id"
             FROM "BookingRecoveryAttempt" recovery
-            WHERE recovery."createdAt" <= ${shellCutoff}
-              AND recovery."protectedDataClearedAt" IS NOT NULL
+            WHERE recovery."protectedDataClearedAt" IS NOT NULL
+              AND LEAST(
+                recovery."expiresAt",
+                CASE recovery."status"
+                  WHEN 'COMPLETED' THEN COALESCE(recovery."completedAt", recovery."expiresAt")
+                  WHEN 'REJECTED' THEN COALESCE(recovery."rejectedAt", recovery."expiresAt")
+                  WHEN 'EXPIRED' THEN COALESCE(recovery."expiredAt", recovery."expiresAt")
+                  WHEN 'CANCELLED' THEN COALESCE(recovery."cancelledAt", recovery."expiresAt")
+                  ELSE recovery."expiresAt"
+                END
+              ) <= ${shellCutoff}
               AND NOT EXISTS (
                 SELECT 1
                 FROM "OtpVerification" otp
@@ -170,7 +203,16 @@ export class SecurityRetentionCleanupService {
                 FROM "CommandIdempotency" command
                 WHERE command."bookingRecoveryAttemptId" = recovery."id"
               )
-            ORDER BY recovery."createdAt", recovery."id"
+            ORDER BY LEAST(
+              recovery."expiresAt",
+              CASE recovery."status"
+                WHEN 'COMPLETED' THEN COALESCE(recovery."completedAt", recovery."expiresAt")
+                WHEN 'REJECTED' THEN COALESCE(recovery."rejectedAt", recovery."expiresAt")
+                WHEN 'EXPIRED' THEN COALESCE(recovery."expiredAt", recovery."expiresAt")
+                WHEN 'CANCELLED' THEN COALESCE(recovery."cancelledAt", recovery."expiresAt")
+                ELSE recovery."expiresAt"
+              END
+            ), recovery."id"
             LIMIT ${batchSize}
             FOR UPDATE OF recovery SKIP LOCKED
           )
@@ -185,8 +227,17 @@ export class SecurityRetentionCleanupService {
           WITH candidates AS (
             SELECT recovery."id"
             FROM "BookingGroupRecoveryAttempt" recovery
-            WHERE recovery."createdAt" <= ${shellCutoff}
-              AND recovery."protectedDataClearedAt" IS NOT NULL
+            WHERE recovery."protectedDataClearedAt" IS NOT NULL
+              AND LEAST(
+                recovery."expiresAt",
+                CASE recovery."status"
+                  WHEN 'COMPLETED' THEN COALESCE(recovery."completedAt", recovery."expiresAt")
+                  WHEN 'REJECTED' THEN COALESCE(recovery."rejectedAt", recovery."expiresAt")
+                  WHEN 'EXPIRED' THEN COALESCE(recovery."expiredAt", recovery."expiresAt")
+                  WHEN 'CANCELLED' THEN COALESCE(recovery."cancelledAt", recovery."expiresAt")
+                  ELSE recovery."expiresAt"
+                END
+              ) <= ${shellCutoff}
               AND NOT EXISTS (
                 SELECT 1
                 FROM "OtpVerification" otp
@@ -197,7 +248,16 @@ export class SecurityRetentionCleanupService {
                 FROM "CommandIdempotency" command
                 WHERE command."bookingGroupRecoveryAttemptId" = recovery."id"
               )
-            ORDER BY recovery."createdAt", recovery."id"
+            ORDER BY LEAST(
+              recovery."expiresAt",
+              CASE recovery."status"
+                WHEN 'COMPLETED' THEN COALESCE(recovery."completedAt", recovery."expiresAt")
+                WHEN 'REJECTED' THEN COALESCE(recovery."rejectedAt", recovery."expiresAt")
+                WHEN 'EXPIRED' THEN COALESCE(recovery."expiredAt", recovery."expiresAt")
+                WHEN 'CANCELLED' THEN COALESCE(recovery."cancelledAt", recovery."expiresAt")
+                ELSE recovery."expiresAt"
+              END
+            ), recovery."id"
             LIMIT ${batchSize}
             FOR UPDATE OF recovery SKIP LOCKED
           )
