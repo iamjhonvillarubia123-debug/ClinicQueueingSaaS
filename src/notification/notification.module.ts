@@ -13,6 +13,7 @@ import { NotificationOutboxReconciliationService } from './notification-outbox-r
 import { NotificationPayloadService } from './notification-payload.service';
 import { NotificationProtectedPayloadPurgeService } from './notification-protected-payload-purge.service';
 import { NotificationProviderContractService } from './notification-provider-contract.service';
+import { NotificationReconciliationWorkerService } from './notification-reconciliation-worker.service';
 import { NotificationRetentionCleanupService } from './notification-retention-cleanup.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 import { ScheduledReminderCancellationService } from './scheduled-reminder-cancellation.service';
@@ -28,6 +29,7 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
     NotificationOutboxClaimService,
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
+    NotificationReconciliationWorkerService,
     NotificationProtectedPayloadPurgeService,
     NotificationOtpPayloadPurgeService,
     NotificationProviderContractService,
@@ -44,6 +46,7 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
     NotificationOutboxClaimService,
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
+    NotificationReconciliationWorkerService,
     NotificationProtectedPayloadPurgeService,
     NotificationOtpPayloadPurgeService,
     NotificationProviderContractService,
