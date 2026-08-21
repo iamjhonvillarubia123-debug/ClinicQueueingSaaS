@@ -225,7 +225,7 @@ describe('DoctorLifecycleService', () => {
     });
     expect(tx.commandIdempotency.create).not.toHaveBeenCalledWith({
       data: expect.objectContaining({
-        doctorFinancialAccountId: expect.anything(),
+        doctorFinancialAccountId: expect.any(String),
       }) as unknown,
       select: { id: true },
     });
