@@ -32,9 +32,7 @@ export class SecurityRetentionCleanupService {
     const protectedCutoff = new Date(
       now.getTime() - PROTECTED_RECOVERY_RETENTION_MS,
     );
-    const shellCutoff = new Date(
-      now.getTime() - TECHNICAL_SHELL_RETENTION_MS,
-    );
+    const shellCutoff = new Date(now.getTime() - TECHNICAL_SHELL_RETENTION_MS);
 
     return this.prisma.$transaction(async (transaction) => {
       const otpSecretsCleared = await transaction.$executeRaw(Prisma.sql`
