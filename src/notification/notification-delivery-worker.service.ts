@@ -13,7 +13,10 @@ import {
 import { NotificationDeliveryPayloadResolverService } from './notification-delivery-payload-resolver.service';
 import { ClaimedOutboxRow } from './notification-outbox-claim.service';
 import { NotificationPayloadService } from './notification-payload.service';
-import { NotificationProviderAdapter } from './notification-provider-adapter';
+import {
+  NotificationProviderAdapter,
+  NotificationProviderSubmissionResult,
+} from './notification-provider-adapter';
 import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 
@@ -61,9 +64,9 @@ export class NotificationDeliveryWorkerService {
 
     const { recipient, messageBody } = this.resolvePayload(claimed);
 
-    let result: ProviderAttemptResult;
+    let providerResult: NotificationProviderSubmissionResult;
     try {
-      const providerResult = await adapter.submit({
+      providerResult = await adapter.submit({
         notificationOutboxId: claimed.id,
         notificationType: claimed.notificationType,
         channel: claimed.channel,
@@ -71,14 +74,8 @@ export class NotificationDeliveryWorkerService {
         recipient,
         messageBody,
       });
-      this.providerContractService.assertSubmissionResult(
-        adapter,
-        providerResult,
-        [recipient, messageBody],
-      );
-      result = providerResult;
     } catch {
-      result = {
+      providerResult = {
         outcome: NotificationAttemptOutcome.UNCERTAIN,
         providerName: adapter.providerName,
         providerStatus: 'submission-result-unavailable',
@@ -88,6 +85,13 @@ export class NotificationDeliveryWorkerService {
         resolvedAt: null,
       };
     }
+
+    this.providerContractService.assertSubmissionResult(
+      adapter,
+      providerResult,
+      [recipient, messageBody],
+    );
+    const result: ProviderAttemptResult = providerResult;
 
     const finalizedAt = now ?? new Date();
     return this.attemptService.finalizeReservedAttempt(
