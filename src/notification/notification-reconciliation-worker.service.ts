@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   NotificationProviderAdapter,
   NotificationProviderReconciliationOutcome,
+  NotificationProviderReconciliationResult,
 } from './notification-provider-adapter';
 import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationOutboxReconciliationService } from './notification-outbox-reconciliation.service';
@@ -34,7 +35,7 @@ export class NotificationReconciliationWorkerService {
       );
     }
 
-    let result;
+    let result: NotificationProviderReconciliationResult;
     try {
       result = await adapter.reconcile({
         notificationOutboxId: candidate.id,
