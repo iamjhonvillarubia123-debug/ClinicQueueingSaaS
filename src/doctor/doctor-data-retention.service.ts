@@ -7,8 +7,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export const CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION =
-  'phase6-v6.1';
+export const CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION = 'phase6-v6.1';
 
 const DATA_PRIVACY_PROFILE = Object.freeze({
   acknowledgementVersion: CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
@@ -115,7 +114,7 @@ export class DoctorDataRetentionService {
     client: Pick<PrismaService, 'user'> | TransactionClient,
     doctorUserId: string,
   ): Promise<void> {
-    const doctor = (await client.user.findUnique({
+    const doctor: DoctorAuthority | null = await client.user.findUnique({
       where: { id: doctorUserId },
       select: {
         id: true,
@@ -123,7 +122,7 @@ export class DoctorDataRetentionService {
         accountStatus: true,
         administrativeRestrictionStatus: true,
       },
-    })) as DoctorAuthority | null;
+    });
 
     if (
       !doctor ||
