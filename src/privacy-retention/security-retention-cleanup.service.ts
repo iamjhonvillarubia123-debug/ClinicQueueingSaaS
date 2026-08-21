@@ -8,11 +8,6 @@ const OTP_SECRET_RETENTION_MS = 15 * 60 * 1000;
 const PROTECTED_RECOVERY_RETENTION_MS = 24 * 60 * 60 * 1000;
 const TECHNICAL_SHELL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
-type OtpCleanupCounts = {
-  otpSecretsCleared: number;
-  otpMobileContextCleared: number;
-};
-
 export type SecurityRetentionCleanupResult = {
   otpSecretsCleared: number;
   otpMobileContextCleared: number;
@@ -40,71 +35,42 @@ export class SecurityRetentionCleanupService {
     const shellCutoff = new Date(now.getTime() - TECHNICAL_SHELL_RETENTION_MS);
 
     return this.prisma.$transaction(async (transaction) => {
-      const [otpCleanup] = await transaction.$queryRaw<OtpCleanupCounts[]>(
-        Prisma.sql`
-          WITH candidates AS (
-            SELECT
-              "id",
-              (
-                ("otpHash" IS NOT NULL OR "otpHashKeyVersion" IS NOT NULL OR "activeContextKey" IS NOT NULL)
-                AND COALESCE("consumedAt", "invalidatedAt", "expiresAt") <= ${otpSecretCutoff}
-              ) AS "clearSecret",
-              (
-                ("mobileNumberHash" IS NOT NULL OR "mobileHashKeyVersion" IS NOT NULL)
-                AND "createdAt" <= ${protectedCutoff}
-              ) AS "clearMobile"
-            FROM "OtpVerification"
-            WHERE (
-              (
-                ("otpHash" IS NOT NULL OR "otpHashKeyVersion" IS NOT NULL OR "activeContextKey" IS NOT NULL)
-                AND COALESCE("consumedAt", "invalidatedAt", "expiresAt") <= ${otpSecretCutoff}
-              )
-              OR
-              (
-                ("mobileNumberHash" IS NOT NULL OR "mobileHashKeyVersion" IS NOT NULL)
-                AND "createdAt" <= ${protectedCutoff}
-              )
-            )
-            ORDER BY "createdAt", "id"
-            LIMIT ${batchSize}
-            FOR UPDATE SKIP LOCKED
-          ), updated AS (
-            UPDATE "OtpVerification" otp
-            SET
-              "otpHash" = CASE
-                WHEN candidates."clearSecret" THEN NULL
-                ELSE otp."otpHash"
-              END,
-              "otpHashKeyVersion" = CASE
-                WHEN candidates."clearSecret" THEN NULL
-                ELSE otp."otpHashKeyVersion"
-              END,
-              "activeContextKey" = CASE
-                WHEN candidates."clearSecret" THEN NULL
-                ELSE otp."activeContextKey"
-              END,
-              "mobileNumberHash" = CASE
-                WHEN candidates."clearMobile" THEN NULL
-                ELSE otp."mobileNumberHash"
-              END,
-              "mobileHashKeyVersion" = CASE
-                WHEN candidates."clearMobile" THEN NULL
-                ELSE otp."mobileHashKeyVersion"
-              END
-            FROM candidates
-            WHERE otp."id" = candidates."id"
-            RETURNING
-              candidates."clearSecret" AS "clearSecret",
-              candidates."clearMobile" AS "clearMobile"
-          )
-          SELECT
-            COUNT(*) FILTER (WHERE "clearSecret")::int AS "otpSecretsCleared",
-            COUNT(*) FILTER (WHERE "clearMobile")::int AS "otpMobileContextCleared"
-          FROM updated
-        `,
-      );
-      const otpSecretsCleared = otpCleanup?.otpSecretsCleared ?? 0;
-      const otpMobileContextCleared = otpCleanup?.otpMobileContextCleared ?? 0;
+      const otpSecretsCleared = await transaction.$executeRaw(Prisma.sql`
+        WITH candidates AS (
+          SELECT "id"
+          FROM "OtpVerification"
+          WHERE ("otpHash" IS NOT NULL OR "otpHashKeyVersion" IS NOT NULL OR "activeContextKey" IS NOT NULL)
+            AND COALESCE("consumedAt", "invalidatedAt", "expiresAt") <= ${otpSecretCutoff}
+          ORDER BY COALESCE("consumedAt", "invalidatedAt", "expiresAt"), "id"
+          LIMIT ${batchSize}
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE "OtpVerification" otp
+        SET
+          "otpHash" = NULL,
+          "otpHashKeyVersion" = NULL,
+          "activeContextKey" = NULL
+        FROM candidates
+        WHERE otp."id" = candidates."id"
+      `);
+
+      const otpMobileContextCleared = await transaction.$executeRaw(Prisma.sql`
+        WITH candidates AS (
+          SELECT "id"
+          FROM "OtpVerification"
+          WHERE ("mobileNumberHash" IS NOT NULL OR "mobileHashKeyVersion" IS NOT NULL)
+            AND "createdAt" <= ${protectedCutoff}
+          ORDER BY "createdAt", "id"
+          LIMIT ${batchSize}
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE "OtpVerification" otp
+        SET
+          "mobileNumberHash" = NULL,
+          "mobileHashKeyVersion" = NULL
+        FROM candidates
+        WHERE otp."id" = candidates."id"
+      `);
 
       const bookingRecoveryProtectedCleared = await transaction.$executeRaw(
         Prisma.sql`
