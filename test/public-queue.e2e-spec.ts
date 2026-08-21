@@ -136,8 +136,10 @@ describe('Public queue projection (e2e)', () => {
         practiceLocationId: fixture.locationId,
         serviceDate: new Date('2026-08-21T00:00:00.000Z'),
         status: 'CLOSED',
+        createdAt: new Date('2026-08-21T07:59:00.000Z'),
         startedAt: new Date('2026-08-21T08:00:00.000Z'),
-        closedAt: new Date('2026-08-21T17:00:00.000Z'),
+        closedAt: new Date('2026-08-21T08:05:00.000Z'),
+        updatedAt: new Date('2026-08-21T08:06:00.000Z'),
       },
     });
 
