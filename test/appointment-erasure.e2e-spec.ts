@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { App } from 'supertest/types';
 import {
   AppointmentStatus,
@@ -10,6 +10,7 @@ import {
   RetentionResourceType,
 } from '../generated/prisma/client';
 import { AppModule } from '../src/app.module';
+import { PatientBookingAccessService } from '../src/patient-access/patient-booking-access.service';
 import { AppointmentErasureService } from '../src/privacy-retention/appointment-erasure.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -17,6 +18,7 @@ describe('Appointment physical erasure (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
   let erasureService: AppointmentErasureService;
+  let patientBookingAccessService: PatientBookingAccessService;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm12-erasure-e2e-only-jwt-secret-not-for-production',
@@ -43,6 +45,7 @@ describe('Appointment physical erasure (e2e)', () => {
 
     prisma = moduleFixture.get(PrismaService);
     erasureService = moduleFixture.get(AppointmentErasureService);
+    patientBookingAccessService = moduleFixture.get(PatientBookingAccessService);
     app = moduleFixture.createNestApplication();
     await app.init();
   });
@@ -139,7 +142,14 @@ describe('Appointment physical erasure (e2e)', () => {
       },
     });
 
-    return { appointment, location, queueEvent, serviceDate, terminalAt };
+    return {
+      appointment,
+      doctorUserId: doctor.id,
+      location,
+      queueEvent,
+      serviceDate,
+      terminalAt,
+    };
   }
 
   async function installDeleteFailureTrigger(appointmentId: string) {
@@ -240,6 +250,104 @@ describe('Appointment physical erasure (e2e)', () => {
       });
     expect(analyticsAfterReplay.bookedCount).toBe(1);
     expect(analyticsAfterReplay.servedCount).toBe(1);
+  });
+
+  it('preserves an independent ScheduledReminder while destroying old Appointment access and recovery correlation', async () => {
+    const fixture = await createFixture(AppointmentStatus.COMPLETED);
+    const now = new Date('2026-08-21T00:00:00.000Z');
+    const rawToken = 'A'.repeat(43);
+    const tokenHash = createHash('sha256')
+      .update(rawToken, 'utf8')
+      .digest('hex');
+
+    await prisma.bookingAccessToken.create({
+      data: {
+        appointmentId: fixture.appointment.id,
+        tokenHash,
+        purpose: 'VIEW_AND_MANAGE_BOOKING',
+        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+      },
+    });
+
+    const recovery = await prisma.bookingRecoveryAttempt.create({
+      data: {
+        practiceLocationId: fixture.location.id,
+        serviceDate: fixture.serviceDate,
+        mobileNumberEncrypted: 'recovery-mobile',
+        mobileNumberHash: `recovery-${randomUUID()}`,
+        mobileHashKeyVersion: 1,
+        mobileNumberLastFour: '1234',
+        status: 'COMPLETED',
+        candidateAppointmentId: fixture.appointment.id,
+        verifiedAt: new Date('2026-08-20T01:00:00.000Z'),
+        candidateConfirmedAt: new Date('2026-08-20T01:01:00.000Z'),
+        completedAt: new Date('2026-08-20T01:02:00.000Z'),
+        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+      },
+    });
+
+    const contactPreference = await prisma.contactPreference.create({
+      data: {
+        appointmentId: fixture.appointment.id,
+        allowOperationalMessages: true,
+        allowFollowUpReminder: true,
+        allowMarketingMessages: false,
+        acknowledgedAt: new Date('2026-08-20T00:00:00.000Z'),
+        privacyNoticeVersion: 'm12-e2e',
+      },
+    });
+
+    const reminder = await prisma.scheduledReminder.create({
+      data: {
+        practiceLocationId: fixture.location.id,
+        sourceAppointmentId: fixture.appointment.id,
+        contactPreferenceId: contactPreference.id,
+        recipientSource: 'APPOINTMENT_CONTACT',
+        recipientMobileEncrypted: 'reminder-mobile',
+        recipientMobileLastFour: '1234',
+        status: 'SCHEDULED',
+        scheduledFor: new Date('2026-08-25T00:00:00.000Z'),
+        expiresAt: new Date('2026-08-26T00:00:00.000Z'),
+        messageBody: 'Independent reminder message',
+        createdByUserId: fixture.doctorUserId,
+        lastEditedByUserId: fixture.doctorUserId,
+      },
+    });
+
+    await expect(
+      erasureService.eraseEligibleAppointment(fixture.appointment.id, now),
+    ).resolves.toEqual(expect.objectContaining({ outcome: 'ERASED' }));
+
+    expect(
+      await prisma.bookingAccessToken.count({
+        where: { appointmentId: fixture.appointment.id },
+      }),
+    ).toBe(0);
+    await expect(patientBookingAccessService.establish(rawToken)).rejects.toThrow(
+      'Patient booking access is unavailable.',
+    );
+
+    const recoveryAfter = await prisma.bookingRecoveryAttempt.findUniqueOrThrow({
+      where: { id: recovery.id },
+    });
+    expect(recoveryAfter.candidateAppointmentId).toBeNull();
+    expect(recoveryAfter.mobileNumberEncrypted).toBeNull();
+    expect(recoveryAfter.mobileNumberHash).toBeNull();
+    expect(recoveryAfter.mobileNumberLastFour).toBeNull();
+    expect(recoveryAfter.protectedDataClearedAt).not.toBeNull();
+
+    const reminderAfter = await prisma.scheduledReminder.findUniqueOrThrow({
+      where: { id: reminder.id },
+    });
+    expect(reminderAfter.sourceAppointmentId).toBeNull();
+    expect(reminderAfter.status).toBe('SCHEDULED');
+    expect(reminderAfter.recipientMobileEncrypted).toBe('reminder-mobile');
+    expect(reminderAfter.messageBody).toBe('Independent reminder message');
+
+    const contactAfter = await prisma.contactPreference.findUniqueOrThrow({
+      where: { id: contactPreference.id },
+    });
+    expect(contactAfter.appointmentId).toBeNull();
   });
 
   it('blocks erasure while an active RetentionHold exists', async () => {
