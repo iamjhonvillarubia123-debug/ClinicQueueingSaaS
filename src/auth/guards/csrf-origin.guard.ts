@@ -3,9 +3,14 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
+import {
+  readCookie,
+  SESSION_COOKIE_NAME,
+} from '../security/session-security';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -17,9 +22,23 @@ export class CsrfOriginGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
 
-    const expectedOrigin =
-      this.configService.get<string>('WEB_APP_ORIGIN') ??
-      'http://localhost:3000';
+    const sessionToken = readCookie(
+      request.headers.cookie,
+      SESSION_COOKIE_NAME,
+    );
+    if (!sessionToken) return true;
+
+    const configuredOrigin = this.configService.get<string>('WEB_APP_ORIGIN');
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
+
+    if (isProduction && !configuredOrigin) {
+      throw new InternalServerErrorException(
+        'Production web origin is not configured.',
+      );
+    }
+
+    const expectedOrigin = configuredOrigin ?? 'http://localhost:3000';
     const origin = request.headers.origin;
 
     if (!origin || origin !== expectedOrigin) {
