@@ -23,8 +23,8 @@ describe('PrivacyRetentionService', () => {
   const prisma = {
     appointment,
     retentionHold,
-    $transaction: jest.fn(
-      (callback: (tx: typeof transaction) => unknown) => callback(transaction),
+    $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+      callback(transaction),
     ),
   };
 
