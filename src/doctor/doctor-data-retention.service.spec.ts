@@ -30,27 +30,28 @@ describe('DoctorDataRetentionService', () => {
   });
 
   it('returns the current privacy profile and missing acknowledgement state', async () => {
-    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(
-      null,
-    );
+    const findAcknowledgement =
+      prisma.doctorDataRetentionAcknowledgement.findUnique;
+    findAcknowledgement.mockResolvedValue(null);
 
-    await expect(service.getDataPrivacyProfile('doctor-1')).resolves.toEqual(
-      expect.objectContaining({
-        acknowledgementVersion:
-          CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
-        jurisdiction: 'PHILIPPINES',
-        terminalAppointmentIdentifiableRetentionHours: 24,
-        finalPrivacyErasureIsIrreversible: true,
-        erasedVisitIdentityCanBeRecovered: false,
-        currentAcknowledgementSatisfied: false,
-        acknowledgedAt: null,
-      }),
+    const result = await service.getDataPrivacyProfile('doctor-1');
+
+    expect(result.acknowledgementVersion).toBe(
+      CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
     );
+    expect(result.jurisdiction).toBe('PHILIPPINES');
+    expect(result.terminalAppointmentIdentifiableRetentionHours).toBe(24);
+    expect(result.finalPrivacyErasureIsIrreversible).toBe(true);
+    expect(result.erasedVisitIdentityCanBeRecovered).toBe(false);
+    expect(result.currentAcknowledgementSatisfied).toBe(false);
+    expect(result.acknowledgedAt).toBeNull();
   });
 
   it('records the current acknowledgement idempotently through the version key', async () => {
     const acknowledgedAt = new Date('2026-08-21T12:00:00.000Z');
-    prisma.doctorDataRetentionAcknowledgement.upsert.mockResolvedValue({
+    const upsertAcknowledgement =
+      prisma.doctorDataRetentionAcknowledgement.upsert;
+    upsertAcknowledgement.mockResolvedValue({
       acknowledgementVersion:
         CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
       acknowledgedAt,
@@ -63,8 +64,7 @@ describe('DoctorDataRetentionService', () => {
       CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
     );
     expect(result.acknowledgedAt).toEqual(acknowledgedAt);
-    const upsertMock = prisma.doctorDataRetentionAcknowledgement.upsert;
-    expect(upsertMock).toHaveBeenCalledTimes(1);
+    expect(upsertAcknowledgement).toHaveBeenCalledTimes(1);
   });
 
   it('rejects acknowledgement access without current unrestricted Doctor authority', async () => {
@@ -81,14 +81,15 @@ describe('DoctorDataRetentionService', () => {
   });
 
   it('blocks patient operations until the current acknowledgement exists', async () => {
-    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(
-      null,
-    );
+    const findAcknowledgement =
+      prisma.doctorDataRetentionAcknowledgement.findUnique;
+    findAcknowledgement.mockResolvedValue(null);
 
     const assertion = service.assertCurrentAcknowledgement(
       prisma as never,
       'doctor-1',
     );
+
     await expect(assertion).rejects.toThrow(
       'Current Data Retention Acknowledgement is required',
     );
