@@ -9,6 +9,7 @@ import {
   OtpPurpose,
   PracticeLocationLifecycleStatus,
   UserRole,
+  WaitingPlacementType,
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -150,6 +151,8 @@ describe('Security retention cleanup (e2e)', () => {
         estimatedServiceMinutes: 15,
         queueNumber: 1,
         status: AppointmentStatus.WAITING,
+        servingOrderKey: 1,
+        waitingPlacementType: WaitingPlacementType.ORDINARY,
         firstName: 'Recovery',
         lastName: 'Patient',
       },
