@@ -59,7 +59,7 @@ export class SecurityRetentionCleanupService {
           SELECT "id"
           FROM "OtpVerification"
           WHERE ("mobileNumberHash" IS NOT NULL OR "mobileHashKeyVersion" IS NOT NULL)
-            AND "createdAt" <= ${protectedCutoff}
+            AND "createdAt" + INTERVAL '24 hours' <= ${now}
           ORDER BY "createdAt", "id"
           LIMIT ${batchSize}
           FOR UPDATE SKIP LOCKED
