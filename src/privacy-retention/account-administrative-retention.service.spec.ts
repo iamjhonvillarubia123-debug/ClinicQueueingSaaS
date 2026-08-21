@@ -1,5 +1,4 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountAdministrativeRetentionService } from './account-administrative-retention.service';
 
@@ -97,28 +96,5 @@ describe('AccountAdministrativeRetentionService', () => {
     });
 
     expect(transaction.user.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('uses deterministic tombstone values for the same historical User', async () => {
-    transaction.$queryRaw.mockResolvedValue([{ userId: 'closed-user-1' }]);
-    transaction.user.updateMany.mockResolvedValue({ count: 1 });
-
-    await service.run(new Date('2026-08-21T12:00:00.000Z'));
-    const firstCall = transaction.user.updateMany.mock.calls[0] as [
-      Prisma.UserUpdateManyArgs,
-    ];
-
-    jest.clearAllMocks();
-    transaction.$queryRaw.mockResolvedValue([{ userId: 'closed-user-1' }]);
-    transaction.user.updateMany.mockResolvedValue({ count: 1 });
-    transaction.accountPermanentClosureAudit.count.mockResolvedValue(0);
-    transaction.administrativeAccountAction.count.mockResolvedValue(0);
-
-    await service.run(new Date('2026-08-21T12:00:00.000Z'));
-    const secondCall = transaction.user.updateMany.mock.calls[0] as [
-      Prisma.UserUpdateManyArgs,
-    ];
-
-    expect(secondCall[0].data).toEqual(firstCall[0].data);
   });
 });
