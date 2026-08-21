@@ -137,19 +137,22 @@ export class DoctorClosureFinancialSettlementService {
       );
       if (unusedFuturePeriods === 0) continue;
 
-      const amount = purchase.monthlyPriceSnapshot.mul(unusedFuturePeriods);
+      creditCreated = creditCreated.add(
+        purchase.monthlyPriceSnapshot.mul(unusedFuturePeriods),
+      );
+      creditedFuturePeriods += unusedFuturePeriods;
+    }
+
+    if (creditCreated.greaterThan(0)) {
       await transaction.subscriptionCreditEntry.create({
         data: {
           doctorFinancialAccountId: input.doctorFinancialAccountId,
           entryType: SubscriptionCreditEntryType.CREDIT_CREATED,
-          amount,
-          subscriptionPurchaseId: purchase.id,
+          amount: creditCreated,
           commandIdempotencyId: input.closureCommandId,
           occurredAt: input.closedAt,
         },
       });
-      creditCreated = creditCreated.add(amount);
-      creditedFuturePeriods += unusedFuturePeriods;
     }
 
     return {
