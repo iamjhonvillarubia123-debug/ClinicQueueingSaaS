@@ -10,6 +10,11 @@ import type { Request } from 'express';
 import { readCookie, SESSION_COOKIE_NAME } from '../security/session-security';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const CSRF_PROTECTED_COOKIE_NAMES = [
+  SESSION_COOKIE_NAME,
+  'cq_booking_access',
+  'cq_booking_group_access',
+];
 
 @Injectable()
 export class CsrfOriginGuard implements CanActivate {
@@ -19,11 +24,10 @@ export class CsrfOriginGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
 
-    const sessionToken = readCookie(
-      request.headers.cookie,
-      SESSION_COOKIE_NAME,
+    const hasCookieCredential = CSRF_PROTECTED_COOKIE_NAMES.some((name) =>
+      Boolean(readCookie(request.headers.cookie, name)),
     );
-    if (!sessionToken) return true;
+    if (!hasCookieCredential) return true;
 
     const configuredOrigin = this.configService.get<string>('WEB_APP_ORIGIN');
     const isProduction =
