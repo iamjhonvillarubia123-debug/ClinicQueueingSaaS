@@ -56,12 +56,13 @@ describe('DoctorDataRetentionService', () => {
       acknowledgedAt,
     });
 
-    await expect(service.acknowledgeCurrentPolicy('doctor-1')).resolves.toEqual({
-      acknowledged: true,
-      acknowledgementVersion:
-        CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
-      acknowledgedAt,
-    });
+    const result = await service.acknowledgeCurrentPolicy('doctor-1');
+
+    expect(result.acknowledged).toBe(true);
+    expect(result.acknowledgementVersion).toBe(
+      CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
+    );
+    expect(result.acknowledgedAt).toEqual(acknowledgedAt);
     expect(
       prisma.doctorDataRetentionAcknowledgement.upsert,
     ).toHaveBeenCalledTimes(1);
