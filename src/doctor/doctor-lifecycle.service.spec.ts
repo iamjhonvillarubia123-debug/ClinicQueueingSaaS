@@ -13,6 +13,7 @@ import {
 } from '../../generated/prisma/client';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
+import { DoctorClosureFinancialSettlementService } from '../financial/doctor-closure-financial-settlement.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
 
@@ -52,6 +53,14 @@ describe('DoctorLifecycleService', () => {
   const protectedPayload = {
     encrypt: jest.fn((value: string) => `enc:${value}`),
   };
+  const closureFinancialSettlement = {
+    prepare: jest.fn().mockResolvedValue({ doctorFinancialAccountId: null }),
+    settle: jest.fn().mockResolvedValue({
+      doctorFinancialAccountId: null,
+      creditCreated: '0.00',
+      creditedFuturePeriods: 0,
+    }),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -60,6 +69,10 @@ describe('DoctorLifecycleService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: PasswordSecurityService, useValue: passwordSecurity },
         { provide: ProtectedAccountPayloadService, useValue: protectedPayload },
+        {
+          provide: DoctorClosureFinancialSettlementService,
+          useValue: closureFinancialSettlement,
+        },
       ],
     }).compile();
     service = module.get(DoctorLifecycleService);
@@ -70,6 +83,14 @@ describe('DoctorLifecycleService', () => {
     protectedPayload.encrypt.mockImplementation(
       (value: string) => `enc:${value}`,
     );
+    closureFinancialSettlement.prepare.mockResolvedValue({
+      doctorFinancialAccountId: null,
+    });
+    closureFinancialSettlement.settle.mockResolvedValue({
+      doctorFinancialAccountId: null,
+      creditCreated: '0.00',
+      creditedFuturePeriods: 0,
+    });
   });
 
   it('disables an active unrestricted Doctor, revokes sessions, and commits idempotency', async () => {
@@ -159,11 +180,10 @@ describe('DoctorLifecycleService', () => {
     ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('permanently closes an eligible Doctor, revokes sessions, audits exactly once, and creates one closure EMAIL intent', async () => {
+  it('permanently closes an eligible Doctor, settles financial state, revokes sessions, audits exactly once, and creates one closure EMAIL intent', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
     tx.$queryRaw
       .mockResolvedValueOnce([{ id: 'doctor-1' }])
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
     tx.user.findUnique.mockResolvedValue({
       id: 'doctor-1',
@@ -174,6 +194,9 @@ describe('DoctorLifecycleService', () => {
     });
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
+    closureFinancialSettlement.prepare.mockResolvedValue({
+      doctorFinancialAccountId: 'financial-1',
+    });
 
     await expect(
       service.permanentlyDelete(
@@ -188,6 +211,25 @@ describe('DoctorLifecycleService', () => {
       publicRouteRetired: true,
     });
 
+    expect(closureFinancialSettlement.prepare).toHaveBeenCalledWith(
+      tx,
+      'doctor-1',
+    );
+    expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        doctorFinancialAccountId: 'financial-1',
+      }) as unknown,
+      select: { id: true },
+    });
+    expect(closureFinancialSettlement.settle).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        doctorFinancialAccountId: 'financial-1',
+        recoveryEmail: 'doctor@example.com',
+        closureCommandId: 'command-1',
+        closedAt: expect.any(Date) as unknown,
+      }),
+    );
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'doctor-1' },
       data: { accountStatus: UserAccountStatus.PERMANENTLY_CLOSED },
@@ -217,7 +259,6 @@ describe('DoctorLifecycleService', () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
     tx.$queryRaw
       .mockResolvedValueOnce([{ id: 'doctor-1' }])
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: 'clinic-day-1' }]);
     tx.user.findUnique.mockResolvedValue({
       id: 'doctor-1',
@@ -238,15 +279,14 @@ describe('DoctorLifecycleService', () => {
     ).rejects.toThrow(ConflictException);
 
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
+    expect(closureFinancialSettlement.settle).not.toHaveBeenCalled();
     expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
     expect(tx.user.update).not.toHaveBeenCalled();
   });
 
-  it('fails closed when financial settlement state exists', async () => {
+  it('rejects permanent closure while financial settlement reports an unresolved purchase or payment', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
-    tx.$queryRaw
-      .mockResolvedValueOnce([{ id: 'doctor-1' }])
-      .mockResolvedValueOnce([{ id: 'financial-1' }]);
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'doctor-1' }]);
     tx.user.findUnique.mockResolvedValue({
       id: 'doctor-1',
       email: 'doctor@example.com',
@@ -255,6 +295,9 @@ describe('DoctorLifecycleService', () => {
       passwordHash: 'hash',
     });
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
+    closureFinancialSettlement.prepare.mockRejectedValue(
+      new ConflictException('Pending financial transaction.'),
+    );
 
     await expect(
       service.permanentlyDelete(
@@ -266,6 +309,7 @@ describe('DoctorLifecycleService', () => {
     ).rejects.toThrow(ConflictException);
 
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
+    expect(closureFinancialSettlement.settle).not.toHaveBeenCalled();
     expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
   });
 
@@ -279,11 +323,7 @@ describe('DoctorLifecycleService', () => {
       accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
       passwordHash: 'hash',
     });
-    tx.commandIdempotency.findUnique.mockResolvedValue({
-      requestFingerprint: expect.any(String) as unknown,
-    });
 
-    // Match the actual fingerprint rather than weakening replay validation.
     const fingerprint = createHash('sha256')
       .update(`${CommandType.DOCTOR_DELETE_ACCOUNT}|doctor-1|confirmed`, 'utf8')
       .digest('hex');
@@ -304,6 +344,8 @@ describe('DoctorLifecycleService', () => {
       publicRouteRetired: true,
     });
 
+    expect(closureFinancialSettlement.prepare).not.toHaveBeenCalled();
+    expect(closureFinancialSettlement.settle).not.toHaveBeenCalled();
     expect(tx.user.update).not.toHaveBeenCalled();
     expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
     expect(tx.notificationOutbox.create).not.toHaveBeenCalled();
