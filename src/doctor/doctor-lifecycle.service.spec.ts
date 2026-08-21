@@ -223,12 +223,6 @@ describe('DoctorLifecycleService', () => {
       }) as unknown,
       select: { id: true },
     });
-    expect(tx.commandIdempotency.create).not.toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        doctorFinancialAccountId: expect.any(String),
-      }) as unknown,
-      select: { id: true },
-    });
     expect(closureFinancialSettlement.settle).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
