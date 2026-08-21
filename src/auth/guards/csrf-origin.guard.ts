@@ -7,10 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
-import {
-  readCookie,
-  SESSION_COOKIE_NAME,
-} from '../security/session-security';
+import { readCookie, SESSION_COOKIE_NAME } from '../security/session-security';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
