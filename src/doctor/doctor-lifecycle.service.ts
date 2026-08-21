@@ -19,6 +19,7 @@ import {
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { normalizeEmail } from '../auth/security/session-security';
+import { DoctorClosureFinancialSettlementService } from '../financial/doctor-closure-financial-settlement.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -32,6 +33,7 @@ export class DoctorLifecycleService {
     private readonly prisma: PrismaService,
     private readonly passwordSecurityService: PasswordSecurityService,
     private readonly protectedPayloadService: ProtectedAccountPayloadService,
+    private readonly closureFinancialSettlement: DoctorClosureFinancialSettlementService,
   ) {}
 
   async disable(userId: string, idempotencyKey: string) {
@@ -287,22 +289,10 @@ export class DoctorLifecycleService {
         );
       }
 
-      // Milestone-2 fail-closed integration boundary:
-      // Phase 4 requires financial settlement to be atomic with closure.
-      // Until that settlement workflow is implemented, do not close an account
-      // that already has a DoctorFinancialAccount.
-      const financialRows = await transaction.$queryRaw<Array<{ id: string }>>`
-        SELECT "id"
-        FROM "DoctorFinancialAccount"
-        WHERE "doctorUserId" = ${user.id}
-        LIMIT 1
-        FOR SHARE
-      `;
-      if (financialRows[0]) {
-        throw new ConflictException(
-          'Permanent closure is unavailable while financial settlement is pending.',
-        );
-      }
+      const financialPreparation = await this.closureFinancialSettlement.prepare(
+        transaction,
+        user.id,
+      );
 
       const startedClinicDays = await transaction.$queryRaw<
         Array<{ id: string }>
@@ -334,11 +324,20 @@ export class DoctorLifecycleService {
           requestFingerprint,
           actorUserId: user.id,
           accountUserId: user.id,
+          doctorFinancialAccountId:
+            financialPreparation.doctorFinancialAccountId,
           completedAt: now,
           expiresAt: new Date(now.getTime() + IDEMPOTENCY_RETENTION_MS),
           createdAt: now,
         },
         select: { id: true },
+      });
+
+      await this.closureFinancialSettlement.settle(transaction, {
+        doctorFinancialAccountId: financialPreparation.doctorFinancialAccountId,
+        recoveryEmail: user.email,
+        closureCommandId: command.id,
+        closedAt: now,
       });
 
       await transaction.user.update({
