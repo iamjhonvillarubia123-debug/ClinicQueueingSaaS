@@ -148,7 +148,9 @@ describe('Account and administrative retention (e2e)', () => {
     expect(accountAfter.recoveryEmailEncrypted).toBe(
       financialAccount.recoveryEmailEncrypted,
     );
-    expect(accountAfter.recoveryEmailHash).toBe(financialAccount.recoveryEmailHash);
+    expect(accountAfter.recoveryEmailHash).toBe(
+      financialAccount.recoveryEmailHash,
+    );
     expect(accountAfter.doctorUserId).toBe(eligible.user.id);
     expect(eligibleAudit.accountUserId).toBe(eligible.user.id);
 
@@ -199,16 +201,17 @@ describe('Account and administrative retention (e2e)', () => {
         administrativeRestrictionStatus: 'NONE',
       },
     });
-    const administrativeAction = await prisma.administrativeAccountAction.create({
-      data: {
-        actionType: 'NORMAL_SUSPENSION',
-        actorUserId: admin.id,
-        targetDoctorUserId: target.id,
-        reasonCategory: 'SECURITY_CONCERN',
-        explanation: 'M12S7 retained audit evidence fixture.',
-        occurredAt: oldOccurredAt,
-      },
-    });
+    const administrativeAction =
+      await prisma.administrativeAccountAction.create({
+        data: {
+          actionType: 'NORMAL_SUSPENSION',
+          actorUserId: admin.id,
+          targetDoctorUserId: target.id,
+          reasonCategory: 'SECURITY_CONCERN',
+          explanation: 'M12S7 retained audit evidence fixture.',
+          occurredAt: oldOccurredAt,
+        },
+      });
 
     const auditCutoff = new Date('2015-01-20T12:00:00.000Z');
     const [expectedClosureCount, expectedAdministrativeCount] =
