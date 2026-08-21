@@ -48,6 +48,10 @@ describe('Backup erasure replay (e2e)', () => {
     await app.init();
   });
 
+  beforeEach(async () => {
+    await prisma.privacyErasureLedger.deleteMany();
+  });
+
   afterAll(async () => {
     if (app) await app.close();
 
