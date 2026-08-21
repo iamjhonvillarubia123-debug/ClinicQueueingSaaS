@@ -94,9 +94,9 @@ describe('Security retention cleanup (e2e)', () => {
   }
 
   it('clears expired OTP secret state and mobile correlation on their approved clocks', async () => {
-    const now = new Date('2026-08-21T12:00:00.000Z');
+    const now = new Date('2026-01-21T12:00:00.000Z');
     const { location, unique } = await createLocation();
-    const serviceDate = new Date('2026-08-21T00:00:00.000Z');
+    const serviceDate = new Date('2026-01-21T00:00:00.000Z');
     const recovery = await prisma.bookingRecoveryAttempt.create({
       data: {
         practiceLocationId: location.id,
@@ -125,6 +125,13 @@ describe('Security retention cleanup (e2e)', () => {
         createdAt: new Date(now.getTime() - 25 * HOUR_MS),
       },
     });
+
+    const storedBefore = await prisma.otpVerification.findUniqueOrThrow({
+      where: { id: otp.id },
+    });
+    expect(storedBefore.createdAt.getTime()).toBeLessThanOrEqual(
+      now.getTime() - DAY_MS,
+    );
 
     const result = await cleanup.cleanupEligible(now, 500);
 
