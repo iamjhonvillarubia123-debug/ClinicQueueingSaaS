@@ -4,6 +4,7 @@ import { FinancialModule } from '../financial/financial.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { DoctorController } from './doctor.controller';
+import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
@@ -16,7 +17,9 @@ import { DoctorService } from './doctor.service';
     DoctorLifecycleService,
     DoctorDefaultsService,
     DoctorDefaultsApplyService,
+    DoctorDataRetentionService,
   ],
   controllers: [DoctorController],
+  exports: [DoctorDataRetentionService],
 })
 export class DoctorModule {}
