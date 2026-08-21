@@ -18,6 +18,7 @@ import { DisablePracticeLocationDto } from './dto/disable-practice-location.dto'
 import { PermanentlyDeletePracticeLocationDto } from './dto/permanently-delete-practice-location.dto';
 import { ReactivatePracticeLocationDto } from './dto/reactivate-practice-location.dto';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
+import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationService } from './practice-location.service';
@@ -27,6 +28,7 @@ export class PracticeLocationController {
   constructor(
     private readonly practiceLocationService: PracticeLocationService,
     private readonly practiceLocationActivationService: PracticeLocationActivationService,
+    private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
   ) {}
@@ -45,11 +47,14 @@ export class PracticeLocationController {
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('activate')
-  activate(
+  async activate(
     @Body() dto: ActivatePracticeLocationDto,
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
+    await this.practiceLocationDataRetentionGateService.assertCurrentAcknowledgement(
+      request.user.userId,
+    );
     return this.practiceLocationActivationService.activate(
       request.user.userId,
       dto,
@@ -59,11 +64,14 @@ export class PracticeLocationController {
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('reactivate')
-  reactivate(
+  async reactivate(
     @Body() dto: ReactivatePracticeLocationDto,
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
+    await this.practiceLocationDataRetentionGateService.assertCurrentAcknowledgement(
+      request.user.userId,
+    );
     return this.practiceLocationActivationService.reactivate(
       request.user.userId,
       dto,
