@@ -79,7 +79,9 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
     });
 
     if (!doctor.doctorProfile) {
-      throw new Error('M12 group erasure fixture did not create DoctorProfile.');
+      throw new Error(
+        'M12 group erasure fixture did not create DoctorProfile.',
+      );
     }
 
     const location = await prisma.practiceLocation.create({
@@ -242,12 +244,15 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
       }),
     ).not.toBeNull();
 
-    await expect(groupAccessService.establish(fixture.rawToken)).resolves.toEqual(
+    const groupAccess = await groupAccessService.establish(fixture.rawToken);
+    expect(groupAccess.bookingGroup).toEqual(
       expect.objectContaining({
-        bookingGroup: expect.objectContaining({
-          id: fixture.group.id,
-          members: [expect.objectContaining({ bookingReference: fixture.second.bookingReference })],
-        }),
+        id: fixture.group.id,
+        members: [
+          expect.objectContaining({
+            bookingReference: fixture.second.bookingReference,
+          }),
+        ],
       }),
     );
   });
@@ -255,7 +260,10 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
   it('removes BookingGroup identity, credentials, recovery correlation and notification history after the last member erases', async () => {
     const fixture = await createFixture();
 
-    await erasureService.eraseEligibleAppointment(fixture.first.id, fixture.now);
+    await erasureService.eraseEligibleAppointment(
+      fixture.first.id,
+      fixture.now,
+    );
     await expect(
       erasureService.eraseEligibleAppointment(fixture.second.id, fixture.now),
     ).resolves.toEqual(expect.objectContaining({ outcome: 'ERASED' }));
@@ -268,9 +276,9 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
         where: { id: fixture.groupToken.id },
       }),
     ).toBeNull();
-    await expect(groupAccessService.establish(fixture.rawToken)).rejects.toThrow(
-      'Booking group access is unavailable.',
-    );
+    await expect(
+      groupAccessService.establish(fixture.rawToken),
+    ).rejects.toThrow('Booking group access is unavailable.');
 
     const recoveryAfter =
       await prisma.bookingGroupRecoveryAttempt.findUniqueOrThrow({
