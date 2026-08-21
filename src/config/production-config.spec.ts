@@ -12,6 +12,9 @@ const validProductionConfig = () => ({
   OTP_HMAC_ACTIVE_KEY_ID: 'v1',
   PUBLIC_APP_BASE_URL: 'https://app.example.com',
   WEB_APP_ORIGIN: 'https://app.example.com',
+  SMS_PROVIDER: 'PHILSMS',
+  PHILSMS_API_TOKEN: 'production-philsms-token',
+  PHILSMS_SENDER_ID: 'ClinicQueue',
 });
 
 describe('validateRuntimeConfig', () => {
@@ -46,6 +49,42 @@ describe('validateRuntimeConfig', () => {
     config.WEB_APP_ORIGIN = 'http://app.example.com';
     expect(() => validateRuntimeConfig(config)).toThrow(
       'Production configuration WEB_APP_ORIGIN must use HTTPS.',
+    );
+  });
+
+  it('requires the approved PhilSMS provider configuration in production', () => {
+    const config = validProductionConfig();
+    delete (config as Partial<typeof config>).PHILSMS_API_TOKEN;
+    expect(() => validateRuntimeConfig(config)).toThrow(
+      'Production configuration requires PHILSMS_API_TOKEN.',
+    );
+  });
+
+  it('rejects an unsupported production SMS provider', () => {
+    const config = validProductionConfig();
+    config.SMS_PROVIDER = 'UNSUPPORTED';
+    expect(() => validateRuntimeConfig(config)).toThrow(
+      'Production configuration SMS_PROVIDER is unsupported.',
+    );
+  });
+
+  it('requires HTTPS when a custom PhilSMS base URL is configured', () => {
+    const config = {
+      ...validProductionConfig(),
+      PHILSMS_BASE_URL: 'http://sms.example.com/api/v3',
+    };
+    expect(() => validateRuntimeConfig(config)).toThrow(
+      'Production configuration PHILSMS_BASE_URL must use HTTPS.',
+    );
+  });
+
+  it('rejects unreasonable PhilSMS request timeouts', () => {
+    const config = {
+      ...validProductionConfig(),
+      PHILSMS_TIMEOUT_MS: '500',
+    };
+    expect(() => validateRuntimeConfig(config)).toThrow(
+      'Production configuration PHILSMS_TIMEOUT_MS must be between 1000 and 30000 milliseconds.',
     );
   });
 });
