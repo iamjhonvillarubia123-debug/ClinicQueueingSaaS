@@ -56,7 +56,9 @@ describe('NotificationReconciliationWorkerService', () => {
 
   it('returns null when there is no expired processing lease to reconcile', async () => {
     const fixture = createFixture();
-    fixture.reconciliation.claimExpiredForReconciliation.mockResolvedValue(null);
+    fixture.reconciliation.claimExpiredForReconciliation.mockResolvedValue(
+      null,
+    );
     const reconcile = jest.fn();
 
     await expect(
