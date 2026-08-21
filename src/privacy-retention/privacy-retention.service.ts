@@ -193,12 +193,14 @@ export class PrivacyRetentionService {
   }
 
   private isTerminalStatus(status: AppointmentStatus): boolean {
-    return [
+    const terminalStatuses: AppointmentStatus[] = [
       AppointmentStatus.COMPLETED,
       AppointmentStatus.EXPIRED,
       AppointmentStatus.CANCELLED,
       AppointmentStatus.NO_SHOW,
       AppointmentStatus.RESCHEDULED,
-    ].includes(status);
+    ];
+
+    return terminalStatuses.includes(status);
   }
 }
