@@ -101,7 +101,9 @@ describe('Public queue projection (e2e)', () => {
     });
 
     if (!doctor.doctorProfile || !doctor.doctorFinancialAccount?.entitlement) {
-      throw new Error('Public queue fixture did not create required relations.');
+      throw new Error(
+        'Public queue fixture did not create required relations.',
+      );
     }
 
     const location = await prisma.practiceLocation.create({
