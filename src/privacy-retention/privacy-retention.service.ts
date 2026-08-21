@@ -115,10 +115,14 @@ export class PrivacyRetentionService {
       throw new BadRequestException('Retention hold explanation is required.');
     }
     if (input.expiresAt.getTime() <= now.getTime()) {
-      throw new BadRequestException('Retention hold expiry must be in the future.');
+      throw new BadRequestException(
+        'Retention hold expiry must be in the future.',
+      );
     }
     if (input.reviewAt.getTime() > input.expiresAt.getTime()) {
-      throw new BadRequestException('Retention hold review must not be after expiry.');
+      throw new BadRequestException(
+        'Retention hold review must not be after expiry.',
+      );
     }
 
     return this.prisma.$transaction(async (transaction) => {
@@ -131,7 +135,9 @@ export class PrivacyRetentionService {
         admin.role !== UserRole.SYSTEM_ADMIN ||
         admin.accountStatus !== UserAccountStatus.ACTIVE
       ) {
-        throw new ForbiddenException('Active SYSTEM_ADMIN authority is required.');
+        throw new ForbiddenException(
+          'Active SYSTEM_ADMIN authority is required.',
+        );
       }
 
       const appointment = await transaction.appointment.findUnique({
@@ -173,7 +179,9 @@ export class PrivacyRetentionService {
         admin.role !== UserRole.SYSTEM_ADMIN ||
         admin.accountStatus !== UserAccountStatus.ACTIVE
       ) {
-        throw new ForbiddenException('Active SYSTEM_ADMIN authority is required.');
+        throw new ForbiddenException(
+          'Active SYSTEM_ADMIN authority is required.',
+        );
       }
 
       const hold = await transaction.retentionHold.findUnique({
