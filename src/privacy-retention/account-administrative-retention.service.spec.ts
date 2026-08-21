@@ -55,9 +55,9 @@ describe('AccountAdministrativeRetentionService', () => {
     });
 
     expect(transaction.user.updateMany).toHaveBeenCalledTimes(1);
-    expect(transaction.accountPermanentClosureAudit.count).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      transaction.accountPermanentClosureAudit.count,
+    ).toHaveBeenCalledTimes(1);
     expect(transaction.administrativeAccountAction.count).toHaveBeenCalledTimes(
       1,
     );
