@@ -82,9 +82,7 @@ describe('DoctorDataRetentionService', () => {
   });
 
   it('blocks patient operations until the current acknowledgement exists', async () => {
-    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(
-      null,
-    );
+    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(null);
 
     await expect(
       service.assertCurrentAcknowledgement(prisma as never, 'doctor-1'),
