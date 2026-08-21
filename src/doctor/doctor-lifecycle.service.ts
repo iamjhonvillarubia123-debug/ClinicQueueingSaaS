@@ -322,8 +322,6 @@ export class DoctorLifecycleService {
           requestFingerprint,
           actorUserId: user.id,
           accountUserId: user.id,
-          doctorFinancialAccountId:
-            financialPreparation.doctorFinancialAccountId,
           completedAt: now,
           expiresAt: new Date(now.getTime() + IDEMPOTENCY_RETENTION_MS),
           createdAt: now,
@@ -430,18 +428,17 @@ export class DoctorLifecycleService {
       SELECT "id"
       FROM "User"
       WHERE "id" = ${userId}
-      LIMIT 1
       FOR UPDATE
     `;
   }
 
   private assertCompatibleReplay(
-    storedFingerprint: string,
-    currentFingerprint: string,
+    existingFingerprint: string,
+    requestedFingerprint: string,
   ): void {
-    if (storedFingerprint !== currentFingerprint) {
+    if (existingFingerprint !== requestedFingerprint) {
       throw new ConflictException(
-        'Idempotency-Key conflicts with an earlier request.',
+        'Idempotency-Key was already used with different command input.',
       );
     }
   }
