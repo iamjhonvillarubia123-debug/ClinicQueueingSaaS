@@ -289,10 +289,8 @@ export class DoctorLifecycleService {
         );
       }
 
-      const financialPreparation = await this.closureFinancialSettlement.prepare(
-        transaction,
-        user.id,
-      );
+      const financialPreparation =
+        await this.closureFinancialSettlement.prepare(transaction, user.id);
 
       const startedClinicDays = await transaction.$queryRaw<
         Array<{ id: string }>
