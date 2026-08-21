@@ -35,10 +35,9 @@ describe('DoctorDataRetentionService', () => {
     findAcknowledgement.mockResolvedValue(null);
 
     const result = await service.getDataPrivacyProfile('doctor-1');
+    const currentVersion = CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION;
 
-    expect(result.acknowledgementVersion).toBe(
-      CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
-    );
+    expect(result.acknowledgementVersion).toBe(currentVersion);
     expect(result.jurisdiction).toBe('PHILIPPINES');
     expect(result.terminalAppointmentIdentifiableRetentionHours).toBe(24);
     expect(result.finalPrivacyErasureIsIrreversible).toBe(true);
@@ -51,18 +50,16 @@ describe('DoctorDataRetentionService', () => {
     const acknowledgedAt = new Date('2026-08-21T12:00:00.000Z');
     const upsertAcknowledgement =
       prisma.doctorDataRetentionAcknowledgement.upsert;
+    const currentVersion = CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION;
     upsertAcknowledgement.mockResolvedValue({
-      acknowledgementVersion:
-        CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
+      acknowledgementVersion: currentVersion,
       acknowledgedAt,
     });
 
     const result = await service.acknowledgeCurrentPolicy('doctor-1');
 
     expect(result.acknowledged).toBe(true);
-    expect(result.acknowledgementVersion).toBe(
-      CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
-    );
+    expect(result.acknowledgementVersion).toBe(currentVersion);
     expect(result.acknowledgedAt).toEqual(acknowledgedAt);
     expect(upsertAcknowledgement).toHaveBeenCalledTimes(1);
   });
