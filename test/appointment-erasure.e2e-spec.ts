@@ -215,7 +215,9 @@ describe('Appointment physical erasure (e2e)', () => {
     expect(analytics.servedCount).toBe(1);
 
     expect(
-      await prisma.queueEvent.findUnique({ where: { id: fixture.queueEvent.id } }),
+      await prisma.queueEvent.findUnique({
+        where: { id: fixture.queueEvent.id },
+      }),
     ).not.toBeNull();
     expect(
       await prisma.queueEventAppointmentLink.count({
@@ -225,18 +227,17 @@ describe('Appointment physical erasure (e2e)', () => {
 
     await expect(
       erasureService.eraseEligibleAppointment(fixture.appointment.id, now),
-    ).resolves.toEqual(
-      expect.objectContaining({ outcome: 'ALREADY_ERASED' }),
-    );
+    ).resolves.toEqual(expect.objectContaining({ outcome: 'ALREADY_ERASED' }));
 
-    const analyticsAfterReplay = await prisma.queueAnalyticsDaily.findUniqueOrThrow({
-      where: {
-        practiceLocationId_serviceDate: {
-          practiceLocationId: fixture.location.id,
-          serviceDate: fixture.serviceDate,
+    const analyticsAfterReplay =
+      await prisma.queueAnalyticsDaily.findUniqueOrThrow({
+        where: {
+          practiceLocationId_serviceDate: {
+            practiceLocationId: fixture.location.id,
+            serviceDate: fixture.serviceDate,
+          },
         },
-      },
-    });
+      });
     expect(analyticsAfterReplay.bookedCount).toBe(1);
     expect(analyticsAfterReplay.servedCount).toBe(1);
   });
