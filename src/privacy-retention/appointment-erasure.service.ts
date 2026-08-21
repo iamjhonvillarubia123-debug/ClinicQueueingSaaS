@@ -121,11 +121,7 @@ export class AppointmentErasureService {
         select: { erasureCommittedAt: true },
       });
 
-      await this.unlinkAppointmentDependencies(
-        transaction,
-        appointment,
-        now,
-      );
+      await this.unlinkAppointmentDependencies(transaction, appointment, now);
 
       await transaction.appointment.delete({
         where: { id: normalizedAppointmentId },
@@ -343,10 +339,7 @@ export class AppointmentErasureService {
 
     await transaction.commandIdempotency.updateMany({
       where: {
-        OR: [
-          { bookingGroupId },
-          { resultBookingGroupId: bookingGroupId },
-        ],
+        OR: [{ bookingGroupId }, { resultBookingGroupId: bookingGroupId }],
       },
       data: {
         bookingGroupId: null,
