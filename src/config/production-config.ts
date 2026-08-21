@@ -57,7 +57,14 @@ function validateSmsProvider(config: Record<string, unknown>): void {
   requireProductionValue(config, 'PHILSMS_API_TOKEN');
   requireProductionValue(config, 'PHILSMS_SENDER_ID');
 
-  const timeoutRaw = String(config.PHILSMS_TIMEOUT_MS ?? '10000').trim();
+  const configuredTimeout = config.PHILSMS_TIMEOUT_MS;
+  const timeoutRaw =
+    configuredTimeout === undefined ? '10000' : configuredTimeout;
+  if (typeof timeoutRaw !== 'string' && typeof timeoutRaw !== 'number') {
+    throw new Error(
+      'Production configuration PHILSMS_TIMEOUT_MS must be between 1000 and 30000 milliseconds.',
+    );
+  }
   const timeoutMs = Number(timeoutRaw);
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
     throw new Error(
