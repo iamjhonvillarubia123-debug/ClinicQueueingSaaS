@@ -2,17 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { SecurityRetentionCleanupService } from './security-retention-cleanup.service';
 
 describe('SecurityRetentionCleanupService', () => {
-  const queryRaw = jest.fn<
-    Promise<
-      Array<{
-        otpSecretsCleared: number;
-        otpMobileContextCleared: number;
-      }>
-    >,
-    [unknown]
-  >();
   const executeRaw = jest.fn<Promise<number>, [unknown]>();
-  const transaction = { $queryRaw: queryRaw, $executeRaw: executeRaw };
+  const transaction = { $executeRaw: executeRaw };
   const prisma = {
     $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
       callback(transaction),
@@ -25,10 +16,9 @@ describe('SecurityRetentionCleanupService', () => {
   });
 
   it('runs all approved OTP and recovery cleanup stages in dependency order', async () => {
-    queryRaw.mockResolvedValueOnce([
-      { otpSecretsCleared: 2, otpMobileContextCleared: 3 },
-    ]);
     executeRaw
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(4)
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(6)
@@ -47,14 +37,10 @@ describe('SecurityRetentionCleanupService', () => {
       bookingGroupRecoveryShellsDeleted: 8,
     });
 
-    expect(queryRaw).toHaveBeenCalledTimes(1);
-    expect(executeRaw).toHaveBeenCalledTimes(5);
+    expect(executeRaw).toHaveBeenCalledTimes(7);
   });
 
   it('allows an idempotent no-op cleanup pass', async () => {
-    queryRaw.mockResolvedValue([
-      { otpSecretsCleared: 0, otpMobileContextCleared: 0 },
-    ]);
     executeRaw.mockResolvedValue(0);
 
     await expect(service.cleanupEligible()).resolves.toEqual({
@@ -72,7 +58,6 @@ describe('SecurityRetentionCleanupService', () => {
     await expect(service.cleanupEligible(new Date(), 0)).rejects.toBeInstanceOf(
       BadRequestException,
     );
-    expect(queryRaw).not.toHaveBeenCalled();
     expect(executeRaw).not.toHaveBeenCalled();
   });
 });
