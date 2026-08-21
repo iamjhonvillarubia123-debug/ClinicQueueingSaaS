@@ -25,7 +25,10 @@ describe('NotificationReconciliationWorkerService', () => {
 
   function createFixture() {
     const reconciliation = {
-      claimExpiredForReconciliation: jest.fn(() => Promise.resolve(candidate)),
+      claimExpiredForReconciliation: jest.fn<
+        Promise<typeof candidate | null>,
+        [string, number, Date]
+      >(() => Promise.resolve(candidate)),
       applyReconciliation: jest.fn(() =>
         Promise.resolve({ outboxStatus: 'SENT' }),
       ),
