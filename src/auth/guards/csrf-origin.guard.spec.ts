@@ -12,11 +12,7 @@ describe('CsrfOriginGuard', () => {
     get: jest.fn((key: string) => configValues[key]),
   } as unknown as ConfigService;
   const guard = new CsrfOriginGuard(config);
-  const context = (
-    method: string,
-    origin?: string,
-    withSessionCookie = true,
-  ) =>
+  const context = (method: string, origin?: string, withSessionCookie = true) =>
     ({
       switchToHttp: () => ({
         getRequest: () => ({
