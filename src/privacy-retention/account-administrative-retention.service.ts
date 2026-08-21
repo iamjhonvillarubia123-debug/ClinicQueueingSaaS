@@ -36,31 +36,27 @@ export class AccountAdministrativeRetentionService {
       auditCutoff.getUTCFullYear() - ACCOUNT_AUDIT_BASELINE_YEARS,
     );
 
-    const [closedUsersMinimized, closureAuditsAtBaseline, administrativeActionsAtBaseline] =
-      await this.prisma.$transaction(async (transaction) => {
-        const minimized = await this.minimizeClosedUsers(
-          transaction,
-          minimizationCutoff,
-          batchSize,
-        );
+    return this.prisma.$transaction(async (transaction) => {
+      const closedUsersMinimized = await this.minimizeClosedUsers(
+        transaction,
+        minimizationCutoff,
+        batchSize,
+      );
+      const closureAuditsAtBaseline =
+        await transaction.accountPermanentClosureAudit.count({
+          where: { occurredAt: { lte: auditCutoff } },
+        });
+      const administrativeActionsAtBaseline =
+        await transaction.administrativeAccountAction.count({
+          where: { occurredAt: { lte: auditCutoff } },
+        });
 
-        const [closureCount, administrativeCount] = await Promise.all([
-          transaction.accountPermanentClosureAudit.count({
-            where: { occurredAt: { lte: auditCutoff } },
-          }),
-          transaction.administrativeAccountAction.count({
-            where: { occurredAt: { lte: auditCutoff } },
-          }),
-        ]);
-
-        return [minimized, closureCount, administrativeCount] as const;
-      });
-
-    return {
-      closedUsersMinimized,
-      closureAuditsAtBaseline,
-      administrativeActionsAtBaseline,
-    };
+      return {
+        closedUsersMinimized,
+        closureAuditsAtBaseline,
+        administrativeActionsAtBaseline,
+      };
+    });
   }
 
   private async minimizeClosedUsers(
@@ -76,6 +72,16 @@ export class AccountAdministrativeRetentionService {
           ON account_user."id" = audit."accountUserId"
         WHERE audit."occurredAt" <= ${cutoff}
           AND account_user."accountStatus" = ${UserAccountStatus.PERMANENTLY_CLOSED}::"UserAccountStatus"
+          AND (
+            account_user."email" NOT LIKE 'closed-%@invalid.local'
+            OR account_user."firstName" <> 'Closed'
+            OR account_user."middleName" IS NOT NULL
+            OR account_user."lastName" <> 'Account'
+            OR account_user."mobileNumber" NOT LIKE 'closed-%'
+            OR account_user."passwordHash" NOT LIKE '!closed:%'
+            OR account_user."emailVerifiedAt" IS NOT NULL
+            OR account_user."lastLoginAt" IS NOT NULL
+          )
         ORDER BY audit."occurredAt" ASC, audit."id" ASC
         LIMIT ${batchSize}
         FOR UPDATE OF account_user SKIP LOCKED
@@ -93,16 +99,6 @@ export class AccountAdministrativeRetentionService {
         where: {
           id: candidate.userId,
           accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
-          OR: [
-            { email: { not: email } },
-            { firstName: { not: 'Closed' } },
-            { middleName: { not: null } },
-            { lastName: { not: 'Account' } },
-            { mobileNumber: { not: mobileNumber } },
-            { passwordHash: { not: passwordHash } },
-            { emailVerifiedAt: { not: null } },
-            { lastLoginAt: { not: null } },
-          ],
         },
         data: {
           email,
