@@ -329,10 +329,11 @@ describe('Appointment physical erasure (e2e)', () => {
       patientBookingAccessService.establish(rawToken),
     ).rejects.toThrow('Patient booking access is unavailable.');
 
-    const recoveryAfter =
-      await prisma.bookingRecoveryAttempt.findUniqueOrThrow({
+    const recoveryAfter = await prisma.bookingRecoveryAttempt.findUniqueOrThrow(
+      {
         where: { id: recovery.id },
-      });
+      },
+    );
     expect(recoveryAfter.candidateAppointmentId).toBeNull();
     expect(recoveryAfter.mobileNumberEncrypted).toBeNull();
     expect(recoveryAfter.mobileNumberHash).toBeNull();
