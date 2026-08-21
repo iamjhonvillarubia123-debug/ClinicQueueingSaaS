@@ -69,15 +69,12 @@ describe('PhilSmsNotificationProviderAdapter', () => {
     expect(result.providerName).toBe('PhilSMS');
     expect(result.providerReference).toBe('sms-uid-1');
     expect(result.providerStatus).toBe('queued');
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://app.philsms.com/api/v3/sms/send',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          Authorization: 'Bearer test-token',
-        }),
-      }),
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://app.philsms.com/api/v3/sms/send');
+    expect(init?.method).toBe('POST');
+    const headers = new Headers(init?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer test-token');
   });
 
   it('treats successful submission without a provider UID as uncertain', async () => {
