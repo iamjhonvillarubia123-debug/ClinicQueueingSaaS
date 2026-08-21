@@ -223,10 +223,12 @@ describe('DoctorLifecycleService', () => {
       }) as unknown,
       select: { id: true },
     });
-    const createdCommand = tx.commandIdempotency.create.mock.calls[0]?.[0] as {
-      data?: { doctorFinancialAccountId?: string | null };
-    };
-    expect(createdCommand.data).not.toHaveProperty('doctorFinancialAccountId');
+    expect(tx.commandIdempotency.create).not.toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        doctorFinancialAccountId: expect.anything(),
+      }) as unknown,
+      select: { id: true },
+    });
     expect(closureFinancialSettlement.settle).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
