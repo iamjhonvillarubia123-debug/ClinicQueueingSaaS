@@ -30,7 +30,9 @@ describe('DoctorDataRetentionService', () => {
   });
 
   it('returns the current privacy profile and missing acknowledgement state', async () => {
-    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(null);
+    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(
+      null,
+    );
 
     await expect(service.getDataPrivacyProfile('doctor-1')).resolves.toEqual(
       expect.objectContaining({
@@ -81,7 +83,9 @@ describe('DoctorDataRetentionService', () => {
   });
 
   it('blocks patient operations until the current acknowledgement exists', async () => {
-    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(null);
+    prisma.doctorDataRetentionAcknowledgement.findUnique.mockResolvedValue(
+      null,
+    );
 
     await expect(
       service.assertCurrentAcknowledgement(prisma as never, 'doctor-1'),
