@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
 import { DoctorController } from './doctor.controller';
+import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
@@ -14,6 +15,7 @@ describe('DoctorController', () => {
   const doctorLifecycleServiceMock = {};
   const doctorDefaultsServiceMock = {};
   const doctorDefaultsApplyServiceMock = {};
+  const doctorDataRetentionServiceMock = {};
   const authenticationServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
@@ -32,6 +34,10 @@ describe('DoctorController', () => {
         {
           provide: DoctorDefaultsApplyService,
           useValue: doctorDefaultsApplyServiceMock,
+        },
+        {
+          provide: DoctorDataRetentionService,
+          useValue: doctorDataRetentionServiceMock,
         },
         { provide: AuthenticationService, useValue: authenticationServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
