@@ -53,7 +53,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
     const fetchMock = jest.fn<
       Promise<Response>,
       [RequestInfo | URL, RequestInit?]
-    >((_input, _init) =>
+    >(() =>
       Promise.resolve(
         response(200, {
           status: 'success',
@@ -121,9 +121,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
   });
 
   it('treats network failure as uncertain rather than retrying blindly', async () => {
-    global.fetch = jest.fn(() =>
-      Promise.reject(new Error('network timeout')),
-    );
+    global.fetch = jest.fn(() => Promise.reject(new Error('network timeout')));
 
     await expect(createAdapter().submit(request)).resolves.toEqual(
       expect.objectContaining({
