@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import {
   Prisma,
   PrivacyErasureResourceType,
@@ -84,10 +88,7 @@ export class BackupErasureReplayService {
 
     await transaction.commandIdempotency.updateMany({
       where: {
-        OR: [
-          { appointmentId },
-          { resultAppointmentId: appointmentId },
-        ],
+        OR: [{ appointmentId }, { resultAppointmentId: appointmentId }],
       },
       data: { appointmentId: null, resultAppointmentId: null },
     });
@@ -119,11 +120,15 @@ export class BackupErasureReplayService {
       where: { appointmentId, scheduledReminderId: { not: null } },
       data: { appointmentId: null },
     });
-    await transaction.appointmentAnswer.deleteMany({ where: { appointmentId } });
+    await transaction.appointmentAnswer.deleteMany({
+      where: { appointmentId },
+    });
     await transaction.queueEventAppointmentLink.deleteMany({
       where: { appointmentId },
     });
-    await transaction.bookingAccessToken.deleteMany({ where: { appointmentId } });
+    await transaction.bookingAccessToken.deleteMany({
+      where: { appointmentId },
+    });
 
     if (appointment) {
       await transaction.appointment.delete({ where: { id: appointmentId } });
@@ -212,10 +217,7 @@ export class BackupErasureReplayService {
       }),
       transaction.commandIdempotency.count({
         where: {
-          OR: [
-            { appointmentId },
-            { resultAppointmentId: appointmentId },
-          ],
+          OR: [{ appointmentId }, { resultAppointmentId: appointmentId }],
         },
       }),
       transaction.scheduledReminder.count({
