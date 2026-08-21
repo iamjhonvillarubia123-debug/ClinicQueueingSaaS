@@ -121,15 +121,12 @@ describe('DoctorClosureFinancialSettlementService', () => {
     transaction.subscriptionCreditEntry.create.mockResolvedValue({});
 
     await expect(
-      service.settle(
-        transaction as unknown as Prisma.TransactionClient,
-        {
-          doctorFinancialAccountId: 'financial-1',
-          recoveryEmail: ' Doctor@Example.com ',
-          closureCommandId: 'command-1',
-          closedAt,
-        },
-      ),
+      service.settle(transaction as unknown as Prisma.TransactionClient, {
+        doctorFinancialAccountId: 'financial-1',
+        recoveryEmail: ' Doctor@Example.com ',
+        closureCommandId: 'command-1',
+        closedAt,
+      }),
     ).resolves.toEqual({
       doctorFinancialAccountId: 'financial-1',
       creditCreated: '4400.00',
