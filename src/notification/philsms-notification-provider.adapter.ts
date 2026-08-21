@@ -16,9 +16,7 @@ import {
 type PhilSmsRecord = Record<string, unknown>;
 
 @Injectable()
-export class PhilSmsNotificationProviderAdapter
-  implements NotificationProviderAdapter
-{
+export class PhilSmsNotificationProviderAdapter implements NotificationProviderAdapter {
   readonly providerName = 'PhilSMS';
   readonly channel = NotificationChannel.SMS;
   readonly supportsIdempotency = false;
@@ -33,8 +31,12 @@ export class PhilSmsNotificationProviderAdapter
     this.baseUrl = this.configService
       .get<string>('PHILSMS_BASE_URL', 'https://app.philsms.com/api/v3')
       .replace(/\/+$/u, '');
-    this.apiToken = this.configService.get<string>('PHILSMS_API_TOKEN', '').trim();
-    this.senderId = this.configService.get<string>('PHILSMS_SENDER_ID', '').trim();
+    this.apiToken = this.configService
+      .get<string>('PHILSMS_API_TOKEN', '')
+      .trim();
+    this.senderId = this.configService
+      .get<string>('PHILSMS_SENDER_ID', '')
+      .trim();
     this.timeoutMs = Number(
       this.configService.get<string>('PHILSMS_TIMEOUT_MS', '10000'),
     );
@@ -97,7 +99,9 @@ export class PhilSmsNotificationProviderAdapter
     request: NotificationProviderReconciliationRequest,
   ): Promise<NotificationProviderReconciliationResult> {
     if (!request.providerReference) {
-      return { outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN };
+      return {
+        outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN,
+      };
     }
 
     try {
@@ -107,12 +111,16 @@ export class PhilSmsNotificationProviderAdapter
       );
 
       if (!response.ok) {
-        return { outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN };
+        return {
+          outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN,
+        };
       }
 
       const payload = await this.readJson(response);
       if (payload.status !== 'success') {
-        return { outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN };
+        return {
+          outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN,
+        };
       }
 
       const status = (
@@ -134,9 +142,13 @@ export class PhilSmsNotificationProviderAdapter
         };
       }
 
-      return { outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN };
+      return {
+        outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN,
+      };
     } catch {
-      return { outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN };
+      return {
+        outcome: NotificationProviderReconciliationOutcome.STILL_UNCERTAIN,
+      };
     }
   }
 
