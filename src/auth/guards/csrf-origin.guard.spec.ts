@@ -48,11 +48,7 @@ describe('CsrfOriginGuard', () => {
   it('rejects patient group cookie mutation from an unapproved Origin', () =>
     expect(() =>
       guard.canActivate(
-        context(
-          'POST',
-          'https://evil.example.com',
-          'cq_booking_group_access',
-        ),
+        context('POST', 'https://evil.example.com', 'cq_booking_group_access'),
       ),
     ).toThrow('Request origin is not allowed.'));
 
