@@ -305,12 +305,7 @@ export class AppointmentErasureService {
         appointmentId: appointment.id,
         scheduledReminderId: { not: null },
       },
-      data: {
-        appointmentId: null,
-        recipientMobileEncrypted: null,
-        messageBodyEncrypted: null,
-        protectedPayloadPurgedAt: now,
-      },
+      data: { appointmentId: null },
     });
 
     await transaction.appointmentAnswer.deleteMany({
