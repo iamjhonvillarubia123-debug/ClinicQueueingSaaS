@@ -1,16 +1,19 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { AppModule } from './../src/app.module';
+import { ProtectedAccountPayloadService } from './../src/auth/security/protected-account-payload.service';
 import { AccountAdministrativeRetentionService } from './../src/privacy-retention/account-administrative-retention.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const RECOVERY_EMAIL_PURPOSE = 'doctor-financial-account:recovery-email';
 
 describe('Account and administrative retention (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let retention: AccountAdministrativeRetentionService;
+  let protectedPayload: ProtectedAccountPayloadService;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm12s7-e2e-only-jwt-secret-not-for-production',
@@ -38,6 +41,7 @@ describe('Account and administrative retention (e2e)', () => {
 
     prisma = moduleFixture.get(PrismaService);
     retention = moduleFixture.get(AccountAdministrativeRetentionService);
+    protectedPayload = moduleFixture.get(ProtectedAccountPayloadService);
     app = moduleFixture.createNestApplication();
     await app.init();
   });
@@ -56,6 +60,7 @@ describe('Account and administrative retention (e2e)', () => {
     withFinancialAccount = false,
   ) {
     const unique = randomUUID();
+    const recoveryEmail = `${label}-recovery-${unique}@example.test`;
     const user = await prisma.user.create({
       data: {
         email: `${label}-${unique}@example.test`,
@@ -72,8 +77,13 @@ describe('Account and administrative retention (e2e)', () => {
         doctorFinancialAccount: withFinancialAccount
           ? {
               create: {
-                recoveryEmailEncrypted: `preserved-encrypted-${unique}`,
-                recoveryEmailHash: `preserved-hash-${unique}`,
+                recoveryEmailEncrypted: protectedPayload.encrypt(
+                  recoveryEmail,
+                  RECOVERY_EMAIL_PURPOSE,
+                ),
+                recoveryEmailHash: createHash('sha256')
+                  .update(recoveryEmail, 'utf8')
+                  .digest('hex'),
               },
             }
           : undefined,
