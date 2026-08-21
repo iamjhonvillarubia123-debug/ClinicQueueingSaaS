@@ -146,7 +146,7 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
       },
     });
 
-    const rawToken = 'G'.repeat(43);
+    const rawToken = `G${unique.replaceAll('-', '')}`;
     const tokenHash = createHash('sha256')
       .update(rawToken, 'utf8')
       .digest('hex');
@@ -175,9 +175,12 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
       },
     });
 
+    const deliveryIdentityKey = createHash('sha256')
+      .update(`m12-group:${group.id}`, 'utf8')
+      .digest('hex');
     const outbox = await prisma.notificationOutbox.create({
       data: {
-        deliveryIdentityKey: `m12-group-${unique}`,
+        deliveryIdentityKey,
         notificationType: 'BOOKING_CONFIRMATION',
         bookingGroupId: group.id,
         recipientMobileEncrypted: 'group-outbox-mobile',
