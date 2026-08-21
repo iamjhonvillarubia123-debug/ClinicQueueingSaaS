@@ -23,8 +23,8 @@ describe('PrivacyRetentionService', () => {
   const prisma = {
     appointment,
     retentionHold,
-    $transaction: jest.fn(async (callback: (tx: typeof transaction) => unknown) =>
-      callback(transaction),
+    $transaction: jest.fn(
+      (callback: (tx: typeof transaction) => unknown) => callback(transaction),
     ),
   };
 
@@ -138,7 +138,7 @@ describe('PrivacyRetentionService', () => {
           resourceId: 'appointment-1',
           explanation: 'Preserve minimum required evidence',
           reference: 'CASE-123',
-        }),
+        }) as Record<string, unknown>,
       }),
     );
   });
