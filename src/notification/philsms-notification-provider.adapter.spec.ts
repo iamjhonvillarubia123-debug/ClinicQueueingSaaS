@@ -31,7 +31,9 @@ describe('PhilSmsNotificationProviderAdapter', () => {
     const config = {
       get: jest.fn((key: string, fallback?: string) => values[key] ?? fallback),
     };
-    return new PhilSmsNotificationProviderAdapter(config as unknown as ConfigService);
+    return new PhilSmsNotificationProviderAdapter(
+      config as unknown as ConfigService,
+    );
   }
 
   function response(status: number, body: unknown): Response {
@@ -48,7 +50,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
   });
 
   it('captures PhilSMS UID and accepted status on successful submission', async () => {
-    const fetchMock = jest.fn(() =>
+    const fetchMock: jest.MockedFunction<typeof fetch> = jest.fn(() =>
       Promise.resolve(
         response(200, {
           status: 'success',
@@ -56,7 +58,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
         }),
       ),
     );
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
 
     const result = await createAdapter().submit(request);
 
@@ -68,7 +70,9 @@ describe('PhilSmsNotificationProviderAdapter', () => {
       'https://app.philsms.com/api/v3/sms/send',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-token',
+        }),
       }),
     );
   });
@@ -78,7 +82,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
       Promise.resolve(
         response(200, { status: 'success', data: { status: 'queued' } }),
       ),
-    ) as unknown as typeof fetch;
+    );
 
     await expect(createAdapter().submit(request)).resolves.toEqual(
       expect.objectContaining({
@@ -92,7 +96,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
   it('marks HTTP 429 as retryable with a future retry time', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve(response(429, { status: 'error' })),
-    ) as unknown as typeof fetch;
+    );
 
     const result = await createAdapter().submit(request);
 
@@ -104,7 +108,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
   it('marks non-retryable HTTP 4xx rejection as permanent failure', async () => {
     global.fetch = jest.fn(() =>
       Promise.resolve(response(422, { status: 'error' })),
-    ) as unknown as typeof fetch;
+    );
 
     const result = await createAdapter().submit(request);
 
@@ -114,7 +118,9 @@ describe('PhilSmsNotificationProviderAdapter', () => {
   });
 
   it('treats network failure as uncertain rather than retrying blindly', async () => {
-    global.fetch = jest.fn(() => Promise.reject(new Error('network timeout'))) as unknown as typeof fetch;
+    global.fetch = jest.fn(() =>
+      Promise.reject(new Error('network timeout')),
+    );
 
     await expect(createAdapter().submit(request)).resolves.toEqual(
       expect.objectContaining({
@@ -132,7 +138,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
           data: { uid: 'sms-uid-1', status: 'delivered' },
         }),
       ),
-    ) as unknown as typeof fetch;
+    );
 
     await expect(
       createAdapter().reconcile({
@@ -157,7 +163,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
           data: { uid: 'sms-uid-1', status: 'failed' },
         }),
       ),
-    ) as unknown as typeof fetch;
+    );
 
     await expect(
       createAdapter().reconcile({
@@ -181,7 +187,7 @@ describe('PhilSmsNotificationProviderAdapter', () => {
           data: { uid: 'sms-uid-1', status: 'processing' },
         }),
       ),
-    ) as unknown as typeof fetch;
+    );
 
     await expect(
       createAdapter().reconcile({
