@@ -12,10 +12,12 @@ import {
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
 import { DoctorService } from './doctor.service';
+import { AcknowledgeDataRetentionDto } from './dto/acknowledge-data-retention.dto';
 import { ApplyDoctorDefaultsDto } from './dto/apply-doctor-defaults.dto';
 import { PermanentlyDeleteDoctorDto } from './dto/permanently-delete-doctor.dto';
 import { ReactivateDoctorDto } from './dto/reactivate-doctor.dto';
@@ -31,6 +33,7 @@ export class DoctorController {
     private readonly doctorLifecycleService: DoctorLifecycleService,
     private readonly doctorDefaultsService: DoctorDefaultsService,
     private readonly doctorDefaultsApplyService: DoctorDefaultsApplyService,
+    private readonly doctorDataRetentionService: DoctorDataRetentionService,
   ) {}
 
   @Post('register')
@@ -51,6 +54,26 @@ export class DoctorController {
     @Body() dto: UpdateDoctorAccountSettingsDto,
   ) {
     return this.doctorService.updateAccountSettings(request.user.userId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get('account/data-privacy')
+  getDataPrivacyProfile(@Request() request: AuthenticatedRequest) {
+    return this.doctorDataRetentionService.getDataPrivacyProfile(
+      request.user.userId,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('account/data-retention-acknowledgement')
+  acknowledgeDataRetention(
+    @Request() request: AuthenticatedRequest,
+    @Body() dto: AcknowledgeDataRetentionDto,
+  ) {
+    void dto;
+    return this.doctorDataRetentionService.acknowledgeCurrentPolicy(
+      request.user.userId,
+    );
   }
 
   @UseGuards(SessionAuthGuard)
