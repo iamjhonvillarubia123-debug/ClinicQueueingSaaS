@@ -5,6 +5,7 @@ import { MobileNumberModule } from '../security/mobile-number/mobile-number.modu
 import { ApplicationNotificationController } from './application-notification.controller';
 import { ApplicationNotificationService } from './application-notification.service';
 import { NotificationDeliveryAttemptService } from './notification-delivery-attempt.service';
+import { NotificationDeliveryPayloadResolverService } from './notification-delivery-payload-resolver.service';
 import { NotificationDeliveryWorkerService } from './notification-delivery-worker.service';
 import { NotificationOtpPayloadPurgeService } from './notification-otp-payload-purge.service';
 import { NotificationOutboxClaimService } from './notification-outbox-claim.service';
@@ -23,6 +24,7 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
   providers: [
     ApplicationNotificationService,
     NotificationPayloadService,
+    NotificationDeliveryPayloadResolverService,
     NotificationOutboxClaimService,
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
@@ -38,6 +40,7 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
   exports: [
     ApplicationNotificationService,
     NotificationPayloadService,
+    NotificationDeliveryPayloadResolverService,
     NotificationOutboxClaimService,
     NotificationDeliveryAttemptService,
     NotificationOutboxReconciliationService,
