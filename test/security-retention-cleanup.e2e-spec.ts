@@ -126,8 +126,10 @@ describe('Security retention cleanup (e2e)', () => {
       },
     });
 
-    await cleanup.cleanupEligible(now, 500);
+    const result = await cleanup.cleanupEligible(now, 500);
 
+    expect(result.otpSecretsCleared).toBeGreaterThanOrEqual(1);
+    expect(result.otpMobileContextCleared).toBeGreaterThanOrEqual(1);
     const after = await prisma.otpVerification.findUniqueOrThrow({
       where: { id: otp.id },
     });
@@ -141,8 +143,8 @@ describe('Security retention cleanup (e2e)', () => {
   it('clears recovery identity but preserves the seven-day shell while a retained command depends on it', async () => {
     const now = new Date('2026-08-21T12:00:00.000Z');
     const { location, unique } = await createLocation();
-    const serviceDate = new Date('2026-08-12T00:00:00.000Z');
-    const terminalAt = new Date(now.getTime() - 8 * DAY_MS);
+    const serviceDate = new Date('2026-08-14T00:00:00.000Z');
+    const terminalAt = new Date(now.getTime() - 7 * DAY_MS);
     const appointment = await prisma.appointment.create({
       data: {
         bookingReference: `M12-RET-${unique.slice(0, 12)}`,
@@ -192,7 +194,7 @@ describe('Security retention cleanup (e2e)', () => {
         bookingRecoveryAttemptId: recovery.id,
         resultAppointmentId: appointment.id,
         completedAt: terminalAt,
-        expiresAt: new Date(now.getTime() + DAY_MS),
+        expiresAt: now,
         createdAt: terminalAt,
       },
     });
