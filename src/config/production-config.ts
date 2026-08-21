@@ -20,7 +20,7 @@ const PLACEHOLDER_MARKERS = [
 
 function requireProductionValue(
   config: Record<string, unknown>,
-  key: (typeof REQUIRED_PRODUCTION_ENV)[number],
+  key: string,
 ): string {
   const value = config[key];
   if (typeof value !== 'string' || value.trim() === '') {
@@ -48,6 +48,29 @@ function requireHttpsUrl(value: string, key: string): void {
   }
 }
 
+function validateSmsProvider(config: Record<string, unknown>): void {
+  const provider = requireProductionValue(config, 'SMS_PROVIDER').toUpperCase();
+  if (provider !== 'PHILSMS') {
+    throw new Error('Production configuration SMS_PROVIDER is unsupported.');
+  }
+
+  requireProductionValue(config, 'PHILSMS_API_TOKEN');
+  requireProductionValue(config, 'PHILSMS_SENDER_ID');
+
+  const timeoutRaw = String(config.PHILSMS_TIMEOUT_MS ?? '10000').trim();
+  const timeoutMs = Number(timeoutRaw);
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
+    throw new Error(
+      'Production configuration PHILSMS_TIMEOUT_MS must be between 1000 and 30000 milliseconds.',
+    );
+  }
+
+  if (config.PHILSMS_BASE_URL !== undefined) {
+    const baseUrl = requireProductionValue(config, 'PHILSMS_BASE_URL');
+    requireHttpsUrl(baseUrl, 'PHILSMS_BASE_URL');
+  }
+}
+
 export function validateRuntimeConfig(
   config: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -59,6 +82,7 @@ export function validateRuntimeConfig(
 
   requireHttpsUrl(String(config.PUBLIC_APP_BASE_URL), 'PUBLIC_APP_BASE_URL');
   requireHttpsUrl(String(config.WEB_APP_ORIGIN), 'WEB_APP_ORIGIN');
+  validateSmsProvider(config);
 
   return config;
 }
