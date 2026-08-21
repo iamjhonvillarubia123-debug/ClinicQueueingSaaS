@@ -104,8 +104,7 @@ export class SecurityRetentionCleanupService {
         `,
       );
       const otpSecretsCleared = otpCleanup?.otpSecretsCleared ?? 0;
-      const otpMobileContextCleared =
-        otpCleanup?.otpMobileContextCleared ?? 0;
+      const otpMobileContextCleared = otpCleanup?.otpMobileContextCleared ?? 0;
 
       const bookingRecoveryProtectedCleared = await transaction.$executeRaw(
         Prisma.sql`
