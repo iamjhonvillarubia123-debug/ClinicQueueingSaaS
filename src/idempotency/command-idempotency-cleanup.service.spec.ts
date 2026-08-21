@@ -1,11 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 import { CommandIdempotencyCleanupService } from './command-idempotency-cleanup.service';
 
+type DeleteManyArgument = { where?: { id?: { in?: string[] } } };
+
 describe('CommandIdempotencyCleanupService', () => {
+  const deleteMany = jest.fn<Promise<{ count: number }>, [DeleteManyArgument]>();
   const transaction = {
     $queryRaw: jest.fn(),
     commandIdempotency: {
-      deleteMany: jest.fn(),
+      deleteMany,
     },
   };
   const prisma = {
@@ -21,15 +24,19 @@ describe('CommandIdempotencyCleanupService', () => {
 
   it('deletes only the locked expired batch', async () => {
     transaction.$queryRaw.mockResolvedValue([{ id: 'one' }, { id: 'two' }]);
-    transaction.commandIdempotency.deleteMany.mockResolvedValue({ count: 2 });
+    deleteMany.mockResolvedValue({ count: 2 });
 
     await expect(
       service.cleanupExpired(new Date('2026-08-21T00:00:00.000Z'), 2),
     ).resolves.toEqual({ examined: 2, deleted: 2 });
 
-    const deleteManyCall = transaction.commandIdempotency.deleteMany.mock
-      .calls[0]?.[0] as { where?: { id?: { in?: string[] } } } | undefined;
-    expect(deleteManyCall?.where?.id?.in).toEqual(['one', 'two']);
+    expect(deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: ['one', 'two'] },
+        }),
+      }),
+    );
   });
 
   it('returns zero when no expired command rows are available', async () => {
@@ -39,7 +46,7 @@ describe('CommandIdempotencyCleanupService', () => {
       examined: 0,
       deleted: 0,
     });
-    expect(transaction.commandIdempotency.deleteMany).not.toHaveBeenCalled();
+    expect(deleteMany).not.toHaveBeenCalled();
   });
 
   it('rejects invalid batch sizes', async () => {
