@@ -145,7 +145,7 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
     const now = new Date();
     const futureStart = new Date(now.getTime() + 10 * DAY_MS);
     const futureEnd = periods.addCalendarMonths(futureStart, 2);
-    const purchase = await prisma.subscriptionPurchase.create({
+    await prisma.subscriptionPurchase.create({
       data: {
         doctorFinancialAccountId: fixture.financialAccountId,
         purchasedByUserId: fixture.doctor.id,
@@ -198,7 +198,6 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
         prisma.subscriptionCreditEntry.findMany({
           where: {
             doctorFinancialAccountId: fixture.financialAccountId,
-            subscriptionPurchaseId: purchase.id,
             entryType: 'CREDIT_CREATED',
           },
         }),
@@ -223,10 +222,9 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
     );
     expect(creditEntries).toHaveLength(1);
     expect(creditEntries[0]?.amount.toFixed(2)).toBe('2469.12');
+    expect(creditEntries[0]?.subscriptionPurchaseId).toBeNull();
     expect(auditCount).toBe(1);
     expect(closureCommands).toHaveLength(1);
-    expect(closureCommands[0]?.doctorFinancialAccountId).toBe(
-      fixture.financialAccountId,
-    );
+    expect(closureCommands[0]?.doctorFinancialAccountId).toBeNull();
   });
 });
