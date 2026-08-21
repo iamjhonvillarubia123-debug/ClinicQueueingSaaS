@@ -63,9 +63,7 @@ describe('DoctorDataRetentionService', () => {
       CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
     );
     expect(result.acknowledgedAt).toEqual(acknowledgedAt);
-    expect(
-      prisma.doctorDataRetentionAcknowledgement.upsert,
-    ).toHaveBeenCalledTimes(1);
+    expect(prisma.doctorDataRetentionAcknowledgement.upsert).toHaveBeenCalledTimes(1);
   });
 
   it('rejects acknowledgement access without current unrestricted Doctor authority', async () => {
