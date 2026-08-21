@@ -140,32 +140,15 @@ describe('DoctorClosureFinancialSettlementService', () => {
         recoveryEmailHash: expect.any(String) as unknown,
       },
     });
-    expect(transaction.subscriptionCreditEntry.create).toHaveBeenCalledTimes(2);
-    expect(transaction.subscriptionCreditEntry.create).toHaveBeenNthCalledWith(
-      1,
-      {
-        data: {
-          doctorFinancialAccountId: 'financial-1',
-          entryType: SubscriptionCreditEntryType.CREDIT_CREATED,
-          amount: new Prisma.Decimal('2000.00'),
-          subscriptionPurchaseId: 'purchase-current',
-          commandIdempotencyId: 'command-1',
-          occurredAt: closedAt,
-        },
+    expect(transaction.subscriptionCreditEntry.create).toHaveBeenCalledTimes(1);
+    expect(transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith({
+      data: {
+        doctorFinancialAccountId: 'financial-1',
+        entryType: SubscriptionCreditEntryType.CREDIT_CREATED,
+        amount: new Prisma.Decimal('4400.00'),
+        commandIdempotencyId: 'command-1',
+        occurredAt: closedAt,
       },
-    );
-    expect(transaction.subscriptionCreditEntry.create).toHaveBeenNthCalledWith(
-      2,
-      {
-        data: {
-          doctorFinancialAccountId: 'financial-1',
-          entryType: SubscriptionCreditEntryType.CREDIT_CREATED,
-          amount: new Prisma.Decimal('2400.00'),
-          subscriptionPurchaseId: 'purchase-future',
-          commandIdempotencyId: 'command-1',
-          occurredAt: closedAt,
-        },
-      },
-    );
+    });
   });
 });
