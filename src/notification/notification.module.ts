@@ -16,6 +16,7 @@ import { NotificationProviderContractService } from './notification-provider-con
 import { NotificationReconciliationWorkerService } from './notification-reconciliation-worker.service';
 import { NotificationRetentionCleanupService } from './notification-retention-cleanup.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
+import { PhilSmsNotificationProviderAdapter } from './philsms-notification-provider.adapter';
 import { ScheduledReminderCancellationService } from './scheduled-reminder-cancellation.service';
 import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.service';
 
@@ -36,6 +37,7 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
     NotificationRetentionCleanupService,
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
+    PhilSmsNotificationProviderAdapter,
     ScheduledReminderCancellationService,
     ScheduledReminderHandoffService,
   ],
@@ -53,6 +55,7 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
     NotificationRetentionCleanupService,
     NotificationSubmissionBoundaryService,
     NotificationDeliveryWorkerService,
+    PhilSmsNotificationProviderAdapter,
     ScheduledReminderCancellationService,
     ScheduledReminderHandoffService,
   ],
