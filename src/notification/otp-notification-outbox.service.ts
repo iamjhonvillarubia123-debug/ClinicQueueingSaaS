@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import {
   NotificationChannel,
@@ -13,7 +13,7 @@ const OUTBOX_PROVISIONAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 type CreateBookingOtpOutboxInput = {
   otpVerificationId: string;
   practiceLocationId: string;
-  recipientMobileEncrypted: string;
+  recipientMobileEncrypted: string | null;
   otp: string;
   createdAt: Date;
 };
@@ -28,6 +28,12 @@ export class OtpNotificationOutboxService {
     transaction: Prisma.TransactionClient,
     input: CreateBookingOtpOutboxInput,
   ): Promise<void> {
+    if (!input.recipientMobileEncrypted) {
+      throw new BadRequestException(
+        'OTP notification recipient payload is unavailable.',
+      );
+    }
+
     const message = `Your Clinic Queueing verification code is ${input.otp}. It expires in 5 minutes.`;
     const deliveryIdentityKey = createHash('sha256')
       .update(`${NotificationType.OTP_VERIFICATION}|${input.otpVerificationId}`)
