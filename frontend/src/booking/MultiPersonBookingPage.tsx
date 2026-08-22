@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import {
+  DuplicateBookingDecision,
+  DuplicateReplacementConfirmation,
+  type DuplicateContext,
+  type DuplicateContextResult,
+  type UseExistingResult,
+} from './DuplicateBookingResolution';
 import '../styles/booking.css';
 
 const PRIVACY_NOTICE_VERSION = 'v1.0-2026-08';
@@ -100,7 +107,7 @@ type ReplacementSession = {
   expiresAt: string;
 };
 
-type Stage = 'details' | 'otp' | 'review' | 'confirmed';
+type Stage = 'details' | 'otp' | 'duplicate' | 'duplicate-replace-confirm' | 'review' | 'confirmed';
 
 function PublicHeader() {
   return (
@@ -180,6 +187,7 @@ function answersFor(member: MemberForm, questions: BookingQuestion[]): DraftAnsw
 
 export function MultiPersonBookingPage() {
   const { publicIdentifier } = useParams();
+  const navigate = useNavigate();
   const [config, setConfig] = useState<BookingConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<Stage>('details');
@@ -195,6 +203,8 @@ export function MultiPersonBookingPage() {
   const [otp, setOtp] = useState('');
   const [confirmation, setConfirmation] = useState<GroupConfirmation | null>(null);
   const [replacementSession, setReplacementSession] = useState<ReplacementSession | null>(null);
+  const [duplicateContext, setDuplicateContext] = useState<DuplicateContext | null>(null);
+  const [draftReplacementAuthorized, setDraftReplacementAuthorized] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -297,6 +307,8 @@ export function MultiPersonBookingPage() {
       }
       setDraft(nextDraft);
       setPayload(nextPayload);
+      setDuplicateContext(null);
+      setDraftReplacementAuthorized(false);
       sessionStorage.setItem(`booking-draft:${nextDraft.bookingDraft.id}`, nextDraft.draftControlToken);
       setOtp('');
       setStage('otp');
@@ -321,7 +333,13 @@ export function MultiPersonBookingPage() {
         method: 'POST',
         body: { bookingDraftId: draft.bookingDraft.id, otp },
       });
-      setStage('review');
+      const duplicate = await apiRequest<DuplicateContextResult>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/duplicate-context`, { method: 'POST' });
+      if (duplicate.duplicate) {
+        setDuplicateContext(duplicate.context);
+        setStage('duplicate');
+      } else {
+        setStage('review');
+      }
     } catch (caught) {
       setError(messageFor(caught));
     } finally {
@@ -339,6 +357,39 @@ export function MultiPersonBookingPage() {
         body: { draftControlToken: draft.draftControlToken },
       });
       setOtp('');
+    } catch (caught) {
+      setError(messageFor(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function useExistingDuplicate() {
+    if (!draft || !duplicateContext || busy) return;
+    setError(''); setBusy(true);
+    try {
+      const result = await apiRequest<UseExistingResult>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/use-existing`, { method: 'POST' });
+      sessionStorage.removeItem(`booking-draft:${draft.bookingDraft.id}`);
+      if (result.contextKind === 'BOOKING_GROUP') {
+        navigate('/patient-booking-groups', { replace: true });
+      } else {
+        navigate(`/patient-bookings/${encodeURIComponent(result.bookingReference)}`, { replace: true });
+      }
+    } catch (caught) {
+      setError(messageFor(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function authorizeDraftReplacement() {
+    if (!draft || !duplicateContext || busy) return;
+    setError(''); setBusy(true);
+    try {
+      const result = await apiRequest<{ replacementAuthorized: boolean }>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/replace-existing`, { method: 'POST' });
+      if (!result.replacementAuthorized) throw new Error('Replacement authorization could not be completed.');
+      setDraftReplacementAuthorized(true);
+      setStage('review');
     } catch (caught) {
       setError(messageFor(caught));
     } finally {
@@ -396,6 +447,7 @@ export function MultiPersonBookingPage() {
         <div className="booking-progress" aria-label="Booking progress">
           <span className={stage === 'details' ? 'current' : ''}>People</span>
           {!replacementSession ? <span className={stage === 'otp' ? 'current' : ''}>Verify</span> : null}
+          {stage === 'duplicate' || stage === 'duplicate-replace-confirm' ? <span className="current">Resolve</span> : null}
           <span className={stage === 'review' ? 'current' : ''}>Review</span>
           <span className={stage === 'confirmed' ? 'current' : ''}>Confirmed</span>
         </div>
@@ -490,6 +542,10 @@ export function MultiPersonBookingPage() {
           </section>
         ) : null}
 
+        {stage === 'duplicate' && duplicateContext ? <DuplicateBookingDecision context={duplicateContext} error={error} busy={busy} onUseExisting={() => void useExistingDuplicate()} onNeedDifferent={() => { setError(''); setStage('duplicate-replace-confirm'); }} /> : null}
+
+        {stage === 'duplicate-replace-confirm' && duplicateContext ? <DuplicateReplacementConfirmation context={duplicateContext} error={error} busy={busy} onBack={() => { setError(''); setStage('duplicate'); }} onConfirmReplacement={() => void authorizeDraftReplacement()} /> : null}
+
         {stage === 'review' && payload ? (
           <section className="booking-stage">
             <p className="eyebrow">Review group booking</p>
@@ -508,9 +564,9 @@ export function MultiPersonBookingPage() {
                 </article>
               ))}
             </div>
-            <p className="field-note">{replacementSession ? 'No second verification code is required. Confirmation rechecks clinic rules and capacity, and fresh Queue Numbers are assigned only after successful confirmation.' : 'Confirmation rechecks current clinic rules and capacity for the whole group. The booking succeeds as one transaction or not at all. Each person receives an independent permanent Queue Number only after successful confirmation.'}</p>
+            <p className="field-note">{replacementSession || draftReplacementAuthorized ? 'No second verification code is required. Confirmation rechecks clinic rules and capacity, and fresh Queue Numbers are assigned only after successful confirmation.' : 'Confirmation rechecks current clinic rules and capacity for the whole group. The booking succeeds as one transaction or not at all. Each person receives an independent permanent Queue Number only after successful confirmation.'}</p>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
-            <button className="primary wide-action" disabled={busy} type="button" onClick={confirm}>{busy ? 'Confirming group…' : replacementSession ? 'Confirm new group booking' : 'Confirm group booking'}</button>
+            <button className="primary wide-action" disabled={busy} type="button" onClick={confirm}>{busy ? 'Confirming group…' : replacementSession || draftReplacementAuthorized ? 'Confirm new group booking' : 'Confirm group booking'}</button>
             {replacementSession && !draft ? <button className="secondary wide-action" disabled={busy} type="button" onClick={() => { setError(''); setStage('details'); }}>Edit booking</button> : null}
           </section>
         ) : null}
