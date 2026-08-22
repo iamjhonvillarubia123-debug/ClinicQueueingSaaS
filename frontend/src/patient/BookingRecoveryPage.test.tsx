@@ -51,7 +51,9 @@ describe('F4 unified booking recovery', () => {
 
     expect(await screen.findByRole('heading', { name: 'Is this your booking?' })).toBeInTheDocument();
     expect(screen.getByText('August 23, 2026')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'This is not my booking' }));
+    expect(screen.getByRole('button', { name: 'Yes, this is my booking' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No, I need a different booking' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'No, I need a different booking' }));
 
     expect(await screen.findByRole('heading', { name: 'Cancel the existing booking and start again?' })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -91,7 +93,7 @@ describe('F4 unified booking recovery', () => {
     fireEvent.change(screen.getByLabelText('6-digit verification code'), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify code' }));
     await screen.findByRole('heading', { name: 'Is this your booking?' });
-    fireEvent.click(screen.getByRole('button', { name: 'This is not my booking' }));
+    fireEvent.click(screen.getByRole('button', { name: 'No, I need a different booking' }));
     await screen.findByRole('heading', { name: 'Cancel the existing booking and start again?' });
     fireEvent.click(screen.getByRole('button', { name: 'Cancel existing booking and create new one' }));
 
