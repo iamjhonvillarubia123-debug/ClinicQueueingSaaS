@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { NextFunction, Response } from 'express';
+import type { NextFunction } from 'express';
 import { EventEmitter } from 'node:events';
 import { OperationalLoggingMiddleware } from './operational-logging.middleware';
 
@@ -11,11 +11,12 @@ type TestRequestShape = {
   originalUrl?: string;
 };
 
-type TestResponse = EventEmitter &
-  Pick<Response, 'statusCode' | 'once'>;
+type TestResponse = EventEmitter & {
+  statusCode: number;
+};
 
 function createTestResponse(statusCode: number): TestResponse {
-  return Object.assign(new EventEmitter(), { statusCode }) as TestResponse;
+  return Object.assign(new EventEmitter(), { statusCode });
 }
 
 describe('OperationalLoggingMiddleware', () => {
