@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { formatQueueNumber } from '../presentation/queueNumber';
 
 type BookingConfiguration = {
   practiceLocation: {
@@ -269,7 +270,7 @@ export function BookingRecoveryPage() {
         {stage === 'otp' ? (
           <form className="recovery-form" onSubmit={verify}>
             {notice ? <div className="patient-message" role="status">{notice}</div> : null}
-            <label>6-digit verification code<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
+            <label>6-digit verification code<input className="otp-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
             <button className="primary" type="submit" disabled={busy || otp.length !== 6}>{busy ? 'Verifying…' : 'Verify code'}</button>
             <div className="recovery-secondary-actions">
@@ -288,12 +289,12 @@ export function BookingRecoveryPage() {
                 <div><dt>Service date</dt><dd>{candidateDate}</dd></div>
                 <div><dt>Booking</dt><dd>{contextKind === 'BOOKING_GROUP' ? 'Multiple people' : 'One person'}</dd></div>
                 {isGroupCandidate(candidate) ? (
-                  <div><dt>People</dt><dd>{candidate.appointments.map((appointment) => `${personName(appointment.firstName, appointment.lastName)} · Queue ${appointment.queueNumber}`).join(', ')}</dd></div>
+                  <div><dt>People</dt><dd>{candidate.appointments.map((appointment) => `${personName(appointment.firstName, appointment.lastName)} · Queue ${formatQueueNumber(appointment.queueNumber)}`).join(', ')}</dd></div>
                 ) : (
                   <>
                     <div><dt>Patient</dt><dd>{personName(candidate.firstName, candidate.lastName)}</dd></div>
                     <div><dt>Booking reference</dt><dd>{candidate.bookingReference}</dd></div>
-                    <div><dt>Queue Number</dt><dd>{candidate.queueNumber}</dd></div>
+                    <div><dt>Queue Number</dt><dd>{formatQueueNumber(candidate.queueNumber)}</dd></div>
                   </>
                 )}
               </dl>
