@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { PATIENT_BOOKING_ACCESS_COOKIE } from '../patient-access/patient-booking-access.service';
+import { PATIENT_BOOKING_GROUP_ACCESS_COOKIE } from '../patient-access/patient-booking-group-access.service';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
@@ -26,6 +27,14 @@ import {
 import { ReplacePublicBookingDraftDto } from './dto/replace-public-booking-draft.dto';
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
 import { PublicBookingEntryService } from './public-booking-entry.service';
+
+type PublicBookingGroupAppointment = {
+  bookingReference: string;
+  queueNumber: number;
+  status: string;
+  firstName: string | null;
+  lastName: string | null;
+};
 
 @Controller('booking')
 export class BookingController {
@@ -201,6 +210,45 @@ export class BookingController {
           expiresAt: result.bookingAccessToken.expiresAt,
           transport: 'HTTP_ONLY_COOKIE',
         },
+        replayed: result.replayed,
+      };
+    }
+
+    if ('bookingGroup' in result) {
+      if (result.bookingGroupAccessToken) {
+        response?.cookie(
+          PATIENT_BOOKING_GROUP_ACCESS_COOKIE,
+          result.bookingGroupAccessToken.token,
+          {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            path: '/patient-booking-groups',
+            expires: result.bookingGroupAccessToken.expiresAt,
+          },
+        );
+      }
+
+      const appointments = result.bookingGroup
+        .appointments as PublicBookingGroupAppointment[];
+
+      return {
+        bookingGroup: {
+          serviceDate: result.bookingGroup.serviceDate,
+          appointments: appointments.map((appointment) => ({
+            bookingReference: appointment.bookingReference,
+            queueNumber: appointment.queueNumber,
+            status: appointment.status,
+            firstName: appointment.firstName,
+            lastName: appointment.lastName,
+          })),
+        },
+        bookingGroupAccessToken: result.bookingGroupAccessToken
+          ? {
+              expiresAt: result.bookingGroupAccessToken.expiresAt,
+              transport: 'HTTP_ONLY_COOKIE',
+            }
+          : null,
         replayed: result.replayed,
       };
     }

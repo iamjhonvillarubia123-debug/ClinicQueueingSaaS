@@ -219,8 +219,11 @@ export function PracticeLocationPublicPage() {
 
         {data.bookingEntryAllowed ? (
           <div className="booking-entry">
-            <div><strong>Ready to book?</strong><span>Choose this clinic to continue to available service dates.</span></div>
-            <Link className="primary-action" to={`/book/${encodeURIComponent(publicIdentifier)}`}>Continue to booking</Link>
+            <div><strong>Ready to book?</strong><span>Choose one person or a group of 2–5 people.</span></div>
+            <div className="booking-entry-actions">
+              <Link className="primary-action" to={`/book/${encodeURIComponent(publicIdentifier)}`}>Book one person</Link>
+              <Link className="secondary-action" to={`/book/${encodeURIComponent(publicIdentifier)}/group`}>Book multiple people</Link>
+            </div>
           </div>
         ) : null}
 
