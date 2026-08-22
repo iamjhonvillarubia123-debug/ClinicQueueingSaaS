@@ -39,8 +39,8 @@ describe('PublicBookingDuplicateUseExistingService', () => {
       },
       otpVerification: { update: jest.fn() },
       bookingDraft: { update: jest.fn() },
-      bookingAccessToken: { create: jest.fn() },
-      bookingGroupAccessToken: { create: jest.fn() },
+      bookingAccessToken: { updateMany: jest.fn() },
+      bookingGroupAccessToken: { updateMany: jest.fn() },
     };
     const prisma = {
       $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
@@ -74,7 +74,7 @@ describe('PublicBookingDuplicateUseExistingService', () => {
     return { service, transaction, individualTokens, groupTokens };
   }
 
-  it('restores individual access and terminalizes only the competing draft', async () => {
+  it('rotates individual access and terminalizes only the competing draft', async () => {
     const { service, transaction, individualTokens } = createHarness({
       individual: {
         id: 'appointment-1',
@@ -87,6 +87,15 @@ describe('PublicBookingDuplicateUseExistingService', () => {
       contextKind: 'INDIVIDUAL',
       bookingReference: 'BOOK-1',
     });
+    expect(transaction.bookingAccessToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          appointmentId: 'appointment-1',
+          revokedAt: null,
+        }),
+        data: { revokedAt: expect.any(Date) },
+      }),
+    );
     expect(individualTokens.issueInitialToken).toHaveBeenCalledWith(
       transaction,
       'appointment-1',
@@ -95,7 +104,10 @@ describe('PublicBookingDuplicateUseExistingService', () => {
     expect(transaction.otpVerification.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'otp-1' },
-        data: expect.objectContaining({ consumedAt: expect.any(Date), activeContextKey: null }),
+        data: expect.objectContaining({
+          consumedAt: expect.any(Date),
+          activeContextKey: null,
+        }),
       }),
     );
     expect(transaction.bookingDraft.update).toHaveBeenCalledWith(
@@ -111,7 +123,7 @@ describe('PublicBookingDuplicateUseExistingService', () => {
     );
   });
 
-  it('restores group controller access without changing the existing group', async () => {
+  it('rotates group controller access without changing the existing group', async () => {
     const { service, transaction, groupTokens } = createHarness({
       groups: [{ id: 'group-1', serviceDate }],
     });
@@ -120,6 +132,15 @@ describe('PublicBookingDuplicateUseExistingService', () => {
       contextKind: 'BOOKING_GROUP',
       bookingGroupId: 'group-1',
     });
+    expect(transaction.bookingGroupAccessToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          bookingGroupId: 'group-1',
+          revokedAt: null,
+        }),
+        data: { revokedAt: expect.any(Date) },
+      }),
+    );
     expect(groupTokens.issueInitialToken).toHaveBeenCalledWith(
       transaction,
       'group-1',
