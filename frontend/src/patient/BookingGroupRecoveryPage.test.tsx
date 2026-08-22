@@ -96,7 +96,7 @@ describe('F4 BookingGroup recovery', () => {
   });
 
   it('resends through the same recovery attempt without putting recovery identifiers in the route', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/booking/public/configuration/north-clinic')) return jsonResponse(configuration);
       if (url.endsWith('/patient-booking-groups/recovery/request')) {
