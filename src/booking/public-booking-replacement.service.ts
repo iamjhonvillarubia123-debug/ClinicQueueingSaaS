@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AppointmentCancelledByType,
   Prisma,
@@ -59,7 +63,11 @@ export class PublicBookingReplacementService {
         transaction,
         activeKey,
       );
-      const context = await this.findActiveContext(transaction, draft, activeKey);
+      const context = await this.findActiveContext(
+        transaction,
+        draft,
+        activeKey,
+      );
       if (!context) {
         return { duplicate: false as const, replacementAuthorized: false };
       }
@@ -107,7 +115,11 @@ export class PublicBookingReplacementService {
         transaction,
         activeKey,
       );
-      const context = await this.findActiveContext(transaction, draft, activeKey);
+      const context = await this.findActiveContext(
+        transaction,
+        draft,
+        activeKey,
+      );
       if (!context) {
         throw new ConflictException(
           'There is no active public booking to replace for this verified mobile scope.',
@@ -336,7 +348,8 @@ export class PublicBookingReplacementService {
       otp.invalidatedAt ||
       !otp.activeContextKey ||
       (otp.activeContextKey === replacementKey &&
-        (!acceptReplacementAuthority || otp.expiresAt.getTime() <= now.getTime()))
+        (!acceptReplacementAuthority ||
+          otp.expiresAt.getTime() <= now.getTime()))
     ) {
       throw new ConflictException(
         'Mobile verification is not valid for duplicate booking resolution.',
