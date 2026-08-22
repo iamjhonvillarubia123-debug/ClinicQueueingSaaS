@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -121,7 +122,8 @@ describe('M13 HTTP and PostgreSQL load smoke (e2e)', () => {
     );
     await app.listen(0, '127.0.0.1');
 
-    const address = app.getHttpServer().address() as AddressInfo | null;
+    const server = app.getHttpServer() as Server;
+    const address = server.address() as AddressInfo | null;
     if (!address) {
       throw new Error('M13 load application did not bind a TCP listener.');
     }
