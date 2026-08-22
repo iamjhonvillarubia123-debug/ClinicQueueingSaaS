@@ -1,13 +1,12 @@
 import { FormEvent, useState } from 'react';
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from './api/client';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
-import { AppointmentRecoveryPage } from './patient/AppointmentRecoveryPage';
+import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
-import { BookingGroupRecoveryPage } from './patient/BookingGroupRecoveryPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
 import { PatientBookingGroupPage } from './patient/PatientBookingGroupPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
@@ -95,6 +94,11 @@ function WorkspacePage() {
   return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>{copy[0]}</h1><p>{copy[1]}</p></section>;
 }
 
+function LegacyRecoveryRedirect() {
+  const { publicIdentifier } = useParams();
+  return <Navigate to={publicIdentifier ? `/recover/${encodeURIComponent(publicIdentifier)}` : '/'} replace />;
+}
+
 function NotFound() {
   return <main className="auth-page"><section className="auth-panel"><p className="eyebrow">404</p><h1>Page not found</h1><p>The link may be incorrect or no longer available.</p><Link className="link-button" to="/">Return home</Link></section></main>;
 }
@@ -108,8 +112,9 @@ export function App() {
       <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
       <Route path="/book/:publicIdentifier/group" element={<MultiPersonBookingPage />} />
       <Route path="/booking/access" element={<BookingAccessBootstrapPage />} />
-      <Route path="/recover/appointment/:publicIdentifier" element={<AppointmentRecoveryPage />} />
-      <Route path="/recover/group/:publicIdentifier" element={<BookingGroupRecoveryPage />} />
+      <Route path="/recover/:publicIdentifier" element={<BookingRecoveryPage />} />
+      <Route path="/recover/appointment/:publicIdentifier" element={<LegacyRecoveryRedirect />} />
+      <Route path="/recover/group/:publicIdentifier" element={<LegacyRecoveryRedirect />} />
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
