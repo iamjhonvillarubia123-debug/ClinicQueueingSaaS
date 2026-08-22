@@ -51,6 +51,7 @@ export class ActiveBookingIdentityService {
       UPDATE "BookingDraft"
       SET
         "status" = 'EXPIRED',
+        "expiredAt" = now(),
         "activeDraftKey" = NULL,
         "updatedAt" = now()
       WHERE "activeDraftKey" = ${activeDraftKey}
