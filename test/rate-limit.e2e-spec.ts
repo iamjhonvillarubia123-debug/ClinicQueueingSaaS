@@ -43,13 +43,17 @@ describe('Distributed rate limiting (e2e)', () => {
       .post('/auth/login')
       .send({ email, password: 'not-a-real-password' })
       .expect(429);
+    const body = limited.body as unknown as {
+      statusCode: number;
+      code: string;
+      message: string;
+      requestId: string;
+    };
 
     expect(limited.headers['retry-after']).toEqual(expect.any(String));
-    expect(limited.body).toMatchObject({
-      statusCode: 429,
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: 'Too many requests. Please try again later.',
-      requestId: expect.any(String),
-    });
+    expect(body.statusCode).toBe(429);
+    expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(body.message).toBe('Too many requests. Please try again later.');
+    expect(body.requestId).toEqual(expect.any(String));
   });
 });
