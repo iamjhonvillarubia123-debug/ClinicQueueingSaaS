@@ -45,9 +45,7 @@ export class BookingController {
     subject: { kind: 'PARAM', field: 'publicIdentifier' },
   })
   @Get('public/configuration/:publicIdentifier')
-  getPublicConfiguration(
-    @Param('publicIdentifier') publicIdentifier: string,
-  ) {
+  getPublicConfiguration(@Param('publicIdentifier') publicIdentifier: string) {
     return this.publicBookingEntryService.getConfiguration(publicIdentifier);
   }
 
