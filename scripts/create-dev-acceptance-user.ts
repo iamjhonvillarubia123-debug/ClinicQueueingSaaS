@@ -14,9 +14,10 @@ const ACCEPTANCE_MOBILE = '+639000000000';
 const BCRYPT_SALT_ROUNDS = 12;
 
 async function main(): Promise<void> {
-  if (process.env.NODE_ENV !== 'development') {
+  const nodeEnv = process.env.NODE_ENV?.trim().toLowerCase();
+  if (nodeEnv && nodeEnv !== 'development') {
     throw new Error(
-      'Refusing to create the acceptance user because NODE_ENV is not development.',
+      `Refusing to create the acceptance user because NODE_ENV is "${process.env.NODE_ENV}" rather than development.`,
     );
   }
 
