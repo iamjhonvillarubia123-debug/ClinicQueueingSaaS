@@ -1,6 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PublicRoutingService } from '../public-routing/public-routing.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PublicRoutingService } from '../public-routing/public-routing.service';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
@@ -21,7 +25,10 @@ export class PublicBookingEntryService {
 
   async getConfiguration(publicIdentifier: string) {
     const location = await this.resolveBookableLocation(publicIdentifier);
-    const config = await this.configuration.getEffectiveConfiguration(location.id);
+    const config = await this.configuration.getEffectiveConfiguration(
+      location.id,
+    );
+
     return {
       practiceLocation: {
         publicIdentifier: location.publicIdentifier,
@@ -38,7 +45,8 @@ export class PublicBookingEntryService {
   async getAvailability(publicIdentifier: string, serviceDate: string) {
     const location = await this.resolveBookableLocation(publicIdentifier);
     const result = await this.availability.resolve(location.id, serviceDate);
-    const { practiceLocationId: _practiceLocationId, ...publicResult } = result;
+    const publicResult: Record<string, unknown> = { ...result };
+    delete publicResult.practiceLocationId;
     return publicResult;
   }
 
@@ -51,6 +59,7 @@ export class PublicBookingEntryService {
       location.id,
       dto.serviceDate,
     );
+
     if (!availability.availableForPublicBooking) {
       throw new BadRequestException(
         'Selected Service Date is not available for public booking.',
@@ -79,16 +88,15 @@ export class PublicBookingEntryService {
   private sanitizeCreatedDraftResult<T extends { bookingDraft: object }>(
     result: T,
   ) {
-    const bookingDraft = result.bookingDraft as Record<string, unknown>;
-    const { practiceLocationId: _practiceLocationId, ...publicDraft } =
-      bookingDraft;
+    const publicDraft: Record<string, unknown> = { ...result.bookingDraft };
+    delete publicDraft.practiceLocationId;
     return { ...result, bookingDraft: publicDraft };
   }
 
   private async resolveBookableLocation(publicIdentifier: string) {
-    const route = await this.publicRouting.getPracticeLocationPublicRoute(
-      publicIdentifier,
-    );
+    const route =
+      await this.publicRouting.getPracticeLocationPublicRoute(publicIdentifier);
+
     if (!route.bookingEntryAllowed) {
       throw new BadRequestException(
         'Practice location is not currently available for online booking.',
@@ -99,9 +107,11 @@ export class PublicBookingEntryService {
       where: { publicIdentifier: route.publicIdentifier },
       select: { id: true, publicIdentifier: true },
     });
+
     if (!location) {
       throw new NotFoundException('Practice location public route not found.');
     }
+
     return location;
   }
 }
