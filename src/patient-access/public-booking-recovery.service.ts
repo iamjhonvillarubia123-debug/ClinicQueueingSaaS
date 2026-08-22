@@ -388,6 +388,7 @@ export class PublicBookingRecoveryService {
           activeContextKey: `BOOKING:${draft.id}`,
           expiresAt,
           verifiedAt: now,
+          createdAt: now,
         },
       });
       await transaction.otpVerification.update({
