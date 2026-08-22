@@ -4,7 +4,6 @@ import { ApiError, apiRequest } from '../api/client';
 
 type BookingConfiguration = {
   practiceLocation: {
-    id: string;
     publicIdentifier: string;
     name: string;
   };
@@ -59,7 +58,7 @@ export function BookingGroupRecoveryPage() {
       const result = await apiRequest<RecoveryRequestResult>('/patient-booking-groups/recovery/request', {
         method: 'POST',
         body: {
-          practiceLocationId: configuration.practiceLocation.id,
+          practiceLocationPublicIdentifier: configuration.practiceLocation.publicIdentifier,
           serviceDate,
           mobileNumber: mobileNumber.trim(),
         },
