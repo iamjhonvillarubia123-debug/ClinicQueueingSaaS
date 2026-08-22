@@ -17,7 +17,9 @@ function delay(ms: number): Promise<void> {
 }
 
 function buildWorkerId(): string {
-  const host = hostname().replace(/[^A-Za-z0-9_.-]/gu, '_').slice(0, 48);
+  const host = hostname()
+    .replace(/[^A-Za-z0-9_.-]/gu, '_')
+    .slice(0, 48);
   return `notify:${host}:${process.pid}:${randomUUID().slice(0, 8)}`;
 }
 
