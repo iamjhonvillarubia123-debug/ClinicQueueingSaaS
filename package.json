@@ -22,7 +22,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register node_modules/.bin/jest --runInBand",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node ./test/run-e2e.mjs",
     "test:load": "node ./test/run-e2e.mjs --runInBand --testPathPatterns=performance-load.e2e-spec.ts",
     "test:db-drill": "node ./test/production-db-drill.mjs",
