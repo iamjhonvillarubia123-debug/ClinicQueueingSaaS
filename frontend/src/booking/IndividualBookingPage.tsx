@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import '../styles/booking.css';
 
 const PRIVACY_NOTICE_VERSION = 'v1.0-2026-08';
 
@@ -154,11 +155,11 @@ export function IndividualBookingPage() {
 
       let result: DraftResult;
       if (draft) {
-        result = await apiRequest<DraftResult>(`/booking/public/draft/${encodeURIComponent(publicIdentifier)}/${encodeURIComponent(draft.bookingDraft.id)}`, {
+        await apiRequest(`/booking/public/draft/${encodeURIComponent(publicIdentifier)}/${encodeURIComponent(draft.bookingDraft.id)}`, {
           method: 'PUT', body: { ...nextPayload, draftControlToken: draft.draftControlToken },
         });
-        await apiRequest(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/request-otp`, { method: 'POST', body: { draftControlToken: draft.draftControlToken } });
-        result = { ...draft, otpVerification: { id: 'reissued', expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(), maxAttempts: 5 } };
+        const reissued = await apiRequest<{ otpVerification: { id: string; expiresAt: string; maxAttempts: number } }>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/request-otp`, { method: 'POST', body: { draftControlToken: draft.draftControlToken } });
+        result = { ...draft, otpVerification: reissued.otpVerification };
       } else {
         result = await apiRequest<DraftResult>(`/booking/public/draft/${encodeURIComponent(publicIdentifier)}`, { method: 'POST', body: nextPayload });
       }
