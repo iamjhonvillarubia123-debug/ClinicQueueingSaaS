@@ -19,6 +19,7 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node ./test/run-e2e.mjs",
     "test:db-drill": "node ./test/production-db-drill.mjs",
+    "verify:rollback": "node ./test/rollback-compatibility-check.mjs",
     "typecheck": "tsc --noEmit",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
@@ -82,7 +83,7 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": "$1"
     },
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1"
