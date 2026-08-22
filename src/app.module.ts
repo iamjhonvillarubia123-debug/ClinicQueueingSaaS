@@ -23,6 +23,7 @@ import { PublicRoutingModule } from './public-routing/public-routing.module';
 import { QueueModule } from './queue/queue.module';
 import { RateLimitGuard } from './rate-limit/rate-limit.guard';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { OperationalLoggingMiddleware } from './request-context/operational-logging.middleware';
 import { RequestCorrelationMiddleware } from './request-context/request-correlation.middleware';
 import { RequestIdExceptionFilter } from './request-context/request-id-exception.filter';
 import { ScheduleModule } from './schedule/schedule.module';
@@ -72,9 +73,11 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestCorrelationMiddleware).forRoutes({
-      path: '{*splat}',
-      method: RequestMethod.ALL,
-    });
+    consumer
+      .apply(RequestCorrelationMiddleware, OperationalLoggingMiddleware)
+      .forRoutes({
+        path: '{*splat}',
+        method: RequestMethod.ALL,
+      });
   }
 }
