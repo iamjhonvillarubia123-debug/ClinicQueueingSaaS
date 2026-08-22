@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formatQueueNumber } from '../presentation/queueNumber';
 
 export type IndividualDuplicateContext = {
   kind: 'INDIVIDUAL';
@@ -96,12 +97,12 @@ export function DuplicateBookingDecision({
           <>
             <Detail label="Patient">{patientName(context.appointment.firstName, context.appointment.lastName)}</Detail>
             <Detail label="Booking reference">{context.appointment.bookingReference}</Detail>
-            <Detail label="Queue Number">{context.appointment.queueNumber}</Detail>
+            <Detail label="Queue Number">{formatQueueNumber(context.appointment.queueNumber)}</Detail>
           </>
         ) : (
           <Detail label="People">
             {context.bookingGroup.appointments.map((appointment) =>
-              `${patientName(appointment.firstName, appointment.lastName)} · Queue ${appointment.queueNumber}`,
+              `${patientName(appointment.firstName, appointment.lastName)} · Queue ${formatQueueNumber(appointment.queueNumber)}`,
             ).join(', ')}
           </Detail>
         )}
