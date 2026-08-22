@@ -21,7 +21,11 @@ export class RequestIdExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const payload = exception.getResponse();
 
-      if (typeof payload === 'object' && payload !== null && !Array.isArray(payload)) {
+      if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        !Array.isArray(payload)
+      ) {
         response.status(status).json({ ...payload, requestId });
         return;
       }
