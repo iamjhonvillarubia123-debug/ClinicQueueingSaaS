@@ -57,7 +57,9 @@ export class RateLimitService {
 
   async cleanupExpired(now = new Date(), batchSize = 500): Promise<number> {
     if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) {
-      throw new BadRequestException('Rate-limit cleanup batch size is invalid.');
+      throw new BadRequestException(
+        'Rate-limit cleanup batch size is invalid.',
+      );
     }
 
     return this.prisma.$executeRaw(Prisma.sql`
