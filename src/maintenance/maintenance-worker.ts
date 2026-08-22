@@ -15,7 +15,8 @@ function delay(ms: number): Promise<void> {
 }
 
 function readInterval(): number {
-  const raw = process.env.MAINTENANCE_WORKER_INTERVAL_MS ?? String(DEFAULT_INTERVAL_MS);
+  const raw =
+    process.env.MAINTENANCE_WORKER_INTERVAL_MS ?? String(DEFAULT_INTERVAL_MS);
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 10_000 || value > 3_600_000) {
     throw new Error(
