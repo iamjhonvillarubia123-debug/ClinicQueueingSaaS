@@ -1,0 +1,26 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'prisma/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  verify-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npm run prisma:generate
+      - run: npm run typecheck
+      - run: npm run lint:check
+      - run: npm test -- --runInBand public-booking-entry.service.spec.ts
+      - run: npm run build
