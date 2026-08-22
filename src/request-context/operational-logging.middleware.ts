@@ -1,14 +1,14 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
-import type { NextFunction, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { performance } from 'node:perf_hooks';
-import type { CorrelatedRequest } from './request-correlation.middleware';
+
+type OperationalLogRequest = Pick<Request, 'method'> & {
+  requestId?: string;
+  route?: unknown;
+};
 
 type RouteInfo = {
   path?: unknown;
-};
-
-type RoutedRequest = CorrelatedRequest & {
-  route?: unknown;
 };
 
 function resultCategory(statusCode: number): string {
@@ -18,8 +18,8 @@ function resultCategory(statusCode: number): string {
   return 'success';
 }
 
-function safeRouteIdentifier(request: RoutedRequest): string {
-  const route = request.route;
+function safeRouteIdentifier(request: OperationalLogRequest): string {
+  const route: unknown = request.route;
   if (typeof route !== 'object' || route === null) return 'UNMATCHED';
 
   const routePath = (route as RouteInfo).path;
@@ -32,7 +32,11 @@ function safeRouteIdentifier(request: RoutedRequest): string {
 export class OperationalLoggingMiddleware implements NestMiddleware {
   private readonly logger = new Logger('HttpRequest');
 
-  use(request: RoutedRequest, response: Response, next: NextFunction): void {
+  use(
+    request: OperationalLogRequest,
+    response: Response,
+    next: NextFunction,
+  ): void {
     const startedAt = performance.now();
 
     response.once('finish', () => {
