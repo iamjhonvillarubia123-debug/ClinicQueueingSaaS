@@ -4,7 +4,9 @@ import { EventEmitter } from 'node:events';
 import type { CorrelatedRequest } from './request-correlation.middleware';
 import { OperationalLoggingMiddleware } from './operational-logging.middleware';
 
-type TestRequest = CorrelatedRequest & {
+type TestRequestShape = {
+  requestId?: string;
+  method: string;
   route?: { path?: unknown };
   body?: unknown;
   originalUrl?: string;
@@ -22,7 +24,7 @@ describe('OperationalLoggingMiddleware', () => {
   it('logs request correlation and route template without raw URL or body data', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const middleware = new OperationalLoggingMiddleware();
-    const request: TestRequest = {
+    const request: TestRequestShape = {
       requestId: '5f8ef3b4-fbb8-4f23-a39d-5b8e75e4f6f2',
       method: 'POST',
       route: { path: '/patient/bookings/:accessToken' },
@@ -39,7 +41,11 @@ describe('OperationalLoggingMiddleware', () => {
     }) as TestResponse;
     const next: NextFunction = jest.fn();
 
-    middleware.use(request, response as unknown as Response, next);
+    middleware.use(
+      request as unknown as CorrelatedRequest,
+      response as unknown as Response,
+      next,
+    );
     response.emit('finish');
 
     expect(next).toHaveBeenCalledTimes(1);
@@ -59,7 +65,7 @@ describe('OperationalLoggingMiddleware', () => {
   it('uses a non-identifying route marker for unmatched requests', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const middleware = new OperationalLoggingMiddleware();
-    const request: TestRequest = {
+    const request: TestRequestShape = {
       requestId: '1e36f17e-66fe-43b5-8108-440483941be5',
       method: 'GET',
       originalUrl: '/unknown/private-value',
@@ -68,7 +74,11 @@ describe('OperationalLoggingMiddleware', () => {
       statusCode: 404,
     }) as TestResponse;
 
-    middleware.use(request, response as unknown as Response, jest.fn());
+    middleware.use(
+      request as unknown as CorrelatedRequest,
+      response as unknown as Response,
+      jest.fn(),
+    );
     response.emit('finish');
 
     const message = String(log.mock.calls[0]?.[0]);
