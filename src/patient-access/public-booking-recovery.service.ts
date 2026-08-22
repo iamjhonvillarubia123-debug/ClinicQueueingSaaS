@@ -1,9 +1,4 @@
-import { createHash } from 'crypto';
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
   AppointmentCancelledByType,
   BookingGroupRecoveryAttemptStatus,
@@ -308,7 +303,8 @@ export class PublicBookingRecoveryService {
         kind,
       );
       if (
-        otp.activeContextKey !== this.replacementContextKey(input.recoveryAttemptId) ||
+        otp.activeContextKey !==
+          this.replacementContextKey(input.recoveryAttemptId) ||
         otp.expiresAt.getTime() <= Date.now() ||
         scope.mobileNumberHash !== input.mobileNumberHash ||
         scope.practiceLocationId !== input.practiceLocationId ||
@@ -341,7 +337,8 @@ export class PublicBookingRecoveryService {
         kind,
       );
       if (
-        otp.activeContextKey !== this.replacementContextKey(input.recoveryAttemptId) ||
+        otp.activeContextKey !==
+          this.replacementContextKey(input.recoveryAttemptId) ||
         otp.expiresAt.getTime() <= now.getTime() ||
         scope.mobileNumberHash !== input.mobileNumberHash ||
         scope.practiceLocationId !== input.practiceLocationId ||
