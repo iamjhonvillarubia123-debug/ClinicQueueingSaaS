@@ -3,7 +3,8 @@ import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 
 import { ApiError } from './api/client';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
-import { BookingEntryBoundary, DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
+import { IndividualBookingPage } from './booking/IndividualBookingPage';
+import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 
 function LandingPage() {
   return (
@@ -88,6 +89,10 @@ function WorkspacePage() {
   return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>{copy[0]}</h1><p>{copy[1]}</p></section>;
 }
 
+function PatientAccessBoundary() {
+  return <main className="public-detail"><header className="public-header"><Link className="brand" to="/">Clinic Queueing</Link></header><section className="public-state"><p className="eyebrow">Appointment</p><h1>Your appointment access is ready.</h1><p>The detailed queue dashboard is implemented in the next patient-experience milestone.</p></section></main>;
+}
+
 function NotFound() {
   return <main className="auth-page"><section className="auth-panel"><p className="eyebrow">404</p><h1>Page not found</h1><p>The link may be incorrect or no longer available.</p><Link className="link-button" to="/">Return home</Link></section></main>;
 }
@@ -98,7 +103,8 @@ export function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/public/doctors/:publicIdentifier" element={<DoctorPublicPage />} />
       <Route path="/public/practice-locations/:publicIdentifier" element={<PracticeLocationPublicPage />} />
-      <Route path="/book/:publicIdentifier" element={<BookingEntryBoundary />} />
+      <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
+      <Route path="/patient-bookings/:bookingReference" element={<PatientAccessBoundary />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
