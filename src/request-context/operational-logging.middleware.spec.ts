@@ -22,7 +22,7 @@ describe('OperationalLoggingMiddleware', () => {
   it('logs request correlation and route template without raw URL or body data', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const middleware = new OperationalLoggingMiddleware();
-    const request = {
+    const request: TestRequest = {
       requestId: '5f8ef3b4-fbb8-4f23-a39d-5b8e75e4f6f2',
       method: 'POST',
       route: { path: '/patient/bookings/:accessToken' },
@@ -33,11 +33,11 @@ describe('OperationalLoggingMiddleware', () => {
         password: 'raw-password',
         bookingAnswer: 'sensitive patient free text',
       },
-    } as TestRequest;
+    };
     const response = Object.assign(new EventEmitter(), {
       statusCode: 401,
     }) as TestResponse;
-    const next = jest.fn() as NextFunction;
+    const next: NextFunction = jest.fn();
 
     middleware.use(request, response as unknown as Response, next);
     response.emit('finish');
@@ -59,20 +59,16 @@ describe('OperationalLoggingMiddleware', () => {
   it('uses a non-identifying route marker for unmatched requests', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     const middleware = new OperationalLoggingMiddleware();
-    const request = {
+    const request: TestRequest = {
       requestId: '1e36f17e-66fe-43b5-8108-440483941be5',
       method: 'GET',
       originalUrl: '/unknown/private-value',
-    } as TestRequest;
+    };
     const response = Object.assign(new EventEmitter(), {
       statusCode: 404,
     }) as TestResponse;
 
-    middleware.use(
-      request,
-      response as unknown as Response,
-      jest.fn() as NextFunction,
-    );
+    middleware.use(request, response as unknown as Response, jest.fn());
     response.emit('finish');
 
     const message = String(log.mock.calls[0]?.[0]);
