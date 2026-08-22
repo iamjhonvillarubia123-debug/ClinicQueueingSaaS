@@ -136,4 +136,57 @@ describe('F2 individual public booking', () => {
     expect(screen.queryByText(/bookingAccessToken/i)).not.toBeInTheDocument();
     await waitFor(() => expect(sessionStorage.getItem('booking-draft:draft-id')).toBeNull());
   });
+
+  it('uses verified replacement authority and confirms without a second OTP', async () => {
+    sessionStorage.setItem('f4-replacement:clinic-public', JSON.stringify({
+      recoveryAttemptId: '11111111-1111-4111-8111-111111111111',
+      serviceDate: '2026-08-24',
+      mobileNumber: '09171234567',
+      expiresAt: '2099-08-24T10:10:00.000Z',
+    }));
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/booking/public/configuration/clinic-public')) return jsonResponse(config);
+      if (url.endsWith('/booking/public/availability/clinic-public/2026-08-24')) return jsonResponse({ availableForPublicBooking: true });
+      if (url.endsWith('/booking/public/draft/clinic-public') && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        expect(body.replacementRecoveryAttemptId).toBe('11111111-1111-4111-8111-111111111111');
+        return jsonResponse({
+          bookingDraft: { id: 'replacement-draft', bookingReference: 'NEW-1', expiresAt: '2099-08-24T10:30:00.000Z' },
+          draftControlToken: 'replacement-control',
+          otpVerification: { verified: true, replacementAuthorized: true, expiresAt: '2099-08-24T10:10:00.000Z' },
+        });
+      }
+      if (url.endsWith('/booking/draft/replacement-draft/confirm')) return jsonResponse({
+        appointment: { bookingReference: 'NEW-1', queueNumber: 12, serviceDate: '2026-08-24T00:00:00.000Z', status: 'WAITING' },
+        bookingAccessToken: { expiresAt: '2026-08-25T00:00:00.000Z', transport: 'HTTP_ONLY_COOKIE' },
+        replayed: false,
+      });
+      return jsonResponse({ message: 'Unexpected request' }, 500);
+    });
+
+    const user = userEvent.setup();
+    renderBooking();
+    await screen.findByRole('heading', { name: 'Book at North Clinic' });
+    expect(screen.getByLabelText('Service date')).toHaveValue('2026-08-24');
+    expect(screen.getByLabelText('Mobile number')).toHaveValue('09171234567');
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: /General Consultation/ }));
+    await user.type(screen.getByLabelText('First name'), 'Ana');
+    await user.type(screen.getByLabelText('Last name'), 'Santos');
+    await user.click(screen.getByRole('checkbox', { name: /I have read and acknowledge the Privacy Notice/ }));
+    await user.click(screen.getByRole('button', { name: 'Review new booking' }));
+
+    expect(await screen.findByRole('heading', { name: 'Check your booking' })).toBeInTheDocument();
+    expect(screen.getByText('08/24/2026')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/booking/verify-otp'))).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Confirm new appointment' }));
+    expect(await screen.findByRole('heading', { name: 'Your appointment is booked.' })).toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/booking/verify-otp'))).toBe(false);
+    expect(sessionStorage.getItem('f4-replacement:clinic-public')).toBeNull();
+  });
 });
