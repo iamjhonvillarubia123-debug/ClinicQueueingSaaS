@@ -1,6 +1,6 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AppController } from './app/app.controller';
 import { AuthModule } from './auth/auth.module';
 import { CsrfOriginGuard } from './auth/guards/csrf-origin.guard';
@@ -16,6 +16,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PrivacyRetentionModule } from './privacy-retention/privacy-retention.module';
 import { PublicRoutingModule } from './public-routing/public-routing.module';
 import { QueueModule } from './queue/queue.module';
+import { RequestCorrelationMiddleware } from './request-context/request-correlation.middleware';
+import { RequestIdExceptionFilter } from './request-context/request-id-exception.filter';
 import { ScheduleModule } from './schedule/schedule.module';
 import { SecretaryModule } from './secretary/secretary.module';
 import { SecretarySettingsDraftModule } from './secretary-settings-draft/secretary-settings-draft.module';
@@ -50,6 +52,14 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
       provide: APP_GUARD,
       useClass: CsrfOriginGuard,
     },
+    {
+      provide: APP_FILTER,
+      useClass: RequestIdExceptionFilter,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestCorrelationMiddleware).forRoutes('*');
+  }
+}
