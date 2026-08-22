@@ -4,6 +4,7 @@ import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
 import { OtpModule } from '../otp/otp.module';
 import { PatientAccessModule } from '../patient-access/patient-access.module';
+import { PublicRoutingModule } from '../public-routing/public-routing.module';
 import { QueueModule } from '../queue/queue.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
@@ -26,6 +27,7 @@ import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 import { MultiPersonBookingConfirmationService } from './multi-person-booking-confirmation.service';
+import { PublicBookingEntryService } from './public-booking-entry.service';
 
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     IdempotencyModule,
     NotificationModule,
     PatientAccessModule,
+    PublicRoutingModule,
     QueueModule,
     FinancialModule,
   ],
@@ -46,6 +49,7 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
   providers: [
     BookingService,
     BookingConfigurationService,
+    PublicBookingEntryService,
     BookingAnswerValidationService,
     BookingDraftCleanupService,
     BookingDraftControlService,
