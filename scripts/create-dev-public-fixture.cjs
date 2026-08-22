@@ -5,11 +5,10 @@ const { Client } = require('pg');
 const ACCEPTANCE_EMAIL = 'frontend.acceptance.doctor@local.test';
 const LOCATION_NAME = 'North Clinic';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKDAYS = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'];
 
 async function main() {
-  if (process.env.NODE_ENV && process.env.NODE_ENV !== 'development') {
-    throw new Error('Refusing to create the public acceptance fixture because NODE_ENV is not development.');
-  }
+  if (process.env.NODE_ENV && process.env.NODE_ENV !== 'development') throw new Error('Refusing to create the public acceptance fixture because NODE_ENV is not development.');
   if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL environment variable is not defined.');
 
   const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -33,6 +32,13 @@ async function main() {
       await client.query(`UPDATE "DoctorProfile" SET "professionalTitle"='Dr.', "specialization"='General Practice', "profileDescription"='A development-only public profile used for frontend acceptance testing.', "isProfilePublic"=TRUE, "updatedAt"=now() WHERE "id"=$1`, [doctorProfileId]);
     }
 
+    const settings = await client.query('SELECT "id" FROM "DoctorAccountSettings" WHERE "doctorProfileId"=$1 LIMIT 1 FOR UPDATE', [doctorProfileId]);
+    if (settings.rowCount === 0) {
+      await client.query(`INSERT INTO "DoctorAccountSettings" ("id","doctorProfileId","defaultTimeZone","defaultConsultationMinutes","maximumAdvanceBookingDays","allowOnlineBooking","noClinicOnRegularHolidays","createdAt","updatedAt") VALUES ($1,$2,'Asia/Manila',30,30,TRUE,FALSE,now(),now())`, [randomUUID(), doctorProfileId]);
+    } else {
+      await client.query(`UPDATE "DoctorAccountSettings" SET "defaultTimeZone"='Asia/Manila', "defaultConsultationMinutes"=30, "maximumAdvanceBookingDays"=30, "allowOnlineBooking"=TRUE, "updatedAt"=now() WHERE "doctorProfileId"=$1`, [doctorProfileId]);
+    }
+
     let location = await client.query('SELECT "id", "publicIdentifier" FROM "PracticeLocation" WHERE "doctorProfileId"=$1 AND "name"=$2 LIMIT 1 FOR UPDATE', [doctorProfileId, LOCATION_NAME]);
     let locationId;
     let locationPublicIdentifier;
@@ -49,6 +55,17 @@ async function main() {
     const service = await client.query('SELECT "id" FROM "PracticeLocationService" WHERE "practiceLocationId"=$1 AND "name"=$2 LIMIT 1 FOR UPDATE', [locationId, 'General Consultation']);
     if (service.rowCount === 0) {
       await client.query(`INSERT INTO "PracticeLocationService" ("id","practiceLocationId","name","durationMinutes","status","createdAt","updatedAt") VALUES ($1,$2,'General Consultation',30,'ACTIVE'::"ServiceAvailabilityStatus",now(),now())`, [randomUUID(), locationId]);
+    } else {
+      await client.query(`UPDATE "PracticeLocationService" SET "durationMinutes"=30, "status"='ACTIVE'::"ServiceAvailabilityStatus", "updatedAt"=now() WHERE "id"=$1`, [service.rows[0].id]);
+    }
+
+    for (const weekday of WEEKDAYS) {
+      const schedule = await client.query('SELECT "id" FROM "PracticeSchedule" WHERE "practiceLocationId"=$1 AND "weekday"=$2::"Weekday" LIMIT 1 FOR UPDATE', [locationId, weekday]);
+      if (schedule.rowCount === 0) {
+        await client.query(`INSERT INTO "PracticeSchedule" ("id","practiceLocationId","weekday","isOpen","opensAtLocal","closesAtLocal","maximumOnlineBookingUntilLocal","maximumOperatingUntilLocal","createdAt","updatedAt") VALUES ($1,$2,$3::"Weekday",TRUE,'09:00:00','17:00:00',NULL,'17:00:00',now(),now())`, [randomUUID(), locationId, weekday]);
+      } else {
+        await client.query(`UPDATE "PracticeSchedule" SET "isOpen"=TRUE, "opensAtLocal"='09:00:00', "closesAtLocal"='17:00:00', "maximumOnlineBookingUntilLocal"=NULL, "maximumOperatingUntilLocal"='17:00:00', "updatedAt"=now() WHERE "id"=$1`, [schedule.rows[0].id]);
+      }
     }
 
     let financialAccount = await client.query('SELECT "id" FROM "DoctorFinancialAccount" WHERE "doctorUserId"=$1 LIMIT 1 FOR UPDATE', [userId]);
@@ -56,9 +73,7 @@ async function main() {
     if (financialAccount.rowCount === 0) {
       financialAccountId = randomUUID();
       await client.query('INSERT INTO "DoctorFinancialAccount" ("id","doctorUserId","createdAt","updatedAt") VALUES ($1,$2,now(),now())', [financialAccountId, userId]);
-    } else {
-      financialAccountId = financialAccount.rows[0].id;
-    }
+    } else financialAccountId = financialAccount.rows[0].id;
 
     const paidThrough = new Date(Date.now() + 30 * DAY_MS);
     const graceEndsAt = new Date(paidThrough.getTime() + 7 * DAY_MS);
@@ -73,14 +88,13 @@ async function main() {
     console.log('Development public acceptance fixture ready.');
     console.log(`Doctor page: http://localhost:5173/public/doctors/${doctorPublicIdentifier}`);
     console.log(`Practice location page: http://localhost:5173/public/practice-locations/${locationPublicIdentifier}`);
-    console.log('Fixture state: ACTIVE Doctor, ACTIVE clinic, active Service, paid development entitlement.');
+    console.log(`Booking page: http://localhost:5173/book/${locationPublicIdentifier}`);
+    console.log('Fixture state: ACTIVE Doctor, ACTIVE clinic, online booking enabled, daily 09:00-17:00 schedule, active Service, paid development entitlement.');
     console.log('This fixture contains development-only public data and no patient information.');
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
-  } finally {
-    await client.end();
-  }
+  } finally { await client.end(); }
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });
