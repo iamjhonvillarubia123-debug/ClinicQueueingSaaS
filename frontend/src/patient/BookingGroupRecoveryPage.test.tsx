@@ -9,7 +9,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 const configuration = {
-  practiceLocation: { id: 'location-1', publicIdentifier: 'north-clinic', name: 'North Clinic' },
+  practiceLocation: { publicIdentifier: 'north-clinic', name: 'North Clinic' },
 };
 
 afterEach(() => {
@@ -35,7 +35,7 @@ describe('F4 BookingGroup recovery', () => {
       if (url.endsWith('/booking/public/configuration/north-clinic')) return jsonResponse(configuration);
       if (url.endsWith('/patient-booking-groups/recovery/request') && init?.method === 'POST') {
         expect(JSON.parse(String(init.body))).toEqual({
-          practiceLocationId: 'location-1',
+          practiceLocationPublicIdentifier: 'north-clinic',
           serviceDate: '2026-08-23',
           mobileNumber: '+639181234567',
         });
