@@ -158,8 +158,8 @@ describe('F3 multi-person public booking', () => {
 
     await user.click(screen.getByRole('button', { name: 'Confirm group booking' }));
     expect(await screen.findByRole('heading', { name: 'Your group booking is confirmed.' })).toBeInTheDocument();
-    expect(screen.getByText('Queue 7')).toBeInTheDocument();
-    expect(screen.getByText('Queue 8')).toBeInTheDocument();
+    expect(screen.getByText('Queue 07')).toBeInTheDocument();
+    expect(screen.getByText('Queue 08')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View group booking' })).toHaveAttribute('href', '/patient-booking-groups');
     expect(screen.queryByText('group-control-token')).not.toBeInTheDocument();
     expect(screen.queryByText(/bookingGroupAccessToken/i)).not.toBeInTheDocument();
@@ -188,7 +188,7 @@ describe('F3 multi-person public booking', () => {
 
     expect(await screen.findByRole('heading', { name: 'Is this your booking?' })).toBeInTheDocument();
     expect(screen.getByText('August 24, 2026')).toBeInTheDocument();
-    expect(screen.getByText(/Mara Santos · Queue 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Mara Santos · Queue 03/)).toBeInTheDocument();
     expect(sessionStorage.getItem('booking-draft:group-draft')).toBe('group-control-token');
 
     await user.click(screen.getByRole('button', { name: 'Yes, this is my booking' }));
@@ -310,8 +310,8 @@ describe('F3 multi-person public booking', () => {
 
     render(<MemoryRouter><BookingGroupAccessBoundary /></MemoryRouter>);
     expect(await screen.findByRole('heading', { name: '2 confirmed people' })).toBeInTheDocument();
-    expect(screen.getByText('Queue 7')).toBeInTheDocument();
-    expect(screen.getByText('Queue 8')).toBeInTheDocument();
+    expect(screen.getByText('Queue 07')).toBeInTheDocument();
+    expect(screen.getByText('Queue 08')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:3000/patient-booking-groups/dashboard',
       expect.objectContaining({ credentials: 'include' }),
