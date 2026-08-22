@@ -204,6 +204,26 @@ After all processes are healthy, verify at minimum:
 
 Provider acceptance must use a controlled test recipient and only when explicitly authorized. Do not perform an unplanned live SMS test merely as a deployment health check.
 
+## Verified local performance/load evidence
+
+Milestone 13 includes an opt-in HTTP/PostgreSQL load smoke test:
+
+```text
+npm run test:load
+```
+
+The harness starts the real Nest application on an ephemeral localhost TCP port, uses the isolated PostgreSQL test database, and exercises concurrent HTTP requests without provider side effects. Rate limiting is disabled only inside this isolated capacity harness so the workload measures application/database processing rather than the intentional abuse-control ceiling.
+
+Verified local result on 2026-08-22:
+
+- liveness `/app/health`: 300 requests, concurrency 30, approximately 1657.6 requests/second, p50 11.2 ms, p95 51.9 ms, max 59.6 ms;
+- DB-backed readiness `/app/ready`: 200 requests, concurrency 20, approximately 1132.9 requests/second, p50 10.9 ms, p95 23.2 ms, max 176.1 ms;
+- public PracticeLocation route: 300 requests, concurrency 30, approximately 641.0 requests/second, p50 41.5 ms, p95 85.4 ms, max 94.0 ms;
+- zero incorrect HTTP results in the workload;
+- load test suite passed.
+
+These figures are evidence that the application and isolated PostgreSQL database sustain the tested concurrent read workload on the development machine. They are not a production SLA, capacity guarantee, hosting-size commitment, or substitute for production monitoring. Real production latency and throughput depend on infrastructure, geographic network distance, database sizing, provider dependencies, and concurrent write workload.
+
 ## Rollback triggers
 
 Initiate rollback/recovery review when any of the following occurs and cannot be corrected immediately without changing production data manually:
@@ -265,4 +285,4 @@ Record the following for each production deployment:
 
 ## Version 1 release restriction
 
-Milestone 13 is not complete merely because this runbook exists. Production release still requires the remaining Milestone 13 performance/load testing, logging/privacy inspection, provider acceptance, integrated Product Owner acceptance, and final release-candidate checkpoint to be completed and recorded.
+Milestone 13 is not complete merely because this runbook exists. Production release still requires the remaining Milestone 13 logging/privacy inspection, provider acceptance, integrated Product Owner acceptance, and final release-candidate checkpoint to be completed and recorded.
