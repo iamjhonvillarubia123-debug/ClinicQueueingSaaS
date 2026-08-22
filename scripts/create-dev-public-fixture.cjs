@@ -4,6 +4,7 @@ const { Client } = require('pg');
 
 const ACCEPTANCE_EMAIL = 'frontend.acceptance.doctor@local.test';
 const LOCATION_NAME = 'North Clinic';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function main() {
   if (process.env.NODE_ENV && process.env.NODE_ENV !== 'development') {
@@ -50,10 +51,29 @@ async function main() {
       await client.query(`INSERT INTO "PracticeLocationService" ("id","practiceLocationId","name","durationMinutes","status","createdAt","updatedAt") VALUES ($1,$2,'General Consultation',30,'ACTIVE'::"ServiceAvailabilityStatus",now(),now())`, [randomUUID(), locationId]);
     }
 
+    let financialAccount = await client.query('SELECT "id" FROM "DoctorFinancialAccount" WHERE "doctorUserId"=$1 LIMIT 1 FOR UPDATE', [userId]);
+    let financialAccountId;
+    if (financialAccount.rowCount === 0) {
+      financialAccountId = randomUUID();
+      await client.query('INSERT INTO "DoctorFinancialAccount" ("id","doctorUserId","createdAt","updatedAt") VALUES ($1,$2,now(),now())', [financialAccountId, userId]);
+    } else {
+      financialAccountId = financialAccount.rows[0].id;
+    }
+
+    const paidThrough = new Date(Date.now() + 30 * DAY_MS);
+    const graceEndsAt = new Date(paidThrough.getTime() + 7 * DAY_MS);
+    const entitlement = await client.query('SELECT "id" FROM "DoctorSubscriptionEntitlement" WHERE "doctorFinancialAccountId"=$1 LIMIT 1 FOR UPDATE', [financialAccountId]);
+    if (entitlement.rowCount === 0) {
+      await client.query('INSERT INTO "DoctorSubscriptionEntitlement" ("id","doctorFinancialAccountId","paidThrough","graceEndsAt","createdAt","updatedAt") VALUES ($1,$2,$3,$4,now(),now())', [randomUUID(), financialAccountId, paidThrough, graceEndsAt]);
+    } else {
+      await client.query('UPDATE "DoctorSubscriptionEntitlement" SET "paidThrough"=$2, "graceEndsAt"=$3, "updatedAt"=now() WHERE "doctorFinancialAccountId"=$1', [financialAccountId, paidThrough, graceEndsAt]);
+    }
+
     await client.query('COMMIT');
     console.log('Development public acceptance fixture ready.');
     console.log(`Doctor page: http://localhost:5173/public/doctors/${doctorPublicIdentifier}`);
     console.log(`Practice location page: http://localhost:5173/public/practice-locations/${locationPublicIdentifier}`);
+    console.log('Fixture state: ACTIVE Doctor, ACTIVE clinic, active Service, paid development entitlement.');
     console.log('This fixture contains development-only public data and no patient information.');
   } catch (error) {
     await client.query('ROLLBACK');
