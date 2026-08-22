@@ -18,11 +18,13 @@ import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
 import { CreateBookingDraftDto } from './dto/create-booking-draft.dto';
+import { CreatePublicBookingDraftDto } from './dto/create-public-booking-draft.dto';
 import {
   BookingDraftControlDto,
   ReplaceBookingDraftDto,
 } from './dto/replace-booking-draft.dto';
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
+import { PublicBookingEntryService } from './public-booking-entry.service';
 
 @Controller('booking')
 export class BookingController {
@@ -32,7 +34,52 @@ export class BookingController {
     private readonly publicServiceDateAvailability: PublicServiceDateAvailabilityService,
     private readonly bookingDraftEditService: BookingDraftEditService,
     private readonly bookingConfirmationService: BookingConfirmationService,
+    private readonly publicBookingEntryService: PublicBookingEntryService,
   ) {}
+
+  @RateLimit({
+    id: 'booking-public-configuration',
+    limit: 120,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
+  @Get('public/configuration/:publicIdentifier')
+  getPublicConfiguration(
+    @Param('publicIdentifier') publicIdentifier: string,
+  ) {
+    return this.publicBookingEntryService.getConfiguration(publicIdentifier);
+  }
+
+  @RateLimit({
+    id: 'booking-public-availability',
+    limit: 60,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
+  @Get('public/availability/:publicIdentifier/:serviceDate')
+  getPublicAvailability(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Param('serviceDate') serviceDate: string,
+  ) {
+    return this.publicBookingEntryService.getAvailability(
+      publicIdentifier,
+      serviceDate,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-public-draft-create',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
+  @Post('public/draft/:publicIdentifier')
+  createPublicDraft(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Body() dto: CreatePublicBookingDraftDto,
+  ) {
+    return this.publicBookingEntryService.createDraft(publicIdentifier, dto);
+  }
 
   @RateLimit({
     id: 'booking-configuration',
