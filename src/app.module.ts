@@ -21,6 +21,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PrivacyRetentionModule } from './privacy-retention/privacy-retention.module';
 import { PublicRoutingModule } from './public-routing/public-routing.module';
 import { QueueModule } from './queue/queue.module';
+import { RateLimitGuard } from './rate-limit/rate-limit.guard';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RequestCorrelationMiddleware } from './request-context/request-correlation.middleware';
 import { RequestIdExceptionFilter } from './request-context/request-id-exception.filter';
 import { ScheduleModule } from './schedule/schedule.module';
@@ -36,6 +38,7 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     }),
     AuthModule,
     PrismaModule,
+    RateLimitModule,
     NotificationModule,
     FinancialModule,
     DoctorModule,
@@ -56,6 +59,10 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     {
       provide: APP_GUARD,
       useClass: CsrfOriginGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
     },
     {
       provide: APP_FILTER,
