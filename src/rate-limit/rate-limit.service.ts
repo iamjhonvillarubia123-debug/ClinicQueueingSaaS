@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -53,5 +53,22 @@ export class RateLimitService {
         Math.ceil((expiresAt.getTime() - now.getTime()) / 1000),
       ),
     };
+  }
+
+  async cleanupExpired(now = new Date(), batchSize = 500): Promise<number> {
+    if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 5000) {
+      throw new BadRequestException('Rate-limit cleanup batch size is invalid.');
+    }
+
+    return this.prisma.$executeRaw(Prisma.sql`
+      DELETE FROM "RateLimitBucket"
+      WHERE ("scopeKey", "windowStart") IN (
+        SELECT "scopeKey", "windowStart"
+        FROM "RateLimitBucket"
+        WHERE "expiresAt" <= ${now}
+        ORDER BY "expiresAt", "scopeKey", "windowStart"
+        LIMIT ${batchSize}
+      )
+    `);
   }
 }
