@@ -55,6 +55,7 @@ const env = {
   ...process.env,
   DATABASE_URL: test.value,
   NODE_ENV: 'test',
+  RATE_LIMIT_ENABLED: 'false',
 };
 
 const migration = spawnSync(
