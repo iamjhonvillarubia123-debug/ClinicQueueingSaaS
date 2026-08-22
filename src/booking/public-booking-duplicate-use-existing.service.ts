@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
@@ -138,7 +142,12 @@ export class PublicBookingDuplicateUseExistingService {
           },
         };
       } else {
-        const group = groups[0]!;
+        const group = groups[0];
+        if (!group) {
+          throw new ConflictException(
+            'There is no active public booking to restore for this verified mobile scope.',
+          );
+        }
         await transaction.bookingGroupAccessToken.updateMany({
           where: {
             bookingGroupId: group.id,
