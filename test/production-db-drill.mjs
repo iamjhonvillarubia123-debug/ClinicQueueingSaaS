@@ -58,6 +58,14 @@ function databaseUrl(baseUrl, database) {
   return url.toString();
 }
 
+function postgresCliUrl(baseUrl) {
+  const url = new URL(baseUrl);
+  // Prisma-specific connection parameters such as `schema` are not valid
+  // libpq URI parameters and cause pg_dump/pg_restore to reject the URL.
+  url.search = '';
+  return url.toString();
+}
+
 function generatedDatabaseName(base, purpose, suffix) {
   const normalized = base.replace(/[^A-Za-z0-9_]/g, '_');
   const tail = `_${purpose}_${suffix}`;
@@ -166,6 +174,8 @@ const restoreDatabase = generatedDatabaseName(test.database, 'm13restore', suffi
 const maintenanceUrl = databaseUrl(test.value, 'postgres');
 const migrationUrl = databaseUrl(test.value, migrationDatabase);
 const restoreUrl = databaseUrl(test.value, restoreDatabase);
+const testCliUrl = postgresCliUrl(test.value);
+const restoreCliUrl = postgresCliUrl(restoreUrl);
 const dumpPath = join(tmpdir(), `clinic-queueing-m13-${suffix}.dump`);
 
 console.log(`Database drill source verified: ${test.database}`);
@@ -194,7 +204,7 @@ try {
     '--no-privileges',
     '--file',
     dumpPath,
-    test.value,
+    testCliUrl,
   ]);
 
   const sourceCounts = await readTableCounts(test.value);
@@ -206,7 +216,7 @@ try {
     '--no-owner',
     '--no-privileges',
     '--dbname',
-    restoreUrl,
+    restoreCliUrl,
     dumpPath,
   ]);
 
