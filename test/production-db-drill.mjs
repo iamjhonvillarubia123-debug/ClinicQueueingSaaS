@@ -186,10 +186,10 @@ try {
   await dropDatabaseIfExists(maintenanceUrl, migrationDatabase);
   await dropDatabaseIfExists(maintenanceUrl, restoreDatabase);
 
-  console.log('1/5 Creating fresh migration target...');
+  console.log('1/6 Creating fresh migration target...');
   await createDatabase(maintenanceUrl, migrationDatabase);
 
-  console.log('2/5 Applying all Prisma migrations to an empty database...');
+  console.log('2/6 Applying all Prisma migrations to an empty database...');
   runCommand(
     process.execPath,
     ['./node_modules/prisma/build/index.js', 'migrate', 'deploy'],
@@ -197,7 +197,7 @@ try {
   );
   await assertMigrationHistoryHealthy(migrationUrl);
 
-  console.log('3/5 Creating PostgreSQL custom-format backup of the isolated test database...');
+  console.log('3/6 Creating PostgreSQL custom-format backup of the isolated test database...');
   runCommand('pg_dump', [
     '--format=custom',
     '--no-owner',
@@ -209,7 +209,7 @@ try {
 
   const sourceCounts = await readTableCounts(test.value);
 
-  console.log('4/5 Restoring backup into a separate temporary database...');
+  console.log('4/6 Restoring backup into a separate temporary database...');
   await createDatabase(maintenanceUrl, restoreDatabase);
   runCommand('pg_restore', [
     '--exit-on-error',
@@ -224,15 +224,32 @@ try {
   assertEqualTableCounts(sourceCounts, restoredCounts);
   await assertMigrationHistoryHealthy(restoreUrl);
 
-  console.log('5/5 Confirming restored database is current with repository migrations...');
+  console.log('5/6 Confirming restored database is current with repository migrations...');
   runCommand(
     process.execPath,
     ['./node_modules/prisma/build/index.js', 'migrate', 'deploy'],
     { ...process.env, DATABASE_URL: restoreUrl, NODE_ENV: 'test' },
   );
 
+  console.log('6/6 Running privacy-erasure replay verification on the restored database...');
+  runCommand(
+    process.execPath,
+    [
+      './test/run-e2e.mjs',
+      '--runTestsByPath',
+      'test/backup-erasure-replay.e2e-spec.ts',
+      '--runInBand',
+    ],
+    {
+      ...process.env,
+      TEST_DATABASE_URL: restoreUrl,
+      NODE_ENV: 'test',
+      RATE_LIMIT_ENABLED: 'false',
+    },
+  );
+
   console.log(
-    `M13 database drill PASS: clean migration and backup/restore verified across ${sourceCounts.size} public tables.`,
+    `M13 database drill PASS: clean migration, backup/restore, and privacy-erasure replay verified across ${sourceCounts.size} public tables.`,
   );
 } finally {
   await dropDatabaseIfExists(maintenanceUrl, migrationDatabase).catch(() => undefined);
