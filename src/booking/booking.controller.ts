@@ -28,6 +28,14 @@ import { ReplacePublicBookingDraftDto } from './dto/replace-public-booking-draft
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
 import { PublicBookingEntryService } from './public-booking-entry.service';
 
+type PublicBookingGroupAppointment = {
+  bookingReference: string;
+  queueNumber: number;
+  status: string;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 @Controller('booking')
 export class BookingController {
   constructor(
@@ -221,10 +229,13 @@ export class BookingController {
         );
       }
 
+      const appointments = result.bookingGroup
+        .appointments as PublicBookingGroupAppointment[];
+
       return {
         bookingGroup: {
           serviceDate: result.bookingGroup.serviceDate,
-          appointments: result.bookingGroup.appointments.map((appointment) => ({
+          appointments: appointments.map((appointment) => ({
             bookingReference: appointment.bookingReference,
             queueNumber: appointment.queueNumber,
             status: appointment.status,
