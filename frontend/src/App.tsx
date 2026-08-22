@@ -3,6 +3,7 @@ import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 
 import { ApiError } from './api/client';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
+import { BookingEntryBoundary, DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 
 function LandingPage() {
   return (
@@ -14,7 +15,7 @@ function LandingPage() {
       <section className="hero">
         <p className="eyebrow">Simple clinic queues</p>
         <h1>Less waiting around. More clarity.</h1>
-        <p>Public doctor pages and patient booking will appear here in the next approved frontend journeys.</p>
+        <p>Open a Doctor or clinic public link to view practice information and begin booking.</p>
       </section>
     </main>
   );
@@ -95,6 +96,9 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/public/doctors/:publicIdentifier" element={<DoctorPublicPage />} />
+      <Route path="/public/practice-locations/:publicIdentifier" element={<PracticeLocationPublicPage />} />
+      <Route path="/book/:publicIdentifier" element={<BookingEntryBoundary />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
