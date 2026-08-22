@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { PATIENT_BOOKING_ACCESS_COOKIE } from '../patient-access/patient-booking-access.service';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationService } from './booking-confirmation.service';
@@ -33,6 +34,12 @@ export class BookingController {
     private readonly bookingConfirmationService: BookingConfirmationService,
   ) {}
 
+  @RateLimit({
+    id: 'booking-configuration',
+    limit: 120,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'practiceLocationId' },
+  })
   @Get('configuration/:practiceLocationId')
   getConfiguration(@Param('practiceLocationId') practiceLocationId: string) {
     return this.bookingConfigurationService.getEffectiveConfiguration(
@@ -40,6 +47,12 @@ export class BookingController {
     );
   }
 
+  @RateLimit({
+    id: 'booking-availability',
+    limit: 60,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'practiceLocationId' },
+  })
   @Get('availability/:practiceLocationId/:serviceDate')
   getAvailability(
     @Param('practiceLocationId') practiceLocationId: string,
@@ -51,6 +64,12 @@ export class BookingController {
     );
   }
 
+  @RateLimit({
+    id: 'booking-draft-create',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('draft')
   async createDraft(@Body() createBookingDraftDto: CreateBookingDraftDto) {
     const availability = await this.publicServiceDateAvailability.resolve(
