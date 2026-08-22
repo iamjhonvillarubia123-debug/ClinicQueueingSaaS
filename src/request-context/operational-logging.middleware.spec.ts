@@ -1,7 +1,6 @@
 import { Logger } from '@nestjs/common';
 import type { NextFunction, Response } from 'express';
 import { EventEmitter } from 'node:events';
-import type { CorrelatedRequest } from './request-correlation.middleware';
 import { OperationalLoggingMiddleware } from './operational-logging.middleware';
 
 type TestRequestShape = {
@@ -41,11 +40,7 @@ describe('OperationalLoggingMiddleware', () => {
     }) as TestResponse;
     const next: NextFunction = jest.fn();
 
-    middleware.use(
-      request as unknown as CorrelatedRequest,
-      response as unknown as Response,
-      next,
-    );
+    middleware.use(request, response as unknown as Response, next);
     response.emit('finish');
 
     expect(next).toHaveBeenCalledTimes(1);
@@ -74,11 +69,7 @@ describe('OperationalLoggingMiddleware', () => {
       statusCode: 404,
     }) as TestResponse;
 
-    middleware.use(
-      request as unknown as CorrelatedRequest,
-      response as unknown as Response,
-      jest.fn(),
-    );
+    middleware.use(request, response as unknown as Response, jest.fn());
     response.emit('finish');
 
     const message = String(log.mock.calls[0]?.[0]);
