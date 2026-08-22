@@ -54,7 +54,9 @@ function requirePostgresUrl(value: string): void {
   try {
     url = new URL(value);
   } catch {
-    throw new Error('Production configuration DATABASE_URL must be a valid URL.');
+    throw new Error(
+      'Production configuration DATABASE_URL must be a valid URL.',
+    );
   }
 
   if (!['postgresql:', 'postgres:'].includes(url.protocol)) {
@@ -147,14 +149,20 @@ function validateWorkerConfiguration(
     );
   }
   if (config.MAINTENANCE_WORKER_INTERVAL_MS !== undefined) {
-    readInteger(
-      config,
-      'MAINTENANCE_WORKER_INTERVAL_MS',
-      null,
-      10000,
-      3600000,
-    );
+    readInteger(config, 'MAINTENANCE_WORKER_INTERVAL_MS', null, 10000, 3600000);
   }
+}
+
+function rateLimitExplicitlyDisabled(config: Record<string, unknown>): boolean {
+  const raw = config.RATE_LIMIT_ENABLED;
+  if (raw === undefined) return false;
+  if (typeof raw === 'boolean') return raw === false;
+  if (typeof raw === 'string') return raw.trim().toLowerCase() === 'false';
+  if (typeof raw === 'number') return raw === 0;
+
+  throw new Error(
+    'Production configuration RATE_LIMIT_ENABLED must be a boolean-compatible value.',
+  );
 }
 
 export function validateRuntimeConfig(
@@ -170,7 +178,7 @@ export function validateRuntimeConfig(
   requireHttpsUrl(String(config.PUBLIC_APP_BASE_URL), 'PUBLIC_APP_BASE_URL');
   requireHttpsUrl(String(config.WEB_APP_ORIGIN), 'WEB_APP_ORIGIN');
 
-  if (String(config.RATE_LIMIT_ENABLED ?? 'true').toLowerCase() === 'false') {
+  if (rateLimitExplicitlyDisabled(config)) {
     throw new Error('Production configuration cannot disable rate limiting.');
   }
 
