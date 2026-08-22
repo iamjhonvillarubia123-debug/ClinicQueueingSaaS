@@ -1,17 +1,34 @@
 # Clinic Queueing Frontend
 
-Version 1 frontend foundation.
+React + Vite frontend for the Clinic Queueing SaaS.
 
 ## Local development
 
-1. Copy `.env.example` to `.env.local` and set only browser-safe values.
-2. Run `npm install`.
-3. Run `npm run dev`.
+The backend runs at `http://localhost:3000` and the frontend at `http://localhost:5173` by default.
 
-The backend defaults to `http://localhost:3000` and the frontend to `http://localhost:5173`. Configure the backend `WEB_APP_ORIGIN` accordingly so credentialed HttpOnly session cookies are accepted.
+```powershell
+cd frontend
+npm install
+Copy-Item .env.example .env.local
+npm run dev
+```
+
+Browser authentication uses the backend's HttpOnly session cookie. Never place secrets in `VITE_*` variables.
+
+## Public routes
+
+F1 uses the backend's immutable public identifiers directly as stable route identity:
+
+- `/public/doctors/:publicIdentifier`
+- `/public/practice-locations/:publicIdentifier`
+- `/book/:practiceLocationPublicIdentifier` is the frontend handoff boundary into F2 individual booking.
+
+Public pages render only fields returned by the privacy-whitelisted backend public-routing API. Frontend availability display is not authority: the backend remains authoritative for lifecycle, subscription, schedule, capacity, and booking eligibility.
 
 ## Verification
 
-Run `npm run verify` to execute TypeScript type checking, ESLint, unit tests, and the production build.
+```powershell
+npm run verify
+```
 
-Never place passwords, API keys, provider tokens, session tokens, patient data, or other secrets in `VITE_*` environment variables because those values are exposed to the browser bundle.
+This runs typecheck, lint, unit tests, and the production build.
