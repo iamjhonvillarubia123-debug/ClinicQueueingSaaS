@@ -1,12 +1,6 @@
-import {
-  IsDateString,
-  IsNotEmpty,
-  IsString,
-  IsUUID,
-  Length,
-} from 'class-validator';
+import { IsDateString, IsNotEmpty, IsString, IsUUID, Length } from 'class-validator';
 
-export class RequestBookingGroupRecoveryDto {
+export class RequestAppointmentRecoveryDto {
   @IsString()
   @IsNotEmpty()
   practiceLocationPublicIdentifier!: string;
@@ -19,7 +13,7 @@ export class RequestBookingGroupRecoveryDto {
   mobileNumber!: string;
 }
 
-export class VerifyBookingGroupRecoveryOtpDto {
+export class VerifyAppointmentRecoveryOtpDto {
   @IsUUID()
   recoveryAttemptId!: string;
 

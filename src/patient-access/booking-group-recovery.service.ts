@@ -70,6 +70,14 @@ export class BookingGroupRecoveryService {
   ) {}
 
   async request(dto: RequestBookingGroupRecoveryDto) {
+    const location = await this.prisma.practiceLocation.findUnique({
+      where: {
+        publicIdentifier: dto.practiceLocationPublicIdentifier,
+      },
+      select: { id: true },
+    });
+    if (!location) this.fail();
+
     const protectedMobile = this.mobileNumber.protect(dto.mobileNumber);
     const serviceDate = new Date(`${dto.serviceDate}T00:00:00.000Z`);
     const now = new Date();
@@ -77,7 +85,7 @@ export class BookingGroupRecoveryService {
     return this.prisma.$transaction(async (transaction) => {
       const candidates = await transaction.bookingGroup.findMany({
         where: {
-          practiceLocationId: dto.practiceLocationId,
+          practiceLocationId: location.id,
           serviceDate,
           controllingMobileNumberHash: protectedMobile.hash,
           appointments: { some: { anonymizedAt: null } },
@@ -90,7 +98,7 @@ export class BookingGroupRecoveryService {
 
       const attempt = await transaction.bookingGroupRecoveryAttempt.create({
         data: {
-          practiceLocationId: dto.practiceLocationId,
+          practiceLocationId: location.id,
           serviceDate,
           mobileNumberEncrypted: protectedMobile.encrypted,
           mobileNumberHash: protectedMobile.hash,

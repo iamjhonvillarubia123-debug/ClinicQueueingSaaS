@@ -27,6 +27,7 @@ import {
 import { ReplacePublicBookingDraftDto } from './dto/replace-public-booking-draft.dto';
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
 import { PublicBookingEntryService } from './public-booking-entry.service';
+import { PublicBookingReplacementService } from './public-booking-replacement.service';
 
 type PublicBookingGroupAppointment = {
   bookingReference: string;
@@ -45,6 +46,7 @@ export class BookingController {
     private readonly bookingDraftEditService: BookingDraftEditService,
     private readonly bookingConfirmationService: BookingConfirmationService,
     private readonly publicBookingEntryService: PublicBookingEntryService,
+    private readonly publicBookingReplacementService: PublicBookingReplacementService,
   ) {}
 
   @RateLimit({
@@ -99,6 +101,32 @@ export class BookingController {
       publicIdentifier,
       bookingDraftId,
       dto,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-verified-duplicate-context',
+    limit: 30,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'PARAM', field: 'bookingDraftId' },
+  })
+  @Post('draft/:bookingDraftId/duplicate-context')
+  describeDuplicate(@Param('bookingDraftId') bookingDraftId: string) {
+    return this.publicBookingReplacementService.describeDuplicate(
+      bookingDraftId,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-verified-replace-existing',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'PARAM', field: 'bookingDraftId' },
+  })
+  @Post('draft/:bookingDraftId/replace-existing')
+  authorizeReplacement(@Param('bookingDraftId') bookingDraftId: string) {
+    return this.publicBookingReplacementService.authorizeReplacement(
+      bookingDraftId,
     );
   }
 

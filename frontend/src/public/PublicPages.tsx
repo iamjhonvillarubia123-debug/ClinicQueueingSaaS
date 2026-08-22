@@ -227,6 +227,11 @@ export function PracticeLocationPublicPage() {
           </div>
         ) : null}
 
+        <div className="booking-recovery-entry">
+          <div><strong>Already booked?</strong><span>Recover secure access without needing to know whether the booking was for one person or a group.</span></div>
+          <Link className="secondary-action" to={`/recover/${encodeURIComponent(publicIdentifier)}`}>Recover booking access</Link>
+        </div>
+
         <section className="public-section" aria-labelledby="services-heading">
           <div className="section-heading">
             <p className="eyebrow">Services</p>

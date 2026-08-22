@@ -27,7 +27,10 @@ import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 import { MultiPersonBookingConfirmationService } from './multi-person-booking-confirmation.service';
+import { PublicBookingDuplicateUseExistingController } from './public-booking-duplicate-use-existing.controller';
+import { PublicBookingDuplicateUseExistingService } from './public-booking-duplicate-use-existing.service';
 import { PublicBookingEntryService } from './public-booking-entry.service';
+import { PublicBookingReplacementService } from './public-booking-replacement.service';
 
 @Module({
   imports: [
@@ -43,6 +46,7 @@ import { PublicBookingEntryService } from './public-booking-entry.service';
   ],
   controllers: [
     BookingController,
+    PublicBookingDuplicateUseExistingController,
     BookingGroupAddPersonController,
     BookingGroupMemberCancellationController,
   ],
@@ -63,6 +67,8 @@ import { PublicBookingEntryService } from './public-booking-entry.service';
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
+    PublicBookingReplacementService,
+    PublicBookingDuplicateUseExistingService,
     BookingConfirmationService,
   ],
   exports: [
@@ -74,6 +80,8 @@ import { PublicBookingEntryService } from './public-booking-entry.service';
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
+    PublicBookingReplacementService,
+    PublicBookingDuplicateUseExistingService,
     BookingConfirmationService,
   ],
 })

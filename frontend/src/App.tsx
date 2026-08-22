@@ -1,10 +1,14 @@
 import { FormEvent, useState } from 'react';
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from './api/client';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
-import { BookingGroupAccessBoundary, MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
+import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
+import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
+import { PatientBookingGroupPage } from './patient/PatientBookingGroupPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 
 function LandingPage() {
@@ -90,8 +94,9 @@ function WorkspacePage() {
   return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>{copy[0]}</h1><p>{copy[1]}</p></section>;
 }
 
-function PatientAccessBoundary() {
-  return <main className="public-detail"><header className="public-header"><Link className="brand" to="/">Clinic Queueing</Link></header><section className="public-state"><p className="eyebrow">Appointment</p><h1>Your appointment access is ready.</h1><p>The detailed queue dashboard is implemented in the next patient-experience milestone.</p></section></main>;
+function LegacyRecoveryRedirect() {
+  const { publicIdentifier } = useParams();
+  return <Navigate to={publicIdentifier ? `/recover/${encodeURIComponent(publicIdentifier)}` : '/'} replace />;
 }
 
 function NotFound() {
@@ -106,8 +111,12 @@ export function App() {
       <Route path="/public/practice-locations/:publicIdentifier" element={<PracticeLocationPublicPage />} />
       <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
       <Route path="/book/:publicIdentifier/group" element={<MultiPersonBookingPage />} />
-      <Route path="/patient-bookings/:bookingReference" element={<PatientAccessBoundary />} />
-      <Route path="/patient-booking-groups" element={<BookingGroupAccessBoundary />} />
+      <Route path="/booking/access" element={<BookingAccessBootstrapPage />} />
+      <Route path="/recover/:publicIdentifier" element={<BookingRecoveryPage />} />
+      <Route path="/recover/appointment/:publicIdentifier" element={<LegacyRecoveryRedirect />} />
+      <Route path="/recover/group/:publicIdentifier" element={<LegacyRecoveryRedirect />} />
+      <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
+      <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>

@@ -11,7 +11,7 @@ import { MobileNumberService } from '../security/mobile-number/mobile-number.ser
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 
 type CreateAttemptArgs = {
-  data: { bookingGroupId: string | null };
+  data: { bookingGroupId: string | null; practiceLocationId: string };
 };
 
 type UpdateOtpArgs = {
@@ -35,7 +35,11 @@ describe('BookingGroupRecoveryService', () => {
   };
 
   async function buildService(transaction: Record<string, unknown>) {
+    const practiceLocationFindUnique = jest
+      .fn()
+      .mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' });
     const prisma = {
+      practiceLocation: { findUnique: practiceLocationFindUnique },
       $transaction: (callback: (tx: Record<string, unknown>) => unknown) =>
         Promise.resolve(callback(transaction)),
     };
@@ -91,10 +95,11 @@ describe('BookingGroupRecoveryService', () => {
         completionTimesMock,
       },
       mobile,
+      practiceLocationFindUnique,
     };
   }
 
-  it('returns the same generic recovery shape when no BookingGroup candidate exists', async () => {
+  it('resolves the public clinic identifier server-side and keeps the no-match response generic', async () => {
     const createAttempt = jest
       .fn<
         Promise<{
@@ -119,14 +124,18 @@ describe('BookingGroupRecoveryService', () => {
         create: jest.fn().mockResolvedValue({ id: 'otp-1' }),
       },
     };
-    const { service } = await buildService(transaction);
+    const { service, practiceLocationFindUnique } = await buildService(transaction);
 
     const result = await service.request({
-      practiceLocationId: '11111111-1111-4111-8111-111111111111',
+      practiceLocationPublicIdentifier: 'north-clinic-public-id',
       serviceDate: '2026-08-20',
       mobileNumber: '09171234567',
     });
 
+    expect(practiceLocationFindUnique).toHaveBeenCalledWith({
+      where: { publicIdentifier: 'north-clinic-public-id' },
+      select: { id: true },
+    });
     expect(result.message).toBe(
       'If the booking group can be recovered, verification will continue.',
     );
@@ -134,6 +143,9 @@ describe('BookingGroupRecoveryService', () => {
     expect(createAttempt).toHaveBeenCalledTimes(1);
     const [createAttemptArgs] = createAttempt.mock.calls[0] ?? [];
     expect(createAttemptArgs?.data.bookingGroupId).toBeNull();
+    expect(createAttemptArgs?.data.practiceLocationId).toBe(
+      '11111111-1111-4111-8111-111111111111',
+    );
   });
 
   it('returns the committed logical result on compatible replay without rotating again', async () => {
