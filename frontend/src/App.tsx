@@ -4,6 +4,7 @@ import { ApiError } from './api/client';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
+import { BookingGroupAccessBoundary, MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 
 function LandingPage() {
@@ -104,7 +105,9 @@ export function App() {
       <Route path="/public/doctors/:publicIdentifier" element={<DoctorPublicPage />} />
       <Route path="/public/practice-locations/:publicIdentifier" element={<PracticeLocationPublicPage />} />
       <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
+      <Route path="/book/:publicIdentifier/group" element={<MultiPersonBookingPage />} />
       <Route path="/patient-bookings/:bookingReference" element={<PatientAccessBoundary />} />
+      <Route path="/patient-booking-groups" element={<BookingGroupAccessBoundary />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
