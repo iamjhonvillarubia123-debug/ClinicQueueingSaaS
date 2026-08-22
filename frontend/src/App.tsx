@@ -5,9 +5,11 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import { AppointmentRecoveryPage } from './patient/AppointmentRecoveryPage';
+import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
+import { BookingGroupRecoveryPage } from './patient/BookingGroupRecoveryPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
 import { PatientBookingGroupPage } from './patient/PatientBookingGroupPage';
-import { BookingGroupRecoveryPage } from './patient/BookingGroupRecoveryPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 
 function LandingPage() {
@@ -105,6 +107,8 @@ export function App() {
       <Route path="/public/practice-locations/:publicIdentifier" element={<PracticeLocationPublicPage />} />
       <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
       <Route path="/book/:publicIdentifier/group" element={<MultiPersonBookingPage />} />
+      <Route path="/booking/access" element={<BookingAccessBootstrapPage />} />
+      <Route path="/recover/appointment/:publicIdentifier" element={<AppointmentRecoveryPage />} />
       <Route path="/recover/group/:publicIdentifier" element={<BookingGroupRecoveryPage />} />
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
