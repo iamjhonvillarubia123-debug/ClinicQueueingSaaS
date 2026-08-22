@@ -28,6 +28,7 @@ import { BookingService } from './booking.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 import { MultiPersonBookingConfirmationService } from './multi-person-booking-confirmation.service';
 import { PublicBookingEntryService } from './public-booking-entry.service';
+import { PublicBookingReplacementService } from './public-booking-replacement.service';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { PublicBookingEntryService } from './public-booking-entry.service';
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
+    PublicBookingReplacementService,
     BookingConfirmationService,
   ],
   exports: [
@@ -74,6 +76,7 @@ import { PublicBookingEntryService } from './public-booking-entry.service';
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
+    PublicBookingReplacementService,
     BookingConfirmationService,
   ],
 })

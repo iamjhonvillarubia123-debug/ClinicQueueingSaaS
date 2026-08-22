@@ -9,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
   ValidateIf,
   ValidateNested,
@@ -100,6 +101,10 @@ export class CreateBookingDraftDto {
 
   @IsDateString()
   serviceDate!: string;
+
+  @IsOptional()
+  @IsUUID()
+  replacementRecoveryAttemptId?: string;
 
   @IsOptional()
   @IsString()

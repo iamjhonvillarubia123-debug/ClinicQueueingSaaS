@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { ActiveBookingIdentityService } from '../booking/active-booking-identity.service';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
 import { OtpModule } from '../otp/otp.module';
@@ -15,6 +16,8 @@ import { PatientBookingAccessController } from './patient-booking-access.control
 import { PatientBookingAccessService } from './patient-booking-access.service';
 import { PatientBookingGroupAccessController } from './patient-booking-group-access.controller';
 import { PatientBookingGroupAccessService } from './patient-booking-group-access.service';
+import { PublicBookingRecoveryController } from './public-booking-recovery.controller';
+import { PublicBookingRecoveryService } from './public-booking-recovery.service';
 
 @Module({
   imports: [
@@ -30,6 +33,7 @@ import { PatientBookingGroupAccessService } from './patient-booking-group-access
     PatientBookingGroupAccessController,
     AppointmentRecoveryController,
     BookingGroupRecoveryController,
+    PublicBookingRecoveryController,
   ],
   providers: [
     PatientAppointmentDashboardService,
@@ -38,6 +42,8 @@ import { PatientBookingGroupAccessService } from './patient-booking-group-access
     AppointmentRecoveryService,
     BookingGroupRecoveryService,
     ContactPreferenceWithdrawalService,
+    ActiveBookingIdentityService,
+    PublicBookingRecoveryService,
   ],
   exports: [
     PatientAppointmentDashboardService,
@@ -46,6 +52,7 @@ import { PatientBookingGroupAccessService } from './patient-booking-group-access
     AppointmentRecoveryService,
     BookingGroupRecoveryService,
     ContactPreferenceWithdrawalService,
+    PublicBookingRecoveryService,
   ],
 })
 export class PatientAccessModule {}
