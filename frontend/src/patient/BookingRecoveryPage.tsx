@@ -247,15 +247,13 @@ export function BookingRecoveryPage() {
         <header className="patient-dashboard-hero">
           <p className="eyebrow">Recover booking access</p>
           <h1>{stage === 'details' ? 'Recover your booking.' : stage === 'otp' ? 'Verify your mobile.' : stage === 'candidate' ? 'Is this your booking?' : stage === 'replace-confirm' ? 'Create a new booking?' : 'Existing booking cancelled.'}</h1>
-          <p>{stage === 'details'
+          {stage !== 'candidate' ? <p>{stage === 'details'
             ? `Use the service date and mobile number used for the booking at ${configuration.practiceLocation.name}. You do not need to know whether it was an individual or group booking.`
             : stage === 'otp'
               ? 'For privacy, booking details stay hidden until the mobile number is verified.'
-              : stage === 'candidate'
-                ? 'Choose the existing booking if it belongs to you. Rejecting it does not cancel anything until you confirm the next warning.'
-                : stage === 'replace-confirm'
-                  ? 'This action permanently gives up the old live queue position. The old Queue Number remains historical and will not transfer.'
-                  : 'You can now create a new booking. The replacement will receive fresh Queue Number(s) from the current queue when confirmation succeeds.'}</p>
+              : stage === 'replace-confirm'
+                ? 'This action permanently gives up the old live queue position. The old Queue Number remains historical and will not transfer.'
+                : 'You can now create a new booking. The replacement will receive fresh Queue Number(s) from the current queue when confirmation succeeds.'}</p> : null}
         </header>
 
         {stage === 'details' ? (
@@ -301,8 +299,8 @@ export function BookingRecoveryPage() {
               </dl>
               {error ? <div className="form-error" role="alert">{error}</div> : null}
               <div className="recovery-candidate-actions">
-                <button className="primary" type="button" disabled={busy} onClick={() => void useExisting()}>{busy ? 'Restoring access…' : 'This is my booking'}</button>
-                <button className="secondary" type="button" disabled={busy} onClick={() => { setError(''); setStage('replace-confirm'); }}>This is not my booking</button>
+                <button className="primary" type="button" disabled={busy} onClick={() => void useExisting()}>{busy ? 'Restoring access…' : 'Yes, this is my booking'}</button>
+                <button className="secondary" type="button" disabled={busy} onClick={() => { setError(''); setStage('replace-confirm'); }}>No, I need a different booking</button>
               </div>
             </section>
           ) : (
