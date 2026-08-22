@@ -11,9 +11,12 @@ type TestRequestShape = {
   originalUrl?: string;
 };
 
-type TestResponse = EventEmitter & {
-  statusCode: number;
-};
+type TestResponse = EventEmitter &
+  Pick<Response, 'statusCode' | 'once'>;
+
+function createTestResponse(statusCode: number): TestResponse {
+  return Object.assign(new EventEmitter(), { statusCode }) as TestResponse;
+}
 
 describe('OperationalLoggingMiddleware', () => {
   afterEach(() => {
@@ -35,12 +38,10 @@ describe('OperationalLoggingMiddleware', () => {
         bookingAnswer: 'sensitive patient free text',
       },
     };
-    const response = Object.assign(new EventEmitter(), {
-      statusCode: 401,
-    }) as TestResponse;
+    const response = createTestResponse(401);
     const next: NextFunction = jest.fn();
 
-    middleware.use(request, response as unknown as Response, next);
+    middleware.use(request, response, next);
     response.emit('finish');
 
     expect(next).toHaveBeenCalledTimes(1);
@@ -65,11 +66,9 @@ describe('OperationalLoggingMiddleware', () => {
       method: 'GET',
       originalUrl: '/unknown/private-value',
     };
-    const response = Object.assign(new EventEmitter(), {
-      statusCode: 404,
-    }) as TestResponse;
+    const response = createTestResponse(404);
 
-    middleware.use(request, response as unknown as Response, jest.fn());
+    middleware.use(request, response, jest.fn());
     response.emit('finish');
 
     const message = String(log.mock.calls[0]?.[0]);
