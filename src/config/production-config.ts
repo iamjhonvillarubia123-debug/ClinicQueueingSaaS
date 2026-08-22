@@ -9,6 +9,7 @@ const REQUIRED_PRODUCTION_ENV = [
   'OTP_HMAC_ACTIVE_KEY_ID',
   'PUBLIC_APP_BASE_URL',
   'WEB_APP_ORIGIN',
+  'NOTIFICATION_WORKER_LEASE_MS',
 ] as const;
 
 const PLACEHOLDER_MARKERS = [
@@ -48,7 +49,50 @@ function requireHttpsUrl(value: string, key: string): void {
   }
 }
 
-function validateSmsProvider(config: Record<string, unknown>): void {
+function requirePostgresUrl(value: string): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Production configuration DATABASE_URL must be a valid URL.');
+  }
+
+  if (!['postgresql:', 'postgres:'].includes(url.protocol)) {
+    throw new Error(
+      'Production configuration DATABASE_URL must use PostgreSQL.',
+    );
+  }
+}
+
+function readInteger(
+  config: Record<string, unknown>,
+  key: string,
+  fallback: number | null,
+  min: number,
+  max: number,
+): number {
+  const raw = config[key] ?? fallback;
+  if (raw === null || raw === undefined || raw === '') {
+    throw new Error(`Production configuration requires ${key}.`);
+  }
+
+  if (typeof raw !== 'string' && typeof raw !== 'number') {
+    throw new Error(
+      `Production configuration ${key} must be between ${min} and ${max} milliseconds.`,
+    );
+  }
+
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(
+      `Production configuration ${key} must be between ${min} and ${max} milliseconds.`,
+    );
+  }
+
+  return value;
+}
+
+function validateSmsProvider(config: Record<string, unknown>): number {
   const provider = requireProductionValue(config, 'SMS_PROVIDER').toUpperCase();
   if (provider !== 'PHILSMS') {
     throw new Error('Production configuration SMS_PROVIDER is unsupported.');
@@ -57,24 +101,59 @@ function validateSmsProvider(config: Record<string, unknown>): void {
   requireProductionValue(config, 'PHILSMS_API_TOKEN');
   requireProductionValue(config, 'PHILSMS_SENDER_ID');
 
-  const configuredTimeout = config.PHILSMS_TIMEOUT_MS;
-  const timeoutRaw =
-    configuredTimeout === undefined ? '10000' : configuredTimeout;
-  if (typeof timeoutRaw !== 'string' && typeof timeoutRaw !== 'number') {
-    throw new Error(
-      'Production configuration PHILSMS_TIMEOUT_MS must be between 1000 and 30000 milliseconds.',
-    );
-  }
-  const timeoutMs = Number(timeoutRaw);
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
-    throw new Error(
-      'Production configuration PHILSMS_TIMEOUT_MS must be between 1000 and 30000 milliseconds.',
-    );
-  }
+  const timeoutMs = readInteger(
+    config,
+    'PHILSMS_TIMEOUT_MS',
+    10000,
+    1000,
+    30000,
+  );
 
   if (config.PHILSMS_BASE_URL !== undefined) {
     const baseUrl = requireProductionValue(config, 'PHILSMS_BASE_URL');
     requireHttpsUrl(baseUrl, 'PHILSMS_BASE_URL');
+  }
+
+  return timeoutMs;
+}
+
+function validateWorkerConfiguration(
+  config: Record<string, unknown>,
+  providerTimeoutMs: number,
+): void {
+  const leaseDurationMs = readInteger(
+    config,
+    'NOTIFICATION_WORKER_LEASE_MS',
+    null,
+    5000,
+    300000,
+  );
+  if (leaseDurationMs <= providerTimeoutMs + 5000) {
+    throw new Error(
+      'Production configuration NOTIFICATION_WORKER_LEASE_MS must exceed PHILSMS_TIMEOUT_MS by more than 5000 milliseconds.',
+    );
+  }
+
+  if (config.NOTIFICATION_WORKER_POLL_MS !== undefined) {
+    readInteger(config, 'NOTIFICATION_WORKER_POLL_MS', null, 100, 60000);
+  }
+  if (config.NOTIFICATION_RECONCILIATION_POLL_MS !== undefined) {
+    readInteger(
+      config,
+      'NOTIFICATION_RECONCILIATION_POLL_MS',
+      null,
+      500,
+      60000,
+    );
+  }
+  if (config.MAINTENANCE_WORKER_INTERVAL_MS !== undefined) {
+    readInteger(
+      config,
+      'MAINTENANCE_WORKER_INTERVAL_MS',
+      null,
+      10000,
+      3600000,
+    );
   }
 }
 
@@ -87,9 +166,16 @@ export function validateRuntimeConfig(
     requireProductionValue(config, key);
   }
 
+  requirePostgresUrl(String(config.DATABASE_URL));
   requireHttpsUrl(String(config.PUBLIC_APP_BASE_URL), 'PUBLIC_APP_BASE_URL');
   requireHttpsUrl(String(config.WEB_APP_ORIGIN), 'WEB_APP_ORIGIN');
-  validateSmsProvider(config);
+
+  if (String(config.RATE_LIMIT_ENABLED ?? 'true').toLowerCase() === 'false') {
+    throw new Error('Production configuration cannot disable rate limiting.');
+  }
+
+  const providerTimeoutMs = validateSmsProvider(config);
+  validateWorkerConfiguration(config, providerTimeoutMs);
 
   return config;
 }
