@@ -171,7 +171,7 @@ export class DoctorController {
     id: 'doctor-reactivate',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email', normalize: 'LOWERCASE_TRIM' },
+    subject: { kind: 'BODY', field: 'email' },
   })
   @Post('account/reactivate')
   reactivateAccount(
@@ -189,7 +189,7 @@ export class DoctorController {
     id: 'doctor-permanent-delete',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email', normalize: 'LOWERCASE_TRIM' },
+    subject: { kind: 'BODY', field: 'email' },
   })
   @Post('account/permanent-delete')
   permanentlyDeleteAccount(
