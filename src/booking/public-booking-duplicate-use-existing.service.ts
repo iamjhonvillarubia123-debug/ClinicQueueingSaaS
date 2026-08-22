@@ -115,6 +115,15 @@ export class PublicBookingDuplicateUseExistingService {
           };
 
       if (individual) {
+        await transaction.bookingAccessToken.updateMany({
+          where: {
+            appointmentId: individual.id,
+            tokenHash: { not: null },
+            revokedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { revokedAt: now },
+        });
         const issued = await this.bookingAccessTokens.issueInitialToken(
           transaction,
           individual.id,
@@ -130,6 +139,15 @@ export class PublicBookingDuplicateUseExistingService {
         };
       } else {
         const group = groups[0]!;
+        await transaction.bookingGroupAccessToken.updateMany({
+          where: {
+            bookingGroupId: group.id,
+            tokenHash: { not: null },
+            revokedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: { revokedAt: now },
+        });
         const issued = await this.bookingGroupAccessTokens.issueInitialToken(
           transaction,
           group.id,
