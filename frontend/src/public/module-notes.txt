@@ -1,1 +1,0 @@
-F1 public Doctor and PracticeLocation surfaces are read-only over backend-authoritative public projections.
