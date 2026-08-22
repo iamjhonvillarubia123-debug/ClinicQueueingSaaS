@@ -3,8 +3,10 @@ import { PublicRoutingService } from '../public-routing/public-routing.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
+import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
 import { CreatePublicBookingDraftDto } from './dto/create-public-booking-draft.dto';
+import { ReplacePublicBookingDraftDto } from './dto/replace-public-booking-draft.dto';
 
 @Injectable()
 export class PublicBookingEntryService {
@@ -14,6 +16,7 @@ export class PublicBookingEntryService {
     private readonly configuration: BookingConfigurationService,
     private readonly availability: PublicServiceDateAvailabilityService,
     private readonly bookingService: BookingService,
+    private readonly bookingDraftEditService: BookingDraftEditService,
   ) {}
 
   async getConfiguration(publicIdentifier: string) {
@@ -34,7 +37,9 @@ export class PublicBookingEntryService {
 
   async getAvailability(publicIdentifier: string, serviceDate: string) {
     const location = await this.resolveBookableLocation(publicIdentifier);
-    return this.availability.resolve(location.id, serviceDate);
+    const result = await this.availability.resolve(location.id, serviceDate);
+    const { practiceLocationId: _practiceLocationId, ...publicResult } = result;
+    return publicResult;
   }
 
   async createDraft(
@@ -52,10 +57,36 @@ export class PublicBookingEntryService {
       );
     }
 
-    return this.bookingService.createDraft({
+    const result = await this.bookingService.createDraft({
       ...dto,
       practiceLocationId: location.id,
     });
+    return this.sanitizeDraftResult(result);
+  }
+
+  async replaceDraft(
+    publicIdentifier: string,
+    bookingDraftId: string,
+    dto: ReplacePublicBookingDraftDto,
+  ) {
+    const location = await this.resolveBookableLocation(publicIdentifier);
+    const result = await this.bookingDraftEditService.replaceDraft(
+      bookingDraftId,
+      {
+        ...dto,
+        practiceLocationId: location.id,
+      },
+    );
+    return this.sanitizeDraftResult(result);
+  }
+
+  private sanitizeDraftResult<T extends { bookingDraft?: unknown }>(result: T) {
+    if (!result.bookingDraft || typeof result.bookingDraft !== 'object') {
+      return result;
+    }
+    const bookingDraft = result.bookingDraft as Record<string, unknown>;
+    const { practiceLocationId: _practiceLocationId, ...publicDraft } = bookingDraft;
+    return { ...result, bookingDraft: publicDraft };
   }
 
   private async resolveBookableLocation(publicIdentifier: string) {
