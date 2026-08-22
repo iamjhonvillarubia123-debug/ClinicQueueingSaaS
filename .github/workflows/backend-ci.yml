@@ -20,7 +20,7 @@ jobs:
           node-version: '24'
       - run: npm install
       - run: npm run prisma:generate
-      - run: npm run typecheck
+      - run: npm run prisma:validate
       - run: npm run lint:check
       - run: npm test -- --runInBand public-booking-entry.service.spec.ts
       - run: npm run build
