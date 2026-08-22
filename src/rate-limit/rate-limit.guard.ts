@@ -4,6 +4,7 @@ import {
   HttpException,
   Injectable,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import {
@@ -18,9 +19,14 @@ export class RateLimitGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly rateLimitService: RateLimitService,
+    private readonly configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    if (this.configService.get<string>('RATE_LIMIT_ENABLED', 'true') === 'false') {
+      return true;
+    }
+
     const policy = this.reflector.getAllAndOverride<RateLimitPolicy>(
       RATE_LIMIT_POLICY,
       [context.getHandler(), context.getClass()],
