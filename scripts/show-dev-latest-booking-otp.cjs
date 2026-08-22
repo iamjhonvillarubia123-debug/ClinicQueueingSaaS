@@ -24,6 +24,65 @@ function assertDevelopmentDatabase(databaseUrl) {
   }
 }
 
+async function printMissingOtpDiagnostic(client) {
+  const draftResult = await client.query(`
+    SELECT
+      "id",
+      "status"::text AS "status",
+      "expiresAt",
+      "privacyNoticeAcknowledgedAt",
+      "consumedAt",
+      "cancelledAt",
+      "createdAt"
+    FROM "BookingDraft"
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  `);
+
+  if (draftResult.rowCount === 0) {
+    console.error('Diagnostic: no BookingDraft exists in this development database.');
+    console.error('The browser did not successfully create a booking draft.');
+    return;
+  }
+
+  const draft = draftResult.rows[0];
+  console.error('Diagnostic: a BookingDraft exists, but no active unverified OTP is available.');
+  console.error(`Latest draft status: ${draft.status}`);
+  console.error(`Draft expired: ${new Date(draft.expiresAt) <= new Date() ? 'yes' : 'no'}`);
+  console.error(`Privacy acknowledged: ${draft.privacyNoticeAcknowledgedAt ? 'yes' : 'no'}`);
+  console.error(`Draft consumed: ${draft.consumedAt ? 'yes' : 'no'}`);
+  console.error(`Draft cancelled: ${draft.cancelledAt ? 'yes' : 'no'}`);
+
+  const otpResult = await client.query(`
+    SELECT
+      "otpHash" IS NOT NULL AS "hasOtpHash",
+      "expiresAt",
+      "verifiedAt",
+      "consumedAt",
+      "invalidatedAt",
+      "createdAt"
+    FROM "OtpVerification"
+    WHERE "bookingDraftId" = $1
+      AND "purpose"='BOOKING'::"OtpPurpose"
+    ORDER BY "createdAt" DESC
+    LIMIT 1
+  `, [draft.id]);
+
+  if (otpResult.rowCount === 0) {
+    console.error('OTP history for latest draft: none.');
+    console.error('The draft was created but never became eligible for OTP issuance.');
+    return;
+  }
+
+  const otp = otpResult.rows[0];
+  console.error(`OTP history exists: yes`);
+  console.error(`OTP hash present: ${otp.hasOtpHash ? 'yes' : 'no'}`);
+  console.error(`OTP expired: ${new Date(otp.expiresAt) <= new Date() ? 'yes' : 'no'}`);
+  console.error(`OTP verified: ${otp.verifiedAt ? 'yes' : 'no'}`);
+  console.error(`OTP consumed: ${otp.consumedAt ? 'yes' : 'no'}`);
+  console.error(`OTP invalidated: ${otp.invalidatedAt ? 'yes' : 'no'}`);
+}
+
 async function main() {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL environment variable is not defined.');
@@ -57,8 +116,9 @@ async function main() {
     `);
 
     if (result.rowCount === 0) {
+      await printMissingOtpDiagnostic(client);
       throw new Error(
-        'No active unverified booking OTP exists. Start or resend booking verification first.',
+        'No active unverified booking OTP exists. Use the diagnostic above to identify the failed stage.',
       );
     }
 
