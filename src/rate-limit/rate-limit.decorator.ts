@@ -4,7 +4,7 @@ export const RATE_LIMIT_POLICY = 'rate-limit-policy';
 
 export type RateLimitSubject =
   | { kind: 'NONE' }
-  | { kind: 'BODY_EMAIL'; field: string }
+  | { kind: 'BODY'; field: string }
   | { kind: 'PARAM'; field: string };
 
 export type RateLimitPolicy = {
