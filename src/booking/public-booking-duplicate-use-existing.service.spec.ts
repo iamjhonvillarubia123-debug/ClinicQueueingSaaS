@@ -5,7 +5,11 @@ describe('PublicBookingDuplicateUseExistingService', () => {
   const serviceDate = new Date('2026-08-23T00:00:00.000Z');
 
   function createHarness(input: {
-    individual?: { id: string; bookingReference: string; serviceDate: Date } | null;
+    individual?: {
+      id: string;
+      bookingReference: string;
+      serviceDate: Date;
+    } | null;
     groups?: Array<{ id: string; serviceDate: Date }>;
   }) {
     const draft = {
@@ -68,8 +72,8 @@ describe('PublicBookingDuplicateUseExistingService', () => {
     const service = new PublicBookingDuplicateUseExistingService(
       prisma as never,
       identity as never,
-      individualTokens as never,
-      groupTokens as never,
+      individualTokens,
+      groupTokens,
     );
     return { service, transaction, individualTokens, groupTokens };
   }
