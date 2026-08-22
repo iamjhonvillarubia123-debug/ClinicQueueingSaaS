@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { ConflictException } from '@nestjs/common';
 import { PublicBookingReplacementService } from './public-booking-replacement.service';
 
@@ -29,7 +30,10 @@ describe('PublicBookingReplacementService', () => {
       expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     };
     const transaction = {
-      $queryRaw: jest.fn().mockResolvedValueOnce([draft]).mockResolvedValueOnce([otp]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([draft])
+        .mockResolvedValueOnce([otp]),
       appointment: {
         findFirst: jest.fn().mockResolvedValue(input?.individual ?? null),
         update: jest.fn(),
@@ -43,8 +47,9 @@ describe('PublicBookingReplacementService', () => {
       bookingDraft: { update: jest.fn() },
     };
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: typeof transaction) => unknown) =>
-        callback(transaction),
+      $transaction: jest.fn(
+        (callback: (tx: typeof transaction) => unknown) =>
+          Promise.resolve(callback(transaction)),
       ),
     };
     const identity = {
@@ -55,7 +60,7 @@ describe('PublicBookingReplacementService', () => {
       prisma as never,
       identity as never,
     );
-    return { service, transaction, identity, draft, otp };
+    return { service, transaction };
   }
 
   it('shows the verified individual duplicate without comparing draft names', async () => {
@@ -68,7 +73,9 @@ describe('PublicBookingReplacementService', () => {
       lastName: 'Different',
       practiceLocation: { name: 'North Clinic' },
     };
-    const { service, transaction } = createHarness({ individual: appointment });
+    const { service, transaction } = createHarness({
+      individual: appointment,
+    });
 
     await expect(service.describeDuplicate('draft-1')).resolves.toMatchObject({
       duplicate: true,
@@ -129,7 +136,9 @@ describe('PublicBookingReplacementService', () => {
     expect(transaction.bookingGroup.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'group-1' },
-        data: expect.objectContaining({ servingProtectionEndedAt: expect.any(Date) }),
+        data: expect.objectContaining({
+          servingProtectionEndedAt: expect.any(Date),
+        }),
       }),
     );
     expect(transaction.otpVerification.update).toHaveBeenCalledWith(
@@ -154,7 +163,9 @@ describe('PublicBookingReplacementService', () => {
       otpKey: 'REPLACEMENT:draft-1',
     });
 
-    await expect(service.authorizeReplacement('draft-1')).resolves.toMatchObject({
+    await expect(
+      service.authorizeReplacement('draft-1'),
+    ).resolves.toMatchObject({
       replacementAuthorized: true,
       replayed: true,
     });
@@ -165,8 +176,8 @@ describe('PublicBookingReplacementService', () => {
   it('refuses destructive replacement when no active public context exists', async () => {
     const { service } = createHarness();
 
-    await expect(service.authorizeReplacement('draft-1')).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.authorizeReplacement('draft-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
