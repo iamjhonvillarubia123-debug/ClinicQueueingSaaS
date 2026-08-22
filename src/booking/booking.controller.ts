@@ -206,27 +206,38 @@ export class BookingController {
       };
     }
 
-    if (
-      'bookingGroupAccessToken' in result &&
-      result.bookingGroupAccessToken
-    ) {
-      response?.cookie(
-        PATIENT_BOOKING_GROUP_ACCESS_COOKIE,
-        result.bookingGroupAccessToken.token,
-        {
-          httpOnly: true,
-          secure: true,
-          sameSite: 'strict',
-          path: '/patient-booking-groups',
-          expires: result.bookingGroupAccessToken.expiresAt,
-        },
-      );
+    if ('bookingGroup' in result) {
+      if (result.bookingGroupAccessToken) {
+        response?.cookie(
+          PATIENT_BOOKING_GROUP_ACCESS_COOKIE,
+          result.bookingGroupAccessToken.token,
+          {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            path: '/patient-booking-groups',
+            expires: result.bookingGroupAccessToken.expiresAt,
+          },
+        );
+      }
+
       return {
-        bookingGroup: result.bookingGroup,
-        bookingGroupAccessToken: {
-          expiresAt: result.bookingGroupAccessToken.expiresAt,
-          transport: 'HTTP_ONLY_COOKIE',
+        bookingGroup: {
+          serviceDate: result.bookingGroup.serviceDate,
+          appointments: result.bookingGroup.appointments.map((appointment) => ({
+            bookingReference: appointment.bookingReference,
+            queueNumber: appointment.queueNumber,
+            status: appointment.status,
+            firstName: appointment.firstName,
+            lastName: appointment.lastName,
+          })),
         },
+        bookingGroupAccessToken: result.bookingGroupAccessToken
+          ? {
+              expiresAt: result.bookingGroupAccessToken.expiresAt,
+              transport: 'HTTP_ONLY_COOKIE',
+            }
+          : null,
         replayed: result.replayed,
       };
     }
