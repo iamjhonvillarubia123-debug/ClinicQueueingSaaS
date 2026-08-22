@@ -38,21 +38,47 @@ export class BookingController {
     private readonly publicBookingEntryService: PublicBookingEntryService,
   ) {}
 
-  @RateLimit({ id: 'booking-public-configuration', limit: 120, windowMs: 60 * 1000, subject: { kind: 'PARAM', field: 'publicIdentifier' } })
+  @RateLimit({
+    id: 'booking-public-configuration',
+    limit: 120,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
   @Get('public/configuration/:publicIdentifier')
-  getPublicConfiguration(@Param('publicIdentifier') publicIdentifier: string) {
+  getPublicConfiguration(
+    @Param('publicIdentifier') publicIdentifier: string,
+  ) {
     return this.publicBookingEntryService.getConfiguration(publicIdentifier);
   }
 
-  @RateLimit({ id: 'booking-public-availability', limit: 60, windowMs: 60 * 1000, subject: { kind: 'PARAM', field: 'publicIdentifier' } })
+  @RateLimit({
+    id: 'booking-public-availability',
+    limit: 60,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
   @Get('public/availability/:publicIdentifier/:serviceDate')
-  getPublicAvailability(@Param('publicIdentifier') publicIdentifier: string, @Param('serviceDate') serviceDate: string) {
-    return this.publicBookingEntryService.getAvailability(publicIdentifier, serviceDate);
+  getPublicAvailability(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Param('serviceDate') serviceDate: string,
+  ) {
+    return this.publicBookingEntryService.getAvailability(
+      publicIdentifier,
+      serviceDate,
+    );
   }
 
-  @RateLimit({ id: 'booking-public-draft-create', limit: 10, windowMs: 15 * 60 * 1000, subject: { kind: 'NONE' } })
+  @RateLimit({
+    id: 'booking-public-draft-create',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('public/draft/:publicIdentifier')
-  createPublicDraft(@Param('publicIdentifier') publicIdentifier: string, @Body() dto: CreatePublicBookingDraftDto) {
+  createPublicDraft(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Body() dto: CreatePublicBookingDraftDto,
+  ) {
     return this.publicBookingEntryService.createDraft(publicIdentifier, dto);
   }
 
@@ -62,37 +88,83 @@ export class BookingController {
     @Param('bookingDraftId') bookingDraftId: string,
     @Body() dto: ReplacePublicBookingDraftDto,
   ) {
-    return this.publicBookingEntryService.replaceDraft(publicIdentifier, bookingDraftId, dto);
+    return this.publicBookingEntryService.replaceDraft(
+      publicIdentifier,
+      bookingDraftId,
+      dto,
+    );
   }
 
-  @RateLimit({ id: 'booking-configuration', limit: 120, windowMs: 60 * 1000, subject: { kind: 'PARAM', field: 'practiceLocationId' } })
+  @RateLimit({
+    id: 'booking-configuration',
+    limit: 120,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'practiceLocationId' },
+  })
   @Get('configuration/:practiceLocationId')
   getConfiguration(@Param('practiceLocationId') practiceLocationId: string) {
-    return this.bookingConfigurationService.getEffectiveConfiguration(practiceLocationId);
+    return this.bookingConfigurationService.getEffectiveConfiguration(
+      practiceLocationId,
+    );
   }
 
-  @RateLimit({ id: 'booking-availability', limit: 60, windowMs: 60 * 1000, subject: { kind: 'PARAM', field: 'practiceLocationId' } })
+  @RateLimit({
+    id: 'booking-availability',
+    limit: 60,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'practiceLocationId' },
+  })
   @Get('availability/:practiceLocationId/:serviceDate')
-  getAvailability(@Param('practiceLocationId') practiceLocationId: string, @Param('serviceDate') serviceDate: string) {
-    return this.publicServiceDateAvailability.resolve(practiceLocationId, serviceDate);
+  getAvailability(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Param('serviceDate') serviceDate: string,
+  ) {
+    return this.publicServiceDateAvailability.resolve(
+      practiceLocationId,
+      serviceDate,
+    );
   }
 
-  @RateLimit({ id: 'booking-draft-create', limit: 10, windowMs: 15 * 60 * 1000, subject: { kind: 'NONE' } })
+  @RateLimit({
+    id: 'booking-draft-create',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('draft')
   async createDraft(@Body() createBookingDraftDto: CreateBookingDraftDto) {
-    const availability = await this.publicServiceDateAvailability.resolve(createBookingDraftDto.practiceLocationId, createBookingDraftDto.serviceDate);
-    if (!availability.availableForPublicBooking) throw new BadRequestException('Selected Service Date is not available for public booking.');
+    const availability = await this.publicServiceDateAvailability.resolve(
+      createBookingDraftDto.practiceLocationId,
+      createBookingDraftDto.serviceDate,
+    );
+    if (!availability.availableForPublicBooking) {
+      throw new BadRequestException(
+        'Selected Service Date is not available for public booking.',
+      );
+    }
     return this.bookingService.createDraft(createBookingDraftDto);
   }
 
   @Put('draft/:bookingDraftId')
-  replaceDraft(@Param('bookingDraftId') bookingDraftId: string, @Body() replaceBookingDraftDto: ReplaceBookingDraftDto) {
-    return this.bookingDraftEditService.replaceDraft(bookingDraftId, replaceBookingDraftDto);
+  replaceDraft(
+    @Param('bookingDraftId') bookingDraftId: string,
+    @Body() replaceBookingDraftDto: ReplaceBookingDraftDto,
+  ) {
+    return this.bookingDraftEditService.replaceDraft(
+      bookingDraftId,
+      replaceBookingDraftDto,
+    );
   }
 
   @Post('draft/:bookingDraftId/request-otp')
-  requestBookingOtp(@Param('bookingDraftId') bookingDraftId: string, @Body() bookingDraftControlDto: BookingDraftControlDto) {
-    return this.bookingDraftEditService.requestBookingOtp(bookingDraftId, bookingDraftControlDto);
+  requestBookingOtp(
+    @Param('bookingDraftId') bookingDraftId: string,
+    @Body() bookingDraftControlDto: BookingDraftControlDto,
+  ) {
+    return this.bookingDraftEditService.requestBookingOtp(
+      bookingDraftId,
+      bookingDraftControlDto,
+    );
   }
 
   @Post('verify-otp')
@@ -106,21 +178,35 @@ export class BookingController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Res({ passthrough: true }) response?: Response,
   ) {
-    const result = await this.bookingConfirmationService.confirm({ bookingDraftId, idempotencyKey });
+    const result = await this.bookingConfirmationService.confirm({
+      bookingDraftId,
+      idempotencyKey,
+    });
+
     if ('bookingAccessToken' in result && result.bookingAccessToken) {
-      response?.cookie(PATIENT_BOOKING_ACCESS_COOKIE, result.bookingAccessToken.token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'strict',
-        path: `/patient-bookings/${encodeURIComponent(result.appointment.bookingReference)}`,
-        expires: result.bookingAccessToken.expiresAt,
-      });
+      response?.cookie(
+        PATIENT_BOOKING_ACCESS_COOKIE,
+        result.bookingAccessToken.token,
+        {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'strict',
+          path: `/patient-bookings/${encodeURIComponent(
+            result.appointment.bookingReference,
+          )}`,
+          expires: result.bookingAccessToken.expiresAt,
+        },
+      );
       return {
         appointment: result.appointment,
-        bookingAccessToken: { expiresAt: result.bookingAccessToken.expiresAt, transport: 'HTTP_ONLY_COOKIE' },
+        bookingAccessToken: {
+          expiresAt: result.bookingAccessToken.expiresAt,
+          transport: 'HTTP_ONLY_COOKIE',
+        },
         replayed: result.replayed,
       };
     }
+
     return result;
   }
 }
