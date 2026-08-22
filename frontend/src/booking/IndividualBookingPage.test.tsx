@@ -143,7 +143,7 @@ describe('F2 individual public booking', () => {
 
     await user.click(screen.getByRole('button', { name: 'Confirm appointment' }));
     expect(await screen.findByRole('heading', { name: 'Your appointment is booked.' })).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('07')).toBeInTheDocument();
     expect(screen.getByText('BR-123')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View appointment' })).toHaveAttribute('href', '/patient-bookings/BR-123');
     expect(screen.queryByText('draft-control-token')).not.toBeInTheDocument();
