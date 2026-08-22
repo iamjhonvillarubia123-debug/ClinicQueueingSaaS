@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { PATIENT_BOOKING_ACCESS_COOKIE } from '../patient-access/patient-booking-access.service';
+import { PATIENT_BOOKING_GROUP_ACCESS_COOKIE } from '../patient-access/patient-booking-group-access.service';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
@@ -199,6 +200,31 @@ export class BookingController {
         appointment: result.appointment,
         bookingAccessToken: {
           expiresAt: result.bookingAccessToken.expiresAt,
+          transport: 'HTTP_ONLY_COOKIE',
+        },
+        replayed: result.replayed,
+      };
+    }
+
+    if (
+      'bookingGroupAccessToken' in result &&
+      result.bookingGroupAccessToken
+    ) {
+      response?.cookie(
+        PATIENT_BOOKING_GROUP_ACCESS_COOKIE,
+        result.bookingGroupAccessToken.token,
+        {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'strict',
+          path: '/patient-booking-groups',
+          expires: result.bookingGroupAccessToken.expiresAt,
+        },
+      );
+      return {
+        bookingGroup: result.bookingGroup,
+        bookingGroupAccessToken: {
+          expiresAt: result.bookingGroupAccessToken.expiresAt,
           transport: 'HTTP_ONLY_COOKIE',
         },
         replayed: result.replayed,
