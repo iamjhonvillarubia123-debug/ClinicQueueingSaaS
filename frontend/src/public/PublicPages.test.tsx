@@ -36,6 +36,29 @@ describe('F1 public pages', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:3000/public/doctors/doctor-public-id', expect.objectContaining({ credentials: 'include' }));
   });
 
+  it('renders a neutral Doctor page during temporary restriction without clinic referral details', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      routeStatus: 'TEMPORARILY_UNAVAILABLE',
+      message: 'Online booking is temporarily unavailable. Please try again later.',
+      bookingEntryAllowed: false,
+      doctor: {
+        publicIdentifier: 'doctor-public-id', publicSlug: null, firstName: 'Mara', middleName: null, lastName: 'Santos', suffix: null,
+        professionalTitle: 'Dr.', specialization: 'Pediatrics', profileDescription: 'Private marketing copy should not render here.', profilePhotoUrl: null,
+      },
+      practiceLocations: [{
+        publicIdentifier: 'clinic-public-id', publicUrl: 'http://localhost:5173/public/practice-locations/clinic-public-id',
+        name: 'North Clinic', cityMunicipality: 'Quezon City', province: 'Metro Manila', bookingEntryAllowed: false,
+      }],
+    }));
+
+    render(<MemoryRouter initialEntries={['/public/doctors/doctor-public-id']}><Routes><Route path="/public/doctors/:publicIdentifier" element={<DoctorPublicPage />} /></Routes></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Online booking is temporarily unavailable.' })).toBeInTheDocument();
+    expect(screen.queryByText('North Clinic')).not.toBeInTheDocument();
+    expect(screen.queryByText('Private marketing copy should not render here.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/billing|subscription|suspension/i)).not.toBeInTheDocument();
+  });
+
   it('blocks booking on a temporarily unavailable PracticeLocation but keeps approved information visible', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
       routeStatus: 'TEMPORARILY_UNAVAILABLE',
