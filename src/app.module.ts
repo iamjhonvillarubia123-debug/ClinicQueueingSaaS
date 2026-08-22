@@ -1,4 +1,9 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AppController } from './app/app.controller';
@@ -60,6 +65,9 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestCorrelationMiddleware).forRoutes('*');
+    consumer.apply(RequestCorrelationMiddleware).forRoutes({
+      path: '{*splat}',
+      method: RequestMethod.ALL,
+    });
   }
 }
