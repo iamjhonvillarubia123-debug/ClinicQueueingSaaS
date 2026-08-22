@@ -61,7 +61,7 @@ export class PublicBookingEntryService {
       ...dto,
       practiceLocationId: location.id,
     });
-    return this.sanitizeDraftResult(result);
+    return this.sanitizeCreatedDraftResult(result);
   }
 
   async replaceDraft(
@@ -70,22 +70,18 @@ export class PublicBookingEntryService {
     dto: ReplacePublicBookingDraftDto,
   ) {
     const location = await this.resolveBookableLocation(publicIdentifier);
-    const result = await this.bookingDraftEditService.replaceDraft(
-      bookingDraftId,
-      {
-        ...dto,
-        practiceLocationId: location.id,
-      },
-    );
-    return this.sanitizeDraftResult(result);
+    return this.bookingDraftEditService.replaceDraft(bookingDraftId, {
+      ...dto,
+      practiceLocationId: location.id,
+    });
   }
 
-  private sanitizeDraftResult<T extends { bookingDraft?: unknown }>(result: T) {
-    if (!result.bookingDraft || typeof result.bookingDraft !== 'object') {
-      return result;
-    }
+  private sanitizeCreatedDraftResult<T extends { bookingDraft: object }>(
+    result: T,
+  ) {
     const bookingDraft = result.bookingDraft as Record<string, unknown>;
-    const { practiceLocationId: _practiceLocationId, ...publicDraft } = bookingDraft;
+    const { practiceLocationId: _practiceLocationId, ...publicDraft } =
+      bookingDraft;
     return { ...result, bookingDraft: publicDraft };
   }
 
