@@ -15,7 +15,6 @@ type CreateBookingOtpOutboxInput = {
   practiceLocationId: string;
   recipientMobileEncrypted: string;
   otp: string;
-  otpExpiresAt: Date;
   createdAt: Date;
 };
 
