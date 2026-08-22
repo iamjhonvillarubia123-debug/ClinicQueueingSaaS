@@ -26,16 +26,20 @@ jobs:
           npx eslint
           src/booking/booking.controller.ts
           src/booking/booking.module.ts
+          src/booking/booking.service.ts
           src/booking/booking-confirmation.service.ts
           src/booking/public-booking-entry.service.ts
           src/booking/public-booking-entry.service.spec.ts
           src/booking/public-booking-replacement.service.ts
           src/booking/public-booking-replacement.service.spec.ts
+          src/booking/dto/create-booking-draft.dto.ts
           src/booking/dto/create-public-booking-draft.dto.ts
           src/booking/dto/replace-public-booking-draft.dto.ts
           src/public-routing/public-routing.module.ts
           src/patient-access/appointment-recovery.controller.ts
           src/patient-access/booking-group-recovery.controller.ts
+          src/patient-access/public-booking-recovery.controller.ts
+          src/patient-access/public-booking-recovery.service.ts
           src/patient-access/patient-access.module.ts
       - name: Check development acceptance scripts
         run: |
