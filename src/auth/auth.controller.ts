@@ -38,7 +38,7 @@ export class AuthController {
     id: 'auth-login',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY_EMAIL', field: 'email' },
+    subject: { kind: 'BODY', field: 'email' },
   })
   @Post('login')
   async login(
@@ -81,7 +81,7 @@ export class AuthController {
     id: 'auth-password-reset-request',
     limit: 5,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY_EMAIL', field: 'email' },
+    subject: { kind: 'BODY', field: 'email' },
   })
   @Post('request-password-reset')
   requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
@@ -97,7 +97,7 @@ export class AuthController {
     id: 'auth-email-verification-resend',
     limit: 5,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY_EMAIL', field: 'email' },
+    subject: { kind: 'BODY', field: 'email' },
   })
   @Post('resend-email-verification')
   resendEmailVerification(@Body() dto: ResendEmailVerificationDto) {
