@@ -21,7 +21,7 @@ jobs:
       - run: npm install
       - run: npm run prisma:generate
       - run: npm run prisma:validate
-      - name: Lint frontend-facing backend changes
+      - name: Lint frontend-facing backend integration
         run: >-
           npx eslint
           src/booking/booking.controller.ts
@@ -32,17 +32,14 @@ jobs:
           src/booking/dto/replace-public-booking-draft.dto.ts
           src/public-routing/public-routing.module.ts
           src/patient-access/appointment-recovery.controller.ts
-          src/patient-access/appointment-recovery.service.ts
-          src/patient-access/appointment-recovery.service.spec.ts
-          src/patient-access/dto/appointment-recovery.dto.ts
           src/patient-access/booking-group-recovery.controller.ts
-          src/patient-access/booking-group-recovery.service.ts
-          src/patient-access/booking-group-recovery.service.spec.ts
+          src/patient-access/patient-access.module.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
           node --check scripts/show-dev-latest-booking-otp.cjs
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
-      - run: npm test -- --runInBand public-booking-entry.service.spec.ts appointment-recovery.service.spec.ts booking-group-recovery.service.spec.ts
+      - name: Test public booking and patient recovery controls
+        run: npm test -- --runInBand public-booking-entry.service.spec.ts appointment-recovery.service.spec.ts booking-group-recovery.service.spec.ts
       - run: npm run build
