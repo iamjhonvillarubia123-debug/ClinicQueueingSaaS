@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Prisma } from '../../generated/prisma/client';
+import { OtpNotificationOutboxService } from '../notification/otp-notification-outbox.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpGenerator } from './otp.generator';
 
@@ -28,6 +29,8 @@ const OTP_VERIFICATION_FAILED = 'OTP verification failed.';
 type LockedBookingDraft = {
   id: string;
   status: string;
+  practiceLocationId: string;
+  mobileNumberEncrypted: string | null;
   mobileNumberHash: string | null;
   expiresAt: Date;
   consumedAt: Date | null;
@@ -57,6 +60,7 @@ export class OtpService {
     private readonly otpGenerator: OtpGenerator,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly otpNotificationOutbox: OtpNotificationOutboxService,
   ) {
     const otpKeyBase64 =
       this.configService.getOrThrow<string>('OTP_HMAC_KEY_V1');
@@ -183,6 +187,14 @@ export class OtpService {
         attemptCount: true,
         createdAt: true,
       },
+    });
+
+    await this.otpNotificationOutbox.createBookingOtpOutbox(transaction, {
+      otpVerificationId: otpVerification.id,
+      practiceLocationId: bookingDraft.practiceLocationId,
+      recipientMobileEncrypted: bookingDraft.mobileNumberEncrypted,
+      otp,
+      createdAt: now,
     });
 
     return { otp, otpVerification };
@@ -312,6 +324,8 @@ export class OtpService {
       SELECT
         "id",
         "status",
+        "practiceLocationId",
+        "mobileNumberEncrypted",
         "mobileNumberHash",
         "expiresAt",
         "consumedAt",
@@ -325,6 +339,8 @@ export class OtpService {
     if (
       !bookingDraft ||
       bookingDraft.status !== 'PENDING_OTP' ||
+      !bookingDraft.practiceLocationId ||
+      !bookingDraft.mobileNumberEncrypted ||
       !bookingDraft.mobileNumberHash ||
       bookingDraft.expiresAt.getTime() <= now.getTime() ||
       bookingDraft.consumedAt ||
