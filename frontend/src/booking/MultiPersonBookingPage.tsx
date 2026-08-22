@@ -69,7 +69,13 @@ type GroupDraftPayload = {
 type DraftResult = {
   bookingDraft: { id: string; bookingReference: string; expiresAt: string };
   draftControlToken: string;
-  otpVerification: null | { id: string; expiresAt: string; maxAttempts: number };
+  otpVerification: null | {
+    id?: string;
+    expiresAt: string;
+    maxAttempts?: number;
+    verified?: boolean;
+    replacementAuthorized?: boolean;
+  };
 };
 
 type GroupConfirmation = {
@@ -87,6 +93,13 @@ type GroupConfirmation = {
   replayed: boolean;
 };
 
+type ReplacementSession = {
+  recoveryAttemptId: string;
+  serviceDate: string;
+  mobileNumber: string;
+  expiresAt: string;
+};
+
 type Stage = 'details' | 'otp' | 'review' | 'confirmed';
 
 function PublicHeader() {
@@ -100,6 +113,32 @@ function PublicHeader() {
 
 function messageFor(error: unknown) {
   return error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
+}
+
+function readReplacementSession(publicIdentifier: string): ReplacementSession | null {
+  const key = `f4-replacement:${publicIdentifier}`;
+  const raw = sessionStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ReplacementSession>;
+    if (!parsed.recoveryAttemptId || !parsed.serviceDate || !parsed.mobileNumber || !parsed.expiresAt) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    if (new Date(parsed.expiresAt).getTime() <= Date.now()) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+    return parsed as ReplacementSession;
+  } catch {
+    sessionStorage.removeItem(key);
+    return null;
+  }
+}
+
+function formatServiceDate(value: string) {
+  const [year, month, day] = value.slice(0, 10).split('-');
+  return year && month && day ? `${month}/${day}/${year}` : value;
 }
 
 function newMember(): MemberForm {
@@ -155,10 +194,17 @@ export function MultiPersonBookingPage() {
   const [payload, setPayload] = useState<GroupDraftPayload | null>(null);
   const [otp, setOtp] = useState('');
   const [confirmation, setConfirmation] = useState<GroupConfirmation | null>(null);
+  const [replacementSession, setReplacementSession] = useState<ReplacementSession | null>(null);
 
   useEffect(() => {
     let active = true;
     if (!publicIdentifier) { setLoading(false); return; }
+    const replacement = readReplacementSession(publicIdentifier);
+    if (replacement) {
+      setReplacementSession(replacement);
+      setServiceDate(replacement.serviceDate);
+      setMobileNumber(replacement.mobileNumber);
+    }
     void apiRequest<BookingConfig>(`/booking/public/configuration/${encodeURIComponent(publicIdentifier)}`)
       .then((result) => { if (active) setConfig(result); })
       .catch((caught) => { if (active) setError(messageFor(caught)); })
@@ -236,6 +282,11 @@ export function MultiPersonBookingPage() {
         setError('That date is not currently available for online booking. Please choose another date.');
         return;
       }
+      if (replacementSession && !draft) {
+        setPayload(nextPayload);
+        setStage('review');
+        return;
+      }
       const nextDraft = await apiRequest<DraftResult>(`/booking/public/draft/${encodeURIComponent(publicIdentifier)}`, {
         method: 'POST',
         body: nextPayload,
@@ -296,15 +347,32 @@ export function MultiPersonBookingPage() {
   }
 
   async function confirm() {
-    if (!draft) return;
+    if ((!draft && !replacementSession) || !publicIdentifier || !payload) return;
     setError('');
     setBusy(true);
     try {
-      const result = await apiRequest<GroupConfirmation>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/confirm`, {
+      let draftToConfirm = draft;
+      if (!draftToConfirm && replacementSession) {
+        draftToConfirm = await apiRequest<DraftResult>(`/booking/public/draft/${encodeURIComponent(publicIdentifier)}`, {
+          method: 'POST',
+          body: { ...payload, replacementRecoveryAttemptId: replacementSession.recoveryAttemptId },
+        });
+        if (!draftToConfirm.otpVerification?.verified || !draftToConfirm.otpVerification.replacementAuthorized) {
+          throw new Error('Replacement verification is no longer valid.');
+        }
+        setDraft(draftToConfirm);
+        sessionStorage.setItem(`booking-draft:${draftToConfirm.bookingDraft.id}`, draftToConfirm.draftControlToken);
+      }
+      if (!draftToConfirm) return;
+      const result = await apiRequest<GroupConfirmation>(`/booking/draft/${encodeURIComponent(draftToConfirm.bookingDraft.id)}/confirm`, {
         method: 'POST',
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       });
-      sessionStorage.removeItem(`booking-draft:${draft.bookingDraft.id}`);
+      sessionStorage.removeItem(`booking-draft:${draftToConfirm.bookingDraft.id}`);
+      if (replacementSession) {
+        sessionStorage.removeItem(`f4-replacement:${publicIdentifier}`);
+        setReplacementSession(null);
+      }
       setConfirmation(result);
       setStage('confirmed');
     } catch (caught) {
@@ -327,7 +395,7 @@ export function MultiPersonBookingPage() {
       <article className="booking-flow">
         <div className="booking-progress" aria-label="Booking progress">
           <span className={stage === 'details' ? 'current' : ''}>People</span>
-          <span className={stage === 'otp' ? 'current' : ''}>Verify</span>
+          {!replacementSession ? <span className={stage === 'otp' ? 'current' : ''}>Verify</span> : null}
           <span className={stage === 'review' ? 'current' : ''}>Review</span>
           <span className={stage === 'confirmed' ? 'current' : ''}>Confirmed</span>
         </div>
@@ -335,19 +403,19 @@ export function MultiPersonBookingPage() {
         {stage === 'details' && (
           <>
             <header className="booking-heading">
-              <p className="eyebrow">Multi-person booking</p>
+              <p className="eyebrow">{replacementSession ? 'Replacement group booking' : 'Multi-person booking'}</p>
               <h1>Book 2–5 people at {config.practiceLocation.name}</h1>
-              <p>One mobile number controls this booking. Each person keeps their own Services, clinic answers, Appointment, and Queue Number.</p>
+              <p>{replacementSession ? 'Create the new group booking that will replace the booking you just cancelled.' : 'One mobile number controls this booking. Each person keeps their own Services, clinic answers, Appointment, and Queue Number.'}</p>
               <Link className="quiet-link" to={`/book/${encodeURIComponent(publicIdentifier)}`}>Book one person instead</Link>
             </header>
 
             <form className="booking-form" onSubmit={submitDetails}>
               <section className="form-section">
                 <h2>Shared booking details</h2>
-                <label>Service date<input type="date" required value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} /></label>
-                <p className="field-note">All members share the same clinic and service date. Online booking is limited to dates accepted by the clinic, up to {config.bookingWindow.maximumAdvanceBookingDays} days ahead.</p>
-                <label>Controlling mobile number<input type="tel" inputMode="tel" autoComplete="tel" required maxLength={30} placeholder="09… or +63…" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} /></label>
-                <p className="field-note">One verification code is sent for the whole group. This number controls later group access; it is not copied as each member’s personal mobile.</p>
+                <label>Service date<input type="date" required readOnly={Boolean(replacementSession)} value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} /></label>
+                <p className="field-note">{replacementSession ? `This replacement is verified for ${formatServiceDate(serviceDate)}.` : `All members share the same clinic and service date. Online booking is limited to dates accepted by the clinic, up to ${config.bookingWindow.maximumAdvanceBookingDays} days ahead.`}</p>
+                <label>Controlling mobile number<input type="tel" inputMode="tel" autoComplete="tel" required maxLength={30} readOnly={Boolean(replacementSession)} placeholder="09… or +63…" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} /></label>
+                <p className="field-note">{replacementSession ? 'This is the verified controlling mobile for the replacement.' : 'One verification code is sent for the whole group. This number controls later group access; it is not copied as each member’s personal mobile.'}</p>
               </section>
 
               {members.map((member, index) => (
@@ -403,7 +471,7 @@ export function MultiPersonBookingPage() {
               </section>
 
               {error ? <div className="form-error" role="alert">{error}</div> : null}
-              <button className="primary wide-action" disabled={busy} type="submit">{busy ? 'Checking booking…' : 'Continue to verification'}</button>
+              <button className="primary wide-action" disabled={busy} type="submit">{busy ? 'Checking booking…' : replacementSession ? 'Review new group booking' : 'Continue to verification'}</button>
             </form>
           </>
         )}
@@ -428,7 +496,7 @@ export function MultiPersonBookingPage() {
             <h1>Check all {payload.members.length} people</h1>
             <div className="review-list">
               <div><span>Clinic</span><strong>{config.practiceLocation.name}</strong></div>
-              <div><span>Service date</span><strong>{new Date(`${payload.serviceDate}T00:00:00Z`).toLocaleDateString()}</strong></div>
+              <div><span>Service date</span><strong>{formatServiceDate(payload.serviceDate)}</strong></div>
               <div><span>Controlling mobile</span><strong>{payload.mobileNumber}</strong></div>
             </div>
             <div className="group-review-members">
@@ -440,9 +508,10 @@ export function MultiPersonBookingPage() {
                 </article>
               ))}
             </div>
-            <p className="field-note">Confirmation rechecks current clinic rules and capacity for the whole group. The booking succeeds as one transaction or not at all. Each person receives an independent permanent Queue Number only after successful confirmation.</p>
+            <p className="field-note">{replacementSession ? 'No second verification code is required. Confirmation rechecks clinic rules and capacity, and fresh Queue Numbers are assigned only after successful confirmation.' : 'Confirmation rechecks current clinic rules and capacity for the whole group. The booking succeeds as one transaction or not at all. Each person receives an independent permanent Queue Number only after successful confirmation.'}</p>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
-            <button className="primary wide-action" disabled={busy} type="button" onClick={confirm}>{busy ? 'Confirming group…' : 'Confirm group booking'}</button>
+            <button className="primary wide-action" disabled={busy} type="button" onClick={confirm}>{busy ? 'Confirming group…' : replacementSession ? 'Confirm new group booking' : 'Confirm group booking'}</button>
+            {replacementSession && !draft ? <button className="secondary wide-action" disabled={busy} type="button" onClick={() => { setError(''); setStage('details'); }}>Edit booking</button> : null}
           </section>
         ) : null}
 
