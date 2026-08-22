@@ -38,15 +38,22 @@ describe('PublicBookingEntryService', () => {
         name: 'North Clinic',
         timeZone: 'Asia/Manila',
       },
-      bookingWindow: { maximumAdvanceBookingDays: 30, upperBoundaryInclusive: true },
-      services: [{ id: 'service-id', name: 'Consultation', durationMinutes: 30 }],
+      bookingWindow: {
+        maximumAdvanceBookingDays: 30,
+        upperBoundaryInclusive: true,
+      },
+      services: [
+        { id: 'service-id', name: 'Consultation', durationMinutes: 30 },
+      ],
       bookingQuestions: [],
       serviceSelection: { maximumSelections: 3 },
     });
 
     const result = await service.getConfiguration('public-clinic');
 
-    expect(configuration.getEffectiveConfiguration).toHaveBeenCalledWith('internal-location-id');
+    expect(configuration.getEffectiveConfiguration).toHaveBeenCalledWith(
+      'internal-location-id',
+    );
     expect(result.practiceLocation).toEqual({
       publicIdentifier: 'public-clinic',
       name: 'North Clinic',
@@ -63,9 +70,15 @@ describe('PublicBookingEntryService', () => {
       reason: 'AVAILABLE',
     });
 
-    const result = await service.getAvailability('public-clinic', '2026-08-24');
+    const result = await service.getAvailability(
+      'public-clinic',
+      '2026-08-24',
+    );
 
-    expect(availability.resolve).toHaveBeenCalledWith('internal-location-id', '2026-08-24');
+    expect(availability.resolve).toHaveBeenCalledWith(
+      'internal-location-id',
+      '2026-08-24',
+    );
     expect(result).not.toHaveProperty('practiceLocationId');
     expect(result.availableForPublicBooking).toBe(true);
   });
