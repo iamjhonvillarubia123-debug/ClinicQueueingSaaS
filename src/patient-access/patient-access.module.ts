@@ -5,6 +5,8 @@ import { NotificationModule } from '../notification/notification.module';
 import { OtpModule } from '../otp/otp.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
+import { AppointmentRecoveryController } from './appointment-recovery.controller';
+import { AppointmentRecoveryService } from './appointment-recovery.service';
 import { BookingGroupRecoveryController } from './booking-group-recovery.controller';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 import { ContactPreferenceWithdrawalService } from './contact-preference-withdrawal.service';
@@ -26,12 +28,14 @@ import { PatientBookingGroupAccessService } from './patient-booking-group-access
   controllers: [
     PatientBookingAccessController,
     PatientBookingGroupAccessController,
+    AppointmentRecoveryController,
     BookingGroupRecoveryController,
   ],
   providers: [
     PatientAppointmentDashboardService,
     PatientBookingAccessService,
     PatientBookingGroupAccessService,
+    AppointmentRecoveryService,
     BookingGroupRecoveryService,
     ContactPreferenceWithdrawalService,
   ],
@@ -39,6 +43,7 @@ import { PatientBookingGroupAccessService } from './patient-booking-group-access
     PatientAppointmentDashboardService,
     PatientBookingAccessService,
     PatientBookingGroupAccessService,
+    AppointmentRecoveryService,
     BookingGroupRecoveryService,
     ContactPreferenceWithdrawalService,
   ],
