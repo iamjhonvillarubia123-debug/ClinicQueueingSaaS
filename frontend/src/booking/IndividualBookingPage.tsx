@@ -273,6 +273,7 @@ export function IndividualBookingPage() {
         setDraft(draftToConfirm);
         sessionStorage.setItem(`booking-draft:${draftToConfirm.bookingDraft.id}`, draftToConfirm.draftControlToken);
       }
+      if (!draftToConfirm) return;
       const result = await apiRequest<ConfirmationResult>(`/booking/draft/${encodeURIComponent(draftToConfirm.bookingDraft.id)}/confirm`, {
         method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
       });
