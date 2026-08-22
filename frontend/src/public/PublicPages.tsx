@@ -141,6 +141,19 @@ export function DoctorPublicPage() {
 
   if (state !== 'ready' || !data) return <ResourceState state={state === 'ready' ? 'error' : state} />;
 
+  if (data.routeStatus === 'TEMPORARILY_UNAVAILABLE') {
+    return (
+      <main className="public-detail">
+        <PublicHeader />
+        <section className="public-state">
+          <p className="eyebrow">Online booking</p>
+          <h1>Online booking is temporarily unavailable.</h1>
+          <p>{data.message ?? 'Please try again later.'}</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="public-detail">
       <PublicHeader />
@@ -233,7 +246,7 @@ export function BookingEntryBoundary() {
       <section className="public-state">
         <p className="eyebrow">Booking</p>
         <h1>Your clinic is selected.</h1>
-        <p>The individual booking journey begins here. Date selection and patient details are implemented in the next approved frontend milestone.</p>
+        <p>The next step is choosing an available service date.</p>
         <Link className="secondary-action" to={target}>Back to clinic</Link>
       </section>
     </main>
