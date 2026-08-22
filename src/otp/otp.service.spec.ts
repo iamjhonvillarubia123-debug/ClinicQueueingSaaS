@@ -140,7 +140,9 @@ describe('OtpService', () => {
       }) as unknown,
       select: expect.any(Object) as unknown,
     });
-    expect(otpNotificationOutboxMock.createBookingOtpOutbox).toHaveBeenCalledWith(
+    expect(
+      otpNotificationOutboxMock.createBookingOtpOutbox,
+    ).toHaveBeenCalledWith(
       transactionMock,
       expect.objectContaining({
         otpVerificationId: 'otp-1',
