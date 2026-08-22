@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { ContactPreferenceWithdrawalService } from './contact-preference-withdrawal.service';
 import { EstablishPatientBookingAccessDto } from './dto/establish-patient-booking-access.dto';
 import { PatientAppointmentDashboardService } from './patient-appointment-dashboard.service';
@@ -27,6 +28,12 @@ export class PatientBookingAccessController {
     private readonly contactPreferenceWithdrawal: ContactPreferenceWithdrawalService,
   ) {}
 
+  @RateLimit({
+    id: 'patient-booking-access-establish',
+    limit: 30,
+    windowMs: 5 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'token' },
+  })
   @UseGuards(CsrfOriginGuard)
   @Post('access')
   async establish(
