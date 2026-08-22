@@ -1,8 +1,8 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
-import request from 'supertest';
+import { performance } from 'node:perf_hooks';
+import { AddressInfo } from 'node:net';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -72,10 +72,19 @@ async function runLoad(
   return result;
 }
 
+async function expectHttp200(baseUrl: string, path: string): Promise<void> {
+  const response = await fetch(`${baseUrl}${path}`);
+  if (response.status !== 200) {
+    throw new Error(`Load request ${path} returned HTTP ${response.status}.`);
+  }
+  await response.arrayBuffer();
+}
+
 describe('M13 HTTP and PostgreSQL load smoke (e2e)', () => {
   let app: INestApplication<App> | undefined;
   let prisma: PrismaService;
   let locationPublicIdentifier: string;
+  let baseUrl: string;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm13-load-e2e-only-jwt-secret-not-for-production',
@@ -110,7 +119,13 @@ describe('M13 HTTP and PostgreSQL load smoke (e2e)', () => {
         transform: true,
       }),
     );
-    await app.init();
+    await app.listen(0, '127.0.0.1');
+
+    const address = app.getHttpServer().address() as AddressInfo | null;
+    if (!address) {
+      throw new Error('M13 load application did not bind a TCP listener.');
+    }
+    baseUrl = `http://127.0.0.1:${address.port}`;
 
     const unique = randomUUID();
     const baseNow = Date.now();
@@ -186,20 +201,13 @@ describe('M13 HTTP and PostgreSQL load smoke (e2e)', () => {
     }
   });
 
-  function httpServer() {
-    if (!app) throw new Error('M13 load application did not initialize.');
-    return app.getHttpServer();
-  }
-
   it('sustains concurrent liveness, readiness and public-routing reads without HTTP failures', async () => {
-    const server = httpServer();
-
     const health = await runLoad('health', 300, 30, async () => {
-      await request(server).get('/app/health').expect(200);
+      await expectHttp200(baseUrl, '/app/health');
     });
 
     const readiness = await runLoad('readiness', 200, 20, async () => {
-      await request(server).get('/app/ready').expect(200);
+      await expectHttp200(baseUrl, '/app/ready');
     });
 
     const publicLocation = await runLoad(
@@ -207,9 +215,10 @@ describe('M13 HTTP and PostgreSQL load smoke (e2e)', () => {
       300,
       30,
       async () => {
-        await request(server)
-          .get(`/public/practice-locations/${locationPublicIdentifier}`)
-          .expect(200);
+        await expectHttp200(
+          baseUrl,
+          `/public/practice-locations/${locationPublicIdentifier}`,
+        );
       },
     );
 
