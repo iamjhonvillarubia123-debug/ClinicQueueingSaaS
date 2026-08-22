@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { formatQueueNumber } from '../presentation/queueNumber';
 
 type AppointmentStatus =
   | 'WAITING'
@@ -125,7 +126,7 @@ export function PatientBookingGroupPage() {
             {dashboard.members.map((member) => (
               <article className="group-member" key={member.bookingReference}>
                 <div className="group-member-queue" aria-label={`Queue number ${member.queueNumber}`}>
-                  <span>Queue</span><strong>{member.queueNumber}</strong>
+                  <span>Queue</span><strong>{formatQueueNumber(member.queueNumber)}</strong>
                 </div>
                 <div className="group-member-body">
                   <div className="group-member-heading">
