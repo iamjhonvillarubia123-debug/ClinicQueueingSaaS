@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordResetService } from './password-reset.service';
@@ -33,6 +34,12 @@ export class AuthController {
     private readonly passwordResetService: PasswordResetService,
   ) {}
 
+  @RateLimit({
+    id: 'auth-login',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY_EMAIL', field: 'email' },
+  })
   @Post('login')
   async login(
     @Body() loginDto: LoginDto,
@@ -70,6 +77,12 @@ export class AuthController {
     return result;
   }
 
+  @RateLimit({
+    id: 'auth-password-reset-request',
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY_EMAIL', field: 'email' },
+  })
   @Post('request-password-reset')
   requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
     return this.passwordResetService.request(dto.email);
@@ -80,6 +93,12 @@ export class AuthController {
     return this.passwordResetService.consume(dto.token, dto.newPassword);
   }
 
+  @RateLimit({
+    id: 'auth-email-verification-resend',
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY_EMAIL', field: 'email' },
+  })
   @Post('resend-email-verification')
   resendEmailVerification(@Body() dto: ResendEmailVerificationDto) {
     return this.emailVerificationService.resend(dto.email);
