@@ -23,7 +23,9 @@ export class RateLimitGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    if (this.configService.get<string>('RATE_LIMIT_ENABLED', 'true') === 'false') {
+    if (
+      this.configService.get<string>('RATE_LIMIT_ENABLED', 'true') === 'false'
+    ) {
       return true;
     }
 
