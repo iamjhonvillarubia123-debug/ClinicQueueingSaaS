@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { formatQueueNumber } from '../presentation/queueNumber';
 import {
   DuplicateBookingDecision,
   DuplicateReplacementConfirmation,
@@ -534,7 +535,7 @@ export function MultiPersonBookingPage() {
             <h1>Enter the 6-digit code</h1>
             <p>One verification confirms temporary control of the submitted mobile for this group booking. It does not establish identity or relationship between members.</p>
             <form className="booking-form" onSubmit={verifyOtp}>
-              <label>Verification code<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
+              <label>Verification code<input className="otp-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
               {error ? <div className="form-error" role="alert">{error}</div> : null}
               <button className="primary wide-action" disabled={busy || otp.length !== 6} type="submit">{busy ? 'Verifying…' : 'Verify code'}</button>
               <button className="secondary wide-action" disabled={busy} type="button" onClick={resendOtp}>Resend code</button>
@@ -579,7 +580,7 @@ export function MultiPersonBookingPage() {
             <div className="group-confirmation-list">
               {confirmation.bookingGroup.appointments.map((appointment) => (
                 <article className="confirmation-member" key={appointment.bookingReference}>
-                  <span>Queue {appointment.queueNumber}</span>
+                  <span>Queue {formatQueueNumber(appointment.queueNumber)}</span>
                   <strong>{[appointment.firstName, appointment.lastName].filter(Boolean).join(' ')}</strong>
                   <small>{appointment.bookingReference}</small>
                 </article>
@@ -618,7 +619,7 @@ export function BookingGroupAccessBoundary() {
       <article className="booking-flow">
         <header className="booking-heading"><p className="eyebrow">Group booking</p><h1>{dashboard.visibleMemberCount} confirmed people</h1><p>Detailed live queue controls are added in the next patient-experience milestone. This device has valid controller access to the group.</p></header>
         <div className="group-confirmation-list">
-          {dashboard.members.map((member) => <article className="confirmation-member" key={member.bookingReference}><span>Queue {member.queueNumber}</span><strong>{[member.firstName, member.lastName].filter(Boolean).join(' ')}</strong><small>{member.bookingReference}</small></article>)}
+          {dashboard.members.map((member) => <article className="confirmation-member" key={member.bookingReference}><span>Queue {formatQueueNumber(member.queueNumber)}</span><strong>{[member.firstName, member.lastName].filter(Boolean).join(' ')}</strong><small>{member.bookingReference}</small></article>)}
         </div>
       </article>
     </main>
