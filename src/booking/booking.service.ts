@@ -10,6 +10,7 @@ import {
   Prisma,
 } from '../../generated/prisma/client';
 import { OtpService } from '../otp/otp.service';
+import { PublicBookingRecoveryService } from '../patient-access/public-booking-recovery.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import {
@@ -50,6 +51,7 @@ export class BookingService {
     private readonly bookingAnswerValidationService: BookingAnswerValidationService,
     private readonly bookingDraftControlService: BookingDraftControlService,
     private readonly activeBookingIdentityService: ActiveBookingIdentityService,
+    private readonly publicBookingRecoveryService: PublicBookingRecoveryService,
   ) {}
 
   async createDraft(createBookingDraftDto: CreateBookingDraftDto) {
@@ -102,6 +104,16 @@ export class BookingService {
     const serviceDate = new Date(
       `${createBookingDraftDto.serviceDate}T00:00:00.000Z`,
     );
+
+    if (createBookingDraftDto.replacementRecoveryAttemptId) {
+      await this.publicBookingRecoveryService.validateReplacementAuthority({
+        recoveryAttemptId: createBookingDraftDto.replacementRecoveryAttemptId,
+        mobileNumberHash: protectedMobileNumber.hash,
+        practiceLocationId: createBookingDraftDto.practiceLocationId,
+        serviceDate,
+      });
+    }
+
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const maximumEstimatedServiceMinutesPerPatient =
       accountSettings.maximumEstimatedServiceMinutesPerPatient;
@@ -143,6 +155,29 @@ export class BookingService {
         bookingDraft: creation.bookingDraft,
         draftControlToken: controlCredential.rawToken,
         otpVerification: null,
+      };
+    }
+
+    if (createBookingDraftDto.replacementRecoveryAttemptId) {
+      const authority =
+        await this.publicBookingRecoveryService.bindReplacementAuthorityToDraft(
+          {
+            recoveryAttemptId:
+              createBookingDraftDto.replacementRecoveryAttemptId,
+            bookingDraftId: creation.bookingDraft.id,
+            mobileNumberHash: protectedMobileNumber.hash,
+            practiceLocationId: createBookingDraftDto.practiceLocationId,
+            serviceDate,
+          },
+        );
+      return {
+        bookingDraft: creation.bookingDraft,
+        draftControlToken: controlCredential.rawToken,
+        otpVerification: {
+          verified: true,
+          expiresAt: authority.expiresAt,
+          replacementAuthorized: true,
+        },
       };
     }
 
