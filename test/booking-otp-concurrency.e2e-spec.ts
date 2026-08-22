@@ -145,9 +145,9 @@ describe('Booking OTP concurrency controls (e2e)', () => {
     expect(challenges[0]?.invalidatedAt).not.toBeNull();
     expect(challenges[0]?.otpHash).toBeNull();
     expect(outboxes).toHaveLength(2);
-    expect(new Set(outboxes.map((outbox) => outbox.otpVerificationId)).size).toBe(
-      2,
-    );
+    expect(
+      new Set(outboxes.map((outbox) => outbox.otpVerificationId)).size,
+    ).toBe(2);
     expect(
       outboxes.every(
         (outbox) =>
