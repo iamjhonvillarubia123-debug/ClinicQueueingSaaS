@@ -166,6 +166,10 @@ export class PublicBookingReplacementService {
           otpHashKeyVersion: null,
         },
       });
+      await transaction.bookingDraft.update({
+        where: { id: draft.id },
+        data: { expiresAt },
+      });
 
       return {
         replacementAuthorized: true,
@@ -186,6 +190,32 @@ export class PublicBookingReplacementService {
                 ),
               },
       };
+    });
+  }
+
+  async prepareForConfirmation(bookingDraftId: string): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const now = new Date();
+      const draft = await this.lockDraft(transaction, bookingDraftId);
+      this.assertDraftUsable(draft, now);
+      const otp = await this.lockVerifiedBookingOtp(
+        transaction,
+        draft.id,
+        now,
+        true,
+      );
+      if (otp.activeContextKey !== this.replacementContextKey(draft.id)) {
+        return;
+      }
+      if (otp.expiresAt.getTime() <= now.getTime()) {
+        throw new ConflictException(
+          'Verified replacement authority has expired. Verify the mobile number again.',
+        );
+      }
+      await transaction.otpVerification.update({
+        where: { id: otp.id },
+        data: { activeContextKey: `BOOKING:${draft.id}` },
+      });
     });
   }
 
