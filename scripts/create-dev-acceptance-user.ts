@@ -2,12 +2,17 @@ import 'dotenv/config';
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import {
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const prismaModule = require('../generated/prisma/client.js') as typeof import('../generated/prisma/client');
+
+const {
   AdministrativeRestrictionStatus,
   PrismaClient,
   UserAccountStatus,
   UserRole,
-} from '../generated/prisma/client';
+} = prismaModule;
 
 const ACCEPTANCE_EMAIL = 'frontend.acceptance.doctor@local.test';
 const ACCEPTANCE_MOBILE = '+639000000000';
