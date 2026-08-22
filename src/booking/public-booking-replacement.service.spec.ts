@@ -47,9 +47,8 @@ describe('PublicBookingReplacementService', () => {
       bookingDraft: { update: jest.fn() },
     };
     const prisma = {
-      $transaction: jest.fn(
-        (callback: (tx: typeof transaction) => unknown) =>
-          Promise.resolve(callback(transaction)),
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+        Promise.resolve(callback(transaction)),
       ),
     };
     const identity = {
