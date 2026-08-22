@@ -228,6 +228,11 @@ export function PracticeLocationPublicPage() {
         ) : null}
 
         <div className="booking-recovery-entry">
+          <div><strong>Already have an individual appointment?</strong><span>Recover secure access if this browser no longer has it.</span></div>
+          <Link className="secondary-action" to={`/recover/appointment/${encodeURIComponent(publicIdentifier)}`}>Recover appointment access</Link>
+        </div>
+
+        <div className="booking-recovery-entry">
           <div><strong>Already have a group booking?</strong><span>Recover secure controller access if this browser no longer has it.</span></div>
           <Link className="secondary-action" to={`/recover/group/${encodeURIComponent(publicIdentifier)}`}>Recover group access</Link>
         </div>
