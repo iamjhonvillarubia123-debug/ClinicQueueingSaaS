@@ -1,10 +1,15 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request } from 'express';
 import { performance } from 'node:perf_hooks';
 
 type OperationalLogRequest = Pick<Request, 'method'> & {
   requestId?: string;
   route?: unknown;
+};
+
+type OperationalLogResponse = {
+  statusCode: number;
+  once(event: 'finish', listener: () => void): unknown;
 };
 
 type RouteInfo = {
@@ -34,7 +39,7 @@ export class OperationalLoggingMiddleware implements NestMiddleware {
 
   use(
     request: OperationalLogRequest,
-    response: Response,
+    response: OperationalLogResponse,
     next: NextFunction,
   ): void {
     const startedAt = performance.now();
