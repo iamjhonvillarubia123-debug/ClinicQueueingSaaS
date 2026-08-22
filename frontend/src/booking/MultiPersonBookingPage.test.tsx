@@ -35,10 +35,12 @@ function renderGroupBooking() {
   );
 }
 
-async function fillTwoPeople(user: ReturnType<typeof userEvent.setup>) {
+async function fillTwoPeople(user: ReturnType<typeof userEvent.setup>, sharedAlreadyFilled = false) {
   await screen.findByRole('heading', { name: 'Book 2–5 people at North Clinic' });
-  await user.type(screen.getByLabelText('Service date'), '2026-08-24');
-  await user.type(screen.getByLabelText('Controlling mobile number'), '+639171234567');
+  if (!sharedAlreadyFilled) {
+    await user.type(screen.getByLabelText('Service date'), '2026-08-24');
+    await user.type(screen.getByLabelText('Controlling mobile number'), '+639171234567');
+  }
 
   const sections = document.querySelectorAll('.member-section');
   expect(sections).toHaveLength(2);
@@ -140,6 +142,62 @@ describe('F3 multi-person public booking', () => {
     expect(screen.queryByText('group-control-token')).not.toBeInTheDocument();
     expect(screen.queryByText(/bookingGroupAccessToken/i)).not.toBeInTheDocument();
     await waitFor(() => expect(sessionStorage.getItem('booking-draft:group-draft')).toBeNull());
+  });
+
+  it('uses verified replacement authority for a group and does not request a second OTP', async () => {
+    sessionStorage.setItem('f4-replacement:clinic-public', JSON.stringify({
+      recoveryAttemptId: '22222222-2222-4222-8222-222222222222',
+      serviceDate: '2026-08-24',
+      mobileNumber: '09171234567',
+      expiresAt: '2099-08-24T10:10:00.000Z',
+    }));
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/booking/public/configuration/clinic-public')) return jsonResponse(config);
+      if (url.endsWith('/booking/public/availability/clinic-public/2026-08-24')) return jsonResponse({ availableForPublicBooking: true });
+      if (url.endsWith('/booking/public/draft/clinic-public') && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        expect(body.replacementRecoveryAttemptId).toBe('22222222-2222-4222-8222-222222222222');
+        expect(body.mode).toBe('MULTI_PERSON');
+        return jsonResponse({
+          bookingDraft: { id: 'replacement-group-draft', bookingReference: 'GD-NEW', expiresAt: '2099-08-24T10:30:00.000Z' },
+          draftControlToken: 'replacement-group-control',
+          otpVerification: { verified: true, replacementAuthorized: true, expiresAt: '2099-08-24T10:10:00.000Z' },
+        });
+      }
+      if (url.endsWith('/booking/draft/replacement-group-draft/confirm')) return jsonResponse({
+        bookingGroup: {
+          serviceDate: '2026-08-24T00:00:00.000Z',
+          appointments: [
+            { bookingReference: 'NEW-A', queueNumber: 15, status: 'WAITING', firstName: 'Ana', lastName: 'Santos' },
+            { bookingReference: 'NEW-B', queueNumber: 16, status: 'WAITING', firstName: 'Ben', lastName: 'Santos' },
+          ],
+        },
+        bookingGroupAccessToken: { expiresAt: '2026-08-25T00:00:00.000Z', transport: 'HTTP_ONLY_COOKIE' },
+        replayed: false,
+      });
+      return jsonResponse({ message: 'Unexpected request' }, 500);
+    });
+
+    const user = userEvent.setup();
+    renderGroupBooking();
+    await screen.findByRole('heading', { name: 'Book 2–5 people at North Clinic' });
+    expect(screen.getByLabelText('Service date')).toHaveValue('2026-08-24');
+    expect(screen.getByLabelText('Controlling mobile number')).toHaveValue('09171234567');
+    await fillTwoPeople(user, true);
+    await user.click(screen.getByRole('button', { name: 'Review new group booking' }));
+
+    expect(await screen.findByRole('heading', { name: 'Check all 2 people' })).toBeInTheDocument();
+    expect(screen.getByText('08/24/2026')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/booking/verify-otp'))).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Confirm new group booking' }));
+    expect(await screen.findByRole('heading', { name: 'Your group booking is confirmed.' })).toBeInTheDocument();
+    expect(screen.getByText('Queue 15')).toBeInTheDocument();
+    expect(screen.getByText('Queue 16')).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/booking/verify-otp'))).toBe(false);
+    expect(sessionStorage.getItem('f4-replacement:clinic-public')).toBeNull();
   });
 
   it('opens the controller surface through cookie-backed group access', async () => {
