@@ -127,11 +127,11 @@ export function PatientAppointmentPage() {
       ) : null}
 
       {viewState === 'inaccessible' ? (
-        <section className="patient-dashboard patient-state"><p className="eyebrow">Appointment</p><h1>Appointment access is unavailable.</h1><p>This device does not currently have access to this appointment. Use the approved recovery link or contact the clinic if you need help.</p></section>
+        <section className="patient-dashboard patient-state"><p className="eyebrow">Appointment</p><h1>Appointment access is unavailable.</h1><p>This device does not currently have access to this appointment. Use the approved recovery flow or contact the clinic if you need help.</p></section>
       ) : null}
 
       {viewState === 'unavailable' || viewState === 'error' ? (
-        <section className="patient-dashboard patient-state"><p className="eyebrow">{viewState === 'unavailable' ? 'Temporarily unavailable' : 'Connection problem'}</p><h1>{viewState === 'unavailable' ? 'Your appointment is still محفوظ.' : 'We could not load your appointment.'}</h1><p>{message}</p><button className="secondary" type="button" onClick={() => void load()}>Try again</button></section>
+        <section className="patient-dashboard patient-state"><p className="eyebrow">{viewState === 'unavailable' ? 'Temporarily unavailable' : 'Connection problem'}</p><h1>{viewState === 'unavailable' ? 'Your appointment is still booked.' : 'We could not load your appointment.'}</h1><p>{message}</p><button className="secondary" type="button" onClick={() => void load()}>Try again</button></section>
       ) : null}
 
       {viewState === 'ready' && dashboard && heading ? (
