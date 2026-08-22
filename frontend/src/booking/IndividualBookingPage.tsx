@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import {
+  DuplicateBookingDecision,
+  DuplicateReplacementConfirmation,
+  type DuplicateContext,
+  type DuplicateContextResult,
+  type UseExistingResult,
+} from './DuplicateBookingResolution';
 import '../styles/booking.css';
 
 const PRIVACY_NOTICE_VERSION = 'v1.0-2026-08';
@@ -74,7 +81,7 @@ type ReplacementSession = {
   expiresAt: string;
 };
 
-type Stage = 'details' | 'otp' | 'review' | 'confirmed';
+type Stage = 'details' | 'otp' | 'duplicate' | 'duplicate-replace-confirm' | 'review' | 'confirmed';
 
 function PublicHeader() {
   return <header className="public-header"><Link className="brand" to="/">Clinic Queueing</Link><Link className="quiet-link" to="/login">Staff sign in</Link></header>;
@@ -123,6 +130,7 @@ function selectValues(value: unknown): Array<{ value: string; label: string }> {
 
 export function IndividualBookingPage() {
   const { publicIdentifier } = useParams();
+  const navigate = useNavigate();
   const [config, setConfig] = useState<BookingConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [stage, setStage] = useState<Stage>('details');
@@ -132,6 +140,8 @@ export function IndividualBookingPage() {
   const [payload, setPayload] = useState<DraftPayload | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(null);
   const [replacementSession, setReplacementSession] = useState<ReplacementSession | null>(null);
+  const [duplicateContext, setDuplicateContext] = useState<DuplicateContext | null>(null);
+  const [draftReplacementAuthorized, setDraftReplacementAuthorized] = useState(false);
   const [otp, setOtp] = useState('');
   const [serviceDate, setServiceDate] = useState('');
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -227,6 +237,8 @@ export function IndividualBookingPage() {
       if (!nextDraft.otpVerification) { setError('The booking is not ready for mobile verification. Review the required information.'); return; }
       setDraft(nextDraft);
       setPayload(nextPayload);
+      setDuplicateContext(null);
+      setDraftReplacementAuthorized(false);
       sessionStorage.setItem(`booking-draft:${nextDraft.bookingDraft.id}`, nextDraft.draftControlToken);
       setOtp('');
       setStage('otp');
@@ -242,7 +254,13 @@ export function IndividualBookingPage() {
     setBusy(true);
     try {
       await apiRequest('/booking/verify-otp', { method: 'POST', body: { bookingDraftId: draft.bookingDraft.id, otp } });
-      setStage('review');
+      const duplicate = await apiRequest<DuplicateContextResult>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/duplicate-context`, { method: 'POST' });
+      if (duplicate.duplicate) {
+        setDuplicateContext(duplicate.context);
+        setStage('duplicate');
+      } else {
+        setStage('review');
+      }
     } catch (caught) { setError(messageFor(caught)); }
     finally { setBusy(false); }
   }
@@ -253,6 +271,33 @@ export function IndividualBookingPage() {
     try {
       await apiRequest(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/request-otp`, { method: 'POST', body: { draftControlToken: draft.draftControlToken } });
       setOtp('');
+    } catch (caught) { setError(messageFor(caught)); }
+    finally { setBusy(false); }
+  }
+
+  async function useExistingDuplicate() {
+    if (!draft || !duplicateContext || busy) return;
+    setError(''); setBusy(true);
+    try {
+      const result = await apiRequest<UseExistingResult>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/use-existing`, { method: 'POST' });
+      sessionStorage.removeItem(`booking-draft:${draft.bookingDraft.id}`);
+      if (result.contextKind === 'BOOKING_GROUP') {
+        navigate('/patient-booking-groups', { replace: true });
+      } else {
+        navigate(`/patient-bookings/${encodeURIComponent(result.bookingReference)}`, { replace: true });
+      }
+    } catch (caught) { setError(messageFor(caught)); }
+    finally { setBusy(false); }
+  }
+
+  async function authorizeDraftReplacement() {
+    if (!draft || !duplicateContext || busy) return;
+    setError(''); setBusy(true);
+    try {
+      const result = await apiRequest<{ replacementAuthorized: boolean }>(`/booking/draft/${encodeURIComponent(draft.bookingDraft.id)}/replace-existing`, { method: 'POST' });
+      if (!result.replacementAuthorized) throw new Error('Replacement authorization could not be completed.');
+      setDraftReplacementAuthorized(true);
+      setStage('review');
     } catch (caught) { setError(messageFor(caught)); }
     finally { setBusy(false); }
   }
@@ -299,7 +344,7 @@ export function IndividualBookingPage() {
   if (!config || !publicIdentifier) return <main className="public-detail"><PublicHeader /><section className="public-state"><p className="eyebrow">Booking unavailable</p><h1>We cannot start this booking.</h1><p>{error || 'This clinic is not currently available for online booking.'}</p><Link className="secondary-action" to="/">Return home</Link></section></main>;
 
   return <main className="public-detail"><PublicHeader /><article className="booking-flow">
-    <div className="booking-progress" aria-label="Booking progress"><span className={stage === 'details' ? 'current' : ''}>Details</span>{!replacementSession ? <span className={stage === 'otp' ? 'current' : ''}>Verify</span> : null}<span className={stage === 'review' ? 'current' : ''}>Review</span><span className={stage === 'confirmed' ? 'current' : ''}>Confirmed</span></div>
+    <div className="booking-progress" aria-label="Booking progress"><span className={stage === 'details' ? 'current' : ''}>Details</span>{!replacementSession ? <span className={stage === 'otp' ? 'current' : ''}>Verify</span> : null}{stage === 'duplicate' || stage === 'duplicate-replace-confirm' ? <span className="current">Resolve</span> : null}<span className={stage === 'review' ? 'current' : ''}>Review</span><span className={stage === 'confirmed' ? 'current' : ''}>Confirmed</span></div>
 
     {stage === 'details' && <>
       <header className="booking-heading"><p className="eyebrow">{replacementSession ? 'Replacement booking' : 'Individual booking'}</p><h1>Book at {config.practiceLocation.name}</h1><p>{replacementSession ? 'Create the new booking that will replace the booking you just cancelled.' : 'Choose a date and services, then enter the patient details needed for this appointment.'}</p></header>
@@ -317,7 +362,11 @@ export function IndividualBookingPage() {
 
     {stage === 'otp' && <section className="booking-narrow"><p className="eyebrow">Mobile verification</p><h1>Enter the 6-digit code</h1><p>We sent a booking verification code to the mobile number you provided. Codes expire after five minutes.</p><form className="stack" onSubmit={verifyOtp}><label>Verification code<input className="otp-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>{error && <div className="form-error" role="alert">{error}</div>}<button className="primary" type="submit" disabled={busy || otp.length !== 6}>{busy ? 'Verifying…' : 'Verify code'}</button><button className="secondary" type="button" disabled={busy} onClick={resendOtp}>Send a new code</button><button className="text-button" type="button" onClick={() => { setError(''); setStage('details'); }}>Change booking details</button></form></section>}
 
-    {stage === 'review' && payload && <section className="booking-narrow"><p className="eyebrow">Review</p><h1>Check your booking</h1><div className="review-list"><div><span>Clinic</span><strong>{config.practiceLocation.name}</strong></div><div><span>Date</span><strong>{formatServiceDate(payload.serviceDate)}</strong></div><div><span>Patient</span><strong>{[payload.firstName, payload.middleName, payload.lastName, payload.suffix].filter(Boolean).join(' ')}</strong></div><div><span>Services</span><strong>{selectedServiceRows.map((service) => service.name).join(', ')}</strong></div><div><span>Mobile</span><strong>{payload.mobileNumber}</strong></div></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="form-actions stacked-actions"><button className="primary" type="button" disabled={busy} onClick={confirm}>{busy ? 'Confirming…' : replacementSession ? 'Confirm new appointment' : 'Confirm appointment'}</button>{!(replacementSession && draft) ? <button className="secondary" type="button" onClick={() => { setError(''); setStage('details'); }}>Edit booking</button> : null}</div><p className="field-note">{replacementSession ? 'No second verification code is required. The new Queue Number is assigned only after successful confirmation.' : 'Availability and clinic rules are checked again when you confirm. Your queue number is assigned only after successful confirmation.'}</p></section>}
+    {stage === 'duplicate' && duplicateContext ? <DuplicateBookingDecision context={duplicateContext} error={error} busy={busy} onUseExisting={() => void useExistingDuplicate()} onNeedDifferent={() => { setError(''); setStage('duplicate-replace-confirm'); }} /> : null}
+
+    {stage === 'duplicate-replace-confirm' && duplicateContext ? <DuplicateReplacementConfirmation context={duplicateContext} error={error} busy={busy} onBack={() => { setError(''); setStage('duplicate'); }} onConfirmReplacement={() => void authorizeDraftReplacement()} /> : null}
+
+    {stage === 'review' && payload && <section className="booking-narrow"><p className="eyebrow">Review</p><h1>Check your booking</h1><div className="review-list"><div><span>Clinic</span><strong>{config.practiceLocation.name}</strong></div><div><span>Date</span><strong>{formatServiceDate(payload.serviceDate)}</strong></div><div><span>Patient</span><strong>{[payload.firstName, payload.middleName, payload.lastName, payload.suffix].filter(Boolean).join(' ')}</strong></div><div><span>Services</span><strong>{selectedServiceRows.map((service) => service.name).join(', ')}</strong></div><div><span>Mobile</span><strong>{payload.mobileNumber}</strong></div></div>{error && <div className="form-error" role="alert">{error}</div>}<div className="form-actions stacked-actions"><button className="primary" type="button" disabled={busy} onClick={confirm}>{busy ? 'Confirming…' : replacementSession || draftReplacementAuthorized ? 'Confirm new appointment' : 'Confirm appointment'}</button>{!draftReplacementAuthorized && !(replacementSession && draft) ? <button className="secondary" type="button" onClick={() => { setError(''); setStage('details'); }}>Edit booking</button> : null}</div><p className="field-note">{replacementSession || draftReplacementAuthorized ? 'No second verification code is required. The new Queue Number is assigned only after successful confirmation.' : 'Availability and clinic rules are checked again when you confirm. Your queue number is assigned only after successful confirmation.'}</p></section>}
 
     {stage === 'confirmed' && confirmation && <section className="booking-narrow confirmed-panel"><p className="eyebrow">Confirmed</p><h1>Your appointment is booked.</h1><div className="queue-confirmation"><span>Queue number</span><strong>{confirmation.appointment.queueNumber}</strong></div><div className="review-list"><div><span>Booking reference</span><strong>{confirmation.appointment.bookingReference}</strong></div><div><span>Service date</span><strong>{formatServiceDate(String(confirmation.appointment.serviceDate))}</strong></div></div><Link className="primary-action full-action" to={`/patient-bookings/${encodeURIComponent(confirmation.appointment.bookingReference)}`}>View appointment</Link><p className="field-note">Keep this booking available on this device. Access is protected by a secure browser cookie rather than a token shown in the URL.</p></section>}
   </article></main>;
