@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { randomUUID } from 'crypto';
@@ -11,6 +12,8 @@ import { CorrelatedRequest } from './request-correlation.middleware';
 
 @Catch()
 export class RequestIdExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(RequestIdExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const request = http.getRequest<CorrelatedRequest>();
@@ -36,6 +39,14 @@ export class RequestIdExceptionFilter implements ExceptionFilter {
         requestId,
       });
       return;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const error = exception instanceof Error ? exception : new Error(String(exception));
+      this.logger.error(
+        `Unhandled request exception requestId=${requestId}: ${error.message}`,
+        error.stack,
+      );
     }
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
