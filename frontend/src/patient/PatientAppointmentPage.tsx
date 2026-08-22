@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { formatQueueNumber } from '../presentation/queueNumber';
 
 type AppointmentStatus =
   | 'WAITING'
@@ -144,11 +145,11 @@ export function PatientAppointmentPage() {
 
           <section className="patient-queue-number" aria-label={`Queue number ${dashboard.queueNumber}`}>
             <span>Your Queue Number</span>
-            <strong>{dashboard.queueNumber}</strong>
+            <strong>{formatQueueNumber(dashboard.queueNumber)}</strong>
           </section>
 
           <section className="patient-live-grid" aria-label="Live queue information">
-            <div><span>Now serving</span><strong>{dashboard.nowServingQueueNumber ?? '—'}</strong></div>
+            <div><span>Now serving</span><strong>{dashboard.nowServingQueueNumber === null ? '—' : formatQueueNumber(dashboard.nowServingQueueNumber)}</strong></div>
             <div><span>People ahead</span><strong>{dashboard.patientsAhead ?? '—'}</strong></div>
           </section>
 
