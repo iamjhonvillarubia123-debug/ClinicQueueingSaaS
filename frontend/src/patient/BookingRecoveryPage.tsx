@@ -288,6 +288,7 @@ export function BookingRecoveryPage() {
               <dl className="patient-detail-list">
                 <div><dt>Clinic</dt><dd>{candidate.practiceLocationName ?? configuration.practiceLocation.name}</dd></div>
                 <div><dt>Service date</dt><dd>{candidateDate}</dd></div>
+                <div><dt>Booking</dt><dd>{contextKind === 'BOOKING_GROUP' ? 'Multiple people' : 'One person'}</dd></div>
                 {isGroupCandidate(candidate) ? (
                   <div><dt>People</dt><dd>{candidate.appointments.map((appointment) => `${personName(appointment.firstName, appointment.lastName)} · Queue ${appointment.queueNumber}`).join(', ')}</dd></div>
                 ) : (
