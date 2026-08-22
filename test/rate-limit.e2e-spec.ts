@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { randomUUID } from 'crypto';
 import request from 'supertest';
@@ -28,9 +29,16 @@ describe('Distributed rate limiting (e2e)', () => {
       process.env[key] = value;
     }
 
+    const isolatedConfig = new ConfigService<Record<string, string>>({
+      ...testEnvironment,
+      DATABASE_URL: process.env.DATABASE_URL ?? '',
+    });
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(ConfigService)
+      .useValue(isolatedConfig)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
