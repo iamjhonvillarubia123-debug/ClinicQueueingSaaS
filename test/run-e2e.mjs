@@ -76,6 +76,17 @@ if ((migration.status ?? 1) !== 0) {
   process.exit(migration.status ?? 1);
 }
 
+const requestedArguments = process.argv.slice(2);
+const explicitlyRunsLoadTest = requestedArguments.some((argument) =>
+  argument.includes('performance-load.e2e-spec.ts'),
+);
+const jestArguments = explicitlyRunsLoadTest
+  ? requestedArguments
+  : [
+      '--testPathIgnorePatterns=performance-load.e2e-spec.ts',
+      ...requestedArguments,
+    ];
+
 const result = spawnSync(
   process.execPath,
   [
@@ -83,7 +94,7 @@ const result = spawnSync(
     './node_modules/jest/bin/jest.js',
     '--config',
     './test/jest-e2e.json',
-    ...process.argv.slice(2),
+    ...jestArguments,
   ],
   {
     cwd: process.cwd(),
