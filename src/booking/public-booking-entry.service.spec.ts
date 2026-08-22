@@ -70,10 +70,7 @@ describe('PublicBookingEntryService', () => {
       reason: 'AVAILABLE',
     });
 
-    const result = await service.getAvailability(
-      'public-clinic',
-      '2026-08-24',
-    );
+    const result = await service.getAvailability('public-clinic', '2026-08-24');
 
     expect(availability.resolve).toHaveBeenCalledWith(
       'internal-location-id',
