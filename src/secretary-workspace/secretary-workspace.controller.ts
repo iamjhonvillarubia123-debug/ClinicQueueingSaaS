@@ -8,10 +8,14 @@ import { SecretaryWorkspaceService } from './secretary-workspace.service';
 @Controller('secretary-workspace')
 @UseGuards(SessionAuthGuard, CsrfOriginGuard)
 export class SecretaryWorkspaceController {
-  constructor(private readonly secretaryWorkspaceService: SecretaryWorkspaceService) {}
+  constructor(
+    private readonly secretaryWorkspaceService: SecretaryWorkspaceService,
+  ) {}
 
   @Get('clinics')
   listAssignedClinics(@Request() request: AuthenticatedRequest) {
-    return this.secretaryWorkspaceService.listAssignedClinics(request.user.userId);
+    return this.secretaryWorkspaceService.listAssignedClinics(
+      request.user.userId,
+    );
   }
 }
