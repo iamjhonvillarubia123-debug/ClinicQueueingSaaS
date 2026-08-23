@@ -6,6 +6,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BookingQuestionType,
+  Prisma,
   ServiceAvailabilityStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -80,6 +81,37 @@ describe('DoctorDefaultsService', () => {
         status: ServiceAvailabilityStatus.ACTIVE,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('creates an optional TEXT BookingQuestion with database-null select options', async () => {
+    prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
+    prismaMock.doctorBookingQuestionTemplate.findFirst.mockResolvedValue(null);
+    prismaMock.doctorBookingQuestionTemplate.count.mockResolvedValue(0);
+    prismaMock.doctorBookingQuestionTemplate.create.mockResolvedValue({
+      id: 'question-optional',
+    });
+
+    await service.createBookingQuestionTemplate('doctor-user', {
+      questionText: 'Reason for visit?',
+      type: BookingQuestionType.TEXT,
+      isRequired: false,
+      displayOrder: 0,
+      isActive: true,
+      textMaximumLength: 500,
+    });
+
+    expect(prismaMock.doctorBookingQuestionTemplate.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        doctorProfileId: 'doctor-1',
+        questionText: 'Reason for visit?',
+        type: BookingQuestionType.TEXT,
+        isRequired: false,
+        displayOrder: 0,
+        isActive: true,
+        textMaximumLength: 500,
+        selectOptions: Prisma.DbNull,
+      }) as unknown,
+    });
   });
 
   it('blocks a sixth active Doctor-wide BookingQuestion', async () => {
