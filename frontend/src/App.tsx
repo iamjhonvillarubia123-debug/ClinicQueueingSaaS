@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from './api/client';
 import {
-  DoctorRegistrationPage,
+  AccountRegistrationPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   VerifyEmailPage,
@@ -87,8 +87,8 @@ function LoginPage() {
           <Link className="quiet-link auth-center-link" to="/account/reactivate">Reactivate disabled account</Link>
         </form>
         <div className="auth-registration-entry">
-          <span>Doctor without an account?</span>
-          <Link className="secondary-action" to="/register/doctor">Create doctor account</Link>
+          <span>Don’t have an account?</span>
+          <Link className="secondary-action" to="/register">Create account</Link>
         </div>
       </section>
     </main>
@@ -150,7 +150,8 @@ export function App() {
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
+      <Route path="/register" element={<AccountRegistrationPage />} />
+      <Route path="/register/doctor" element={<Navigate to="/register" replace />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
