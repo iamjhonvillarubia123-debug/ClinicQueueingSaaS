@@ -317,7 +317,9 @@ export class RecurringScheduleConflictService {
   private canonicalTimeZone(timeZone: string): string {
     const trimmed = timeZone.trim();
     this.assertValidConfiguredTimeZone(trimmed);
-    return new Intl.DateTimeFormat('en-US', { timeZone: trimmed }).resolvedOptions().timeZone;
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: trimmed,
+    }).resolvedOptions().timeZone;
   }
 
   private assertValidConfiguredTimeZone(timeZone: string): void {
