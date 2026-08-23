@@ -11,15 +11,30 @@ import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { CurrentPasswordGuard } from '../auth/guards/current-password.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { PermanentlyDeleteSecretaryDto } from './dto/permanently-delete-secretary.dto';
 import { ReactivateSecretaryDto } from './dto/reactivate-secretary.dto';
+import { RegisterSecretaryDto } from './dto/register-secretary.dto';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
+import { SecretaryRegistrationService } from './secretary-registration.service';
 
 @Controller('secretary')
 export class SecretaryController {
   constructor(
     private readonly secretaryLifecycleService: SecretaryLifecycleService,
+    private readonly secretaryRegistrationService: SecretaryRegistrationService,
   ) {}
+
+  @RateLimit({
+    id: 'secretary-register',
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
+  @Post('register')
+  register(@Body() dto: RegisterSecretaryDto) {
+    return this.secretaryRegistrationService.register(dto);
+  }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('account/disable')
