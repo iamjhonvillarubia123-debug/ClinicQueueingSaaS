@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma } from '../../generated/prisma/client';
 import { OtpService } from '../otp/otp.service';
+import { PublicBookingRecoveryService } from '../patient-access/public-booking-recovery.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
@@ -47,6 +48,9 @@ describe('BookingService', () => {
     assertNoActiveDraft: jest.fn(),
     attachDraftKey: jest.fn(),
   };
+  const publicBookingRecoveryServiceMock = {
+    bindReplacementAuthorityToDraft: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -74,6 +78,10 @@ describe('BookingService', () => {
         {
           provide: ActiveBookingIdentityService,
           useValue: activeBookingIdentityServiceMock,
+        },
+        {
+          provide: PublicBookingRecoveryService,
+          useValue: publicBookingRecoveryServiceMock,
         },
       ],
     }).compile();
