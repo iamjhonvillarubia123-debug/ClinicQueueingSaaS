@@ -94,9 +94,10 @@ describe('Backup erasure replay (e2e)', () => {
   }
 
   it('replays a still-valid erasure ledger against restored Appointment correlation without double-counting analytics', async () => {
-    const now = new Date('2026-08-21T12:00:00.000Z');
+    const now = new Date();
     const { location, unique } = await createLocation();
-    const serviceDate = new Date('2026-08-20T00:00:00.000Z');
+    const serviceDate = new Date(now.getTime() - 3 * DAY_MS);
+    serviceDate.setUTCHours(0, 0, 0, 0);
     const appointmentId = randomUUID();
 
     await prisma.queueAnalyticsDaily.create({

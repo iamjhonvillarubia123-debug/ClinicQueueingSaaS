@@ -1,8 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { OtpNotificationOutboxService } from '../notification/otp-notification-outbox.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { OtpGenerator } from './otp.generator';
 import { OtpService } from './otp.service';
-import { PrismaService } from '../prisma/prisma.service';
 
 describe('OtpService', () => {
   let service: OtpService;
@@ -20,6 +21,9 @@ describe('OtpService', () => {
     }),
   };
   const otpGeneratorMock = { generate: jest.fn<string, []>() };
+  const otpNotificationOutboxMock = {
+    createBookingOtpOutbox: jest.fn(),
+  };
   const otpVerificationMock = {
     findFirst: jest.fn(),
     count: jest.fn(),
@@ -42,6 +46,8 @@ describe('OtpService', () => {
   const activeDraft = (overrides: Record<string, unknown> = {}) => ({
     id: 'draft-1',
     status: 'PENDING_OTP',
+    practiceLocationId: 'location-1',
+    mobileNumberEncrypted: 'encrypted-mobile',
     mobileNumberHash: 'a'.repeat(64),
     expiresAt: new Date(Date.now() + 20 * 60 * 1000),
     consumedAt: null,
@@ -56,6 +62,10 @@ describe('OtpService', () => {
         { provide: OtpGenerator, useValue: otpGeneratorMock },
         { provide: ConfigService, useValue: configServiceMock },
         { provide: PrismaService, useValue: prismaServiceMock },
+        {
+          provide: OtpNotificationOutboxService,
+          useValue: otpNotificationOutboxMock,
+        },
       ],
     }).compile();
 
@@ -67,6 +77,9 @@ describe('OtpService', () => {
       _sum: { attemptCount: null },
     });
     otpVerificationMock.updateMany.mockResolvedValue({ count: 0 });
+    otpNotificationOutboxMock.createBookingOtpOutbox.mockResolvedValue(
+      undefined,
+    );
     otpGeneratorMock.generate.mockReturnValue('123456');
   });
 
@@ -86,7 +99,7 @@ describe('OtpService', () => {
     ).toBe(false);
   });
 
-  it('issues one active booking challenge after locking the BookingDraft', async () => {
+  it('issues one active booking challenge and its outbox in one transaction', async () => {
     transactionMock.$queryRaw.mockResolvedValueOnce([activeDraft()]);
     const createdAt = new Date();
     const expiresAt = new Date(createdAt.getTime() + 5 * 60 * 1000);
@@ -127,6 +140,18 @@ describe('OtpService', () => {
       }) as unknown,
       select: expect.any(Object) as unknown,
     });
+    expect(
+      otpNotificationOutboxMock.createBookingOtpOutbox,
+    ).toHaveBeenCalledWith(
+      transactionMock,
+      expect.objectContaining({
+        otpVerificationId: 'otp-1',
+        practiceLocationId: 'location-1',
+        recipientMobileEncrypted: 'encrypted-mobile',
+        otp: '123456',
+        createdAt: expect.any(Date) as unknown,
+      }),
+    );
     expect(result.otp).toBe('123456');
   });
 
@@ -140,6 +165,9 @@ describe('OtpService', () => {
       'OTP request is unavailable. Please try again later.',
     );
     expect(otpVerificationMock.create).not.toHaveBeenCalled();
+    expect(
+      otpNotificationOutboxMock.createBookingOtpOutbox,
+    ).not.toHaveBeenCalled();
   });
 
   it('enforces five booking challenges per context in thirty minutes', async () => {

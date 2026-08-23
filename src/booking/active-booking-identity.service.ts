@@ -44,6 +44,21 @@ export class ActiveBookingIdentityService {
     transaction: TransactionClient,
     activeDraftKey: string,
   ): Promise<void> {
+    // The scope lock is already held by the caller. Terminalize any stale
+    // PENDING_OTP draft before checking uniqueness so an expired attempt does
+    // not permanently block a fresh public booking for the same scope.
+    await transaction.$executeRaw(Prisma.sql`
+      UPDATE "BookingDraft"
+      SET
+        "status" = 'EXPIRED',
+        "expiredAt" = now(),
+        "activeDraftKey" = NULL,
+        "updatedAt" = now()
+      WHERE "activeDraftKey" = ${activeDraftKey}
+        AND "status" = 'PENDING_OTP'
+        AND "expiresAt" <= now()
+    `);
+
     const rows = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT "id"
       FROM "BookingDraft"

@@ -1,0 +1,1 @@
+F1 public patient surfaces consume only the backend public-routing projections. Public identifiers are route identity, never credentials. Booking eligibility remains backend-authoritative. The `/book/:practiceLocationPublicIdentifier` route is the handoff boundary to F2.

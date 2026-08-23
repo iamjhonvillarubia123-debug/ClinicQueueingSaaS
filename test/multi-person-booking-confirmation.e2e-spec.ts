@@ -93,15 +93,19 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(first.status).toBe(201);
     const firstBody = first.body as unknown as {
       bookingGroup: {
-        id: string;
+        serviceDate: string;
         appointments: Array<{
-          id: string;
+          bookingReference: string;
           queueNumber: number;
           firstName: string;
           lastName: string;
         }>;
       };
-      bookingGroupAccessToken: { token: string; expiresAt: string } | null;
+      bookingGroupAccessToken: {
+        expiresAt: string;
+        transport: string;
+        token?: string;
+      } | null;
       replayed: boolean;
     };
 
@@ -109,17 +113,37 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(
       firstBody.bookingGroup.appointments.map((item) => item.queueNumber),
     ).toEqual([1, 2]);
-    expect(firstBody.bookingGroupAccessToken?.token).toEqual(
-      expect.any(String),
+    expect(firstBody.bookingGroupAccessToken).not.toBeNull();
+    expect(firstBody.bookingGroupAccessToken?.transport).toBe(
+      'HTTP_ONLY_COOKIE',
     );
+    expect(typeof firstBody.bookingGroupAccessToken?.expiresAt).toBe('string');
+    expect(firstBody.bookingGroupAccessToken).not.toHaveProperty('token');
+    const firstCookies = first.headers['set-cookie'];
+    expect(firstCookies).toEqual(expect.any(Array));
+    const groupCookie = (firstCookies as unknown as string[]).find((value) =>
+      value.startsWith('cq_booking_group_access='),
+    );
+    expect(groupCookie).toEqual(expect.any(String));
+    expect(groupCookie).toContain('HttpOnly');
+    expect(groupCookie).toContain('Secure');
+    expect(groupCookie).toContain('SameSite=Strict');
+    expect(groupCookie).toContain('Path=/patient-booking-groups');
+
+    const confirmedGroup = await prisma.bookingGroup.findFirstOrThrow({
+      where: {
+        practiceLocationId: fixture.locationId,
+        serviceDate: fixture.serviceDate,
+      },
+    });
 
     const replay = await confirm(draft.bookingDraftId, idempotencyKey);
     expect(replay.status).toBe(201);
     expect(replay.body).toMatchObject({
-      bookingGroup: { id: firstBody.bookingGroup.id },
       bookingGroupAccessToken: null,
       replayed: true,
     });
+    expect(replay.headers['set-cookie']).toBeUndefined();
 
     const [
       groups,
@@ -154,11 +178,11 @@ describe('Multi-person booking confirmation (e2e)', () => {
         },
       }),
       prisma.bookingGroupAccessToken.findMany({
-        where: { bookingGroupId: firstBody.bookingGroup.id },
+        where: { bookingGroupId: confirmedGroup.id },
       }),
       prisma.notificationOutbox.findMany({
         where: {
-          bookingGroupId: firstBody.bookingGroup.id,
+          bookingGroupId: confirmedGroup.id,
           notificationType: NotificationType.BOOKING_CONFIRMATION,
         },
       }),
@@ -170,7 +194,7 @@ describe('Multi-person booking confirmation (e2e)', () => {
       }),
       prisma.contactPreference.findMany({
         where: {
-          appointment: { bookingGroupId: firstBody.bookingGroup.id },
+          appointment: { bookingGroupId: confirmedGroup.id },
         },
       }),
       prisma.bookingDraft.findUniqueOrThrow({
@@ -185,7 +209,7 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(appointments).toHaveLength(2);
     expect(appointments.map((item) => item.queueNumber)).toEqual([1, 2]);
     expect(
-      appointments.every((item) => item.bookingGroupId === groups[0]?.id),
+      appointments.every((item) => item.bookingGroupId === confirmedGroup.id),
     ).toBe(true);
     expect(
       appointments.every(
@@ -200,7 +224,7 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(groupTokens[0]?.tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(outboxes).toHaveLength(1);
     expect(commands).toHaveLength(1);
-    expect(commands[0]?.resultBookingGroupId).toBe(firstBody.bookingGroup.id);
+    expect(commands[0]?.resultBookingGroupId).toBe(confirmedGroup.id);
     expect(commands[0]?.resultBookingGroupAccessTokenId).toBeNull();
     expect(contacts).toHaveLength(2);
     expect(storedDraft.status).toBe('CONSUMED');

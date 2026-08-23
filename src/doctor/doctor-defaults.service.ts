@@ -257,7 +257,7 @@ export class DoctorDefaultsService {
         proposedTextMaximumLength: dto.textMaximumLength ?? null,
         proposedNumberMinimum: null,
         proposedNumberMaximum: null,
-        proposedSelectOptions: Prisma.JsonNull,
+        proposedSelectOptions: Prisma.DbNull,
       };
     }
 
@@ -283,7 +283,7 @@ export class DoctorDefaultsService {
         proposedTextMaximumLength: null,
         proposedNumberMinimum: dto.numberMinimum ?? null,
         proposedNumberMaximum: dto.numberMaximum ?? null,
-        proposedSelectOptions: Prisma.JsonNull,
+        proposedSelectOptions: Prisma.DbNull,
       };
     }
 
@@ -302,7 +302,7 @@ export class DoctorDefaultsService {
         proposedTextMaximumLength: null,
         proposedNumberMinimum: null,
         proposedNumberMaximum: null,
-        proposedSelectOptions: Prisma.JsonNull,
+        proposedSelectOptions: Prisma.DbNull,
       };
     }
 

@@ -1,6 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
@@ -22,6 +24,8 @@ describe('PracticeLocationController', () => {
   const practiceLocationLifecycleServiceMock = {};
   const practiceLocationPermanentDeleteServiceMock = {};
   const authenticationServiceMock = {};
+  const prismaServiceMock = {};
+  const passwordSecurityServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
   };
@@ -67,6 +71,11 @@ describe('PracticeLocationController', () => {
           provide: AuthenticationService,
           useValue: authenticationServiceMock,
         },
+        { provide: PrismaService, useValue: prismaServiceMock },
+        {
+          provide: PasswordSecurityService,
+          useValue: passwordSecurityServiceMock,
+        },
         {
           provide: ConfigService,
           useValue: configServiceMock,
@@ -85,7 +94,10 @@ describe('PracticeLocationController', () => {
 
   it('checks current Doctor acknowledgement before activation', async () => {
     const request = { user: { userId: 'doctor-1' } };
-    const dto = { practiceLocationId: 'location-1' };
+    const dto = {
+      practiceLocationId: 'location-1',
+      currentPassword: 'current-password',
+    };
 
     await controller.activate(dto, 'activation-key', request as never);
 
@@ -101,7 +113,10 @@ describe('PracticeLocationController', () => {
 
   it('checks current Doctor acknowledgement before reactivation', async () => {
     const request = { user: { userId: 'doctor-1' } };
-    const dto = { practiceLocationId: 'location-1' };
+    const dto = {
+      practiceLocationId: 'location-1',
+      currentPassword: 'current-password',
+    };
 
     await controller.reactivate(dto, 'reactivation-key', request as never);
 

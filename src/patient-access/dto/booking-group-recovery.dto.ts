@@ -7,8 +7,9 @@ import {
 } from 'class-validator';
 
 export class RequestBookingGroupRecoveryDto {
-  @IsUUID()
-  practiceLocationId!: string;
+  @IsString()
+  @IsNotEmpty()
+  practiceLocationPublicIdentifier!: string;
 
   @IsDateString()
   serviceDate!: string;

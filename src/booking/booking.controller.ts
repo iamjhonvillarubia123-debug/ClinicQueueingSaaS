@@ -11,17 +11,31 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { PATIENT_BOOKING_ACCESS_COOKIE } from '../patient-access/patient-booking-access.service';
+import { PATIENT_BOOKING_GROUP_ACCESS_COOKIE } from '../patient-access/patient-booking-group-access.service';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
 import { CreateBookingDraftDto } from './dto/create-booking-draft.dto';
+import { CreatePublicBookingDraftDto } from './dto/create-public-booking-draft.dto';
 import {
   BookingDraftControlDto,
   ReplaceBookingDraftDto,
 } from './dto/replace-booking-draft.dto';
+import { ReplacePublicBookingDraftDto } from './dto/replace-public-booking-draft.dto';
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
+import { PublicBookingEntryService } from './public-booking-entry.service';
+import { PublicBookingReplacementService } from './public-booking-replacement.service';
+
+type PublicBookingGroupAppointment = {
+  bookingReference: string;
+  queueNumber: number;
+  status: string;
+  firstName: string | null;
+  lastName: string | null;
+};
 
 @Controller('booking')
 export class BookingController {
@@ -31,8 +45,97 @@ export class BookingController {
     private readonly publicServiceDateAvailability: PublicServiceDateAvailabilityService,
     private readonly bookingDraftEditService: BookingDraftEditService,
     private readonly bookingConfirmationService: BookingConfirmationService,
+    private readonly publicBookingEntryService: PublicBookingEntryService,
+    private readonly publicBookingReplacementService: PublicBookingReplacementService,
   ) {}
 
+  @RateLimit({
+    id: 'booking-public-configuration',
+    limit: 120,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
+  @Get('public/configuration/:publicIdentifier')
+  getPublicConfiguration(@Param('publicIdentifier') publicIdentifier: string) {
+    return this.publicBookingEntryService.getConfiguration(publicIdentifier);
+  }
+
+  @RateLimit({
+    id: 'booking-public-availability',
+    limit: 60,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
+  @Get('public/availability/:publicIdentifier/:serviceDate')
+  getPublicAvailability(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Param('serviceDate') serviceDate: string,
+  ) {
+    return this.publicBookingEntryService.getAvailability(
+      publicIdentifier,
+      serviceDate,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-public-draft-create',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
+  @Post('public/draft/:publicIdentifier')
+  createPublicDraft(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Body() dto: CreatePublicBookingDraftDto,
+  ) {
+    return this.publicBookingEntryService.createDraft(publicIdentifier, dto);
+  }
+
+  @Put('public/draft/:publicIdentifier/:bookingDraftId')
+  replacePublicDraft(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Param('bookingDraftId') bookingDraftId: string,
+    @Body() dto: ReplacePublicBookingDraftDto,
+  ) {
+    return this.publicBookingEntryService.replaceDraft(
+      publicIdentifier,
+      bookingDraftId,
+      dto,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-verified-duplicate-context',
+    limit: 30,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'PARAM', field: 'bookingDraftId' },
+  })
+  @Post('draft/:bookingDraftId/duplicate-context')
+  describeDuplicate(@Param('bookingDraftId') bookingDraftId: string) {
+    return this.publicBookingReplacementService.describeDuplicate(
+      bookingDraftId,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-verified-replace-existing',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'PARAM', field: 'bookingDraftId' },
+  })
+  @Post('draft/:bookingDraftId/replace-existing')
+  authorizeReplacement(@Param('bookingDraftId') bookingDraftId: string) {
+    return this.publicBookingReplacementService.authorizeReplacement(
+      bookingDraftId,
+    );
+  }
+
+  @RateLimit({
+    id: 'booking-configuration',
+    limit: 120,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'practiceLocationId' },
+  })
   @Get('configuration/:practiceLocationId')
   getConfiguration(@Param('practiceLocationId') practiceLocationId: string) {
     return this.bookingConfigurationService.getEffectiveConfiguration(
@@ -40,6 +143,12 @@ export class BookingController {
     );
   }
 
+  @RateLimit({
+    id: 'booking-availability',
+    limit: 60,
+    windowMs: 60 * 1000,
+    subject: { kind: 'PARAM', field: 'practiceLocationId' },
+  })
   @Get('availability/:practiceLocationId/:serviceDate')
   getAvailability(
     @Param('practiceLocationId') practiceLocationId: string,
@@ -51,6 +160,12 @@ export class BookingController {
     );
   }
 
+  @RateLimit({
+    id: 'booking-draft-create',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('draft')
   async createDraft(@Body() createBookingDraftDto: CreateBookingDraftDto) {
     const availability = await this.publicServiceDateAvailability.resolve(
@@ -62,7 +177,6 @@ export class BookingController {
         'Selected Service Date is not available for public booking.',
       );
     }
-
     return this.bookingService.createDraft(createBookingDraftDto);
   }
 
@@ -124,6 +238,45 @@ export class BookingController {
           expiresAt: result.bookingAccessToken.expiresAt,
           transport: 'HTTP_ONLY_COOKIE',
         },
+        replayed: result.replayed,
+      };
+    }
+
+    if ('bookingGroup' in result) {
+      if (result.bookingGroupAccessToken) {
+        response?.cookie(
+          PATIENT_BOOKING_GROUP_ACCESS_COOKIE,
+          result.bookingGroupAccessToken.token,
+          {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'strict',
+            path: '/patient-booking-groups',
+            expires: result.bookingGroupAccessToken.expiresAt,
+          },
+        );
+      }
+
+      const appointments = result.bookingGroup
+        .appointments as PublicBookingGroupAppointment[];
+
+      return {
+        bookingGroup: {
+          serviceDate: result.bookingGroup.serviceDate,
+          appointments: appointments.map((appointment) => ({
+            bookingReference: appointment.bookingReference,
+            queueNumber: appointment.queueNumber,
+            status: appointment.status,
+            firstName: appointment.firstName,
+            lastName: appointment.lastName,
+          })),
+        },
+        bookingGroupAccessToken: result.bookingGroupAccessToken
+          ? {
+              expiresAt: result.bookingGroupAccessToken.expiresAt,
+              transport: 'HTTP_ONLY_COOKIE',
+            }
+          : null,
         replayed: result.replayed,
       };
     }

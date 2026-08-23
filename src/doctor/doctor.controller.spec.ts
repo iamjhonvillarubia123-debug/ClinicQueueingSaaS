@@ -1,6 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { DoctorController } from './doctor.controller';
 import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
@@ -17,6 +19,8 @@ describe('DoctorController', () => {
   const doctorDefaultsApplyServiceMock = {};
   const doctorDataRetentionServiceMock = {};
   const authenticationServiceMock = {};
+  const prismaServiceMock = {};
+  const passwordSecurityServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
   };
@@ -40,6 +44,11 @@ describe('DoctorController', () => {
           useValue: doctorDataRetentionServiceMock,
         },
         { provide: AuthenticationService, useValue: authenticationServiceMock },
+        { provide: PrismaService, useValue: prismaServiceMock },
+        {
+          provide: PasswordSecurityService,
+          useValue: passwordSecurityServiceMock,
+        },
         { provide: ConfigService, useValue: configServiceMock },
       ],
     }).compile();

@@ -69,13 +69,9 @@ describe('AppController (e2e)', () => {
       .get('/app/health')
       .expect(200);
 
-    expect(response.body).toEqual(
-      expect.objectContaining({
-        status: 'OK',
-        message: 'Clinic Queueing SaaS API is running',
-        userCount: expect.any(Number) as unknown,
-      }),
-    );
+    expect(response.body).toEqual({
+      status: 'OK',
+    });
   });
 
   it('registers, verifies, and then permits ordinary Doctor login without auto-login on verification', async () => {
@@ -820,6 +816,7 @@ describe('AppController (e2e)', () => {
       .post('/doctor/account/disable')
       .set('Origin', 'https://app.example.test')
       .set('Idempotency-Key', disableKey)
+      .send({ currentPassword: password })
       .expect(201, { disabled: true, replayed: false });
 
     const disabled = await prisma.user.findUniqueOrThrow({

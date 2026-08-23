@@ -1,7 +1,14 @@
 # compiled output
 /dist
 /node_modules
+**/node_modules/
 /build
+
+# Local generated dependency metadata
+/frontend/package-lock.json
+
+# Local development database safety backups
+*.backup
 
 # Logs
 logs

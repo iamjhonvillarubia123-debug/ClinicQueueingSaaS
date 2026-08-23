@@ -12,16 +12,30 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "start:worker": "node dist/notification/notification-worker",
+    "start:maintenance": "node dist/maintenance/maintenance-worker",
+    "dev:acceptance-user": "node scripts/create-dev-acceptance-user.cjs",
+    "dev:public-fixture": "node scripts/create-dev-public-fixture.cjs",
+    "dev:latest-booking-otp": "node scripts/show-dev-latest-booking-otp.cjs",
+    "dev:latest-booking-group-recovery-otp": "node scripts/show-dev-latest-booking-group-recovery-otp.cjs",
+    "dev:latest-appointment-recovery-otp": "node scripts/show-dev-latest-appointment-recovery-otp.cjs",
+    "dev:latest-email-verification-link": "node scripts/show-dev-latest-account-link.cjs verification",
+    "dev:latest-password-reset-link": "node scripts/show-dev-latest-account-link.cjs reset",
+    "dev:cleanup-expired-bookings": "node scripts/cleanup-dev-expired-booking-drafts.cjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "node ./test/run-e2e.mjs",
+    "test:load": "node ./test/run-e2e.mjs --runInBand --testPathPatterns=performance-load.e2e-spec.ts",
+    "test:db-drill": "node ./test/production-db-drill.mjs",
+    "verify:rollback": "node ./test/rollback-compatibility-check.mjs",
+    "verify:production-config": "node -e \"const { validateRuntimeConfig } = require('./dist/config/production-config'); validateRuntimeConfig(process.env); console.log('Production configuration PASS.');\"",
     "typecheck": "tsc --noEmit",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
-    "verify:static": "npm run typecheck \u0026\u0026 npm run lint:check \u0026\u0026 npm test -- --runInBand \u0026\u0026 npm run test:e2e -- --runInBand \u0026\u0026 npm run prisma:validate \u0026\u0026 npm run prisma:generate \u0026\u0026 npm run build",
+    "verify:static": "npm run typecheck && npm run lint:check && npm test -- --runInBand && npm run test:e2e -- --runInBand && npm run prisma:validate && npm run prisma:generate && npm run build",
     "lint:check": "eslint \"{src,apps,libs,test}/**/*.ts\""
   },
   "dependencies": {
@@ -59,11 +73,11 @@
     "@types/supertest": "^7.0.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
-    "eslint-plugin-prettier": "^5.2.2",
+    "eslint-plugin-prettier": "^5.0.1",
     "globals": "^17.0.0",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
-    "source-map-support": "^0.5.21",
+    "source-map-support": "^0.2.2",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
@@ -73,27 +87,14 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
+    "moduleFileExtensions": ["js", "json", "ts"],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "moduleNameMapper": {
-      "^(\\.{1,2}/.*)\\.js$": "$1"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
+    "transform": {"^.+\\.(t|j)s$": "ts-jest"},
+    "moduleNameMapper": {"^(\\.{1,2}/.*)\\.js$": "$1"},
+    "collectCoverageFrom": ["**/*.(t|j)s"],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
   },
-  "allowScripts": {
-    "prisma@7.9.1": true,
-    "@prisma/engines@7.9.1": true
-  }
+  "allowScripts": {"prisma@7.9.1": true, "@prisma/engines@7.9.1": true}
 }

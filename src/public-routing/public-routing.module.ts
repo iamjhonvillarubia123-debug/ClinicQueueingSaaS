@@ -9,5 +9,6 @@ import { PublicRoutingService } from './public-routing.service';
   imports: [PrismaModule, FinancialModule],
   providers: [PublicRoutingService, PublicQueueService],
   controllers: [PublicRoutingController],
+  exports: [PublicRoutingService],
 })
 export class PublicRoutingModule {}

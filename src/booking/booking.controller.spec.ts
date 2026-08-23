@@ -6,6 +6,8 @@ import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingController } from './booking.controller';
 import { BookingDraftEditService } from './booking-draft-edit.service';
 import { BookingService } from './booking.service';
+import { PublicBookingEntryService } from './public-booking-entry.service';
+import { PublicBookingReplacementService } from './public-booking-replacement.service';
 
 describe('BookingController', () => {
   let controller: BookingController;
@@ -27,6 +29,8 @@ describe('BookingController', () => {
   const bookingConfirmationServiceMock = {
     confirm: jest.fn(),
   };
+  const publicBookingEntryServiceMock = {};
+  const publicBookingReplacementServiceMock = {};
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -51,6 +55,14 @@ describe('BookingController', () => {
         {
           provide: BookingConfirmationService,
           useValue: bookingConfirmationServiceMock,
+        },
+        {
+          provide: PublicBookingEntryService,
+          useValue: publicBookingEntryServiceMock,
+        },
+        {
+          provide: PublicBookingReplacementService,
+          useValue: publicBookingReplacementServiceMock,
         },
       ],
     }).compile();

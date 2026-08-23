@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "migrations": {
+    "20260822120000_m13s5_rate_limit_buckets": {
+      "classification": "APPLICATION_ROLLBACK_COMPATIBLE",
+      "rationale": "Additive-only migration. Creates RateLimitBucket and its index/constraint without changing or removing pre-existing schema required by the Milestone 12 application."
+    }
+  }
+}

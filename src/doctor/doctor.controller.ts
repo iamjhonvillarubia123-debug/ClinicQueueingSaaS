@@ -9,9 +9,12 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ConfirmCurrentPasswordDto } from '../auth/dto/confirm-current-password.dto';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { CurrentPasswordGuard } from '../auth/guards/current-password.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
@@ -36,6 +39,12 @@ export class DoctorController {
     private readonly doctorDataRetentionService: DoctorDataRetentionService,
   ) {}
 
+  @RateLimit({
+    id: 'doctor-register',
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('register')
   async register(@Body() registerDoctorDto: RegisterDoctorDto) {
     return this.doctorService.registerDoctor(registerDoctorDto);
@@ -148,18 +157,26 @@ export class DoctorController {
     );
   }
 
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
+    @Body() dto: ConfirmCurrentPasswordDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
+    void dto;
     return this.doctorLifecycleService.disable(
       request.user.userId,
       idempotencyKey,
     );
   }
 
+  @RateLimit({
+    id: 'doctor-reactivate',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
   @Post('account/reactivate')
   reactivateAccount(
     @Body() dto: ReactivateDoctorDto,
@@ -172,6 +189,12 @@ export class DoctorController {
     );
   }
 
+  @RateLimit({
+    id: 'doctor-permanent-delete',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
   @Post('account/permanent-delete')
   permanentlyDeleteAccount(
     @Body() dto: PermanentlyDeleteDoctorDto,

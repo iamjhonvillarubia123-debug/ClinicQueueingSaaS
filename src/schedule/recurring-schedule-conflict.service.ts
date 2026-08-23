@@ -35,8 +35,7 @@ export class RecurringScheduleConflictService {
     practiceLocationTimeZone: string,
     transaction?: RecurrenceClient,
   ): Promise<void> {
-    const timeZone = practiceLocationTimeZone.trim();
-    this.assertValidConfiguredTimeZone(timeZone);
+    const timeZone = this.canonicalTimeZone(practiceLocationTimeZone);
 
     const db: RecurrenceClient = transaction ?? this.prisma;
     const candidateSchedules = await this.loadOpenSchedules(
@@ -60,13 +59,12 @@ export class RecurringScheduleConflictService {
     });
 
     for (const location of otherLocations) {
-      const otherTimeZone = location.timeZone?.trim();
-      if (!otherTimeZone) {
+      if (!location.timeZone?.trim()) {
         throw new ConflictException(
           'An active practice location has no configured time zone.',
         );
       }
-      this.assertValidConfiguredTimeZone(otherTimeZone);
+      const otherTimeZone = this.canonicalTimeZone(location.timeZone);
 
       const otherSchedules = await this.loadOpenSchedules(db, location.id);
       if (otherSchedules.length === 0) {
@@ -314,6 +312,14 @@ export class RecurringScheduleConflictService {
 
   private dateKey(date: LocalDateParts): string {
     return `${String(date.year).padStart(4, '0')}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`;
+  }
+
+  private canonicalTimeZone(timeZone: string): string {
+    const trimmed = timeZone.trim();
+    this.assertValidConfiguredTimeZone(trimmed);
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: trimmed,
+    }).resolvedOptions().timeZone;
   }
 
   private assertValidConfiguredTimeZone(timeZone: string): void {
