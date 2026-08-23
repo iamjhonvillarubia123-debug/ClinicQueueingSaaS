@@ -231,7 +231,9 @@ export class PracticeLocationService {
     }
 
     return this.prisma.$transaction(async (transaction) => {
-      const rows = await transaction.$queryRaw<LockedDraftLocation[]>(Prisma.sql`
+      const rows = await transaction.$queryRaw<
+        LockedDraftLocation[]
+      >(Prisma.sql`
         SELECT "id", "lifecycleStatus"
         FROM "PracticeLocation"
         WHERE "id" = ${practiceLocationId}
