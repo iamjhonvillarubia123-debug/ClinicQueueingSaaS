@@ -25,7 +25,7 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function permanentClosureErrorMessage(error: unknown) {
+function permanentClosureError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
     return 'Email or current password is incorrect.';
   }
@@ -190,6 +190,7 @@ export function ReactivateAccountPage() {
 }
 
 export function PermanentCloseAccountPage() {
+  const { refresh } = useAuth();
   const [params] = useSearchParams();
   const initialRole = roleFromQuery(params.get('role'));
   const [role, setRole] = useState<LifecycleRole>(initialRole ?? 'DOCTOR');
@@ -214,9 +215,10 @@ export function PermanentCloseAccountPage() {
         headers: { 'Idempotency-Key': idempotencyKey('permanent-close-account') },
         body: { email, password, confirmPermanentDelete: true },
       });
+      await refresh();
       setComplete(true);
     } catch (caught) {
-      setError(permanentClosureErrorMessage(caught));
+      setError(permanentClosureError(caught));
     } finally {
       setSubmitting(false);
     }
