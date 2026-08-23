@@ -1,8 +1,17 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { PermanentCloseAccountPage, ReactivateAccountPage } from './AccountLifecyclePages';
+import { AccountSecurityPage, PermanentCloseAccountPage, ReactivateAccountPage } from './AccountLifecyclePages';
+
+const refreshMock = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('./AuthContext', () => ({
+  useAuth: () => ({
+    profile: { userId: 'doctor-1', role: 'DOCTOR' },
+    refresh: refreshMock,
+  }),
+}));
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -11,9 +20,30 @@ function jsonResponse(body: unknown, status = 200) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  refreshMock.mockClear();
 });
 
 describe('F5 staff account lifecycle', () => {
+  it('requires and submits the current password before voluntary disablement', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ disabled: true, replayed: false }));
+    const user = userEvent.setup();
+    render(<MemoryRouter><AccountSecurityPage /></MemoryRouter>);
+
+    await user.click(screen.getByRole('button', { name: 'Disable my account' }));
+    const confirmButton = screen.getByRole('button', { name: 'Yes, disable my account' });
+    expect(confirmButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText('Current password'), 'secret-password');
+    expect(confirmButton).toBeEnabled();
+    await user.click(confirmButton);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/doctor/account/disable');
+    expect(JSON.parse(String(init?.body))).toEqual({ currentPassword: 'secret-password' });
+    expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
+  });
+
   it('reactivates a disabled Doctor without creating a signed-in session', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ reactivated: true, replayed: false }));
     const user = userEvent.setup();
