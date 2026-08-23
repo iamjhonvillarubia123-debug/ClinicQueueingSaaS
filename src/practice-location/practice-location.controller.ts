@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { CurrentPasswordGuard } from '../auth/guards/current-password.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
@@ -61,7 +62,7 @@ export class PracticeLocationController {
     );
   }
 
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('activate')
   async activate(
     @Body() dto: ActivatePracticeLocationDto,
@@ -78,7 +79,7 @@ export class PracticeLocationController {
     );
   }
 
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('reactivate')
   async reactivate(
     @Body() dto: ReactivatePracticeLocationDto,
