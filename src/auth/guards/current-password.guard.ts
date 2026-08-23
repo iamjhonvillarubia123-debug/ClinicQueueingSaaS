@@ -5,14 +5,13 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PasswordSecurityService } from '../security/password-security.service';
 import type { AuthenticatedRequest } from '../types/authenticated-request';
 
-type CurrentPasswordRequest = AuthenticatedRequest & {
-  body?: {
-    currentPassword?: unknown;
-  };
+type CurrentPasswordBody = {
+  currentPassword?: unknown;
 };
 
 @Injectable()
@@ -23,16 +22,17 @@ export class CurrentPasswordGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const rawRequest: unknown = context.switchToHttp().getRequest();
-    const request = rawRequest as CurrentPasswordRequest;
-    const currentPassword = request.body?.currentPassword;
+    const request = context.switchToHttp().getRequest<Request>();
+    const body = request.body as CurrentPasswordBody | undefined;
+    const currentPassword = body?.currentPassword;
+    const authenticatedRequest = request as AuthenticatedRequest;
 
     if (typeof currentPassword !== 'string' || !currentPassword.trim()) {
       throw new BadRequestException('Current password is required.');
     }
 
     const user = await this.prisma.user.findUnique({
-      where: { id: request.user.userId },
+      where: { id: authenticatedRequest.user.userId },
       select: { passwordHash: true },
     });
     if (!user) {
