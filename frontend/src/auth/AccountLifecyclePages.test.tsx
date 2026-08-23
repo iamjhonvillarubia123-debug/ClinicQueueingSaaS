@@ -80,4 +80,18 @@ describe('F5 staff account lifecycle', () => {
     expect(JSON.parse(String(init?.body))).toEqual(expect.objectContaining({ confirmPermanentDelete: true }));
     expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
   });
+
+  it('explains invalid permanent-closure credentials without revealing which credential failed', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ message: 'Unable to permanently close account.' }, 401));
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/account/permanent-close?role=DOCTOR']}><PermanentCloseAccountPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText('Email'), 'doctor@example.com');
+    await user.type(screen.getByLabelText('Password'), 'wrong-password');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Permanently close account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email or current password is incorrect.');
+    expect(screen.queryByRole('heading', { name: 'Account permanently closed.' })).not.toBeInTheDocument();
+  });
 });
