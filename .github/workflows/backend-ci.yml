@@ -30,6 +30,10 @@ jobs:
           src/doctor/doctor.controller.ts
           src/doctor/doctor-defaults.service.ts
           src/doctor/doctor-defaults.service.spec.ts
+          src/practice-location/dto/update-draft-practice-location.dto.ts
+          src/practice-location/practice-location.controller.ts
+          src/practice-location/practice-location.service.ts
+          src/practice-location/practice-location.service.spec.ts
           src/secretary/secretary.controller.ts
           src/booking/booking.controller.ts
           src/booking/booking.module.ts
@@ -57,11 +61,12 @@ jobs:
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
           node --check scripts/show-dev-latest-account-link.cjs
-      - name: Test account security, Doctor defaults, public booking, and patient recovery controls
+      - name: Test account security, Doctor configuration, public booking, and patient recovery controls
         run: >-
           npm test -- --runInBand
           current-password.guard.spec.ts
           doctor-defaults.service.spec.ts
+          practice-location.service.spec.ts
           public-booking-entry.service.spec.ts
           public-booking-replacement.service.spec.ts
           public-booking-duplicate-use-existing.service.spec.ts
