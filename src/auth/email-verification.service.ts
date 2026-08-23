@@ -57,9 +57,7 @@ export class EmailVerificationService {
         : 'doctor-email-verification';
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.sha256(token);
-    const activeVerificationKey = this.sha256(
-      `${notificationType}:${userId}`,
-    );
+    const activeVerificationKey = this.sha256(`${notificationType}:${userId}`);
     const createdAt = new Date();
     const expiresAt = new Date(createdAt.getTime() + VERIFICATION_LIFETIME_MS);
 
