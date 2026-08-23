@@ -29,6 +29,7 @@ export function AccountSecurityPage() {
   const { profile, refresh } = useAuth();
   const navigate = useNavigate();
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -37,17 +38,20 @@ export function AccountSecurityPage() {
   if (!role) return null;
 
   async function disableAccount(targetRole: LifecycleRole) {
+    if (!currentPassword.trim()) return;
     setSubmitting(true);
     setError('');
     try {
       await apiRequest(`${lifecycleBase(targetRole)}/disable`, {
         method: 'POST',
         headers: { 'Idempotency-Key': idempotencyKey('disable-account') },
+        body: { currentPassword },
       });
+      setCurrentPassword('');
       await refresh();
       navigate(`/account/disabled?role=${targetRole}`, { replace: true });
     } catch (caught) {
-      setError(errorMessage(caught, 'Unable to disable the account. Please try again.'));
+      setError(errorMessage(caught, 'Unable to disable the account. Please check your password and try again.'));
       setSubmitting(false);
     }
   }
@@ -84,10 +88,11 @@ export function AccountSecurityPage() {
           <div className="confirm-panel" role="group" aria-label="Confirm account disablement">
             <strong>Disable this account now?</strong>
             <p>You will be signed out immediately. Existing appointments are not renumbered or automatically cancelled by this account action.</p>
+            <label>Current password<input type="password" autoComplete="current-password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
             <div className="button-row">
-              <button className="primary danger-primary" type="button" disabled={submitting} onClick={() => void disableAccount(role)}>{submitting ? 'Disabling…' : 'Yes, disable my account'}</button>
-              <button className="secondary" type="button" disabled={submitting} onClick={() => { setConfirmDisable(false); setError(''); }}>Keep account active</button>
+              <button className="primary danger-primary" type="button" disabled={submitting || !currentPassword.trim()} onClick={() => void disableAccount(role)}>{submitting ? 'Disabling…' : 'Yes, disable my account'}</button>
+              <button className="secondary" type="button" disabled={submitting} onClick={() => { setConfirmDisable(false); setCurrentPassword(''); setError(''); }}>Keep account active</button>
             </div>
           </div>
         )}
