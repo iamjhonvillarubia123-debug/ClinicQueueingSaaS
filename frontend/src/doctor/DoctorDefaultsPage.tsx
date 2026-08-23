@@ -8,7 +8,7 @@ type DefaultsResponse = { services: ServiceTemplate[]; bookingQuestions: Booking
 type PracticeLocation = { id: string; lifecycleStatus: string; name: string | null; addressLine1: string | null; cityMunicipality: string | null };
 
 function errorMessage(error: unknown) { return error instanceof ApiError ? error.message : 'Unable to complete this action. Please try again.'; }
-function locationName(location: PracticeLocation) { return location.name?.trim() || location.addressLine1?.trim() || location.cityMunicipality?.trim() || 'Untitled practice location'; }
+function locationName(location: PracticeLocation) { return location.name?.trim() || location.addressLine1?.trim() || location.cityMunicipality?.trim() || 'Untitled clinic location'; }
 function optionValue(label: string, index: number) {
   const normalized = label.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 90);
   return `${normalized || 'OPTION'}_${index + 1}`;
@@ -49,7 +49,7 @@ export function DoctorDefaultsPage() {
     event.preventDefault(); setSavingService(true); setError(''); setNotice('');
     try {
       await apiRequest('/doctor/defaults/services', { method: 'POST', body: { name: serviceName, durationMinutes: Number(serviceDuration), status: 'ACTIVE' } });
-      setServiceName(''); setServiceDuration('30'); setNotice('Service default saved. Existing locations are unchanged until you apply defaults.'); await load();
+      setServiceName(''); setServiceDuration('30'); setNotice('Service default saved. Existing clinic locations are unchanged until you apply defaults.'); await load();
     } catch (caught) { setError(errorMessage(caught)); } finally { setSavingService(false); }
   }
 
@@ -68,7 +68,7 @@ export function DoctorDefaultsPage() {
         },
       });
       setQuestionText(''); setQuestionType('TEXT'); setQuestionRequired(false); setSelectOptionLabels(['', '']);
-      setNotice('Booking question default saved. Existing locations are unchanged until you apply defaults.'); await load();
+      setNotice('Booking question default saved. Existing clinic locations are unchanged until you apply defaults.'); await load();
     } catch (caught) { setError(errorMessage(caught)); } finally { setSavingQuestion(false); }
   }
 
@@ -82,13 +82,13 @@ export function DoctorDefaultsPage() {
     setApplying(true); setError(''); setNotice('');
     try {
       await apiRequest('/doctor/defaults/apply', { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: { practiceLocationIds: selectedLocations } });
-      setSelectedLocations([]); setNotice('Current Doctor-wide defaults applied to the selected practice locations.');
+      setSelectedLocations([]); setNotice('Current Doctor-wide defaults applied to the selected clinic locations.');
     } catch (caught) { setError(errorMessage(caught)); } finally { setApplying(false); }
   }
 
   return (
     <section className="practice-admin-page" aria-labelledby="doctor-defaults-heading">
-      <div className="practice-admin-heading"><div><p className="eyebrow">Doctor-wide defaults</p><h1 id="doctor-defaults-heading">Defaults for new clinics</h1><p>Services and booking questions here are templates. New practice locations copy them automatically; existing locations change only when you explicitly apply the current defaults.</p></div></div>
+      <div className="practice-admin-heading"><div><p className="eyebrow">Doctor-wide defaults</p><h1 id="doctor-defaults-heading">Defaults for new clinics</h1><p>Services and booking questions here are templates. New clinic locations copy them automatically; existing clinic locations change only when you explicitly apply the current defaults.</p></div></div>
       {error ? <div className="form-error" role="alert">{error}</div> : null}
       {notice ? <div className="practice-notice" role="status">{notice}</div> : null}
       {loading ? <p className="practice-muted">Loading defaults…</p> : null}
@@ -110,7 +110,7 @@ export function DoctorDefaultsPage() {
           </form>
         </section>
       </div> : null}
-      {!loading ? <section className="practice-create-panel" aria-labelledby="apply-defaults-heading"><div className="practice-panel-heading"><p className="eyebrow">Explicit apply</p><h2 id="apply-defaults-heading">Apply current defaults to existing clinics</h2><p>This copies the current template meaning into the selected practice locations. Later edits here will not silently change those clinics.</p></div>{locations.length ? <div className="location-selection-list">{locations.map((location) => <label className="location-selection-row" key={location.id}><input type="checkbox" checked={selectedLocations.includes(location.id)} onChange={() => toggleLocation(location.id)} /><span><strong>{locationName(location)}</strong><small>{location.lifecycleStatus.replaceAll('_', ' ')}</small></span></label>)}</div> : <p className="practice-muted">Create a practice location before applying defaults.</p>}<button className="primary" type="button" disabled={applying || !selectedLocations.length} onClick={() => void applyDefaults()}>{applying ? 'Applying…' : `Apply to ${selectedLocations.length || 0} selected`}</button></section> : null}
+      {!loading ? <section className="practice-create-panel" aria-labelledby="apply-defaults-heading"><div className="practice-panel-heading"><p className="eyebrow">Explicit apply</p><h2 id="apply-defaults-heading">Apply current defaults to existing clinics</h2><p>This copies the current template meaning into the selected clinic locations. Later edits here will not silently change those clinics.</p></div>{locations.length ? <div className="location-selection-list">{locations.map((location) => <label className="location-selection-row" key={location.id}><input type="checkbox" checked={selectedLocations.includes(location.id)} onChange={() => toggleLocation(location.id)} /><span><strong>{locationName(location)}</strong><small>{location.lifecycleStatus.replaceAll('_', ' ')}</small></span></label>)}</div> : <p className="practice-muted">Create a clinic location before applying defaults.</p>}<button className="primary" type="button" disabled={applying || !selectedLocations.length} onClick={() => void applyDefaults()}>{applying ? 'Applying…' : `Apply to ${selectedLocations.length || 0} selected`}</button></section> : null}
     </section>
   );
 }
