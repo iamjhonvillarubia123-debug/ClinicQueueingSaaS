@@ -75,10 +75,42 @@
   outline-offset: 1px;
 }
 
+.privacy-facts {
+  display: grid;
+  gap: 14px;
+}
+
+.privacy-facts p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.privacy-acknowledgement-form {
+  display: grid;
+  gap: 18px;
+}
+
+.privacy-acknowledgement-check {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fafafa;
+}
+
+.privacy-acknowledgement-form .primary {
+  justify-self: start;
+}
+
+.privacy-version {
+  margin-top: 18px !important;
+  font-size: 0.86rem;
+}
+
 @media (max-width: 720px) {
   .activation-panel > .primary,
   .activation-confirm-form .primary,
-  .activation-confirm-form .secondary {
+  .activation-confirm-form .secondary,
+  .privacy-acknowledgement-form .primary {
     width: 100%;
   }
 }
