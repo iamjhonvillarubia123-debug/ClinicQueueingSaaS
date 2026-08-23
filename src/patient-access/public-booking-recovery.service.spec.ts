@@ -44,9 +44,8 @@ describe('PublicBookingRecoveryService replacement authority binding', () => {
     };
 
     const prisma = {
-      $transaction: jest.fn(
-        (callback: (tx: typeof transaction) => unknown) =>
-          Promise.resolve(callback(transaction)),
+      $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
+        Promise.resolve(callback(transaction)),
       ),
       bookingRecoveryAttempt: {
         findUnique: jest.fn().mockResolvedValue(null),
