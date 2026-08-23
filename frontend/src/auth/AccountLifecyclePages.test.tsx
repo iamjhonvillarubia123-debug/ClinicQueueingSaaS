@@ -1,0 +1,53 @@
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
+import { PermanentCloseAccountPage, ReactivateAccountPage } from './AccountLifecyclePages';
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe('F5 staff account lifecycle', () => {
+  it('reactivates a disabled Doctor without creating a signed-in session', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ reactivated: true, replayed: false }));
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/account/reactivate?role=DOCTOR']}><ReactivateAccountPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText('Email'), 'doctor@example.com');
+    await user.type(screen.getByLabelText('Password'), 'secret-password');
+    await user.click(screen.getByRole('button', { name: 'Reactivate Doctor account' }));
+
+    expect(await screen.findByRole('heading', { name: 'Account reactivated.' })).toBeInTheDocument();
+    expect(screen.getByText(/does not sign you in/i)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/doctor/account/reactivate');
+    expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
+  });
+
+  it('requires explicit irreversible confirmation before permanent closure can submit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ permanentlyClosed: true }));
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/account/permanent-close?role=SECRETARY']}><PermanentCloseAccountPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText('Email'), 'secretary@example.com');
+    await user.type(screen.getByLabelText('Password'), 'secret-password');
+    const closeButton = screen.getByRole('button', { name: 'Permanently close account' });
+    expect(closeButton).toBeDisabled();
+
+    await user.click(screen.getByRole('checkbox'));
+    expect(closeButton).toBeEnabled();
+    await user.click(closeButton);
+
+    expect(await screen.findByRole('heading', { name: 'Account permanently closed.' })).toBeInTheDocument();
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual(expect.objectContaining({ confirmPermanentDelete: true }));
+    expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
+  });
+});
