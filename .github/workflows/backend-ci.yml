@@ -30,15 +30,6 @@ jobs:
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
           node --check scripts/show-dev-latest-account-link.cjs
-      - name: Test account security, Doctor configuration, public booking, and patient recovery controls
-        run: >-
-          npm test -- --runInBand
-          current-password.guard.spec.ts
-          doctor-defaults.service.spec.ts
-          practice-location.service.spec.ts
-          public-booking-entry.service.spec.ts
-          public-booking-replacement.service.spec.ts
-          public-booking-duplicate-use-existing.service.spec.ts
-          appointment-recovery.service.spec.ts
-          booking-group-recovery.service.spec.ts
+      - name: Run full backend unit test suite
+        run: npm test -- --runInBand
       - run: npm run build
