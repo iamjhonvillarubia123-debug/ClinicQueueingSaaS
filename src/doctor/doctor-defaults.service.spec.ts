@@ -100,7 +100,9 @@ describe('DoctorDefaultsService', () => {
       textMaximumLength: 500,
     });
 
-    expect(prismaMock.doctorBookingQuestionTemplate.create).toHaveBeenCalledWith({
+    expect(
+      prismaMock.doctorBookingQuestionTemplate.create,
+    ).toHaveBeenCalledWith({
       data: expect.objectContaining({
         doctorProfileId: 'doctor-1',
         questionText: 'Reason for visit?',
