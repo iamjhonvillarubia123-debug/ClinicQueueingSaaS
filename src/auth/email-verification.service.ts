@@ -15,7 +15,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
 
 const VERIFICATION_LIFETIME_MS = 24 * 60 * 60 * 1000;
-const EMAIL_PAYLOAD_PURPOSE = 'staff-email-verification';
+// Legacy internal purpose/type names are retained for backward compatibility.
+// They now cover both public staff roles: Doctor and Secretary.
+const EMAIL_PAYLOAD_PURPOSE = 'doctor-email-verification';
 const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_15_MINUTES = 3;
 const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_24_HOURS = 10;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
@@ -42,8 +44,13 @@ export class EmailVerificationService {
     normalizedEmail: string,
     role: UserRole = UserRole.DOCTOR,
   ): Promise<CreatedEmailVerification> {
-    const notificationType = this.notificationTypeFor(role);
-    const roleLabel = role === UserRole.SECRETARY ? 'Secretary' : 'Doctor';
+    if (!this.isPublicStaffRole(role)) {
+      throw new BadRequestException(
+        'Email verification is unavailable for this account role.',
+      );
+    }
+
+    const notificationType = NotificationType.DOCTOR_EMAIL_VERIFICATION;
     const providerPrefix =
       role === UserRole.SECRETARY
         ? 'secretary-email-verification'
@@ -68,7 +75,7 @@ export class EmailVerificationService {
     });
 
     const verificationUrl = this.buildVerificationUrl(token);
-    const messageBody = `Verify your Clinic Queueing SaaS ${roleLabel} account: ${verificationUrl}`;
+    const messageBody = `Verify your Clinic Queueing SaaS account: ${verificationUrl}`;
     const deliveryIdentityKey = this.sha256(
       `${notificationType}:${emailVerification.id}`,
     );
@@ -314,18 +321,6 @@ export class EmailVerificationService {
 
   private isPublicStaffRole(role: UserRole): boolean {
     return role === UserRole.DOCTOR || role === UserRole.SECRETARY;
-  }
-
-  private notificationTypeFor(role: UserRole): NotificationType {
-    if (role === UserRole.DOCTOR) {
-      return NotificationType.DOCTOR_EMAIL_VERIFICATION;
-    }
-    if (role === UserRole.SECRETARY) {
-      return NotificationType.SECRETARY_EMAIL_VERIFICATION;
-    }
-    throw new BadRequestException(
-      'Email verification is unavailable for this account role.',
-    );
   }
 
   private verificationIssuanceLimit15Minutes(): number {
