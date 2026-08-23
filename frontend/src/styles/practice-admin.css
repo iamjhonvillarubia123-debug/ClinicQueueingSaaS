@@ -409,6 +409,22 @@
   min-width: 210px;
 }
 
+.clinic-save-status {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.clinic-save-status.is-dirty {
+  color: #111;
+  font-weight: 600;
+}
+
+.clinic-save-status.is-saved {
+  color: #111;
+  font-weight: 700;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
