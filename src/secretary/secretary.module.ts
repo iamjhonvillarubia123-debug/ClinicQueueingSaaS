@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
 import { SecretaryRegistrationService } from './secretary-registration.service';
 import { SecretaryController } from './secretary.controller';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, MobileNumberModule],
   providers: [SecretaryLifecycleService, SecretaryRegistrationService],
   controllers: [SecretaryController],
 })
