@@ -29,6 +29,7 @@ import { RequestIdExceptionFilter } from './request-context/request-id-exception
 import { ScheduleModule } from './schedule/schedule.module';
 import { SecretaryModule } from './secretary/secretary.module';
 import { SecretarySettingsDraftModule } from './secretary-settings-draft/secretary-settings-draft.module';
+import { SecretaryWorkspaceModule } from './secretary-workspace/secretary-workspace.module';
 import { SystemAdminModule } from './system-admin/system-admin.module';
 
 @Module({
@@ -45,6 +46,7 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
     DoctorModule,
     SecretaryModule,
     SecretarySettingsDraftModule,
+    SecretaryWorkspaceModule,
     SystemAdminModule,
     PracticeLocationModule,
     PracticeStaffModule,
