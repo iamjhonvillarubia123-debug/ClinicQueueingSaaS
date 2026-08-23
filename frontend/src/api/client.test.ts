@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest } from './client';
+import { apiRequest } from './client';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -29,7 +29,7 @@ describe('apiRequest', () => {
       ),
     );
 
-    await expect(apiRequest('/secretary/register', { method: 'POST', body: {} })).rejects.toMatchObject<ApiError>({
+    await expect(apiRequest('/secretary/register', { method: 'POST', body: {} })).rejects.toMatchObject({
       message: 'email must be an email firstName should not be empty',
       status: 400,
       requestId: 'req-1',
