@@ -18,7 +18,9 @@ export class SecretaryWorkspaceService {
 
     const clinics = await this.prisma.practiceLocation.findMany({
       where: {
-        lifecycleStatus: { not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED },
+        lifecycleStatus: {
+          not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
+        },
         currentRegularPracticeStaff: {
           is: {
             userId: authenticatedUserId,
@@ -81,9 +83,12 @@ export class SecretaryWorkspaceService {
       !actor ||
       actor.role !== UserRole.SECRETARY ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
-      throw new ForbiddenException('Secretary workspace access is unavailable.');
+      throw new ForbiddenException(
+        'Secretary workspace access is unavailable.',
+      );
     }
   }
 }
