@@ -1,7 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
-import { useAuth, type UserRole } from './AuthContext';
+import { useAuth } from './AuthContext';
 
 type LifecycleRole = 'DOCTOR' | 'SECRETARY';
 
@@ -36,16 +36,16 @@ export function AccountSecurityPage() {
   if (profile?.role === 'SYSTEM_ADMIN') return <Navigate to="/app" replace />;
   if (!role) return null;
 
-  async function disableAccount() {
+  async function disableAccount(targetRole: LifecycleRole) {
     setSubmitting(true);
     setError('');
     try {
-      await apiRequest(`${lifecycleBase(role)}/disable`, {
+      await apiRequest(`${lifecycleBase(targetRole)}/disable`, {
         method: 'POST',
         headers: { 'Idempotency-Key': idempotencyKey('disable-account') },
       });
       await refresh();
-      navigate(`/account/disabled?role=${role}`, { replace: true });
+      navigate(`/account/disabled?role=${targetRole}`, { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to disable the account. Please try again.'));
       setSubmitting(false);
@@ -86,7 +86,7 @@ export function AccountSecurityPage() {
             <p>You will be signed out immediately. Existing appointments are not renumbered or automatically cancelled by this account action.</p>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
             <div className="button-row">
-              <button className="primary danger-primary" type="button" disabled={submitting} onClick={() => void disableAccount()}>{submitting ? 'Disabling…' : 'Yes, disable my account'}</button>
+              <button className="primary danger-primary" type="button" disabled={submitting} onClick={() => void disableAccount(role)}>{submitting ? 'Disabling…' : 'Yes, disable my account'}</button>
               <button className="secondary" type="button" disabled={submitting} onClick={() => { setConfirmDisable(false); setError(''); }}>Keep account active</button>
             </div>
           </div>
