@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { ClinicActivationDialog } from './ClinicActivationDialog';
 
 type PracticeLocation = {
   id: string;
@@ -63,6 +64,8 @@ export function PracticeLocationsPage() {
   const [draft, setDraft] = useState<LocationDraft>(emptyDraft);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [activationTarget, setActivationTarget] = useState<PracticeLocation | null>(null);
+  const [notice, setNotice] = useState('');
 
   async function loadLocations() {
     setLoading(true);
@@ -98,6 +101,11 @@ export function PracticeLocationsPage() {
     }
   }
 
+  async function activationCompleted() {
+    setNotice('Clinic activated.');
+    await loadLocations();
+  }
+
   return (
     <section className="practice-admin-page" aria-labelledby="clinic-locations-heading">
       <div className="practice-admin-heading">
@@ -110,6 +118,7 @@ export function PracticeLocationsPage() {
       </div>
 
       {error ? <div className="form-error" role="alert">{error}</div> : null}
+      {notice ? <div className="practice-notice practice-success" role="status">{notice}</div> : null}
 
       {showCreate ? (
         <section className="practice-create-panel" aria-labelledby="create-location-heading">
@@ -162,12 +171,25 @@ export function PracticeLocationsPage() {
                 <span>{location.isBookingEnabled ? 'Booking enabled' : 'Booking not enabled'}</span>
               </div>
             </div>
-            <div className="practice-card-actions">
+            <div className="practice-card-actions clinic-list-actions">
               <Link className="secondary-action" to={`/app/practice-locations/${encodeURIComponent(location.id)}`}>Configure</Link>
+              {location.lifecycleStatus === 'DRAFT' ? (
+                <button className="primary" type="button" onClick={() => { setNotice(''); setActivationTarget(location); }}>Activate</button>
+              ) : null}
             </div>
           </article>
         ))}
       </section>
+
+      {activationTarget ? (
+        <ClinicActivationDialog
+          open
+          practiceLocationId={activationTarget.id}
+          clinicName={locationTitle(activationTarget)}
+          onClose={() => setActivationTarget(null)}
+          onActivated={activationCompleted}
+        />
+      ) : null}
     </section>
   );
 }
