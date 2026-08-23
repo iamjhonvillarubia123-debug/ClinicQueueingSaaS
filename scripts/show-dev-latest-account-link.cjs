@@ -64,7 +64,7 @@ async function main() {
   await client.connect();
   try {
     const result = await client.query(`
-      SELECT "messageBodyEncrypted", "status"::text AS "status", "createdAt", "expiresAt"
+      SELECT "id", "messageBodyEncrypted", "status"::text AS "status", "createdAt", "expiresAt", "emailVerificationId", "passwordResetId"
       FROM "NotificationOutbox"
       WHERE "notificationType" = $1::"NotificationType"
         AND "messageBodyEncrypted" IS NOT NULL
@@ -79,6 +79,39 @@ async function main() {
     console.log(`Outbox status: ${row.status}`);
     console.log(`Created: ${new Date(row.createdAt).toISOString()}`);
     console.log(`Expires: ${new Date(row.expiresAt).toISOString()}`);
+
+    if (kind === 'verification' && row.emailVerificationId) {
+      const verification = await client.query(`
+        SELECT
+          ev."status"::text AS "verificationStatus",
+          ev."verifiedAt",
+          u."email",
+          u."emailVerifiedAt",
+          u."lastLoginAt",
+          (
+            SELECT COUNT(*)::int
+            FROM "UserSession" s
+            WHERE s."userId" = u."id"
+              AND s."revokedAt" IS NULL
+              AND s."idleExpiresAt" > now()
+              AND s."expiresAt" > now()
+          ) AS "activeSessionCount"
+        FROM "EmailVerification" ev
+        INNER JOIN "User" u ON u."id" = ev."userId"
+        WHERE ev."id" = $1
+        LIMIT 1
+      `, [row.emailVerificationId]);
+      if (verification.rowCount > 0) {
+        const state = verification.rows[0];
+        console.log(`Account email: ${state.email}`);
+        console.log(`Verification record status: ${state.verificationStatus}`);
+        console.log(`Verification completed: ${state.verifiedAt ? new Date(state.verifiedAt).toISOString() : 'no'}`);
+        console.log(`User emailVerifiedAt: ${state.emailVerifiedAt ? new Date(state.emailVerifiedAt).toISOString() : 'no'}`);
+        console.log(`User lastLoginAt: ${state.lastLoginAt ? new Date(state.lastLoginAt).toISOString() : 'no'}`);
+        console.log(`Active sessions for this user: ${state.activeSessionCount}`);
+      }
+    }
+
     console.log(match ? `Link: ${match[0]}` : `Message: ${message}`);
   } finally {
     await client.end();
