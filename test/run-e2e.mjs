@@ -56,6 +56,8 @@ const env = {
   DATABASE_URL: test.value,
   NODE_ENV: 'test',
   RATE_LIMIT_ENABLED: 'false',
+  PUBLIC_APP_BASE_URL: 'https://app.example.test',
+  WEB_APP_ORIGIN: 'https://app.example.test',
 };
 
 const migration = spawnSync(
