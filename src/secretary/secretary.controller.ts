@@ -6,6 +6,7 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ConfirmCurrentPasswordDto } from '../auth/dto/confirm-current-password.dto';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
@@ -23,10 +24,12 @@ export class SecretaryController {
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
+    @Body() dto: ConfirmCurrentPasswordDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
     return this.secretaryLifecycleService.disable(
       request.user.userId,
+      dto.currentPassword,
       idempotencyKey,
     );
   }
