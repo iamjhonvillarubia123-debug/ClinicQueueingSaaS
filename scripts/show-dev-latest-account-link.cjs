@@ -5,12 +5,12 @@ const { Client } = require('pg');
 const KEY_DERIVATION_PURPOSE = 'account-notification-payload-v1';
 const TYPES = {
   verification: {
-    notificationTypes: ['DOCTOR_EMAIL_VERIFICATION', 'SECRETARY_EMAIL_VERIFICATION'],
-    purpose: 'staff-email-verification:message',
+    notificationType: 'DOCTOR_EMAIL_VERIFICATION',
+    purpose: 'doctor-email-verification:message',
     label: 'Staff email verification',
   },
   reset: {
-    notificationTypes: ['PASSWORD_RESET'],
+    notificationType: 'PASSWORD_RESET',
     purpose: 'password-reset:message',
     label: 'Password reset',
   },
@@ -64,19 +64,18 @@ async function main() {
   await client.connect();
   try {
     const result = await client.query(`
-      SELECT "id", "notificationType"::text AS "notificationType", "messageBodyEncrypted", "status"::text AS "status", "createdAt", "expiresAt", "emailVerificationId", "passwordResetId"
+      SELECT "id", "messageBodyEncrypted", "status"::text AS "status", "createdAt", "expiresAt", "emailVerificationId", "passwordResetId"
       FROM "NotificationOutbox"
-      WHERE "notificationType"::text = ANY($1::text[])
+      WHERE "notificationType" = $1::"NotificationType"
         AND "messageBodyEncrypted" IS NOT NULL
       ORDER BY "createdAt" DESC
       LIMIT 1
-    `, [config.notificationTypes]);
+    `, [config.notificationType]);
     if (result.rowCount === 0) throw new Error(`No ${config.label.toLowerCase()} notification exists in the development database.`);
     const row = result.rows[0];
     const message = decrypt(row.messageBodyEncrypted, config.purpose);
     const match = message.match(/https?:\/\/\S+/);
     console.log(`${config.label} diagnostic`);
-    console.log(`Notification type: ${row.notificationType}`);
     console.log(`Outbox status: ${row.status}`);
     console.log(`Created: ${new Date(row.createdAt).toISOString()}`);
     console.log(`Expires: ${new Date(row.expiresAt).toISOString()}`);
@@ -96,7 +95,7 @@ async function main() {
             WHERE s."userId" = u."id"
               AND s."revokedAt" IS NULL
               AND s."idleExpiresAt" > now()
-              AND s."absoluteExpiresAt" > now()
+              AND s."expiresAt" > now()
           ) AS "activeSessionCount"
         FROM "EmailVerification" ev
         INNER JOIN "User" u ON u."id" = ev."userId"
