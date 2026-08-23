@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthContext';
 import './styles/global.css';
 import './styles/account-lifecycle.css';
 import './styles/patient.css';
+import './styles/practice-admin.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
