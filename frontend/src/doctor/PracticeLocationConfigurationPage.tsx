@@ -46,6 +46,19 @@ type LocationFields = {
 };
 
 const weekdays: Weekday[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+const suggestedTimeZones = [
+  'Asia/Manila',
+  'Asia/Singapore',
+  'Asia/Hong_Kong',
+  'Asia/Tokyo',
+  'Asia/Seoul',
+  'Australia/Sydney',
+  'Europe/London',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+];
 
 function blankSchedule(weekday: Weekday): ScheduleRow {
   return { weekday, isOpen: false, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '' };
@@ -59,6 +72,21 @@ function apiTime(value: string | null) {
   if (!value) return '';
   const match = /T(\d{2}):(\d{2})/.exec(value);
   return match ? `${match[1]}:${match[2]}` : value.slice(0, 5);
+}
+
+function canonicalTimeZone(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: trimmed }).resolvedOptions().timeZone;
+  } catch {
+    return trimmed;
+  }
+}
+
+function initialTimeZone(countryCode: string | null, configuredTimeZone: string | null) {
+  if (configuredTimeZone?.trim()) return canonicalTimeZone(configuredTimeZone);
+  return countryCode?.trim().toUpperCase() === 'PH' ? 'Asia/Manila' : '';
 }
 
 function errorMessage(error: unknown) {
@@ -84,7 +112,8 @@ export function PracticeLocationConfigurationPage() {
       setFields({
         name: response.name ?? '', addressLine1: response.addressLine1 ?? '', addressLine2: response.addressLine2 ?? '',
         cityMunicipality: response.cityMunicipality ?? '', province: response.province ?? '', postalCode: response.postalCode ?? '',
-        contactNumber: response.contactNumber ?? '', countryCode: response.countryCode ?? '', timeZone: response.timeZone ?? '',
+        contactNumber: response.contactNumber ?? '', countryCode: response.countryCode ?? '',
+        timeZone: initialTimeZone(response.countryCode, response.timeZone),
       });
       const byDay = new Map(response.schedules.map((row) => [row.weekday, row]));
       setSchedules(weekdays.map((weekday) => {
@@ -100,7 +129,17 @@ export function PracticeLocationConfigurationPage() {
   useEffect(() => { void load(); }, [practiceLocationId]);
 
   function updateField(field: keyof LocationFields, value: string) {
-    setFields((current) => ({ ...current, [field]: value }));
+    setFields((current) => {
+      if (field === 'countryCode') {
+        const countryCode = value.toUpperCase();
+        return {
+          ...current,
+          countryCode,
+          timeZone: !current.timeZone.trim() && countryCode === 'PH' ? 'Asia/Manila' : current.timeZone,
+        };
+      }
+      return { ...current, [field]: value };
+    });
   }
 
   function updateSchedule(weekday: Weekday, patch: Partial<ScheduleRow>) {
@@ -116,10 +155,12 @@ export function PracticeLocationConfigurationPage() {
     if (!practiceLocationId || location?.lifecycleStatus !== 'DRAFT') return;
     setSaving(true); setError(''); setNotice('');
     try {
+      const normalizedFields = { ...fields, timeZone: canonicalTimeZone(fields.timeZone) };
+      setFields(normalizedFields);
       const response = await apiRequest<LocationConfiguration>(`/practice-location/${encodeURIComponent(practiceLocationId)}/draft-configuration`, {
         method: 'POST',
         body: {
-          ...fields,
+          ...normalizedFields,
           schedules: schedules.map((row) => ({
             weekday: row.weekday,
             isOpen: row.isOpen,
@@ -159,7 +200,8 @@ export function PracticeLocationConfigurationPage() {
           <label>Address line 2<input disabled={!editable} maxLength={255} value={fields.addressLine2} onChange={(event) => updateField('addressLine2', event.target.value)} /></label>
           <div className="practice-form-grid"><label>City / municipality<input disabled={!editable} maxLength={120} value={fields.cityMunicipality} onChange={(event) => updateField('cityMunicipality', event.target.value)} /></label><label>Province<input disabled={!editable} maxLength={120} value={fields.province} onChange={(event) => updateField('province', event.target.value)} /></label></div>
           <div className="practice-form-grid"><label>Postal code<input disabled={!editable} maxLength={20} value={fields.postalCode} onChange={(event) => updateField('postalCode', event.target.value)} /></label><label>Contact number<input disabled={!editable} maxLength={30} value={fields.contactNumber} onChange={(event) => updateField('contactNumber', event.target.value)} /></label></div>
-          <div className="practice-form-grid"><label>Country code<input disabled={!editable} maxLength={2} placeholder="PH" value={fields.countryCode} onChange={(event) => updateField('countryCode', event.target.value.toUpperCase())} /></label><label>IANA time zone<input disabled={!editable} maxLength={100} placeholder="Asia/Manila" value={fields.timeZone} onChange={(event) => updateField('timeZone', event.target.value)} /></label></div>
+          <div className="practice-form-grid"><label>Country code<input disabled={!editable} maxLength={2} placeholder="PH" value={fields.countryCode} onChange={(event) => updateField('countryCode', event.target.value)} /></label><label>Time zone<input disabled={!editable} list="practice-time-zone-options" maxLength={100} placeholder="Asia/Manila" value={fields.timeZone} onChange={(event) => updateField('timeZone', event.target.value)} onBlur={(event) => updateField('timeZone', canonicalTimeZone(event.target.value))} /><span className="optional-label">Choose a suggested IANA time zone or type another valid IANA name.</span></label></div>
+          <datalist id="practice-time-zone-options">{suggestedTimeZones.map((timeZone) => <option key={timeZone} value={timeZone} />)}</datalist>
         </section>
 
         <section className="practice-create-panel">
