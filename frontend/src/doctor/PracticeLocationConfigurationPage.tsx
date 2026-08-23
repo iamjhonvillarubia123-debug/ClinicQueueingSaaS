@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { ClinicActivationDialog } from './ClinicActivationDialog';
 
 type Weekday = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 
@@ -118,10 +119,7 @@ export function PracticeLocationConfigurationPage() {
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [showActivation, setShowActivation] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [activating, setActivating] = useState(false);
-  const [activationError, setActivationError] = useState('');
+  const [activationOpen, setActivationOpen] = useState(false);
   const [activationNotice, setActivationNotice] = useState('');
 
   async function load() {
@@ -208,27 +206,9 @@ export function PracticeLocationConfigurationPage() {
     }
   }
 
-  async function activateClinic(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!practiceLocationId || location?.lifecycleStatus !== 'DRAFT' || dirty || !currentPassword) return;
-    setActivating(true);
-    setActivationError('');
-    setActivationNotice('');
-    try {
-      await apiRequest('/practice-location/activate', {
-        method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: { practiceLocationId, currentPassword },
-      });
-      setCurrentPassword('');
-      setShowActivation(false);
-      await load();
-      setActivationNotice('Clinic activated. The clinic is now active subject to its current booking and operating controls.');
-    } catch (caught) {
-      setActivationError(errorMessage(caught));
-    } finally {
-      setActivating(false);
-    }
+  async function activationCompleted() {
+    await load();
+    setActivationNotice('Clinic activated. The clinic is now active subject to its current booking and operating controls.');
   }
 
   if (loading) return <section className="practice-admin-page"><p className="practice-muted">Loading clinic configuration…</p></section>;
@@ -238,9 +218,8 @@ export function PracticeLocationConfigurationPage() {
   const timeZoneOptions = fields.timeZone && fields.timeZone !== 'Asia/Manila' ? [fields.timeZone, 'Asia/Manila'] : ['Asia/Manila'];
   const saveStatus = saving ? 'Saving changes…' : saved ? 'Changes saved' : dirty ? 'Unsaved changes' : 'Changes remain private while this clinic location is a draft.';
   const openSchedules = schedules.filter((row) => row.isOpen && row.opensAtLocal && row.closesAtLocal);
-  const scheduleReady = openSchedules.length > 0;
-  const timeZoneReady = Boolean(fields.timeZone.trim());
-  const locallyReady = scheduleReady && timeZoneReady && !dirty;
+  const locallyReady = Boolean(fields.timeZone.trim()) && openSchedules.length > 0 && !dirty;
+  const clinicName = fields.name.trim() || 'this clinic';
 
   return (
     <section className="practice-admin-page" aria-labelledby="location-config-heading">
@@ -250,7 +229,10 @@ export function PracticeLocationConfigurationPage() {
           <h1 id="location-config-heading">{fields.name.trim() || 'Untitled clinic location'}</h1>
           <p>Configure the clinic details and regular weekly hours while this clinic location is still a draft.</p>
         </div>
-        <Link className="secondary-action" to="/app/practice-locations">← Back to clinic locations</Link>
+        <div className="clinic-config-header-actions">
+          <Link className="secondary-action" to="/app/practice-locations">← Back to clinic locations</Link>
+          {editable ? <button className="primary" type="button" disabled={!locallyReady} onClick={() => setActivationOpen(true)}>Activate clinic</button> : null}
+        </div>
       </div>
 
       <div className="practice-location-title-row"><span className="practice-status">{location.lifecycleStatus.replaceAll('_', ' ')}</span></div>
@@ -317,36 +299,22 @@ export function PracticeLocationConfigurationPage() {
         {editable ? (
           <div className="clinic-save-row">
             <span className={`clinic-save-status${saved ? ' is-saved' : dirty ? ' is-dirty' : ''}`} role="status" aria-live="polite">{saveStatus}</span>
-            <button className="primary" type="submit" disabled={saving || !dirty}>{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save clinic settings'}</button>
+            <div className="clinic-save-actions">
+              <button className="primary" type="submit" disabled={saving || !dirty}>{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save clinic settings'}</button>
+              <button className="secondary" type="button" disabled={!locallyReady} onClick={() => setActivationOpen(true)}>Activate clinic</button>
+            </div>
           </div>
         ) : null}
       </form>
 
-      {editable ? (
-        <section className="practice-create-panel activation-panel" aria-labelledby="activate-clinic-heading">
-          <div className="practice-panel-heading">
-            <p className="eyebrow">Activation</p>
-            <h2 id="activate-clinic-heading">Make this clinic active</h2>
-            <p>Activation is a high-risk Doctor action. The backend will re-check the Doctor Calendar and all active-clinic schedule conflicts before anything becomes effective.</p>
-          </div>
-          <div className="activation-readiness" aria-label="Activation readiness">
-            <div><span className={`readiness-dot${timeZoneReady ? ' is-ready' : ''}`} aria-hidden="true" /><span><strong>Time zone</strong><small>{timeZoneReady ? fields.timeZone : 'Select a clinic time zone first.'}</small></span></div>
-            <div><span className={`readiness-dot${scheduleReady ? ' is-ready' : ''}`} aria-hidden="true" /><span><strong>Clinic hours</strong><small>{scheduleReady ? `${openSchedules.length} operating day${openSchedules.length === 1 ? '' : 's'} configured.` : 'Configure at least one operating day.'}</small></span></div>
-            <div><span className={`readiness-dot${!dirty ? ' is-ready' : ''}`} aria-hidden="true" /><span><strong>Saved configuration</strong><small>{dirty ? 'Save the current changes before activation.' : 'Current draft changes are saved.'}</small></span></div>
-          </div>
-          <p className="practice-muted">Services, booking questions, and Secretary assignment are not activation prerequisites. A current Data Retention Acknowledgement is also checked by the backend.</p>
-          {!showActivation ? <button className="primary" type="button" disabled={!locallyReady} onClick={() => { setShowActivation(true); setActivationError(''); }}>Activate clinic</button> : (
-            <form className="activation-confirm-form" onSubmit={activateClinic}>
-              <div className="practice-notice"><strong>Confirm activation</strong><br />This makes the clinic operationally active if all final backend checks pass.</div>
-              <label>Current password<input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => { setCurrentPassword(event.target.value); setActivationError(''); }} /></label>
-              {activationError ? <div className="form-error" role="alert">{activationError}</div> : null}
-              <div className="button-row">
-                <button className="primary" type="submit" disabled={activating || !currentPassword}>{activating ? 'Activating clinic…' : 'Confirm activation'}</button>
-                <button className="secondary" type="button" disabled={activating} onClick={() => { setShowActivation(false); setCurrentPassword(''); setActivationError(''); }}>Cancel</button>
-              </div>
-            </form>
-          )}
-        </section>
+      {editable && practiceLocationId ? (
+        <ClinicActivationDialog
+          open={activationOpen}
+          practiceLocationId={practiceLocationId}
+          clinicName={clinicName}
+          onClose={() => setActivationOpen(false)}
+          onActivated={activationCompleted}
+        />
       ) : null}
     </section>
   );
