@@ -17,6 +17,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import { DoctorDefaultsPage } from './doctor/DoctorDefaultsPage';
 import { PracticeLocationsPage } from './doctor/PracticeLocationsPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
@@ -103,6 +104,7 @@ function Shell() {
         <div>
           <span className="role">{profile?.role.replace('_', ' ')}</span>
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Practices</Link> : null}
+          {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/defaults">Defaults</Link> : null}
           {canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}
           <button className="secondary" onClick={signOut}>Sign out</button>
         </div>
@@ -156,6 +158,7 @@ export function App() {
         <Route element={<Shell />}>
           <Route path="/app" element={<WorkspacePage />} />
           <Route path="/app/practice-locations" element={<PracticeLocationsPage />} />
+          <Route path="/app/defaults" element={<DoctorDefaultsPage />} />
           <Route path="/app/account" element={<AccountSecurityPage />} />
         </Route>
       </Route>
