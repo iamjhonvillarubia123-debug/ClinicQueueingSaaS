@@ -17,6 +17,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import { PracticeLocationsPage } from './doctor/PracticeLocationsPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
@@ -101,6 +102,7 @@ function Shell() {
         <Link className="brand" to="/">Clinic Queueing</Link>
         <div>
           <span className="role">{profile?.role.replace('_', ' ')}</span>
+          {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Practices</Link> : null}
           {canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}
           <button className="secondary" onClick={signOut}>Sign out</button>
         </div>
@@ -112,11 +114,10 @@ function Shell() {
 
 function WorkspacePage() {
   const { profile } = useAuth();
-  const copy = profile?.role === 'DOCTOR'
-    ? ['Doctor workspace', 'Clinic oversight and configuration will be built here.']
-    : profile?.role === 'SECRETARY'
-      ? ['Secretary workspace', 'Fast assigned-clinic operations will be built here.']
-      : ['System administration', 'Restricted administrative operations will remain separate from clinic navigation.'];
+  if (profile?.role === 'DOCTOR') return <Navigate to="/app/practice-locations" replace />;
+  const copy = profile?.role === 'SECRETARY'
+    ? ['Secretary workspace', 'Fast assigned-clinic operations will be built here.']
+    : ['System administration', 'Restricted administrative operations will remain separate from clinic navigation.'];
   return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>{copy[0]}</h1><p>{copy[1]}</p></section>;
 }
 
@@ -154,6 +155,7 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
           <Route path="/app" element={<WorkspacePage />} />
+          <Route path="/app/practice-locations" element={<PracticeLocationsPage />} />
           <Route path="/app/account" element={<AccountSecurityPage />} />
         </Route>
       </Route>
