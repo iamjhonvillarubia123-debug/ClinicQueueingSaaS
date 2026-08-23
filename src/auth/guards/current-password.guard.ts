@@ -9,6 +9,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PasswordSecurityService } from '../security/password-security.service';
 import type { AuthenticatedRequest } from '../types/authenticated-request';
 
+type CurrentPasswordRequest = AuthenticatedRequest & {
+  body?: {
+    currentPassword?: unknown;
+  };
+};
+
 @Injectable()
 export class CurrentPasswordGuard implements CanActivate {
   constructor(
@@ -17,9 +23,9 @@ export class CurrentPasswordGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest & {
-      body?: { currentPassword?: unknown };
-    }>();
+    const request = context
+      .switchToHttp()
+      .getRequest<CurrentPasswordRequest>();
     const currentPassword = request.body?.currentPassword;
 
     if (typeof currentPassword !== 'string' || !currentPassword.trim()) {
