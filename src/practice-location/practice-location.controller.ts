@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  Param,
   Post,
   Request,
   UseGuards,
@@ -17,6 +18,7 @@ import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 import { DisablePracticeLocationDto } from './dto/disable-practice-location.dto';
 import { PermanentlyDeletePracticeLocationDto } from './dto/permanently-delete-practice-location.dto';
 import { ReactivatePracticeLocationDto } from './dto/reactivate-practice-location.dto';
+import { UpdateDraftPracticeLocationDto } from './dto/update-draft-practice-location.dto';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
@@ -42,6 +44,20 @@ export class PracticeLocationController {
     return this.practiceLocationService.create(
       request.user.userId,
       createPracticeLocationDto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post(':practiceLocationId/draft-configuration')
+  updateDraftConfiguration(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Body() dto: UpdateDraftPracticeLocationDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationService.updateDraftConfiguration(
+      request.user.userId,
+      practiceLocationId,
+      dto,
     );
   }
 
@@ -104,6 +120,18 @@ export class PracticeLocationController {
       request.user.userId,
       dto,
       idempotencyKey,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/configuration')
+  getConfiguration(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationService.getConfiguration(
+      request.user.userId,
+      practiceLocationId,
     );
   }
 
