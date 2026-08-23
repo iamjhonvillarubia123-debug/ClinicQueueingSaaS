@@ -124,9 +124,8 @@ describe('BookingGroupRecoveryService', () => {
         create: jest.fn().mockResolvedValue({ id: 'otp-1' }),
       },
     };
-    const { service, practiceLocationFindUnique } = await buildService(
-      transaction,
-    );
+    const { service, practiceLocationFindUnique } =
+      await buildService(transaction);
 
     const result = await service.request({
       practiceLocationPublicIdentifier: 'north-clinic-public-id',
