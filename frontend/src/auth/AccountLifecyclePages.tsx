@@ -25,6 +25,13 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
+function permanentClosureErrorMessage(error: unknown) {
+  if (error instanceof ApiError && error.status === 401) {
+    return 'Email or current password is incorrect.';
+  }
+  return errorMessage(error, 'Unable to permanently close the account.');
+}
+
 export function AccountSecurityPage() {
   const { profile, refresh } = useAuth();
   const navigate = useNavigate();
@@ -209,7 +216,7 @@ export function PermanentCloseAccountPage() {
       });
       setComplete(true);
     } catch (caught) {
-      setError(errorMessage(caught, 'Unable to permanently close the account.'));
+      setError(permanentClosureErrorMessage(caught));
     } finally {
       setSubmitting(false);
     }
