@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ConfirmCurrentPasswordDto } from '../auth/dto/confirm-current-password.dto';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { CurrentPasswordGuard } from '../auth/guards/current-password.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
@@ -156,16 +157,16 @@ export class DoctorController {
     );
   }
 
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
     @Body() dto: ConfirmCurrentPasswordDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
+    void dto;
     return this.doctorLifecycleService.disable(
       request.user.userId,
-      dto.currentPassword,
       idempotencyKey,
     );
   }
