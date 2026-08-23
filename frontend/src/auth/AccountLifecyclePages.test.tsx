@@ -61,7 +61,7 @@ describe('F5 staff account lifecycle', () => {
     expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
   });
 
-  it('requires explicit irreversible confirmation before permanent closure can submit', async () => {
+  it('requires explicit irreversible confirmation and clears stale auth state after permanent closure', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ permanentlyClosed: true }));
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/account/permanent-close?role=SECRETARY']}><PermanentCloseAccountPage /></MemoryRouter>);
@@ -76,6 +76,7 @@ describe('F5 staff account lifecycle', () => {
     await user.click(closeButton);
 
     expect(await screen.findByRole('heading', { name: 'Account permanently closed.' })).toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(String(init?.body))).toEqual(expect.objectContaining({ confirmPermanentDelete: true }));
     expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
@@ -93,5 +94,6 @@ describe('F5 staff account lifecycle', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Email or current password is incorrect.');
     expect(screen.queryByRole('heading', { name: 'Account permanently closed.' })).not.toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });
