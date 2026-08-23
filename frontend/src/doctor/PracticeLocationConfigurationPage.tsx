@@ -223,6 +223,7 @@ export function PracticeLocationConfigurationPage() {
       <div className="practice-location-title-row"><span className="practice-status">{location.lifecycleStatus.replaceAll('_', ' ')}</span></div>
       {!editable ? <div className="practice-notice">Active clinic schedule changes require the controlled appointment-reconciliation workflow and are not edited from this draft screen.</div> : null}
       {error ? <div className="form-error" role="alert">{error}</div> : null}
+      {saved ? <div className="practice-notice practice-success" role="status">Clinic settings saved.</div> : null}
 
       <form className="practice-form clinic-config-form" onSubmit={save}>
         <section className="practice-create-panel">
