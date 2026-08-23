@@ -127,8 +127,7 @@ export class PracticeLocationService {
               isRequired: template.isRequired,
               displayOrder: template.displayOrder,
               isActive: template.isActive,
-              estimatedMinutesAdjustment:
-                template.estimatedMinutesAdjustment,
+              estimatedMinutesAdjustment: template.estimatedMinutesAdjustment,
               textMaximumLength: template.textMaximumLength,
               numberMinimum: template.numberMinimum,
               numberMaximum: template.numberMaximum,
@@ -200,9 +199,7 @@ export class PracticeLocationService {
     const doctorProfile = await this.requireDoctorProfile(userId);
     const location = await this.prisma.practiceLocation.findFirst({
       where: { id: practiceLocationId, doctorProfileId: doctorProfile.id },
-      include: {
-        practiceSchedules: { orderBy: { weekday: 'asc' } },
-      },
+      include: { practiceSchedules: { orderBy: { weekday: 'asc' } } },
     });
     if (!location) {
       throw new NotFoundException('Practice location was not found.');
@@ -288,9 +285,7 @@ export class PracticeLocationService {
 
       const updated = await transaction.practiceLocation.findUnique({
         where: { id: location.id },
-        include: {
-          practiceSchedules: { orderBy: { weekday: 'asc' } },
-        },
+        include: { practiceSchedules: { orderBy: { weekday: 'asc' } } },
       });
       if (!updated) {
         throw new NotFoundException('Practice location was not found.');
@@ -352,18 +347,12 @@ export class PracticeLocationService {
             'Every open recurring clinic day requires opening and closing times.',
           );
         }
-        if (
-          this.minuteOfDay(closesAtLocal) <= this.minuteOfDay(opensAtLocal)
-        ) {
+        if (this.minuteOfDay(closesAtLocal) <= this.minuteOfDay(opensAtLocal)) {
           throw new BadRequestException(
             'Recurring clinic closing time must be after opening time.',
           );
         }
-      } else if (
-        opensAtLocal ||
-        closesAtLocal ||
-        maximumOperatingUntilLocal
-      ) {
+      } else if (opensAtLocal || closesAtLocal || maximumOperatingUntilLocal) {
         throw new BadRequestException(
           'Closed recurring clinic days must not retain operating times.',
         );
@@ -380,10 +369,7 @@ export class PracticeLocationService {
 
   private normalizeTime(value: unknown): string | null {
     if (value === undefined || value === null || value === '') return null;
-    if (
-      typeof value !== 'string' ||
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)
-    ) {
+    if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
       throw new BadRequestException('Schedule times must use HH:MM.');
     }
     return value;
