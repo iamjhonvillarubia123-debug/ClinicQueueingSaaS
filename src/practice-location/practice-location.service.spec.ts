@@ -28,6 +28,7 @@ describe('PracticeLocationService', () => {
     doctorServiceTemplate: { findMany: jest.fn() },
     doctorBookingQuestionTemplate: { findMany: jest.fn() },
     $executeRaw: jest.fn(),
+    $queryRaw: jest.fn(),
   };
 
   const prismaServiceMock = {
@@ -156,10 +157,12 @@ describe('PracticeLocationService', () => {
     prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
       id: 'doctor-profile-1',
     });
-    transactionMock.practiceLocation.findFirst.mockResolvedValue({
-      id: 'location-1',
-      lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
-    });
+    transactionMock.$queryRaw.mockResolvedValue([
+      {
+        id: 'location-1',
+        lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
+      },
+    ]);
     transactionMock.practiceLocation.findUnique.mockResolvedValue({
       id: 'location-1',
       lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
@@ -188,6 +191,7 @@ describe('PracticeLocationService', () => {
       schedules,
     });
 
+    expect(transactionMock.$queryRaw).toHaveBeenCalledTimes(1);
     expect(scheduleTimeMock.assertValidTimeZone).toHaveBeenCalledWith(
       'Asia/Manila',
     );
