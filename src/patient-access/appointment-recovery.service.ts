@@ -479,7 +479,8 @@ export class AppointmentRecoveryService {
           commandIdempotencyId: command.id,
           recipientMobileEncrypted: attempt.mobileNumberEncrypted,
           recipientEmailEncrypted: null,
-          messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
+          messageBodyEncrypted:
+            this.notificationPayload.encryptMessage(message),
           providerIdempotencyKey: `appointment-recovery:${commandIdentityKey}`,
           attemptCount: 0,
           nextAttemptAt: completedAt,
@@ -511,11 +512,17 @@ export class AppointmentRecoveryService {
     now: Date,
   ): Promise<void> {
     const latest = await transaction.otpVerification.findFirst({
-      where: { bookingRecoveryAttemptId: recoveryAttemptId, purpose: RECOVERY_PURPOSE },
+      where: {
+        bookingRecoveryAttemptId: recoveryAttemptId,
+        purpose: RECOVERY_PURPOSE,
+      },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
-    if (latest && now.getTime() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS) {
+    if (
+      latest &&
+      now.getTime() - latest.createdAt.getTime() < RESEND_COOLDOWN_MS
+    ) {
       throw new BadRequestException(GENERIC_FAILURE);
     }
     const challengeCount = await transaction.otpVerification.count({
@@ -608,13 +615,13 @@ export class AppointmentRecoveryService {
   ): boolean {
     return Boolean(
       otp.bookingRecoveryAttemptId === recoveryAttemptId &&
-        otp.purpose === RECOVERY_PURPOSE &&
-        !otp.verifiedAt &&
-        !otp.consumedAt &&
-        !otp.invalidatedAt &&
-        otp.otpHash &&
-        otp.attemptCount < MAX_ATTEMPTS_PER_CHALLENGE &&
-        otp.expiresAt.getTime() > now.getTime(),
+      otp.purpose === RECOVERY_PURPOSE &&
+      !otp.verifiedAt &&
+      !otp.consumedAt &&
+      !otp.invalidatedAt &&
+      otp.otpHash &&
+      otp.attemptCount < MAX_ATTEMPTS_PER_CHALLENGE &&
+      otp.expiresAt.getTime() > now.getTime(),
     );
   }
 
