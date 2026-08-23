@@ -229,10 +229,7 @@ export function PracticeLocationConfigurationPage() {
           <h1 id="location-config-heading">{fields.name.trim() || 'Untitled clinic location'}</h1>
           <p>Configure the clinic details and regular weekly hours while this clinic location is still a draft.</p>
         </div>
-        <div className="clinic-config-header-actions">
-          <Link className="secondary-action" to="/app/practice-locations">← Back to clinic locations</Link>
-          {editable ? <button className="primary" type="button" disabled={!locallyReady} onClick={() => setActivationOpen(true)}>Activate clinic</button> : null}
-        </div>
+        <Link className="secondary-action" to="/app/practice-locations">← Back to clinic locations</Link>
       </div>
 
       <div className="practice-location-title-row"><span className="practice-status">{location.lifecycleStatus.replaceAll('_', ' ')}</span></div>
