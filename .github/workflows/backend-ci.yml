@@ -21,39 +21,8 @@ jobs:
       - run: npm install
       - run: npm run prisma:generate
       - run: npm run prisma:validate
-      - name: Lint frontend-facing backend integration
-        run: >-
-          npx eslint
-          src/auth/dto/confirm-current-password.dto.ts
-          src/auth/guards/current-password.guard.ts
-          src/auth/guards/current-password.guard.spec.ts
-          src/doctor/doctor.controller.ts
-          src/doctor/doctor-defaults.service.ts
-          src/doctor/doctor-defaults.service.spec.ts
-          src/practice-location/dto/update-draft-practice-location.dto.ts
-          src/practice-location/practice-location.controller.ts
-          src/practice-location/practice-location.service.ts
-          src/practice-location/practice-location.service.spec.ts
-          src/secretary/secretary.controller.ts
-          src/booking/booking.controller.ts
-          src/booking/booking.module.ts
-          src/booking/booking.service.ts
-          src/booking/booking-confirmation.service.ts
-          src/booking/public-booking-entry.service.ts
-          src/booking/public-booking-entry.service.spec.ts
-          src/booking/public-booking-replacement.service.ts
-          src/booking/public-booking-replacement.service.spec.ts
-          src/booking/public-booking-duplicate-use-existing.service.ts
-          src/booking/public-booking-duplicate-use-existing.service.spec.ts
-          src/booking/dto/create-booking-draft.dto.ts
-          src/booking/dto/create-public-booking-draft.dto.ts
-          src/booking/dto/replace-public-booking-draft.dto.ts
-          src/public-routing/public-routing.module.ts
-          src/patient-access/appointment-recovery.controller.ts
-          src/patient-access/booking-group-recovery.controller.ts
-          src/patient-access/public-booking-recovery.controller.ts
-          src/patient-access/public-booking-recovery.service.ts
-          src/patient-access/patient-access.module.ts
+      - name: Lint full backend repository
+        run: npm run lint:check
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
