@@ -42,7 +42,7 @@ const emptyDraft: LocationDraft = {
 };
 
 function locationTitle(location: PracticeLocation) {
-  return location.name?.trim() || 'Untitled practice location';
+  return location.name?.trim() || 'Untitled clinic location';
 }
 
 function addressSummary(location: PracticeLocation) {
@@ -99,14 +99,14 @@ export function PracticeLocationsPage() {
   }
 
   return (
-    <section className="practice-admin-page" aria-labelledby="practice-locations-heading">
+    <section className="practice-admin-page" aria-labelledby="clinic-locations-heading">
       <div className="practice-admin-heading">
         <div>
-          <p className="eyebrow">Practice administration</p>
-          <h1 id="practice-locations-heading">Practice locations</h1>
+          <p className="eyebrow">Clinic administration</p>
+          <h1 id="clinic-locations-heading">Clinic locations</h1>
           <p>Each clinic location has its own services, questions, schedule, staff, queue operations, and public booking route.</p>
         </div>
-        <button className="primary" type="button" onClick={() => setShowCreate(true)}>Create practice location</button>
+        <button className="primary" type="button" onClick={() => setShowCreate(true)}>Create clinic location</button>
       </div>
 
       {error ? <div className="form-error" role="alert">{error}</div> : null}
@@ -115,13 +115,13 @@ export function PracticeLocationsPage() {
         <section className="practice-create-panel" aria-labelledby="create-location-heading">
           <div className="practice-panel-heading">
             <div>
-              <p className="eyebrow">New location</p>
+              <p className="eyebrow">New clinic location</p>
               <h2 id="create-location-heading">Start as a draft</h2>
-              <p>You can save a blank or partially configured location now and finish the operational setup before activation.</p>
+              <p>You can save a blank or partially configured clinic location now and finish the operational setup before activation.</p>
             </div>
           </div>
           <form className="practice-form" onSubmit={createLocation}>
-            <label>Location name<input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} maxLength={200} /></label>
+            <label>Clinic location name<input value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} maxLength={200} /></label>
             <label>Address line 1<input value={draft.addressLine1} onChange={(event) => updateDraft('addressLine1', event.target.value)} maxLength={255} /></label>
             <label>Address line 2<input value={draft.addressLine2} onChange={(event) => updateDraft('addressLine2', event.target.value)} maxLength={255} /></label>
             <div className="practice-form-grid">
@@ -133,19 +133,19 @@ export function PracticeLocationsPage() {
               <label>Contact number<input value={draft.contactNumber} onChange={(event) => updateDraft('contactNumber', event.target.value)} maxLength={30} /></label>
             </div>
             <div className="button-row">
-              <button className="primary" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save draft location'}</button>
+              <button className="primary" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Save draft clinic'}</button>
               <button className="secondary" type="button" disabled={submitting} onClick={() => { setShowCreate(false); setDraft(emptyDraft); setError(''); }}>Cancel</button>
             </div>
           </form>
         </section>
       ) : null}
 
-      <section className="practice-list" aria-label="Practice locations">
-        {loading ? <p className="practice-muted">Loading practice locations…</p> : null}
+      <section className="practice-list" aria-label="Clinic locations">
+        {loading ? <p className="practice-muted">Loading clinic locations…</p> : null}
         {!loading && locations.length === 0 ? (
           <div className="practice-empty">
-            <h2>No practice locations yet</h2>
-            <p>Create the first location as a draft. Activation comes later, after the required configuration is complete.</p>
+            <h2>No clinic locations yet</h2>
+            <p>Create the first clinic location as a draft. Activation comes later, after the required configuration is complete.</p>
           </div>
         ) : null}
         {locations.map((location) => (
