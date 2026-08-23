@@ -36,7 +36,7 @@ function LandingPage() {
       <section className="hero">
         <p className="eyebrow">Simple clinic queues</p>
         <h1>Less waiting around. More clarity.</h1>
-        <p>Open a Doctor or clinic public link to view practice information and begin booking.</p>
+        <p>Open a Doctor or clinic public link to view clinic information and begin booking.</p>
       </section>
     </main>
   );
@@ -104,7 +104,7 @@ function Shell() {
         <Link className="brand" to="/">Clinic Queueing</Link>
         <div>
           <span className="role">{profile?.role.replace('_', ' ')}</span>
-          {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Practices</Link> : null}
+          {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Clinics</Link> : null}
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/defaults">Defaults</Link> : null}
           {canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}
           <button className="secondary" onClick={signOut}>Sign out</button>
