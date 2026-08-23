@@ -7,6 +7,7 @@ import './styles/global.css';
 import './styles/account-lifecycle.css';
 import './styles/patient.css';
 import './styles/practice-admin.css';
+import './styles/clinic-activation.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
