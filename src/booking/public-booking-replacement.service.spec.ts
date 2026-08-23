@@ -9,17 +9,19 @@ describe('PublicBookingReplacementService', () => {
     individual?: unknown;
     groups?: unknown[];
     otpKey?: string;
+    draftStatus?: 'PENDING_OTP' | 'CONSUMED';
   }) {
+    const consumed = input?.draftStatus === 'CONSUMED';
     const draft = {
       id: 'draft-1',
       practiceLocationId: 'location-1',
       serviceDate,
       mobileNumberHash: 'mobile-hash',
-      status: 'PENDING_OTP',
+      status: input?.draftStatus ?? 'PENDING_OTP',
       expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-      consumedAt: null,
+      consumedAt: consumed ? new Date() : null,
       cancelledAt: null,
-      activeDraftKey: 'draft-key',
+      activeDraftKey: consumed ? null : 'draft-key',
     };
     const otp = {
       id: 'otp-1',
@@ -178,5 +180,17 @@ describe('PublicBookingReplacementService', () => {
     await expect(
       service.authorizeReplacement('draft-1'),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('allows a consumed draft to reach downstream idempotency replay handling', async () => {
+    const { service, transaction } = createHarness({
+      draftStatus: 'CONSUMED',
+    });
+
+    await expect(service.prepareForConfirmation('draft-1')).resolves.toBe(
+      undefined,
+    );
+    expect(transaction.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(transaction.otpVerification.update).not.toHaveBeenCalled();
   });
 });
