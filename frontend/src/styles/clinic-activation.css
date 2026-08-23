@@ -1,57 +1,6 @@
-.activation-panel {
-  display: grid;
-  gap: 18px;
-}
-
-.activation-readiness {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 0;
-}
-
-.activation-readiness > div {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr);
-  gap: 10px;
-  align-items: start;
-  padding: 6px 0;
-}
-
-.activation-readiness > div > span:last-child {
-  display: grid;
-  gap: 2px;
-}
-
-.activation-readiness small {
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.readiness-dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 5px;
-  border: 1px solid #777;
-  border-radius: 50%;
-  background: #fff;
-}
-
-.readiness-dot.is-ready {
-  background: #111;
-  border-color: #111;
-}
-
-.activation-panel > .primary {
-  justify-self: start;
-  min-width: 190px;
-}
-
 .activation-confirm-form {
   display: grid;
   gap: 14px;
-  max-width: 560px;
 }
 
 .activation-confirm-form label {
@@ -73,6 +22,70 @@
 .activation-confirm-form input:focus {
   outline: 2px solid #111;
   outline-offset: 1px;
+}
+
+.clinic-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 0.38);
+}
+
+.clinic-modal {
+  width: min(100%, 560px);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  background: #fff;
+  box-shadow: 0 22px 70px rgb(0 0 0 / 0.18);
+}
+
+.clinic-modal-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.clinic-modal-heading h2 {
+  margin: 0.25rem 0 0;
+  font-size: 1.65rem;
+  letter-spacing: -0.025em;
+}
+
+.clinic-modal-close {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.clinic-list-actions,
+.clinic-config-header-actions,
+.clinic-save-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.clinic-list-actions .primary,
+.clinic-list-actions .secondary-action,
+.clinic-config-header-actions .primary,
+.clinic-config-header-actions .secondary-action {
+  min-height: 42px;
 }
 
 .privacy-facts {
@@ -107,10 +120,31 @@
 }
 
 @media (max-width: 720px) {
-  .activation-panel > .primary,
+  .clinic-modal-backdrop {
+    padding: 12px;
+    place-items: end center;
+  }
+
+  .clinic-modal {
+    width: 100%;
+    max-height: calc(100vh - 24px);
+  }
+
   .activation-confirm-form .primary,
   .activation-confirm-form .secondary,
-  .privacy-acknowledgement-form .primary {
+  .privacy-acknowledgement-form .primary,
+  .clinic-list-actions .primary,
+  .clinic-list-actions .secondary-action,
+  .clinic-config-header-actions .primary,
+  .clinic-config-header-actions .secondary-action,
+  .clinic-save-actions .primary,
+  .clinic-save-actions .secondary {
     width: 100%;
+  }
+
+  .clinic-config-header-actions,
+  .clinic-save-actions,
+  .clinic-list-actions {
+    align-items: stretch;
   }
 }
