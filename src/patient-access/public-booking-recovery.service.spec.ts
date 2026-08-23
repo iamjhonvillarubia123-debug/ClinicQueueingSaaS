@@ -1,10 +1,21 @@
 import { PublicBookingRecoveryService } from './public-booking-recovery.service';
 
+type CreateOtpArgs = {
+  data: {
+    createdAt: Date;
+    verifiedAt: Date;
+    expiresAt: Date;
+  };
+};
+
 describe('PublicBookingRecoveryService replacement authority binding', () => {
   it('uses one timestamp for replacement booking OTP creation and verification', async () => {
     const serviceDate = new Date('2026-08-24T00:00:00.000Z');
     const authorityExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
     const draftExpiresAt = new Date(Date.now() + 20 * 60 * 1000);
+    const createOtp = jest
+      .fn<Promise<{ id: string }>, [CreateOtpArgs]>()
+      .mockResolvedValue({ id: 'booking-otp-1' });
 
     const transaction = {
       $queryRaw: jest.fn().mockResolvedValue([
@@ -18,7 +29,7 @@ describe('PublicBookingRecoveryService replacement authority binding', () => {
         },
       ]),
       otpVerification: {
-        create: jest.fn().mockResolvedValue({ id: 'booking-otp-1' }),
+        create: createOtp,
         update: jest.fn().mockResolvedValue({ id: 'recovery-otp-1' }),
       },
       bookingRecoveryAttempt: {
@@ -33,8 +44,9 @@ describe('PublicBookingRecoveryService replacement authority binding', () => {
     };
 
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: typeof transaction) => unknown) =>
-        callback(transaction),
+      $transaction: jest.fn(
+        (callback: (tx: typeof transaction) => unknown) =>
+          Promise.resolve(callback(transaction)),
       ),
       bookingRecoveryAttempt: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -81,16 +93,14 @@ describe('PublicBookingRecoveryService replacement authority binding', () => {
       serviceDate,
     });
 
-    expect(transaction.otpVerification.create).toHaveBeenCalledTimes(1);
-    const createCall = transaction.otpVerification.create.mock.calls[0]?.[0] as {
-      data: { createdAt: Date; verifiedAt: Date; expiresAt: Date };
-    };
-    expect(createCall.data.createdAt).toBeInstanceOf(Date);
-    expect(createCall.data.verifiedAt).toBeInstanceOf(Date);
-    expect(createCall.data.createdAt.getTime()).toBe(
-      createCall.data.verifiedAt.getTime(),
+    expect(createOtp).toHaveBeenCalledTimes(1);
+    const [createCall] = createOtp.mock.calls[0] ?? [];
+    expect(createCall?.data.createdAt).toBeInstanceOf(Date);
+    expect(createCall?.data.verifiedAt).toBeInstanceOf(Date);
+    expect(createCall?.data.createdAt.getTime()).toBe(
+      createCall?.data.verifiedAt.getTime(),
     );
-    expect(createCall.data.expiresAt.getTime()).toBe(
+    expect(createCall?.data.expiresAt.getTime()).toBe(
       authorityExpiresAt.getTime(),
     );
   });
