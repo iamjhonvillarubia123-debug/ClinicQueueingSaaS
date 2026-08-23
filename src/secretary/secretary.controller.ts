@@ -6,7 +6,9 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { ConfirmCurrentPasswordDto } from '../auth/dto/confirm-current-password.dto';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { CurrentPasswordGuard } from '../auth/guards/current-password.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { PermanentlyDeleteSecretaryDto } from './dto/permanently-delete-secretary.dto';
@@ -19,12 +21,14 @@ export class SecretaryController {
     private readonly secretaryLifecycleService: SecretaryLifecycleService,
   ) {}
 
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
+    @Body() dto: ConfirmCurrentPasswordDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
+    void dto;
     return this.secretaryLifecycleService.disable(
       request.user.userId,
       idempotencyKey,

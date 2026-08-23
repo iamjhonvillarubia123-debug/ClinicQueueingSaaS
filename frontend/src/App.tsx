@@ -1,6 +1,18 @@
 import { FormEvent, useState } from 'react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from './api/client';
+import {
+  DoctorRegistrationPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  VerifyEmailPage,
+} from './auth/AccountAccessPages';
+import {
+  AccountSecurityPage,
+  DisabledAccountPage,
+  PermanentCloseAccountPage,
+  ReactivateAccountPage,
+} from './auth/AccountLifecyclePages';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
@@ -66,7 +78,13 @@ function LoginPage() {
           <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           {error ? <div className="form-error" role="alert">{error}</div> : null}
           <button className="primary" type="submit" disabled={submitting || !email || !password}>{submitting ? 'Signing in…' : 'Continue'}</button>
+          <Link className="quiet-link auth-center-link" to="/forgot-password">Forgot password?</Link>
+          <Link className="quiet-link auth-center-link" to="/account/reactivate">Reactivate disabled account</Link>
         </form>
+        <div className="auth-registration-entry">
+          <span>Doctor without an account?</span>
+          <Link className="secondary-action" to="/register/doctor">Create doctor account</Link>
+        </div>
       </section>
     </main>
   );
@@ -76,9 +94,17 @@ function Shell() {
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
   async function signOut() { await logout(); navigate('/login', { replace: true }); }
+  const canManageOwnLifecycle = profile?.role === 'DOCTOR' || profile?.role === 'SECRETARY';
   return (
     <div className="shell">
-      <header className="appbar"><Link className="brand" to="/">Clinic Queueing</Link><div><span className="role">{profile?.role.replace('_', ' ')}</span><button className="secondary" onClick={signOut}>Sign out</button></div></header>
+      <header className="appbar">
+        <Link className="brand" to="/">Clinic Queueing</Link>
+        <div>
+          <span className="role">{profile?.role.replace('_', ' ')}</span>
+          {canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}
+          <button className="secondary" onClick={signOut}>Sign out</button>
+        </div>
+      </header>
       <main className="workspace"><Outlet /></main>
     </div>
   );
@@ -118,9 +144,17 @@ export function App() {
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/account/disabled" element={<DisabledAccountPage />} />
+      <Route path="/account/reactivate" element={<ReactivateAccountPage />} />
+      <Route path="/account/permanent-close" element={<PermanentCloseAccountPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
           <Route path="/app" element={<WorkspacePage />} />
+          <Route path="/app/account" element={<AccountSecurityPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />
