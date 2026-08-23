@@ -5,12 +5,12 @@ const { Client } = require('pg');
 const KEY_DERIVATION_PURPOSE = 'account-notification-payload-v1';
 const TYPES = {
   verification: {
-    notificationType: 'DOCTOR_EMAIL_VERIFICATION',
-    purpose: 'doctor-email-verification:message',
-    label: 'Doctor email verification',
+    notificationTypes: ['DOCTOR_EMAIL_VERIFICATION', 'SECRETARY_EMAIL_VERIFICATION'],
+    purpose: 'staff-email-verification:message',
+    label: 'Staff email verification',
   },
   reset: {
-    notificationType: 'PASSWORD_RESET',
+    notificationTypes: ['PASSWORD_RESET'],
     purpose: 'password-reset:message',
     label: 'Password reset',
   },
@@ -64,18 +64,19 @@ async function main() {
   await client.connect();
   try {
     const result = await client.query(`
-      SELECT "id", "messageBodyEncrypted", "status"::text AS "status", "createdAt", "expiresAt", "emailVerificationId", "passwordResetId"
+      SELECT "id", "notificationType"::text AS "notificationType", "messageBodyEncrypted", "status"::text AS "status", "createdAt", "expiresAt", "emailVerificationId", "passwordResetId"
       FROM "NotificationOutbox"
-      WHERE "notificationType" = $1::"NotificationType"
+      WHERE "notificationType"::text = ANY($1::text[])
         AND "messageBodyEncrypted" IS NOT NULL
       ORDER BY "createdAt" DESC
       LIMIT 1
-    `, [config.notificationType]);
+    `, [config.notificationTypes]);
     if (result.rowCount === 0) throw new Error(`No ${config.label.toLowerCase()} notification exists in the development database.`);
     const row = result.rows[0];
     const message = decrypt(row.messageBodyEncrypted, config.purpose);
     const match = message.match(/https?:\/\/\S+/);
     console.log(`${config.label} diagnostic`);
+    console.log(`Notification type: ${row.notificationType}`);
     console.log(`Outbox status: ${row.status}`);
     console.log(`Created: ${new Date(row.createdAt).toISOString()}`);
     console.log(`Expires: ${new Date(row.expiresAt).toISOString()}`);
@@ -85,6 +86,7 @@ async function main() {
         SELECT
           ev."status"::text AS "verificationStatus",
           ev."verifiedAt",
+          u."role"::text AS "role",
           u."email",
           u."emailVerifiedAt",
           u."lastLoginAt",
@@ -94,7 +96,7 @@ async function main() {
             WHERE s."userId" = u."id"
               AND s."revokedAt" IS NULL
               AND s."idleExpiresAt" > now()
-              AND s."expiresAt" > now()
+              AND s."absoluteExpiresAt" > now()
           ) AS "activeSessionCount"
         FROM "EmailVerification" ev
         INNER JOIN "User" u ON u."id" = ev."userId"
@@ -103,6 +105,7 @@ async function main() {
       `, [row.emailVerificationId]);
       if (verification.rowCount > 0) {
         const state = verification.rows[0];
+        console.log(`Account role: ${state.role}`);
         console.log(`Account email: ${state.email}`);
         console.log(`Verification record status: ${state.verificationStatus}`);
         console.log(`Verification completed: ${state.verifiedAt ? new Date(state.verifiedAt).toISOString() : 'no'}`);
