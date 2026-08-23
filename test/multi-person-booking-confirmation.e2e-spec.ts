@@ -113,10 +113,11 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(
       firstBody.bookingGroup.appointments.map((item) => item.queueNumber),
     ).toEqual([1, 2]);
-    expect(firstBody.bookingGroupAccessToken).toMatchObject({
-      expiresAt: expect.any(String),
-      transport: 'HTTP_ONLY_COOKIE',
-    });
+    expect(firstBody.bookingGroupAccessToken).not.toBeNull();
+    expect(firstBody.bookingGroupAccessToken?.transport).toBe(
+      'HTTP_ONLY_COOKIE',
+    );
+    expect(typeof firstBody.bookingGroupAccessToken?.expiresAt).toBe('string');
     expect(firstBody.bookingGroupAccessToken).not.toHaveProperty('token');
     const firstCookies = first.headers['set-cookie'];
     expect(firstCookies).toEqual(expect.any(Array));
