@@ -179,8 +179,7 @@ describe('PracticeLocationService', () => {
       isOpen: weekday === Weekday.MONDAY,
       opensAtLocal: weekday === Weekday.MONDAY ? '09:00' : null,
       closesAtLocal: weekday === Weekday.MONDAY ? '17:00' : null,
-      maximumOperatingUntilLocal:
-        weekday === Weekday.MONDAY ? '18:00' : null,
+      maximumOperatingUntilLocal: weekday === Weekday.MONDAY ? '18:00' : null,
     }));
 
     await service.updateDraftConfiguration('doctor-user-1', 'location-1', {
