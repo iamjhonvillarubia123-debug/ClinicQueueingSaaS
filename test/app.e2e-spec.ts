@@ -816,7 +816,7 @@ describe('AppController (e2e)', () => {
       .post('/doctor/account/disable')
       .set('Origin', 'https://app.example.test')
       .set('Idempotency-Key', disableKey)
-      .send({ password })
+      .send({ currentPassword: password })
       .expect(201, { disabled: true, replayed: false });
 
     const disabled = await prisma.user.findUniqueOrThrow({
