@@ -26,7 +26,9 @@ export class SecretaryRegistrationService {
     const firstName = dto.firstName.trim();
     const middleName = this.optionalTrim(dto.middleName);
     const lastName = dto.lastName.trim();
-    const mobileNumber = this.mobileNumberService.normalize(dto.mobileNumber).canonical;
+    const mobileNumber = this.mobileNumberService.normalize(
+      dto.mobileNumber,
+    ).canonical;
 
     const existingCurrentUser = await this.prisma.user.findFirst({
       where: {
@@ -54,7 +56,8 @@ export class SecretaryRegistrationService {
             passwordHash,
             role: UserRole.SECRETARY,
             accountStatus: UserAccountStatus.ACTIVE,
-            administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+            administrativeRestrictionStatus:
+              AdministrativeRestrictionStatus.NONE,
             emailVerifiedAt: null,
           },
         });
@@ -79,7 +82,9 @@ export class SecretaryRegistrationService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException('A current account already uses this email.');
+        throw new ConflictException(
+          'A current account already uses this email.',
+        );
       }
       throw error;
     }
