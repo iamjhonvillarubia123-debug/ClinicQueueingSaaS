@@ -115,8 +115,9 @@ export function PracticeLocationConfigurationPage() {
   const [schedules, setSchedules] = useState<ScheduleRow[]>(weekdays.map(blankSchedule));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   async function load() {
     if (!practiceLocationId) return;
@@ -127,6 +128,8 @@ export function PracticeLocationConfigurationPage() {
       setLocation(response);
       setFields(fieldsFromConfiguration(response));
       setSchedules(schedulesFromConfiguration(response));
+      setDirty(false);
+      setSaved(false);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -136,8 +139,14 @@ export function PracticeLocationConfigurationPage() {
 
   useEffect(() => { void load(); }, [practiceLocationId]);
 
+  function markChanged() {
+    setDirty(true);
+    setSaved(false);
+    setError('');
+  }
+
   function updateField(field: keyof LocationFields, value: string) {
-    setNotice('');
+    markChanged();
     setFields((current) => {
       if (field === 'countryCode') {
         const countryCode = value.toUpperCase();
@@ -152,7 +161,7 @@ export function PracticeLocationConfigurationPage() {
   }
 
   function updateSchedule(weekday: Weekday, patch: Partial<ScheduleRow>) {
-    setNotice('');
+    markChanged();
     setSchedules((current) => current.map((row) => {
       if (row.weekday !== weekday) return row;
       const next = { ...row, ...patch };
@@ -162,10 +171,10 @@ export function PracticeLocationConfigurationPage() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!practiceLocationId || location?.lifecycleStatus !== 'DRAFT') return;
+    if (!practiceLocationId || location?.lifecycleStatus !== 'DRAFT' || !dirty) return;
     setSaving(true);
     setError('');
-    setNotice('');
+    setSaved(false);
     try {
       const normalizedFields = { ...fields, timeZone: canonicalTimeZone(fields.timeZone) };
       const response = await apiRequest<LocationConfiguration>(`/practice-location/${encodeURIComponent(practiceLocationId)}/draft-configuration`, {
@@ -184,7 +193,8 @@ export function PracticeLocationConfigurationPage() {
       setLocation(response);
       setFields(fieldsFromConfiguration(response));
       setSchedules(schedulesFromConfiguration(response));
-      setNotice('Clinic settings saved.');
+      setDirty(false);
+      setSaved(true);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -197,6 +207,7 @@ export function PracticeLocationConfigurationPage() {
 
   const editable = location.lifecycleStatus === 'DRAFT';
   const timeZoneOptions = fields.timeZone && fields.timeZone !== 'Asia/Manila' ? [fields.timeZone, 'Asia/Manila'] : ['Asia/Manila'];
+  const saveStatus = saving ? 'Saving changes…' : saved ? 'Changes saved' : dirty ? 'Unsaved changes' : 'Changes remain private while this clinic location is a draft.';
 
   return (
     <section className="practice-admin-page" aria-labelledby="location-config-heading">
@@ -212,7 +223,6 @@ export function PracticeLocationConfigurationPage() {
       <div className="practice-location-title-row"><span className="practice-status">{location.lifecycleStatus.replaceAll('_', ' ')}</span></div>
       {!editable ? <div className="practice-notice">Active clinic schedule changes require the controlled appointment-reconciliation workflow and are not edited from this draft screen.</div> : null}
       {error ? <div className="form-error" role="alert">{error}</div> : null}
-      {notice ? <div className="practice-notice practice-success" role="status">{notice}</div> : null}
 
       <form className="practice-form clinic-config-form" onSubmit={save}>
         <section className="practice-create-panel">
@@ -271,8 +281,8 @@ export function PracticeLocationConfigurationPage() {
 
         {editable ? (
           <div className="clinic-save-row">
-            <span className="practice-muted">Changes remain private while this clinic location is a draft.</span>
-            <button className="primary" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save clinic settings'}</button>
+            <span className={`clinic-save-status${saved ? ' is-saved' : dirty ? ' is-dirty' : ''}`} role="status" aria-live="polite">{saveStatus}</span>
+            <button className="primary" type="submit" disabled={saving || !dirty}>{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save clinic settings'}</button>
           </div>
         ) : null}
       </form>
