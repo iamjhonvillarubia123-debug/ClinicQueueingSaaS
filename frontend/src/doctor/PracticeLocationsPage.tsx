@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 
 type PracticeLocation = {
@@ -12,8 +13,8 @@ type PracticeLocation = {
   province: string | null;
   postalCode: string | null;
   contactNumber: string | null;
-  countryCode: string;
-  timeZone: string;
+  countryCode: string | null;
+  timeZone: string | null;
   isBookingEnabled: boolean;
   currentRegularPracticeStaffId: string | null;
   createdAt: string;
@@ -156,13 +157,13 @@ export function PracticeLocationsPage() {
               </div>
               <p>{addressSummary(location)}</p>
               <div className="practice-location-meta">
-                <span>{location.timeZone}</span>
+                <span>{location.timeZone || 'Time zone not configured'}</span>
                 <span>{location.contactNumber || 'No contact number'}</span>
                 <span>{location.isBookingEnabled ? 'Booking enabled' : 'Booking not enabled'}</span>
               </div>
             </div>
             <div className="practice-card-actions">
-              <button className="secondary" type="button" disabled>Configure</button>
+              <Link className="secondary-action" to={`/app/practice-locations/${encodeURIComponent(location.id)}`}>Configure</Link>
             </div>
           </article>
         ))}
