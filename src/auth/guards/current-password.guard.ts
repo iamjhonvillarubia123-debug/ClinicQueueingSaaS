@@ -23,9 +23,8 @@ export class CurrentPasswordGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context
-      .switchToHttp()
-      .getRequest<CurrentPasswordRequest>();
+    const rawRequest: unknown = context.switchToHttp().getRequest();
+    const request = rawRequest as CurrentPasswordRequest;
     const currentPassword = request.body?.currentPassword;
 
     if (typeof currentPassword !== 'string' || !currentPassword.trim()) {
