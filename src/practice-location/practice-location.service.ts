@@ -24,6 +24,11 @@ type DraftScheduleInput = {
   maximumOperatingUntilLocal: string | null;
 };
 
+type LockedDraftLocation = {
+  id: string;
+  lifecycleStatus: PracticeLocationLifecycleStatus;
+};
+
 const WEEKDAYS = [
   Weekday.MONDAY,
   Weekday.TUESDAY,
@@ -226,13 +231,15 @@ export class PracticeLocationService {
     }
 
     return this.prisma.$transaction(async (transaction) => {
-      const location = await transaction.practiceLocation.findFirst({
-        where: {
-          id: practiceLocationId,
-          doctorProfileId: doctorProfile.id,
-        },
-        select: { id: true, lifecycleStatus: true },
-      });
+      const rows = await transaction.$queryRaw<LockedDraftLocation[]>(Prisma.sql`
+        SELECT "id", "lifecycleStatus"
+        FROM "PracticeLocation"
+        WHERE "id" = ${practiceLocationId}
+          AND "doctorProfileId" = ${doctorProfile.id}
+        LIMIT 1
+        FOR UPDATE
+      `);
+      const location = rows[0];
       if (!location) {
         throw new NotFoundException('Practice location was not found.');
       }
