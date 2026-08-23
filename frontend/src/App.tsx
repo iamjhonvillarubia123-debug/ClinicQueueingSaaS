@@ -26,6 +26,7 @@ import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
 import { PatientBookingGroupPage } from './patient/PatientBookingGroupPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
+import { SecretaryClinicsPage } from './secretary/SecretaryClinicsPage';
 
 function LandingPage() {
   return (
@@ -108,6 +109,7 @@ function Shell() {
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Clinics</Link> : null}
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/defaults">Defaults</Link> : null}
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/data-privacy">Data & Privacy</Link> : null}
+          {profile?.role === 'SECRETARY' ? <Link className="quiet-link account-nav-link" to="/app/secretary/clinics">Assigned clinics</Link> : null}
           {canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}
           <button className="secondary" onClick={signOut}>Sign out</button>
         </div>
@@ -120,10 +122,8 @@ function Shell() {
 function WorkspacePage() {
   const { profile } = useAuth();
   if (profile?.role === 'DOCTOR') return <Navigate to="/app/practice-locations" replace />;
-  const copy = profile?.role === 'SECRETARY'
-    ? ['Secretary workspace', 'Fast assigned-clinic operations will be built here.']
-    : ['System administration', 'Restricted administrative operations will remain separate from clinic navigation.'];
-  return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>{copy[0]}</h1><p>{copy[1]}</p></section>;
+  if (profile?.role === 'SECRETARY') return <Navigate to="/app/secretary/clinics" replace />;
+  return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>System administration</h1><p>Restricted administrative operations remain separate from clinic navigation.</p></section>;
 }
 
 function LegacyRecoveryRedirect() {
@@ -164,6 +164,7 @@ export function App() {
           <Route path="/app/practice-locations/:practiceLocationId" element={<PracticeLocationConfigurationPage />} />
           <Route path="/app/defaults" element={<DoctorDefaultsPage />} />
           <Route path="/app/data-privacy" element={<DoctorDataPrivacyPage />} />
+          <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
           <Route path="/app/account" element={<AccountSecurityPage />} />
         </Route>
       </Route>
