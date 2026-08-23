@@ -217,7 +217,7 @@ export function PracticeLocationConfigurationPage() {
           <h1 id="location-config-heading">{fields.name.trim() || 'Untitled clinic location'}</h1>
           <p>Configure the clinic details and regular weekly hours while this clinic location is still a draft.</p>
         </div>
-        <Link className="secondary-action" to="/app/practice-locations">Clinic locations</Link>
+        <Link className="secondary-action" to="/app/practice-locations">← Back to clinic locations</Link>
       </div>
 
       <div className="practice-location-title-row"><span className="practice-status">{location.lifecycleStatus.replaceAll('_', ' ')}</span></div>
