@@ -44,10 +44,6 @@ function clinicAddress(clinic: AssignedClinic) {
     .map((value) => value?.trim()).filter(Boolean);
   return parts.length ? parts.join(', ') : 'Address not configured';
 }
-function draftStatusLabel(status: DraftSummary['status']) {
-  if (status === 'RETURNED_FOR_REWORK') return 'Returned for rework';
-  return status.charAt(0) + status.slice(1).toLowerCase();
-}
 function profileLabel(profile: AssignedClinic['access']['accessProfile']) {
   if (profile === 'FULL_CLINIC_CONFIGURATION') return 'Full clinic configuration';
   if (profile === 'CUSTOM') return 'Custom access';
@@ -59,12 +55,6 @@ function messageFrom(error: unknown) {
 function canConfigure(clinic: AssignedClinic) {
   const access = clinic.access;
   return access.canManageClinicDetails || access.canManageServices || access.canManageBookingQuestions || access.canManageSchedules;
-}
-function isEditableDraft(draft: DraftSummary | null) {
-  return Boolean(draft && (draft.status === 'DRAFT' || draft.status === 'RETURNED_FOR_REWORK'));
-}
-function isSubmittedDraft(draft: DraftSummary | null) {
-  return draft?.status === 'SUBMITTED';
 }
 
 export function SecretaryClinicsPage() {
@@ -104,8 +94,8 @@ export function SecretaryClinicsPage() {
         {clinics.map((clinic) => {
           const draft = clinic.latestSettingsDraft;
           const configurable = canConfigure(clinic);
-          const editableDraft = isEditableDraft(draft);
-          const submittedDraft = isSubmittedDraft(draft);
+          const submitted = draft?.status === 'SUBMITTED';
+          const activeDraft = draft?.status === 'DRAFT' || draft?.status === 'RETURNED_FOR_REWORK';
           return (
             <article className="practice-location-card" key={clinic.id}>
               <div>
@@ -113,13 +103,11 @@ export function SecretaryClinicsPage() {
                 <p>{clinicAddress(clinic)}</p>
                 <div className="practice-location-meta"><span>{clinic.timeZone || 'Time zone not configured'}</span><span>{clinic.contactNumber || 'No contact number'}</span><span>{profileLabel(clinic.access.accessProfile)}</span></div>
                 <div className="practice-location-meta"><span><strong>Queue operations:</strong> Available under Standard Secretary authority</span>{configurable ? <span><strong>Configuration:</strong> Proposal access granted</span> : <span><strong>Configuration:</strong> Not granted</span>}</div>
-                {configurable ? <div className="practice-location-meta"><span><strong>Latest settings draft:</strong> {draft ? draftStatusLabel(draft.status) : 'None'}</span>{draft?.reviewComment ? <span><strong>Doctor note:</strong> {draft.reviewComment}</span> : null}</div> : null}
+                {configurable && submitted ? <div className="practice-location-meta"><span><strong>Proposal:</strong> Waiting for Doctor review</span></div> : null}
+                {configurable && activeDraft ? <div className="practice-location-meta"><span><strong>Proposal:</strong> Draft in progress</span></div> : null}
               </div>
               <div className="practice-card-actions">
-                {!configurable ? <span className="practice-muted">Operational workspace only</span> : submittedDraft && draft ? <button className="secondary" type="button" onClick={() => openDraft(draft)}>View submitted draft</button> : <>
-                  <button className="secondary" type="button" disabled={workingClinicId === clinic.id} onClick={() => void startOrContinueDraft(clinic)}>{workingClinicId === clinic.id ? 'Opening…' : editableDraft ? 'Continue settings draft' : 'Propose configuration changes'}</button>
-                  {draft && !editableDraft ? <button className="secondary" type="button" onClick={() => openDraft(draft)}>View latest closed draft</button> : null}
-                </>}
+                {!configurable ? <span className="practice-muted">Operational workspace only</span> : submitted && draft ? <button className="secondary" type="button" onClick={() => openDraft(draft)}>View pending proposal</button> : <button className="secondary" type="button" disabled={workingClinicId === clinic.id} onClick={() => void startOrContinueDraft(clinic)}>{workingClinicId === clinic.id ? 'Opening…' : 'Propose changes'}</button>}
               </div>
             </article>
           );
