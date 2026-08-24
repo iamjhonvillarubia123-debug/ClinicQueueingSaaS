@@ -2,6 +2,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
   Min,
@@ -20,4 +21,9 @@ export class SaveSecretarySettingsDraftServiceDto {
 
   @IsEnum(ServiceAvailabilityStatus)
   status!: ServiceAvailabilityStatus;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  displayOrder?: number;
 }
