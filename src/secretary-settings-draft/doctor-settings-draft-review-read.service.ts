@@ -76,6 +76,17 @@ export class DoctorSettingsDraftReviewReadService {
                 maximumOperatingUntilLocal: true,
               },
             },
+            scheduleExceptions: {
+              orderBy: { serviceDate: 'asc' },
+              select: {
+                serviceDate: true,
+                isOpen: true,
+                opensAtLocal: true,
+                closesAtLocal: true,
+                maximumOnlineBookingUntilLocal: true,
+                maximumOperatingUntilLocal: true,
+              },
+            },
             services: {
               orderBy: [{ status: 'asc' }, { name: 'asc' }],
               select: {
