@@ -41,8 +41,9 @@ export class CreateSecretaryInvitationDto {
   @MaxLength(30)
   mobileNumber!: string;
 
+  @IsOptional()
   @IsEnum(SecretaryAccessProfile)
-  accessProfile!: SecretaryAccessProfile;
+  accessProfile?: SecretaryAccessProfile;
 
   @IsOptional()
   @IsBoolean()
