@@ -7,6 +7,17 @@ const fail = (message) => {
   throw new Error(`SecretaryInvitation schema reconciliation failed: ${message}`);
 };
 
+function modelBlock(name) {
+  const match = schema.match(new RegExp(`model ${name} \\{[\\s\\S]*?\\n\\}`, 'm'));
+  if (!match) fail(`${name} model not found`);
+  return match[0];
+}
+
+function modelHasField(modelName, fieldName) {
+  const model = modelBlock(modelName);
+  return new RegExp(`^\\s*${fieldName}\\s+`, 'm').test(model);
+}
+
 const insertAfterLineOnce = (linePattern, insertion, marker) => {
   if (schema.includes(marker)) return;
   const match = schema.match(linePattern);
@@ -27,11 +38,15 @@ insertAfterLineOnce(
   'secretaryInvitationsSent',
 );
 
-insertAfterLineOnce(
-  /^\s*secretarySettingsDrafts\s+SecretarySettingsDraft\[\]\s*\r?\n/m,
-  `  secretaryInvitations    SecretaryInvitation[]\n`,
-  'secretaryInvitations    SecretaryInvitation[]',
-);
+if (!modelHasField('PracticeLocation', 'secretaryInvitations')) {
+  const location = modelBlock('PracticeLocation');
+  const updated = location.replace(
+    /(\s+secretarySettingsDrafts\s+SecretarySettingsDraft\[\][^\n]*\r?\n)/,
+    `$1  secretaryInvitations    SecretaryInvitation[]\n`,
+  );
+  if (updated === location) fail('PracticeLocation secretarySettingsDrafts anchor not found');
+  schema = schema.replace(location, updated);
+}
 
 if (!schema.includes('model SecretaryInvitation {')) {
   const modelAnchor = schema.indexOf('model DoctorDataRetentionAcknowledgement {');
@@ -51,12 +66,14 @@ const required = [
   'model SecretaryInvitation {',
   'secretaryInvitationsSent',
   'acceptedSecretaryInvitation',
-  'secretaryInvitations    SecretaryInvitation[]',
   'SecretaryInvitationNotificationOutbox", fields: [secretaryInvitationId]',
 ];
 
 for (const marker of required) {
   if (!schema.includes(marker)) fail(`required marker missing after patch: ${marker}`);
+}
+if (!modelHasField('PracticeLocation', 'secretaryInvitations')) {
+  fail('required PracticeLocation secretaryInvitations relation missing after patch');
 }
 
 await writeFile(schemaPath, schema, 'utf8');
