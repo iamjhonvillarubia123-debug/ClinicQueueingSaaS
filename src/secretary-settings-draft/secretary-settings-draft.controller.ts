@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   Param,
   Post,
@@ -21,6 +22,7 @@ import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-s
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
+import { SecretarySettingsDraftReadService } from './secretary-settings-draft-read.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
 import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
@@ -30,12 +32,24 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
 export class SecretarySettingsDraftController {
   constructor(
     private readonly secretarySettingsDraftService: SecretarySettingsDraftService,
+    private readonly secretarySettingsDraftReadService: SecretarySettingsDraftReadService,
     private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
     private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
     private readonly secretarySettingsDraftServiceProposalService: SecretarySettingsDraftServiceProposalService,
     private readonly secretarySettingsDraftBookingQuestionService: SecretarySettingsDraftBookingQuestionService,
     private readonly secretarySettingsDraftApprovalService: SecretarySettingsDraftApprovalService,
   ) {}
+
+  @Get(':draftId')
+  getDraft(
+    @Param('draftId') draftId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftReadService.getDraft(
+      request.user.userId,
+      draftId,
+    );
+  }
 
   @Post()
   create(
