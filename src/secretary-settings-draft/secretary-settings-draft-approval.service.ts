@@ -114,11 +114,15 @@ export class SecretarySettingsDraftApprovalService {
       }
 
       const [
+        clinicDetailsProposal,
         serviceProposals,
         scheduleProposals,
         exceptionProposals,
         questionProposals,
       ] = await Promise.all([
+        transaction.secretarySettingsDraftClinicDetails.findUnique({
+          where: { secretarySettingsDraftId: draft.id },
+        }),
         transaction.secretarySettingsDraftService.findMany({
           where: { secretarySettingsDraftId: draft.id },
           orderBy: { id: 'asc' },
@@ -147,6 +151,24 @@ export class SecretarySettingsDraftApprovalService {
         draft.practiceLocationId,
         questionProposals,
       );
+
+      if (clinicDetailsProposal) {
+        await transaction.practiceLocation.update({
+          where: { id: draft.practiceLocationId },
+          data: {
+            name: clinicDetailsProposal.proposedName,
+            addressLine1: clinicDetailsProposal.proposedAddressLine1,
+            addressLine2: clinicDetailsProposal.proposedAddressLine2,
+            cityMunicipality: clinicDetailsProposal.proposedCityMunicipality,
+            province: clinicDetailsProposal.proposedProvince,
+            postalCode: clinicDetailsProposal.proposedPostalCode,
+            contactNumber: clinicDetailsProposal.proposedContactNumber,
+            countryCode: clinicDetailsProposal.proposedCountryCode,
+            timeZone: clinicDetailsProposal.proposedTimeZone,
+          },
+        });
+        draft.timeZone = clinicDetailsProposal.proposedTimeZone;
+      }
 
       await this.applyServiceProposals(
         transaction,
