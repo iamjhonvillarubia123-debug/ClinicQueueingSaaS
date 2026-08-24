@@ -8,6 +8,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import { ClinicConfigurationTabs } from './doctor/ClinicConfigurationTabs';
 import { ClinicServicesQuestionsPage } from './doctor/ClinicServicesQuestionsPage';
 import { DoctorDataPrivacyPage } from './doctor/DoctorDataPrivacyPage';
 import { DoctorDefaultsPage } from './doctor/DoctorDefaultsPage';
@@ -34,8 +35,16 @@ function LoginPage() {
 }
 
 function Shell() {
-  const { profile, logout } = useAuth(); const navigate = useNavigate(); async function signOut() { await logout(); navigate('/login', { replace: true }); } const canManageOwnLifecycle = profile?.role === 'DOCTOR' || profile?.role === 'SECRETARY';
-  return <div className="shell"><header className="appbar"><Link className="brand" to="/">Clinic Queueing</Link><div><span className="role">{profile?.role.replace('_', ' ')}</span>{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Clinics</Link> : null}{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/secretary-draft-reviews">Reviews</Link> : null}{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/defaults">Defaults</Link> : null}{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/data-privacy">Data & Privacy</Link> : null}{profile?.role === 'SECRETARY' ? <Link className="quiet-link account-nav-link" to="/app/secretary/clinics">Assigned clinics</Link> : null}{canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}<button className="secondary" onClick={signOut}>Sign out</button></div></header><main className="workspace"><Outlet /></main></div>;
+  const { profile, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  async function signOut() { await logout(); navigate('/login', { replace: true }); }
+  const canManageOwnLifecycle = profile?.role === 'DOCTOR' || profile?.role === 'SECRETARY';
+  const clinicRoute = /^\/app\/practice-locations\/([^/]+)(?:\/(services-questions))?$/.exec(location.pathname);
+  const clinicTabs = profile?.role === 'DOCTOR' && clinicRoute
+    ? <ClinicConfigurationTabs practiceLocationId={decodeURIComponent(clinicRoute[1])} active={clinicRoute[2] ? 'services' : 'details'} />
+    : null;
+  return <div className="shell"><header className="appbar"><Link className="brand" to="/">Clinic Queueing</Link><div><span className="role">{profile?.role.replace('_', ' ')}</span>{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Clinics</Link> : null}{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/secretary-draft-reviews">Reviews</Link> : null}{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/defaults">Defaults</Link> : null}{profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/data-privacy">Data & Privacy</Link> : null}{profile?.role === 'SECRETARY' ? <Link className="quiet-link account-nav-link" to="/app/secretary/clinics">Assigned clinics</Link> : null}{canManageOwnLifecycle ? <Link className="quiet-link account-nav-link" to="/app/account">Account</Link> : null}<button className="secondary" onClick={signOut}>Sign out</button></div></header><main className="workspace">{clinicTabs}<Outlet /></main></div>;
 }
 function WorkspacePage() { const { profile } = useAuth(); if (profile?.role === 'DOCTOR') return <Navigate to="/app/practice-locations" replace />; if (profile?.role === 'SECRETARY') return <Navigate to="/app/secretary/clinics" replace />; return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>System administration</h1><p>Restricted administrative operations remain separate from clinic navigation.</p></section>; }
 function LegacyRecoveryRedirect() { const { publicIdentifier } = useParams(); return <Navigate to={publicIdentifier ? `/recover/${encodeURIComponent(publicIdentifier)}` : '/'} replace />; }
