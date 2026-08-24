@@ -195,7 +195,7 @@ export function SecretarySettingsDraftPage() {
   async function saveException(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('exception', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate: exception.serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal || undefined : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? exception.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } }), 'Date-specific schedule proposal saved.'); }
   async function submit() { if (!draftId) return; await run('submit', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/submit`, { method: 'POST' }), 'Draft submitted to the Doctor for review.'); }
 
-  if (loading) return <section className="practice-admin-page"><p className="practice-muted">Loading settings draft…</p></section>;
+  if (loading && !detail) return <section className="practice-admin-page"><p className="practice-muted">Loading settings draft…</p></section>;
   if (!detail) return <section className="practice-admin-page"><div className="form-error" role="alert">{error || 'Settings draft was not found.'}</div><Link to="/app/secretary/clinics">Clinics</Link></section>;
 
   const clinicName = detail.practiceLocation.name?.trim() || 'Clinic settings';
