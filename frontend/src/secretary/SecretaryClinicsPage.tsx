@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 
 type DraftSummary = {
@@ -48,11 +49,11 @@ function messageFrom(error: unknown) {
 }
 
 export function SecretaryClinicsPage() {
+  const navigate = useNavigate();
   const [clinics, setClinics] = useState<AssignedClinic[]>([]);
   const [loading, setLoading] = useState(true);
   const [workingClinicId, setWorkingClinicId] = useState('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   async function load() {
     setLoading(true);
@@ -71,19 +72,20 @@ export function SecretaryClinicsPage() {
   async function startOrContinueDraft(clinic: AssignedClinic) {
     setWorkingClinicId(clinic.id);
     setError('');
-    setNotice('');
     try {
       const draft = await apiRequest<{ id: string; status: DraftSummary['status']; reused: boolean }>('/secretary-settings-drafts', {
         method: 'POST',
         body: { practiceLocationId: clinic.id },
       });
-      await load();
-      setNotice(draft.reused ? `Existing editable draft opened for ${clinicName(clinic)}.` : `Settings draft started for ${clinicName(clinic)}.`);
+      navigate(`/app/secretary/settings-drafts/${encodeURIComponent(draft.id)}`);
     } catch (caught) {
       setError(messageFrom(caught));
-    } finally {
       setWorkingClinicId('');
     }
+  }
+
+  function openDraft(draft: DraftSummary) {
+    navigate(`/app/secretary/settings-drafts/${encodeURIComponent(draft.id)}`);
   }
 
   return (
@@ -97,7 +99,6 @@ export function SecretaryClinicsPage() {
       </div>
 
       {error ? <div className="form-error" role="alert">{error}</div> : null}
-      {notice ? <div className="practice-notice practice-success" role="status">{notice}</div> : null}
       {loading ? <p className="practice-muted">Loading assigned clinics…</p> : null}
 
       {!loading && clinics.length === 0 ? (
@@ -134,9 +135,9 @@ export function SecretaryClinicsPage() {
                   <button className="secondary" type="button" disabled={workingClinicId === clinic.id} onClick={() => void startOrContinueDraft(clinic)}>
                     {workingClinicId === clinic.id ? 'Opening…' : draft ? 'Continue settings draft' : 'Start settings draft'}
                   </button>
-                ) : (
-                  <span className="practice-muted">{draft?.status === 'SUBMITTED' ? 'Waiting for Doctor review' : 'Latest draft is closed'}</span>
-                )}
+                ) : draft ? (
+                  <button className="secondary" type="button" onClick={() => openDraft(draft)}>{draft.status === 'SUBMITTED' ? 'View submitted draft' : 'View closed draft'}</button>
+                ) : null}
               </div>
             </article>
           );
