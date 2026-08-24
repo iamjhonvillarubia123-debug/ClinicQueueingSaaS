@@ -10,6 +10,7 @@ import './styles/practice-admin.css';
 import './styles/clinic-activation.css';
 import './styles/secretary-access.css';
 import './styles/secretary-proposal.css';
+import './styles/secretary-question-controls.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
