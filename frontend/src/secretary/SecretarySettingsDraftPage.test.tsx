@@ -80,7 +80,7 @@ describe('SecretarySettingsDraftPage', () => {
     const secondRow = within(serviceList as HTMLElement).getByText('Vaccination').closest('.proposal-sort-row');
     expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();
     fireEvent.dragStart(firstRow!); fireEvent.dragOver(secondRow!); fireEvent.drop(secondRow!);
-    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/services/'))).toBe(true));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/services/')).length).toBeGreaterThanOrEqual(2));
     const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/services/')).map(([, init]) => String(init?.body));
     expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
     expect(updateBodies.some((body) => body.includes('"displayOrder":1'))).toBe(true);
@@ -98,7 +98,7 @@ describe('SecretarySettingsDraftPage', () => {
     const secondRow = within(questionList as HTMLElement).getByText('Reason for visit?').closest('.proposal-sort-row');
     expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();
     fireEvent.dragStart(firstRow!); fireEvent.dragOver(secondRow!); fireEvent.drop(secondRow!);
-    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/booking-questions/'))).toBe(true));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/booking-questions/')).length).toBeGreaterThanOrEqual(3));
     const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/booking-questions/')).map(([, init]) => String(init?.body));
     expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
     expect(updateBodies.some((body) => body.includes('"displayOrder":1'))).toBe(true);
