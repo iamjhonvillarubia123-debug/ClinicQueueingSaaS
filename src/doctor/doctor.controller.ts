@@ -15,6 +15,7 @@ import { CurrentPasswordGuard } from '../auth/guards/current-password.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
+import { DoctorClinicConfigurationService } from './doctor-clinic-configuration.service';
 import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
@@ -37,174 +38,92 @@ export class DoctorController {
     private readonly doctorDefaultsService: DoctorDefaultsService,
     private readonly doctorDefaultsApplyService: DoctorDefaultsApplyService,
     private readonly doctorDataRetentionService: DoctorDataRetentionService,
+    private readonly doctorClinicConfigurationService: DoctorClinicConfigurationService,
   ) {}
 
-  @RateLimit({
-    id: 'doctor-register',
-    limit: 5,
-    windowMs: 60 * 60 * 1000,
-    subject: { kind: 'NONE' },
-  })
+  @RateLimit({ id: 'doctor-register', limit: 5, windowMs: 60 * 60 * 1000, subject: { kind: 'NONE' } })
   @Post('register')
-  async register(@Body() registerDoctorDto: RegisterDoctorDto) {
-    return this.doctorService.registerDoctor(registerDoctorDto);
-  }
+  async register(@Body() registerDoctorDto: RegisterDoctorDto) { return this.doctorService.registerDoctor(registerDoctorDto); }
 
   @UseGuards(SessionAuthGuard)
   @Get('account/settings')
-  getAccountSettings(@Request() request: AuthenticatedRequest) {
-    return this.doctorService.getAccountSettings(request.user.userId);
-  }
+  getAccountSettings(@Request() request: AuthenticatedRequest) { return this.doctorService.getAccountSettings(request.user.userId); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Patch('account/settings')
-  updateAccountSettings(
-    @Request() request: AuthenticatedRequest,
-    @Body() dto: UpdateDoctorAccountSettingsDto,
-  ) {
-    return this.doctorService.updateAccountSettings(request.user.userId, dto);
-  }
+  updateAccountSettings(@Request() request: AuthenticatedRequest, @Body() dto: UpdateDoctorAccountSettingsDto) { return this.doctorService.updateAccountSettings(request.user.userId, dto); }
 
   @UseGuards(SessionAuthGuard)
   @Get('account/data-privacy')
-  getDataPrivacyProfile(@Request() request: AuthenticatedRequest) {
-    return this.doctorDataRetentionService.getDataPrivacyProfile(
-      request.user.userId,
-    );
-  }
+  getDataPrivacyProfile(@Request() request: AuthenticatedRequest) { return this.doctorDataRetentionService.getDataPrivacyProfile(request.user.userId); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('account/data-retention-acknowledgement')
-  acknowledgeDataRetention(
-    @Request() request: AuthenticatedRequest,
-    @Body() dto: AcknowledgeDataRetentionDto,
-  ) {
-    void dto;
-    return this.doctorDataRetentionService.acknowledgeCurrentPolicy(
-      request.user.userId,
-    );
-  }
+  acknowledgeDataRetention(@Request() request: AuthenticatedRequest, @Body() dto: AcknowledgeDataRetentionDto) { void dto; return this.doctorDataRetentionService.acknowledgeCurrentPolicy(request.user.userId); }
 
   @UseGuards(SessionAuthGuard)
   @Get('defaults')
-  getDefaults(@Request() request: AuthenticatedRequest) {
-    return this.doctorDefaultsService.list(request.user.userId);
-  }
+  getDefaults(@Request() request: AuthenticatedRequest) { return this.doctorDefaultsService.list(request.user.userId); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/services')
-  createServiceTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Body() dto: SaveDoctorServiceTemplateDto,
-  ) {
-    return this.doctorDefaultsService.createServiceTemplate(
-      request.user.userId,
-      dto,
-    );
-  }
+  createServiceTemplate(@Request() request: AuthenticatedRequest, @Body() dto: SaveDoctorServiceTemplateDto) { return this.doctorDefaultsService.createServiceTemplate(request.user.userId, dto); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Patch('defaults/services/:templateId')
-  updateServiceTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Param('templateId') templateId: string,
-    @Body() dto: SaveDoctorServiceTemplateDto,
-  ) {
-    return this.doctorDefaultsService.updateServiceTemplate(
-      request.user.userId,
-      templateId,
-      dto,
-    );
-  }
+  updateServiceTemplate(@Request() request: AuthenticatedRequest, @Param('templateId') templateId: string, @Body() dto: SaveDoctorServiceTemplateDto) { return this.doctorDefaultsService.updateServiceTemplate(request.user.userId, templateId, dto); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/booking-questions')
-  createBookingQuestionTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Body() dto: SaveDoctorBookingQuestionTemplateDto,
-  ) {
-    return this.doctorDefaultsService.createBookingQuestionTemplate(
-      request.user.userId,
-      dto,
-    );
-  }
+  createBookingQuestionTemplate(@Request() request: AuthenticatedRequest, @Body() dto: SaveDoctorBookingQuestionTemplateDto) { return this.doctorDefaultsService.createBookingQuestionTemplate(request.user.userId, dto); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Patch('defaults/booking-questions/:templateId')
-  updateBookingQuestionTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Param('templateId') templateId: string,
-    @Body() dto: SaveDoctorBookingQuestionTemplateDto,
-  ) {
-    return this.doctorDefaultsService.updateBookingQuestionTemplate(
-      request.user.userId,
-      templateId,
-      dto,
-    );
-  }
+  updateBookingQuestionTemplate(@Request() request: AuthenticatedRequest, @Param('templateId') templateId: string, @Body() dto: SaveDoctorBookingQuestionTemplateDto) { return this.doctorDefaultsService.updateBookingQuestionTemplate(request.user.userId, templateId, dto); }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/apply')
-  applyDefaults(
-    @Request() request: AuthenticatedRequest,
-    @Body() dto: ApplyDoctorDefaultsDto,
-    @Headers('idempotency-key') idempotencyKey: string,
-  ) {
-    return this.doctorDefaultsApplyService.apply(
-      request.user.userId,
-      dto,
-      idempotencyKey,
-    );
+  applyDefaults(@Request() request: AuthenticatedRequest, @Body() dto: ApplyDoctorDefaultsDto, @Headers('idempotency-key') idempotencyKey: string) { return this.doctorDefaultsApplyService.apply(request.user.userId, dto, idempotencyKey); }
+
+  @UseGuards(SessionAuthGuard)
+  @Get('practice-locations/:practiceLocationId/configuration-items')
+  listClinicConfiguration(@Request() request: AuthenticatedRequest, @Param('practiceLocationId') practiceLocationId: string) {
+    return this.doctorClinicConfigurationService.list(request.user.userId, practiceLocationId);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('practice-locations/:practiceLocationId/services')
+  createClinicService(@Request() request: AuthenticatedRequest, @Param('practiceLocationId') practiceLocationId: string, @Body() dto: SaveDoctorServiceTemplateDto) {
+    return this.doctorClinicConfigurationService.createService(request.user.userId, practiceLocationId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('practice-locations/:practiceLocationId/services/:serviceId')
+  updateClinicService(@Request() request: AuthenticatedRequest, @Param('practiceLocationId') practiceLocationId: string, @Param('serviceId') serviceId: string, @Body() dto: SaveDoctorServiceTemplateDto) {
+    return this.doctorClinicConfigurationService.updateService(request.user.userId, practiceLocationId, serviceId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('practice-locations/:practiceLocationId/booking-questions')
+  createClinicBookingQuestion(@Request() request: AuthenticatedRequest, @Param('practiceLocationId') practiceLocationId: string, @Body() dto: SaveDoctorBookingQuestionTemplateDto) {
+    return this.doctorClinicConfigurationService.createBookingQuestion(request.user.userId, practiceLocationId, dto);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('practice-locations/:practiceLocationId/booking-questions/:questionId')
+  updateClinicBookingQuestion(@Request() request: AuthenticatedRequest, @Param('practiceLocationId') practiceLocationId: string, @Param('questionId') questionId: string, @Body() dto: SaveDoctorBookingQuestionTemplateDto) {
+    return this.doctorClinicConfigurationService.updateBookingQuestion(request.user.userId, practiceLocationId, questionId, dto);
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard, CurrentPasswordGuard)
   @Post('account/disable')
-  disableAccount(
-    @Request() request: AuthenticatedRequest,
-    @Body() dto: ConfirmCurrentPasswordDto,
-    @Headers('idempotency-key') idempotencyKey: string,
-  ) {
-    void dto;
-    return this.doctorLifecycleService.disable(
-      request.user.userId,
-      idempotencyKey,
-    );
-  }
+  disableAccount(@Request() request: AuthenticatedRequest, @Body() dto: ConfirmCurrentPasswordDto, @Headers('idempotency-key') idempotencyKey: string) { void dto; return this.doctorLifecycleService.disable(request.user.userId, idempotencyKey); }
 
-  @RateLimit({
-    id: 'doctor-reactivate',
-    limit: 10,
-    windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
-  })
+  @RateLimit({ id: 'doctor-reactivate', limit: 10, windowMs: 15 * 60 * 1000, subject: { kind: 'BODY', field: 'email' } })
   @Post('account/reactivate')
-  reactivateAccount(
-    @Body() dto: ReactivateDoctorDto,
-    @Headers('idempotency-key') idempotencyKey: string,
-  ) {
-    return this.doctorLifecycleService.reactivate(
-      dto.email,
-      dto.password,
-      idempotencyKey,
-    );
-  }
+  reactivateAccount(@Body() dto: ReactivateDoctorDto, @Headers('idempotency-key') idempotencyKey: string) { return this.doctorLifecycleService.reactivate(dto.email, dto.password, idempotencyKey); }
 
-  @RateLimit({
-    id: 'doctor-permanent-delete',
-    limit: 10,
-    windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
-  })
+  @RateLimit({ id: 'doctor-permanent-delete', limit: 10, windowMs: 15 * 60 * 1000, subject: { kind: 'BODY', field: 'email' } })
   @Post('account/permanent-delete')
-  permanentlyDeleteAccount(
-    @Body() dto: PermanentlyDeleteDoctorDto,
-    @Headers('idempotency-key') idempotencyKey: string,
-  ) {
-    return this.doctorLifecycleService.permanentlyDelete(
-      dto.email,
-      dto.password,
-      dto.confirmPermanentDelete,
-      idempotencyKey,
-    );
-  }
+  permanentlyDeleteAccount(@Body() dto: PermanentlyDeleteDoctorDto, @Headers('idempotency-key') idempotencyKey: string) { return this.doctorLifecycleService.permanentlyDelete(dto.email, dto.password, dto.confirmPermanentDelete, idempotencyKey); }
 }
