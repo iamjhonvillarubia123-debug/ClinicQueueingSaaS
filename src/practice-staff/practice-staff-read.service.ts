@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AdministrativeRestrictionStatus,
+  PracticeStaffCapabilityStatus,
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
@@ -30,6 +31,16 @@ export class PracticeStaffReadService {
         id: true,
         isActive: true,
         createdAt: true,
+        accessProfile: true,
+        canManageClinicDetails: true,
+        canManageServices: true,
+        canManageBookingQuestions: true,
+        canManageSchedules: true,
+        capabilities: {
+          where: { status: PracticeStaffCapabilityStatus.ACTIVE },
+          select: { capabilityType: true },
+          orderBy: { capabilityType: 'asc' },
+        },
         user: {
           select: {
             id: true, firstName: true, middleName: true, lastName: true, email: true, mobileNumber: true,
