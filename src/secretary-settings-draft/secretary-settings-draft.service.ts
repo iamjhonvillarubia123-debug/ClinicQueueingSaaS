@@ -69,11 +69,17 @@ export class SecretarySettingsDraftService {
             in: [
               SecretarySettingsDraftStatus.DRAFT,
               SecretarySettingsDraftStatus.RETURNED_FOR_REWORK,
+              SecretarySettingsDraftStatus.SUBMITTED,
             ],
           },
         },
         orderBy: { updatedAt: 'desc' },
       });
+      if (existing?.status === SecretarySettingsDraftStatus.SUBMITTED) {
+        throw new ConflictException(
+          'A settings proposal is already waiting for Doctor review. A new draft may be started after the Doctor decides that submission.',
+        );
+      }
       if (existing) {
         return { ...existing, reused: true };
       }
