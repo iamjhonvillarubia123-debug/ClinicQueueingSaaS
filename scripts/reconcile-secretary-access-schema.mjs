@@ -70,13 +70,13 @@ replaceModel('SecretaryInvitation', (original) => {
   return updated;
 });
 
-const requiredCounts = [
-  ['accessProfile', /\baccessProfile\s+SecretaryAccessProfile\b/g, 1],
-  ['requestedAccessProfile', /\brequestedAccessProfile\s+SecretaryAccessProfile\b/g, 2],
-];
-for (const [label, pattern, expected] of requiredCounts) {
-  const count = (schema.match(pattern) ?? []).length;
-  if (count !== expected) fail(`${label} count is ${count}; expected ${expected}`);
+const staffAccessCount = (schema.match(/\baccessProfile\s+SecretaryAccessProfile\b/g) ?? []).length;
+if (staffAccessCount !== 1) fail(`accessProfile count is ${staffAccessCount}; expected 1`);
+
+const invitationAccessCount = (schema.match(/\brequestedAccessProfile\s+SecretaryAccessProfile\b/g) ?? []).length;
+const expectedInvitationAccessCount = schema.includes('model SecretaryReplacementInvitation {') ? 2 : 1;
+if (invitationAccessCount !== expectedInvitationAccessCount) {
+  fail(`requestedAccessProfile count is ${invitationAccessCount}; expected ${expectedInvitationAccessCount}`);
 }
 
 await writeFile(schemaPath, schema, 'utf8');
