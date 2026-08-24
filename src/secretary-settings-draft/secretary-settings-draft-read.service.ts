@@ -43,6 +43,13 @@ export class SecretarySettingsDraftReadService {
           select: {
             id: true,
             name: true,
+            addressLine1: true,
+            addressLine2: true,
+            cityMunicipality: true,
+            province: true,
+            postalCode: true,
+            contactNumber: true,
+            countryCode: true,
             lifecycleStatus: true,
             timeZone: true,
             currentRegularPracticeStaff: {
@@ -95,6 +102,7 @@ export class SecretarySettingsDraftReadService {
             },
           },
         },
+        proposedClinicDetails: true,
         proposedPracticeSchedules: { orderBy: { weekday: 'asc' } },
         proposedServices: { orderBy: { id: 'asc' } },
         proposedBookingQuestions: { orderBy: { id: 'asc' } },
