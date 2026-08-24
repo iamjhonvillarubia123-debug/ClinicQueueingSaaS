@@ -19,6 +19,7 @@ import { SaveSecretarySettingsDraftBookingQuestionDto } from './dto/save-secreta
 import { SaveSecretarySettingsDraftServiceDto } from './dto/save-secretary-settings-draft-service.dto';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
 import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-secretary-settings-draft-schedule-exception.dto';
+import { SecretarySettingsDraftAccessService } from './secretary-settings-draft-access.service';
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
@@ -33,6 +34,7 @@ export class SecretarySettingsDraftController {
   constructor(
     private readonly secretarySettingsDraftService: SecretarySettingsDraftService,
     private readonly secretarySettingsDraftReadService: SecretarySettingsDraftReadService,
+    private readonly secretarySettingsDraftAccessService: SecretarySettingsDraftAccessService,
     private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
     private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
     private readonly secretarySettingsDraftServiceProposalService: SecretarySettingsDraftServiceProposalService,
@@ -41,158 +43,93 @@ export class SecretarySettingsDraftController {
   ) {}
 
   @Get(':draftId')
-  getDraft(
-    @Param('draftId') draftId: string,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftReadService.getDraft(
-      request.user.userId,
-      draftId,
-    );
+  getDraft(@Param('draftId') draftId: string, @Request() request: AuthenticatedRequest) {
+    return this.secretarySettingsDraftReadService.getDraft(request.user.userId, draftId);
   }
 
   @Post()
-  create(
-    @Body() dto: CreateSecretarySettingsDraftDto,
-    @Request() request: AuthenticatedRequest,
-  ) {
+  async create(@Body() dto: CreateSecretarySettingsDraftDto, @Request() request: AuthenticatedRequest) {
+    await this.secretarySettingsDraftAccessService.assertMayCreateDraft(request.user.userId, dto.practiceLocationId);
     return this.secretarySettingsDraftService.create(request.user.userId, dto);
   }
 
   @Post(':draftId/services')
-  createServiceProposal(
-    @Param('draftId') draftId: string,
-    @Body() dto: SaveSecretarySettingsDraftServiceDto,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftServiceProposalService.createProposal(
-      request.user.userId,
-      draftId,
-      dto,
-    );
+  async createServiceProposal(@Param('draftId') draftId: string, @Body() dto: SaveSecretarySettingsDraftServiceDto, @Request() request: AuthenticatedRequest) {
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SERVICES');
+    return this.secretarySettingsDraftServiceProposalService.createProposal(request.user.userId, draftId, dto);
   }
 
   @Put(':draftId/services/effective/:practiceLocationServiceId')
-  upsertExistingServiceProposal(
+  async upsertExistingServiceProposal(
     @Param('draftId') draftId: string,
     @Param('practiceLocationServiceId') practiceLocationServiceId: string,
     @Body() dto: SaveSecretarySettingsDraftServiceDto,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.secretarySettingsDraftServiceProposalService.upsertExistingServiceProposal(
-      request.user.userId,
-      draftId,
-      practiceLocationServiceId,
-      dto,
-    );
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SERVICES');
+    return this.secretarySettingsDraftServiceProposalService.upsertExistingServiceProposal(request.user.userId, draftId, practiceLocationServiceId, dto);
   }
 
   @Put(':draftId/services/proposals/:proposalId')
-  updateServiceProposal(
+  async updateServiceProposal(
     @Param('draftId') draftId: string,
     @Param('proposalId') proposalId: string,
     @Body() dto: SaveSecretarySettingsDraftServiceDto,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.secretarySettingsDraftServiceProposalService.updateProposal(
-      request.user.userId,
-      draftId,
-      proposalId,
-      dto,
-    );
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SERVICES');
+    return this.secretarySettingsDraftServiceProposalService.updateProposal(request.user.userId, draftId, proposalId, dto);
   }
 
   @Post(':draftId/booking-questions')
-  createBookingQuestionProposal(
-    @Param('draftId') draftId: string,
-    @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftBookingQuestionService.createProposal(
-      request.user.userId,
-      draftId,
-      dto,
-    );
+  async createBookingQuestionProposal(@Param('draftId') draftId: string, @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto, @Request() request: AuthenticatedRequest) {
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'BOOKING_QUESTIONS');
+    return this.secretarySettingsDraftBookingQuestionService.createProposal(request.user.userId, draftId, dto);
   }
 
   @Put(':draftId/booking-questions/effective/:bookingQuestionId')
-  upsertExistingBookingQuestionProposal(
+  async upsertExistingBookingQuestionProposal(
     @Param('draftId') draftId: string,
     @Param('bookingQuestionId') bookingQuestionId: string,
     @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.secretarySettingsDraftBookingQuestionService.upsertExistingQuestionProposal(
-      request.user.userId,
-      draftId,
-      bookingQuestionId,
-      dto,
-    );
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'BOOKING_QUESTIONS');
+    return this.secretarySettingsDraftBookingQuestionService.upsertExistingQuestionProposal(request.user.userId, draftId, bookingQuestionId, dto);
   }
 
   @Put(':draftId/booking-questions/proposals/:proposalId')
-  updateBookingQuestionProposal(
+  async updateBookingQuestionProposal(
     @Param('draftId') draftId: string,
     @Param('proposalId') proposalId: string,
     @Body() dto: SaveSecretarySettingsDraftBookingQuestionDto,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.secretarySettingsDraftBookingQuestionService.updateProposal(
-      request.user.userId,
-      draftId,
-      proposalId,
-      dto,
-    );
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'BOOKING_QUESTIONS');
+    return this.secretarySettingsDraftBookingQuestionService.updateProposal(request.user.userId, draftId, proposalId, dto);
   }
 
   @Put(':draftId/practice-schedule')
-  upsertPracticeSchedule(
-    @Param('draftId') draftId: string,
-    @Body() dto: UpsertSecretarySettingsDraftPracticeScheduleDto,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftScheduleService.upsertPracticeSchedule(
-      request.user.userId,
-      draftId,
-      dto,
-    );
+  async upsertPracticeSchedule(@Param('draftId') draftId: string, @Body() dto: UpsertSecretarySettingsDraftPracticeScheduleDto, @Request() request: AuthenticatedRequest) {
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SCHEDULES');
+    return this.secretarySettingsDraftScheduleService.upsertPracticeSchedule(request.user.userId, draftId, dto);
   }
 
   @Put(':draftId/schedule-exception')
-  upsertScheduleException(
-    @Param('draftId') draftId: string,
-    @Body() dto: UpsertSecretarySettingsDraftScheduleExceptionDto,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftExceptionService.upsertScheduleException(
-      request.user.userId,
-      draftId,
-      dto,
-    );
+  async upsertScheduleException(@Param('draftId') draftId: string, @Body() dto: UpsertSecretarySettingsDraftScheduleExceptionDto, @Request() request: AuthenticatedRequest) {
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SCHEDULES');
+    return this.secretarySettingsDraftExceptionService.upsertScheduleException(request.user.userId, draftId, dto);
   }
 
   @Post(':draftId/submit')
-  submit(
-    @Param('draftId') draftId: string,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftService.submit(
-      request.user.userId,
-      draftId,
-    );
+  async submit(@Param('draftId') draftId: string, @Request() request: AuthenticatedRequest) {
+    await this.secretarySettingsDraftAccessService.assertMaySubmitDraft(request.user.userId, draftId);
+    return this.secretarySettingsDraftService.submit(request.user.userId, draftId);
   }
 
   @Post(':draftId/approve')
-  approve(
-    @Param('draftId') draftId: string,
-    @Headers('idempotency-key') idempotencyKey: string,
-    @Request() request: AuthenticatedRequest,
-  ) {
-    return this.secretarySettingsDraftApprovalService.approve(
-      request.user.userId,
-      draftId,
-      idempotencyKey,
-    );
+  approve(@Param('draftId') draftId: string, @Headers('idempotency-key') idempotencyKey: string, @Request() request: AuthenticatedRequest) {
+    return this.secretarySettingsDraftApprovalService.approve(request.user.userId, draftId, idempotencyKey);
   }
 
   @Post(':draftId/reject')
@@ -202,12 +139,7 @@ export class SecretarySettingsDraftController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.secretarySettingsDraftService.reject(
-      request.user.userId,
-      draftId,
-      dto,
-      idempotencyKey,
-    );
+    return this.secretarySettingsDraftService.reject(request.user.userId, draftId, dto, idempotencyKey);
   }
 
   @Post(':draftId/return-for-rework')
@@ -217,11 +149,6 @@ export class SecretarySettingsDraftController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.secretarySettingsDraftService.returnForRework(
-      request.user.userId,
-      draftId,
-      dto,
-      idempotencyKey,
-    );
+    return this.secretarySettingsDraftService.returnForRework(request.user.userId, draftId, dto, idempotencyKey);
   }
 }
