@@ -29,6 +29,7 @@ import { PatientBookingGroupPage } from './patient/PatientBookingGroupPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 import { SecretaryClinicsPage } from './secretary/SecretaryClinicsPage';
 import { SecretaryInvitationPage } from './secretary/SecretaryInvitationPage';
+import { SecretarySettingsDraftPage } from './secretary/SecretarySettingsDraftPage';
 
 function LandingPage() {
   return (
@@ -173,6 +174,7 @@ export function App() {
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['SECRETARY']} />}>
             <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
+            <Route path="/app/secretary/settings-drafts/:draftId" element={<SecretarySettingsDraftPage />} />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['DOCTOR', 'SECRETARY']} />}>
             <Route path="/app/account" element={<AccountSecurityPage />} />
