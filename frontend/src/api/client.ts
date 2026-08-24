@@ -14,6 +14,27 @@ export class ApiError extends Error {
 
 type ApiOptions = Omit<RequestInit, 'body'> & { body?: unknown };
 
+function extractApiMessage(payload: unknown): string {
+  if (typeof payload !== 'object' || payload === null) {
+    return 'Something went wrong. Please try again.';
+  }
+
+  const message = (payload as { message?: unknown }).message;
+  if (typeof message === 'string' && message.trim()) {
+    return message;
+  }
+  if (Array.isArray(message)) {
+    const messages = message.filter(
+      (item): item is string => typeof item === 'string' && item.trim().length > 0,
+    );
+    if (messages.length > 0) {
+      return messages.join(' ');
+    }
+  }
+
+  return 'Something went wrong. Please try again.';
+}
+
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
@@ -35,10 +56,13 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   const payload = contentType.includes('application/json') ? await response.json() : undefined;
 
   if (!response.ok) {
-    const message = typeof payload?.message === 'string'
-      ? payload.message
-      : 'Something went wrong. Please try again.';
-    const requestId = typeof payload?.requestId === 'string' ? payload.requestId : undefined;
+    const message = extractApiMessage(payload);
+    const requestId =
+      typeof payload === 'object' &&
+      payload !== null &&
+      typeof (payload as { requestId?: unknown }).requestId === 'string'
+        ? (payload as { requestId: string }).requestId
+        : undefined;
     throw new ApiError(message, response.status, requestId);
   }
 

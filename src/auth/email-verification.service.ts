@@ -15,6 +15,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
 
 const VERIFICATION_LIFETIME_MS = 24 * 60 * 60 * 1000;
+// Legacy internal purpose/type names are retained for backward compatibility.
+// They now cover both public staff roles: Doctor and Secretary.
 const EMAIL_PAYLOAD_PURPOSE = 'doctor-email-verification';
 const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_15_MINUTES = 3;
 const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_24_HOURS = 10;
@@ -40,12 +42,22 @@ export class EmailVerificationService {
     transaction: TransactionClient,
     userId: string,
     normalizedEmail: string,
+    role: UserRole = UserRole.DOCTOR,
   ): Promise<CreatedEmailVerification> {
+    if (!this.isPublicStaffRole(role)) {
+      throw new BadRequestException(
+        'Email verification is unavailable for this account role.',
+      );
+    }
+
+    const notificationType = NotificationType.DOCTOR_EMAIL_VERIFICATION;
+    const providerPrefix =
+      role === UserRole.SECRETARY
+        ? 'secretary-email-verification'
+        : 'doctor-email-verification';
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.sha256(token);
-    const activeVerificationKey = this.sha256(
-      `${NotificationType.DOCTOR_EMAIL_VERIFICATION}:${userId}`,
-    );
+    const activeVerificationKey = this.sha256(`${notificationType}:${userId}`);
     const createdAt = new Date();
     const expiresAt = new Date(createdAt.getTime() + VERIFICATION_LIFETIME_MS);
 
@@ -61,15 +73,15 @@ export class EmailVerificationService {
     });
 
     const verificationUrl = this.buildVerificationUrl(token);
-    const messageBody = `Verify your Clinic Queueing SaaS Doctor account: ${verificationUrl}`;
+    const messageBody = `Verify your Clinic Queueing SaaS account: ${verificationUrl}`;
     const deliveryIdentityKey = this.sha256(
-      `${NotificationType.DOCTOR_EMAIL_VERIFICATION}:${emailVerification.id}`,
+      `${notificationType}:${emailVerification.id}`,
     );
 
     await transaction.notificationOutbox.create({
       data: {
         deliveryIdentityKey,
-        notificationType: NotificationType.DOCTOR_EMAIL_VERIFICATION,
+        notificationType,
         channel: NotificationChannel.EMAIL,
         status: NotificationOutboxStatus.PENDING,
         practiceLocationId: null,
@@ -83,7 +95,7 @@ export class EmailVerificationService {
           messageBody,
           `${EMAIL_PAYLOAD_PURPOSE}:message`,
         ),
-        providerIdempotencyKey: `doctor-email-verification:${emailVerification.id}`,
+        providerIdempotencyKey: `${providerPrefix}:${emailVerification.id}`,
         nextAttemptAt: createdAt,
         expiresAt,
       },
@@ -126,7 +138,7 @@ export class EmailVerificationService {
 
       if (
         !user ||
-        user.role !== UserRole.DOCTOR ||
+        !this.isPublicStaffRole(user.role) ||
         user.accountStatus !== UserAccountStatus.ACTIVE ||
         user.administrativeRestrictionStatus !==
           AdministrativeRestrictionStatus.NONE ||
@@ -189,7 +201,12 @@ export class EmailVerificationService {
         }
       }
 
-      await this.createInitialVerification(transaction, user.id, user.email);
+      await this.createInitialVerification(
+        transaction,
+        user.id,
+        user.email,
+        user.role,
+      );
     });
 
     return { accepted: true };
@@ -253,7 +270,7 @@ export class EmailVerificationService {
       }
 
       if (
-        verification.user.role !== UserRole.DOCTOR ||
+        !this.isPublicStaffRole(verification.user.role) ||
         verification.user.accountStatus !== UserAccountStatus.ACTIVE ||
         verification.user.administrativeRestrictionStatus !==
           AdministrativeRestrictionStatus.NONE ||
@@ -298,6 +315,10 @@ export class EmailVerificationService {
     }
 
     return { verified: true };
+  }
+
+  private isPublicStaffRole(role: UserRole): boolean {
+    return role === UserRole.DOCTOR || role === UserRole.SECRETARY;
   }
 
   private verificationIssuanceLimit15Minutes(): number {

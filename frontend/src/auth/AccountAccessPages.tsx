@@ -17,10 +17,13 @@ function AccountFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function DoctorRegistrationPage() {
+type PublicAccountType = 'DOCTOR' | 'SECRETARY';
+
+export function AccountRegistrationPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [accountType, setAccountType] = useState<PublicAccountType>('DOCTOR');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -46,24 +49,34 @@ export function DoctorRegistrationPage() {
     }
     setBusy(true);
     try {
-      await apiRequest('/doctor/register', {
-        method: 'POST',
-        body: {
-          firstName,
-          middleName: middleName || undefined,
-          lastName,
-          suffix: suffix || undefined,
-          email,
-          mobileNumber,
-          password,
-          professionalTitle,
-          specialization,
-          licenseNumber,
-        },
-      });
+      const commonBody = {
+        firstName,
+        middleName: middleName || undefined,
+        lastName,
+        email,
+        mobileNumber,
+        password,
+      };
+      if (accountType === 'DOCTOR') {
+        await apiRequest('/doctor/register', {
+          method: 'POST',
+          body: {
+            ...commonBody,
+            suffix: suffix || undefined,
+            professionalTitle,
+            specialization,
+            licenseNumber,
+          },
+        });
+      } else {
+        await apiRequest('/secretary/register', {
+          method: 'POST',
+          body: commonBody,
+        });
+      }
       navigate(`/verify-email?email=${encodeURIComponent(email.trim())}`, {
         replace: true,
-        state: { registrationComplete: true },
+        state: { registrationComplete: true, accountType },
       });
     } catch (caught) {
       setError(messageFor(caught, 'Unable to create the account right now. Please try again.'));
@@ -75,33 +88,47 @@ export function DoctorRegistrationPage() {
   return (
     <AccountFrame>
       <div className="auth-heading">
-        <p className="eyebrow">Doctor account</p>
+        <p className="eyebrow">Staff account</p>
         <h1>Create your account</h1>
-        <p>Your email becomes your sign-in address. Email verification is required before staff access.</p>
+        <p>Choose Doctor or Secretary. System administrator accounts cannot be created here.</p>
       </div>
       <form className="stack auth-long-form" onSubmit={submit}>
+        <label>Account type
+          <select value={accountType} onChange={(event) => setAccountType(event.target.value as PublicAccountType)}>
+            <option value="DOCTOR">Doctor</option>
+            <option value="SECRETARY">Secretary</option>
+          </select>
+        </label>
         <div className="auth-field-grid">
           <label>First name<input required maxLength={100} autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
           <label>Middle name <span className="optional">Optional</span><input maxLength={100} autoComplete="additional-name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} /></label>
           <label>Last name<input required maxLength={100} autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
-          <label>Suffix <span className="optional">Optional</span><input maxLength={30} value={suffix} onChange={(event) => setSuffix(event.target.value)} /></label>
+          {accountType === 'DOCTOR' ? <label>Suffix <span className="optional">Optional</span><input maxLength={30} value={suffix} onChange={(event) => setSuffix(event.target.value)} /></label> : null}
         </div>
         <label>Email<input type="email" required maxLength={255} autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label>Mobile number<input type="tel" required maxLength={30} autoComplete="tel" placeholder="09… or +63…" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} /></label>
-        <div className="auth-field-grid">
-          <label>Professional title<input required maxLength={50} placeholder="e.g. Dr." value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} /></label>
-          <label>Specialization<input required maxLength={150} placeholder="e.g. Family Medicine" value={specialization} onChange={(event) => setSpecialization(event.target.value)} /></label>
-        </div>
-        <label>Professional license number<input required maxLength={100} value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} /></label>
+        {accountType === 'DOCTOR' ? (
+          <>
+            <div className="auth-field-grid">
+              <label>Professional title<input required maxLength={50} placeholder="e.g. Dr." value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} /></label>
+              <label>Specialization<input required maxLength={150} placeholder="e.g. Family Medicine" value={specialization} onChange={(event) => setSpecialization(event.target.value)} /></label>
+            </div>
+            <label>Professional license number<input required maxLength={100} value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} /></label>
+          </>
+        ) : (
+          <p className="auth-footnote">Secretary accounts begin without clinic access. A Doctor must assign the Secretary to a clinic before clinic information becomes available.</p>
+        )}
         <label>Password<input type="password" required autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <label>Confirm password<input type="password" required autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
         {error ? <div className="form-error" role="alert">{error}</div> : null}
-        <button className="primary" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create doctor account'}</button>
+        <button className="primary" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
         <p className="auth-footnote">Already have an account? <Link to="/login">Sign in</Link></p>
       </form>
     </AccountFrame>
   );
 }
+
+export const DoctorRegistrationPage = AccountRegistrationPage;
 
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams();

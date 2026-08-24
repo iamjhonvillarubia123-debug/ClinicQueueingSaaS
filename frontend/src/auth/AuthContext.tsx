@@ -35,6 +35,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    function handlePageShow(event: PageTransitionEvent) {
+      if (event.persisted) void refresh();
+    }
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, [refresh]);
+
   const login = useCallback(async (email: string, password: string) => {
     await apiRequest('/auth/login', { method: 'POST', body: { email, password } });
     const nextProfile = await apiRequest<SessionProfile>('/auth/profile');

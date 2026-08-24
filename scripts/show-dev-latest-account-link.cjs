@@ -7,7 +7,7 @@ const TYPES = {
   verification: {
     notificationType: 'DOCTOR_EMAIL_VERIFICATION',
     purpose: 'doctor-email-verification:message',
-    label: 'Doctor email verification',
+    label: 'Staff email verification',
   },
   reset: {
     notificationType: 'PASSWORD_RESET',
@@ -85,6 +85,7 @@ async function main() {
         SELECT
           ev."status"::text AS "verificationStatus",
           ev."verifiedAt",
+          u."role"::text AS "role",
           u."email",
           u."emailVerifiedAt",
           u."lastLoginAt",
@@ -103,6 +104,7 @@ async function main() {
       `, [row.emailVerificationId]);
       if (verification.rowCount > 0) {
         const state = verification.rows[0];
+        console.log(`Account role: ${state.role}`);
         console.log(`Account email: ${state.email}`);
         console.log(`Verification record status: ${state.verificationStatus}`);
         console.log(`Verification completed: ${state.verifiedAt ? new Date(state.verifiedAt).toISOString() : 'no'}`);
