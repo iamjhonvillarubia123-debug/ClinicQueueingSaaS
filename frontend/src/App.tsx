@@ -2,11 +2,11 @@ import { FormEvent, useState } from 'react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from './api/client';
 import {
-  AccountRegistrationPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   VerifyEmailPage,
 } from './auth/AccountAccessPages';
+import { DoctorRegistrationPage } from './auth/DoctorRegistrationPage';
 import {
   AccountSecurityPage,
   DisabledAccountPage,
@@ -21,12 +21,14 @@ import { DoctorDataPrivacyPage } from './doctor/DoctorDataPrivacyPage';
 import { DoctorDefaultsPage } from './doctor/DoctorDefaultsPage';
 import { PracticeLocationConfigurationPage } from './doctor/PracticeLocationConfigurationPage';
 import { PracticeLocationsPage } from './doctor/PracticeLocationsPage';
+import { SecretaryStaffingPage } from './doctor/SecretaryStaffingPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
 import { PatientBookingGroupPage } from './patient/PatientBookingGroupPage';
 import { DoctorPublicPage, PracticeLocationPublicPage } from './public/PublicPages';
 import { SecretaryClinicsPage } from './secretary/SecretaryClinicsPage';
+import { SecretaryInvitationPage } from './secretary/SecretaryInvitationPage';
 
 function LandingPage() {
   return (
@@ -87,8 +89,8 @@ function LoginPage() {
           <Link className="quiet-link auth-center-link" to="/account/reactivate">Reactivate disabled account</Link>
         </form>
         <div className="auth-registration-entry">
-          <span>Don’t have an account?</span>
-          <Link className="secondary-action" to="/register">Create account</Link>
+          <span>Doctor without an account?</span>
+          <Link className="secondary-action" to="/register">Create Doctor account</Link>
         </div>
       </section>
     </main>
@@ -150,8 +152,9 @@ export function App() {
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<AccountRegistrationPage />} />
+      <Route path="/register" element={<DoctorRegistrationPage />} />
       <Route path="/register/doctor" element={<Navigate to="/register" replace />} />
+      <Route path="/secretary-invitation" element={<SecretaryInvitationPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -164,6 +167,7 @@ export function App() {
           <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
             <Route path="/app/practice-locations" element={<PracticeLocationsPage />} />
             <Route path="/app/practice-locations/:practiceLocationId" element={<PracticeLocationConfigurationPage />} />
+            <Route path="/app/practice-locations/:practiceLocationId/staff" element={<SecretaryStaffingPage />} />
             <Route path="/app/defaults" element={<DoctorDefaultsPage />} />
             <Route path="/app/data-privacy" element={<DoctorDataPrivacyPage />} />
           </Route>
