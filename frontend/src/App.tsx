@@ -21,6 +21,7 @@ import { DoctorDataPrivacyPage } from './doctor/DoctorDataPrivacyPage';
 import { DoctorDefaultsPage } from './doctor/DoctorDefaultsPage';
 import { PracticeLocationConfigurationPage } from './doctor/PracticeLocationConfigurationPage';
 import { PracticeLocationsPage } from './doctor/PracticeLocationsPage';
+import { SecretaryDraftReviewPage, SecretaryDraftReviewsPage } from './doctor/SecretaryDraftReviewsPage';
 import { SecretaryStaffingPage } from './doctor/SecretaryStaffingPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
@@ -110,6 +111,7 @@ function Shell() {
         <div>
           <span className="role">{profile?.role.replace('_', ' ')}</span>
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/practice-locations">Clinics</Link> : null}
+          {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/secretary-draft-reviews">Reviews</Link> : null}
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/defaults">Defaults</Link> : null}
           {profile?.role === 'DOCTOR' ? <Link className="quiet-link account-nav-link" to="/app/data-privacy">Data & Privacy</Link> : null}
           {profile?.role === 'SECRETARY' ? <Link className="quiet-link account-nav-link" to="/app/secretary/clinics">Assigned clinics</Link> : null}
@@ -169,6 +171,8 @@ export function App() {
             <Route path="/app/practice-locations" element={<PracticeLocationsPage />} />
             <Route path="/app/practice-locations/:practiceLocationId" element={<PracticeLocationConfigurationPage />} />
             <Route path="/app/practice-locations/:practiceLocationId/staff" element={<SecretaryStaffingPage />} />
+            <Route path="/app/secretary-draft-reviews" element={<SecretaryDraftReviewsPage />} />
+            <Route path="/app/secretary-draft-reviews/:draftId" element={<SecretaryDraftReviewPage />} />
             <Route path="/app/defaults" element={<DoctorDefaultsPage />} />
             <Route path="/app/data-privacy" element={<DoctorDataPrivacyPage />} />
           </Route>
