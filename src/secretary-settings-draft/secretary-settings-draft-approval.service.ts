@@ -125,7 +125,7 @@ export class SecretarySettingsDraftApprovalService {
         }),
         transaction.secretarySettingsDraftService.findMany({
           where: { secretarySettingsDraftId: draft.id },
-          orderBy: { id: 'asc' },
+          orderBy: [{ proposedDisplayOrder: 'asc' }, { id: 'asc' }],
         }),
         transaction.secretarySettingsDraftPracticeSchedule.findMany({
           where: { secretarySettingsDraftId: draft.id },
@@ -241,9 +241,7 @@ export class SecretarySettingsDraftApprovalService {
     const targetIds = proposals
       .map((proposal) => proposal.practiceLocationServiceId)
       .filter((value): value is string => Boolean(value));
-    if (targetIds.length === 0) {
-      return;
-    }
+    if (targetIds.length === 0) return;
     const existing = await transaction.practiceLocationService.findMany({
       where: { id: { in: targetIds }, practiceLocationId },
       select: { id: true },
@@ -323,6 +321,7 @@ export class SecretarySettingsDraftApprovalService {
       sourceDoctorServiceTemplateId: string | null;
       proposedName: string;
       proposedDurationMinutes: number;
+      proposedDisplayOrder: number;
       proposedStatus: Parameters<
         TransactionClient['practiceLocationService']['create']
       >[0]['data']['status'];
@@ -332,6 +331,7 @@ export class SecretarySettingsDraftApprovalService {
       const data = {
         name: proposal.proposedName,
         durationMinutes: proposal.proposedDurationMinutes,
+        displayOrder: proposal.proposedDisplayOrder,
         status: proposal.proposedStatus,
       };
       if (proposal.practiceLocationServiceId) {
