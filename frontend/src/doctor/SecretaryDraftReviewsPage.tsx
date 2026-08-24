@@ -10,16 +10,37 @@ type ReviewSummary = {
   authorPracticeStaff: { user: { firstName: string; lastName: string } };
 };
 
+type ClinicDetailsProposal = {
+  id: string;
+  proposedName: string;
+  proposedAddressLine1: string;
+  proposedAddressLine2: string | null;
+  proposedCityMunicipality: string;
+  proposedProvince: string;
+  proposedPostalCode: string | null;
+  proposedContactNumber: string;
+  proposedCountryCode: string;
+  proposedTimeZone: string;
+};
+
 type ReviewDetail = ReviewSummary & {
   reviewedAt: string | null;
   reviewComment: string | null;
   practiceLocation: ReviewSummary['practiceLocation'] & {
+    addressLine1: string | null;
+    addressLine2: string | null;
+    cityMunicipality: string | null;
+    province: string | null;
+    postalCode: string | null;
+    contactNumber: string | null;
+    countryCode: string | null;
     timeZone: string | null;
     practiceSchedules: Array<{ weekday: string; isOpen: boolean; opensAtLocal: string | null; closesAtLocal: string | null; maximumOnlineBookingUntilLocal: string | null; maximumOperatingUntilLocal: string | null }>;
     scheduleExceptions: Array<{ serviceDate: string; isOpen: boolean; opensAtLocal: string | null; closesAtLocal: string | null; maximumOnlineBookingUntilLocal: string | null; maximumOperatingUntilLocal: string | null }>;
     services: Array<{ id: string; name: string; durationMinutes: number; status: string }>;
     bookingQuestions: Array<{ id: string; questionText: string; type: string; isRequired: boolean; displayOrder: number; isActive: boolean }>;
   };
+  proposedClinicDetails: ClinicDetailsProposal | null;
   proposedPracticeSchedules: Array<{ weekday: string; proposedIsOpen: boolean; proposedOpensAtLocal: string | null; proposedClosesAtLocal: string | null; proposedMaximumOnlineBookingUntilLocal: string | null; proposedMaximumOperatingUntilLocal: string | null }>;
   proposedScheduleExceptions: Array<{ id: string; serviceDate: string; proposedIsOpen: boolean; proposedOpensAtLocal: string | null; proposedClosesAtLocal: string | null; proposedMaximumOnlineBookingUntilLocal: string | null; proposedMaximumOperatingUntilLocal: string | null }>;
   proposedServices: Array<{ id: string; practiceLocationServiceId: string | null; proposedName: string; proposedDurationMinutes: number; proposedStatus: string }>;
@@ -43,6 +64,9 @@ function scheduleText(row: { isOpen: boolean; opensAtLocal: string | null; close
 }
 function proposalScheduleText(row: { proposedIsOpen: boolean; proposedOpensAtLocal: string | null; proposedClosesAtLocal: string | null; proposedMaximumOnlineBookingUntilLocal?: string | null; proposedMaximumOperatingUntilLocal?: string | null }) {
   return scheduleText({ isOpen: row.proposedIsOpen, opensAtLocal: row.proposedOpensAtLocal, closesAtLocal: row.proposedClosesAtLocal, maximumOnlineBookingUntilLocal: row.proposedMaximumOnlineBookingUntilLocal, maximumOperatingUntilLocal: row.proposedMaximumOperatingUntilLocal });
+}
+function addressText(values: { addressLine1: string | null; addressLine2: string | null; cityMunicipality: string | null; province: string | null; postalCode: string | null; countryCode: string | null }) {
+  return [values.addressLine1, values.addressLine2, values.cityMunicipality, values.province, values.postalCode, values.countryCode].filter(Boolean).join(', ') || 'Not configured';
 }
 
 export function SecretaryDraftReviewsPage() {
@@ -112,7 +136,7 @@ export function SecretaryDraftReviewPage() {
   const exceptionByDate = useMemo(() => new Map(detail?.practiceLocation.scheduleExceptions.map((row) => [dateOnly(row.serviceDate), row]) ?? []), [detail]);
   const serviceById = useMemo(() => new Map(detail?.practiceLocation.services.map((row) => [row.id, row]) ?? []), [detail]);
   const questionById = useMemo(() => new Map(detail?.practiceLocation.bookingQuestions.map((row) => [row.id, row]) ?? []), [detail]);
-  const proposalCount = detail ? detail.proposedPracticeSchedules.length + detail.proposedScheduleExceptions.length + detail.proposedServices.length + detail.proposedBookingQuestions.length : 0;
+  const proposalCount = detail ? (detail.proposedClinicDetails ? 1 : 0) + detail.proposedPracticeSchedules.length + detail.proposedScheduleExceptions.length + detail.proposedServices.length + detail.proposedBookingQuestions.length : 0;
 
   if (loading) return <section className="practice-admin-page"><p className="practice-muted">Loading submitted draft…</p></section>;
   if (!detail) return <section className="practice-admin-page">{error ? <div className="form-error" role="alert">{error}</div> : null}<Link to="/app/secretary-draft-reviews">Back to reviews</Link></section>;
@@ -122,6 +146,8 @@ export function SecretaryDraftReviewPage() {
       <div className="practice-admin-heading"><div><p className="eyebrow">Secretary proposal review</p><h1 id="review-heading">{detail.practiceLocation.name?.trim() || 'Clinic settings'}</h1><p>Compare the current effective configuration with the Secretary's proposed changes. Approval revalidates current state before applying anything.</p></div><Link className="secondary-action" to="/app/secretary-draft-reviews">← Reviews</Link></div>
       <div className="practice-notice"><strong>{proposalCount} proposed change{proposalCount === 1 ? '' : 's'}</strong> · Submitted by {detail.authorPracticeStaff.user.firstName} {detail.authorPracticeStaff.user.lastName}. Nothing below is effective until approval succeeds.</div>
       {error ? <div className="form-error" role="alert">{error}</div> : null}
+
+      {detail.proposedClinicDetails ? <section className="practice-create-panel"><div className="practice-panel-heading"><p className="eyebrow">Clinic details</p><h2>Identity, address & contact proposal</h2></div><article className="practice-location-card"><div className="stack"><p><strong>Clinic name</strong><br />Current: {detail.practiceLocation.name || 'Not configured'}<br />Proposed: {detail.proposedClinicDetails.proposedName}</p><p><strong>Address</strong><br />Current: {addressText(detail.practiceLocation)}<br />Proposed: {addressText({ addressLine1: detail.proposedClinicDetails.proposedAddressLine1, addressLine2: detail.proposedClinicDetails.proposedAddressLine2, cityMunicipality: detail.proposedClinicDetails.proposedCityMunicipality, province: detail.proposedClinicDetails.proposedProvince, postalCode: detail.proposedClinicDetails.proposedPostalCode, countryCode: detail.proposedClinicDetails.proposedCountryCode })}</p><p><strong>Contact</strong><br />Current: {detail.practiceLocation.contactNumber || 'Not configured'}<br />Proposed: {detail.proposedClinicDetails.proposedContactNumber}</p><p><strong>Time zone</strong><br />Current: {detail.practiceLocation.timeZone || 'Not configured'}<br />Proposed: {detail.proposedClinicDetails.proposedTimeZone}</p></div></article></section> : null}
 
       {detail.proposedPracticeSchedules.length ? <section className="practice-create-panel"><div className="practice-panel-heading"><p className="eyebrow">Recurring schedule</p><h2>Clinic hours proposals</h2></div>{detail.proposedPracticeSchedules.map((row) => { const current = scheduleByDay.get(row.weekday); return <article className="practice-location-card" key={row.weekday}><div><h3>{row.weekday.charAt(0) + row.weekday.slice(1).toLowerCase()}</h3><p><strong>Current:</strong> {current ? scheduleText(current) : 'No recurring schedule configured'}</p><p><strong>Proposed:</strong> {proposalScheduleText(row)}</p></div></article>; })}</section> : null}
 
