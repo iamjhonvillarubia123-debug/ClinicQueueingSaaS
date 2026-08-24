@@ -3,6 +3,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import {
   AdministrativeRestrictionStatus,
   PracticeLocationLifecycleStatus,
+  PracticeStaffCapabilityStatus,
   PracticeStaffRole,
   UserAccountStatus,
   UserRole,
@@ -18,9 +19,7 @@ export class SecretaryWorkspaceService {
 
     const clinics = await this.prisma.practiceLocation.findMany({
       where: {
-        lifecycleStatus: {
-          not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
-        },
+        lifecycleStatus: { not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED },
         currentRegularPracticeStaff: {
           is: {
             userId: authenticatedUserId,
@@ -44,6 +43,19 @@ export class SecretaryWorkspaceService {
         countryCode: true,
         timeZone: true,
         isBookingEnabled: true,
+        currentRegularPracticeStaff: {
+          select: {
+            accessProfile: true,
+            canManageClinicDetails: true,
+            canManageServices: true,
+            canManageBookingQuestions: true,
+            canManageSchedules: true,
+            capabilities: {
+              where: { status: PracticeStaffCapabilityStatus.ACTIVE },
+              select: { capabilityType: true },
+            },
+          },
+        },
         secretarySettingsDrafts: {
           orderBy: { updatedAt: 'desc' },
           take: 5,
@@ -63,6 +75,8 @@ export class SecretaryWorkspaceService {
 
     return clinics.map((clinic) => ({
       ...clinic,
+      access: clinic.currentRegularPracticeStaff,
+      currentRegularPracticeStaff: undefined,
       latestSettingsDraft: clinic.secretarySettingsDrafts[0] ?? null,
       settingsDrafts: clinic.secretarySettingsDrafts,
       secretarySettingsDrafts: undefined,
@@ -72,23 +86,16 @@ export class SecretaryWorkspaceService {
   private async assertEligibleSecretary(authenticatedUserId: string) {
     const actor = await this.prisma.user.findUnique({
       where: { id: authenticatedUserId },
-      select: {
-        role: true,
-        accountStatus: true,
-        administrativeRestrictionStatus: true,
-      },
+      select: { role: true, accountStatus: true, administrativeRestrictionStatus: true },
     });
 
     if (
       !actor ||
       actor.role !== UserRole.SECRETARY ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
     ) {
-      throw new ForbiddenException(
-        'Secretary workspace access is unavailable.',
-      );
+      throw new ForbiddenException('Secretary workspace access is unavailable.');
     }
   }
 }
