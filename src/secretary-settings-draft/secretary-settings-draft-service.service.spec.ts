@@ -17,11 +17,12 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
   const prismaServiceMock = {
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
-    practiceLocationService: { findFirst: jest.fn() },
+    practiceLocationService: { findFirst: jest.fn(), aggregate: jest.fn() },
     secretarySettingsDraftService: {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      aggregate: jest.fn(),
     },
   };
 
@@ -45,20 +46,28 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         currentAssignmentActive: true,
       },
     ]);
+    prismaServiceMock.practiceLocationService.aggregate.mockResolvedValue({
+      _max: { displayOrder: 1 },
+    });
+    prismaServiceMock.secretarySettingsDraftService.aggregate.mockResolvedValue({
+      _max: { proposedDisplayOrder: null },
+    });
     prismaServiceMock.secretarySettingsDraftService.create.mockResolvedValue({
       id: 'proposal-1',
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 2,
     });
     prismaServiceMock.secretarySettingsDraftService.update.mockResolvedValue({
       id: 'proposal-1',
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 0,
     });
     prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue(
       null,
     );
   });
 
-  it('creates a new Service proposal without changing effective PracticeLocationService', async () => {
+  it('creates a new Service proposal with the next presentation order without changing effective PracticeLocationService', async () => {
     await expect(
       service.createProposal('secretary-1', 'draft-1', {
         name: 'Consultation',
@@ -71,6 +80,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
       proposalId: 'proposal-1',
       practiceLocationServiceId: null,
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 2,
     });
 
     expect(
@@ -83,6 +93,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         proposedName: 'Consultation',
         proposedDurationMinutes: 30,
         proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+        proposedDisplayOrder: 2,
       },
     });
     expect(
@@ -94,6 +105,12 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
     prismaServiceMock.practiceLocationService.findFirst.mockResolvedValue({
       id: 'service-1',
       sourceDoctorServiceTemplateId: 'template-1',
+      displayOrder: 4,
+    });
+    prismaServiceMock.secretarySettingsDraftService.create.mockResolvedValue({
+      id: 'proposal-1',
+      proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 1,
     });
 
     await expect(
@@ -105,6 +122,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
           name: 'Extended consultation',
           durationMinutes: 45,
           status: ServiceAvailabilityStatus.ACTIVE,
+          displayOrder: 1,
         },
       ),
     ).resolves.toEqual({
@@ -113,6 +131,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
       proposalId: 'proposal-1',
       practiceLocationServiceId: 'service-1',
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 1,
     });
 
     expect(
@@ -125,23 +144,27 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         proposedName: 'Extended consultation',
         proposedDurationMinutes: 45,
         proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+        proposedDisplayOrder: 1,
       },
     });
   });
 
-  it('reuses the existing draft proposal when proposing Service deactivation', async () => {
+  it('reuses the existing draft proposal when proposing Service deactivation and preserves its order', async () => {
     prismaServiceMock.practiceLocationService.findFirst.mockResolvedValue({
       id: 'service-1',
       sourceDoctorServiceTemplateId: null,
+      displayOrder: 3,
     });
     prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue(
       {
         id: 'proposal-1',
+        proposedDisplayOrder: 3,
       },
     );
     prismaServiceMock.secretarySettingsDraftService.update.mockResolvedValue({
       id: 'proposal-1',
       proposedStatus: ServiceAvailabilityStatus.INACTIVE,
+      proposedDisplayOrder: 3,
     });
 
     await expect(
@@ -161,6 +184,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
       proposalId: 'proposal-1',
       practiceLocationServiceId: 'service-1',
       proposedStatus: ServiceAvailabilityStatus.INACTIVE,
+      proposedDisplayOrder: 3,
     });
 
     expect(
@@ -171,20 +195,23 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         proposedName: 'Consultation',
         proposedDurationMinutes: 30,
         proposedStatus: ServiceAvailabilityStatus.INACTIVE,
+        proposedDisplayOrder: 3,
       },
     });
   });
 
-  it('updates a newly created proposal by proposal identity', async () => {
+  it('updates a newly created proposal by proposal identity and accepts a reordered position', async () => {
     prismaServiceMock.secretarySettingsDraftService.findFirst.mockResolvedValue(
       {
         id: 'proposal-new',
         practiceLocationServiceId: null,
+        proposedDisplayOrder: 4,
       },
     );
     prismaServiceMock.secretarySettingsDraftService.update.mockResolvedValue({
       id: 'proposal-new',
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 0,
     });
 
     await expect(
@@ -192,6 +219,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         name: 'Follow-up consultation',
         durationMinutes: 20,
         status: ServiceAvailabilityStatus.ACTIVE,
+        displayOrder: 0,
       }),
     ).resolves.toEqual({
       saved: true,
@@ -199,6 +227,7 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
       proposalId: 'proposal-new',
       practiceLocationServiceId: null,
       proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      proposedDisplayOrder: 0,
     });
   });
 
@@ -225,6 +254,17 @@ describe('SecretarySettingsDraftServiceProposalService', () => {
         name: 'Consultation',
         durationMinutes: 0,
         status: ServiceAvailabilityStatus.ACTIVE,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects an invalid presentation order below the HTTP validation boundary', async () => {
+    await expect(
+      service.createProposal('secretary-1', 'draft-1', {
+        name: 'Consultation',
+        durationMinutes: 30,
+        status: ServiceAvailabilityStatus.ACTIVE,
+        displayOrder: -1,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
