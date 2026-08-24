@@ -4,6 +4,7 @@ import {
   NotificationOutboxStatus,
   NotificationType,
   Prisma,
+  SecretaryInvitationStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -43,16 +44,29 @@ export class NotificationOutboxClaimService {
     return this.prisma.$transaction(async (transaction) => {
       const candidates = await transaction.$queryRaw<Array<{ id: string }>>(
         Prisma.sql`
-          SELECT "id"
-          FROM "NotificationOutbox"
-          WHERE "status" = ${NotificationOutboxStatus.PENDING}::"NotificationOutboxStatus"
-            AND "nextAttemptAt" <= ${now}
-            AND "cancelledAt" IS NULL
-            AND "sentAt" IS NULL
-            AND "failedAt" IS NULL
-          ORDER BY "nextAttemptAt" ASC, "createdAt" ASC, "id" ASC
+          SELECT no."id"
+          FROM "NotificationOutbox" no
+          WHERE no."status" = ${NotificationOutboxStatus.PENDING}::"NotificationOutboxStatus"
+            AND no."nextAttemptAt" <= ${now}
+            AND no."cancelledAt" IS NULL
+            AND no."sentAt" IS NULL
+            AND no."failedAt" IS NULL
+            AND no."expiresAt" > ${now}
+            AND (
+              no."notificationType" <> ${NotificationType.SECRETARY_INVITATION}::"NotificationType"
+              OR EXISTS (
+                SELECT 1
+                FROM "SecretaryInvitation" si
+                WHERE si."id" = no."secretaryInvitationId"
+                  AND si."status" = ${SecretaryInvitationStatus.PENDING}::"SecretaryInvitationStatus"
+                  AND si."tokenHash" IS NOT NULL
+                  AND si."activeInvitationKey" IS NOT NULL
+                  AND si."expiresAt" > ${now}
+              )
+            )
+          ORDER BY no."nextAttemptAt" ASC, no."createdAt" ASC, no."id" ASC
           LIMIT 1
-          FOR UPDATE SKIP LOCKED
+          FOR UPDATE OF no SKIP LOCKED
         `,
       );
 
