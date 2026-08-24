@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { DoctorSettingsDraftReviewController } from './doctor-settings-draft-review.controller';
 import { DoctorSettingsDraftReviewReadService } from './doctor-settings-draft-review-read.service';
+import { SecretarySettingsDraftAccessService } from './secretary-settings-draft-access.service';
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
 import { SecretarySettingsDraftController } from './secretary-settings-draft.controller';
@@ -23,6 +24,7 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
   providers: [
     SecretarySettingsDraftService,
     SecretarySettingsDraftReadService,
+    SecretarySettingsDraftAccessService,
     DoctorSettingsDraftReviewReadService,
     SecretarySettingsDraftScheduleService,
     SecretarySettingsDraftExceptionService,
