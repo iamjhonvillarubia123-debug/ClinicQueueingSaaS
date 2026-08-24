@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import {
   AdministrativeRestrictionStatus,
   NotificationOutboxStatus,
@@ -142,28 +143,6 @@ describe('SecretaryInvitationService', () => {
 
   it('atomically creates the Secretary User and PracticeStaff only during acceptance', async () => {
     transaction.$queryRaw.mockResolvedValue([{ id: 'invitation-1' }]);
-    transaction.secretaryInvitation.findUnique.mockResolvedValue({
-      id: 'invitation-1',
-      practiceLocationId: 'location-1',
-      invitedByUserId: 'doctor-1',
-      normalizedEmail: 'bea@example.com',
-      firstName: 'Bea',
-      lastName: 'Cruz',
-      mobileNumber: '+639171234567',
-      tokenHash: expect.anything(),
-      activeInvitationKey: 'active-key',
-      status: SecretaryInvitationStatus.PENDING,
-      expiresAt: new Date(Date.now() + 60_000),
-      practiceLocation: {
-        id: 'location-1',
-        lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
-        currentRegularPracticeStaffId: null,
-      },
-      notificationOutbox: { id: 'outbox-1' },
-    });
-
-    // Match the actual token digest while keeping the raw token out of persisted state.
-    const { createHash } = await import('crypto');
     const token = 'invitation-token';
     const tokenHash = createHash('sha256').update(token, 'utf8').digest('hex');
     transaction.secretaryInvitation.findUnique.mockResolvedValueOnce({
