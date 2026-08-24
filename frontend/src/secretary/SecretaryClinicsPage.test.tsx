@@ -40,10 +40,10 @@ describe('Secretary assigned clinics access profile', () => {
     expect(await screen.findByText('North Clinic')).toBeInTheDocument();
     expect(screen.getByText('Standard access')).toBeInTheDocument();
     expect(screen.getByText('Operational workspace only')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Propose configuration changes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Propose changes' })).not.toBeInTheDocument();
   });
 
-  it('shows proposal entry when configuration access is granted', async () => {
+  it('shows one concise proposal action when configuration access is granted', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([clinic({
       accessProfile: 'CUSTOM', canManageClinicDetails: false, canManageServices: true,
       canManageBookingQuestions: false, canManageSchedules: false, capabilities: [],
@@ -51,23 +51,23 @@ describe('Secretary assigned clinics access profile', () => {
     render(<MemoryRouter><SecretaryClinicsPage /></MemoryRouter>);
     expect(await screen.findByText('North Clinic')).toBeInTheDocument();
     expect(screen.getByText('Custom access')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Propose configuration changes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Propose changes' })).toBeInTheDocument();
   });
 
-  it('allows a new proposal after the latest draft was approved while preserving history access', async () => {
+  it('allows a new proposal after approval without showing closed-draft clutter', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([clinic(fullAccess, draft('APPROVED'))])));
     render(<MemoryRouter><SecretaryClinicsPage /></MemoryRouter>);
     expect(await screen.findByText('North Clinic')).toBeInTheDocument();
-    expect(screen.getByText('Approved')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Propose configuration changes' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View latest closed draft' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Propose changes' })).toBeInTheDocument();
+    expect(screen.queryByText('Approved')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /closed draft/i })).not.toBeInTheDocument();
   });
 
-  it('does not allow a parallel proposal while a draft is submitted for Doctor review', async () => {
+  it('shows only the pending proposal action during Doctor review', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([clinic(fullAccess, draft('SUBMITTED'))])));
     render(<MemoryRouter><SecretaryClinicsPage /></MemoryRouter>);
     expect(await screen.findByText('North Clinic')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View submitted draft' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Propose configuration changes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View pending proposal' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Propose changes' })).not.toBeInTheDocument();
   });
 });
