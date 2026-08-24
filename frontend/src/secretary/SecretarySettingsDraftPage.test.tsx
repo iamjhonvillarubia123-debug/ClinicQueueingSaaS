@@ -73,8 +73,8 @@ describe('SecretarySettingsDraftPage', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/booking-questions'))).toBe(true));
     const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/booking-questions'));
     const body = String(call?.[1]?.body);
-    expect(body).toContain(`\"type\":\"${type}\"`);
-    expect(body).toContain('\"isRequired\":true');
+    expect(body).toContain(`"type":"${type}"`);
+    expect(body).toContain('"isRequired":true');
     expect(body).not.toContain('selectOptions');
     if (type !== 'TEXT') expect(body).not.toContain('textMaximumLength');
     if (type !== 'NUMBER') { expect(body).not.toContain('numberMinimum'); expect(body).not.toContain('numberMaximum'); }
@@ -94,7 +94,7 @@ describe('SecretarySettingsDraftPage', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/booking-questions'))).toBe(true));
     const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/booking-questions'));
     const body = String(call?.[1]?.body);
-    expect(body).toContain('\"type\":\"SINGLE_SELECT\"');
+    expect(body).toContain('"type":"SINGLE_SELECT"');
     expect(body).toContain('In person');
     expect(body).toContain('Online');
   });
