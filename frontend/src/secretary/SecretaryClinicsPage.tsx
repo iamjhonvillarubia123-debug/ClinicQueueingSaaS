@@ -84,30 +84,29 @@ export function SecretaryClinicsPage() {
   function openDraft(draft: DraftSummary) { navigate(`/app/secretary/settings-drafts/${encodeURIComponent(draft.id)}`); }
 
   return (
-    <section className="practice-admin-page" aria-labelledby="secretary-clinics-heading">
-      <div className="practice-admin-heading"><div><p className="eyebrow">Secretary workspace</p><h1 id="secretary-clinics-heading">Assigned clinics</h1><p>Each clinic opens according to the access granted by its Doctor. Configuration access prepares proposals only; the Doctor remains the final approval authority.</p></div></div>
+    <section className="practice-admin-page secretary-clinics-page" aria-labelledby="secretary-clinics-heading">
+      <div className="practice-admin-heading"><div><p className="eyebrow">Secretary workspace</p><h1 id="secretary-clinics-heading">Assigned clinics</h1><p>Open a clinic to prepare configuration proposals within the access granted by its Doctor.</p></div></div>
       {error ? <div className="form-error" role="alert">{error}</div> : null}
       {loading ? <p className="practice-muted">Loading assigned clinics…</p> : null}
       {!loading && clinics.length === 0 ? <div className="practice-empty"><h2>No assigned clinics</h2><p>You currently have no regular Secretary assignment.</p></div> : null}
 
-      <section className="practice-list" aria-label="Assigned clinics">
+      <section className="secretary-clinic-list" aria-label="Assigned clinics">
         {clinics.map((clinic) => {
           const draft = clinic.latestSettingsDraft;
           const configurable = canConfigure(clinic);
           const submitted = draft?.status === 'SUBMITTED';
           const activeDraft = draft?.status === 'DRAFT' || draft?.status === 'RETURNED_FOR_REWORK';
           return (
-            <article className="practice-location-card" key={clinic.id}>
-              <div>
+            <article className="secretary-clinic-card" key={clinic.id}>
+              <div className="secretary-clinic-copy">
                 <div className="practice-location-title-row"><h2>{clinicName(clinic)}</h2><span className="practice-status">{clinic.lifecycleStatus.replaceAll('_', ' ')}</span></div>
-                <p>{clinicAddress(clinic)}</p>
-                <div className="practice-location-meta"><span>{clinic.timeZone || 'Time zone not configured'}</span><span>{clinic.contactNumber || 'No contact number'}</span><span>{profileLabel(clinic.access.accessProfile)}</span></div>
-                <div className="practice-location-meta"><span><strong>Queue operations:</strong> Available under Standard Secretary authority</span>{configurable ? <span><strong>Configuration:</strong> Proposal access granted</span> : <span><strong>Configuration:</strong> Not granted</span>}</div>
-                {configurable && submitted ? <div className="practice-location-meta"><span><strong>Proposal:</strong> Waiting for Doctor review</span></div> : null}
-                {configurable && activeDraft ? <div className="practice-location-meta"><span><strong>Proposal:</strong> Draft in progress</span></div> : null}
+                <p className="secretary-clinic-address">{clinicAddress(clinic)}</p>
+                <div className="secretary-clinic-facts"><span>{clinic.timeZone || 'Time zone not configured'}</span><span>{clinic.contactNumber || 'No contact number'}</span><span>{profileLabel(clinic.access.accessProfile)}</span></div>
+                <div className="secretary-clinic-access"><span><strong>Queue operations</strong> Standard authority</span><span><strong>Configuration</strong> {configurable ? 'Proposal access granted' : 'Not granted'}</span>{configurable && submitted ? <span><strong>Proposal</strong> Waiting for Doctor review</span> : null}{configurable && activeDraft ? <span><strong>Proposal</strong> Draft in progress</span> : null}</div>
               </div>
-              <div className="practice-card-actions">
-                {!configurable ? <span className="practice-muted">Operational workspace only</span> : submitted && draft ? <button className="secondary" type="button" onClick={() => openDraft(draft)}>View pending proposal</button> : <button className="secondary" type="button" disabled={workingClinicId === clinic.id} onClick={() => void startOrContinueDraft(clinic)}>{workingClinicId === clinic.id ? 'Opening…' : 'Propose changes'}</button>}
+              <div className="secretary-clinic-action">
+                {!configurable ? <span className="practice-muted">Operational workspace only</span> : submitted && draft ? <button className="secondary" type="button" onClick={() => openDraft(draft)}>View pending proposal</button> : <button className="primary" type="button" disabled={workingClinicId === clinic.id} onClick={() => void startOrContinueDraft(clinic)}>{workingClinicId === clinic.id ? 'Opening…' : 'Propose changes'}</button>}
+                {configurable ? <p>Draft proposals only.<br />Doctor approval is required.</p> : null}
               </div>
             </article>
           );
