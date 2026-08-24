@@ -9,15 +9,15 @@ type QuestionType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
 type EditorSection = 'clinic' | 'content' | 'schedules';
 type ScheduleRow = { weekday: Weekday; isOpen: boolean; opensAtLocal: string | null; closesAtLocal: string | null; maximumOnlineBookingUntilLocal: string | null; maximumOperatingUntilLocal: string | null };
 type ProposedSchedule = { weekday: Weekday; proposedIsOpen: boolean; proposedOpensAtLocal: string | null; proposedClosesAtLocal: string | null; proposedMaximumOnlineBookingUntilLocal: string | null; proposedMaximumOperatingUntilLocal: string | null };
-type ServiceRow = { id: string; name: string; durationMinutes: number; status: ServiceStatus };
-type ServiceProposal = { id: string; practiceLocationServiceId: string | null; proposedName: string; proposedDurationMinutes: number; proposedStatus: ServiceStatus };
+type ServiceRow = { id: string; name: string; durationMinutes: number; status: ServiceStatus; displayOrder: number };
+type ServiceProposal = { id: string; practiceLocationServiceId: string | null; proposedName: string; proposedDurationMinutes: number; proposedStatus: ServiceStatus; proposedDisplayOrder: number };
 type QuestionRow = { id: string; questionText: string; helpText: string | null; type: QuestionType; isRequired: boolean; displayOrder: number; isActive: boolean; textMaximumLength: number | null; numberMinimum: number | string | null; numberMaximum: number | string | null; selectOptions: unknown };
 type QuestionProposal = { id: string; bookingQuestionId: string | null; proposedQuestionText: string; proposedHelpText: string | null; proposedType: QuestionType; proposedIsRequired: boolean; proposedDisplayOrder: number; proposedIsActive: boolean; proposedTextMaximumLength: number | null; proposedNumberMinimum: number | string | null; proposedNumberMaximum: number | string | null; proposedSelectOptions: unknown };
 type ExceptionProposal = { id: string; serviceDate: string; proposedIsOpen: boolean; proposedOpensAtLocal: string | null; proposedClosesAtLocal: string | null; proposedMaximumOnlineBookingUntilLocal: string | null; proposedMaximumOperatingUntilLocal: string | null };
 type ClinicDetailsProposal = { id: string; proposedName: string; proposedAddressLine1: string; proposedAddressLine2: string | null; proposedCityMunicipality: string; proposedProvince: string; proposedPostalCode: string | null; proposedContactNumber: string; proposedCountryCode: string; proposedTimeZone: string };
 type ClinicDetailsForm = { name: string; addressLine1: string; addressLine2: string; cityMunicipality: string; province: string; postalCode: string; contactNumber: string; countryCode: string; timeZone: string };
 type ScheduleForm = { weekday: Weekday; isOpen: boolean; opensAtLocal: string; closesAtLocal: string; maximumOnlineBookingUntilLocal: string; maximumOperatingUntilLocal: string };
-type ServiceForm = { name: string; durationMinutes: string; status: ServiceStatus };
+type ServiceForm = { name: string; durationMinutes: string; status: ServiceStatus; displayOrder: string };
 type QuestionForm = { questionText: string; helpText: string; type: QuestionType; isRequired: boolean; displayOrder: string; isActive: boolean };
 type DraftDetail = {
   id: string; status: DraftStatus; submittedAt: string | null; reviewedAt: string | null; reviewComment: string | null;
@@ -80,7 +80,7 @@ export function SecretarySettingsDraftPage() {
   const [questionOrder, setQuestionOrder] = useState<string[]>([]);
   const [draggedService, setDraggedService] = useState('');
   const [draggedQuestion, setDraggedQuestion] = useState('');
-  const [newService, setNewService] = useState<ServiceForm>({ name: '', durationMinutes: '15', status: 'ACTIVE' });
+  const [newService, setNewService] = useState<ServiceForm>({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' });
   const [newQuestion, setNewQuestion] = useState<QuestionForm>({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true });
   const [exception, setException] = useState({ serviceDate: '', isOpen: false, opensAtLocal: '', closesAtLocal: '', maximumOnlineBookingUntilLocal: '', maximumOperatingUntilLocal: '' });
   const [loading, setLoading] = useState(true); const [working, setWorking] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -94,11 +94,11 @@ export function SecretarySettingsDraftPage() {
       const serviceState: Record<string, ServiceForm> = {};
       for (const row of response.practiceLocation.services) {
         const p = response.proposedServices.find((item) => item.practiceLocationServiceId === row.id);
-        serviceState[row.id] = { name: p?.proposedName ?? row.name, durationMinutes: String(p?.proposedDurationMinutes ?? row.durationMinutes), status: p?.proposedStatus ?? row.status };
+        serviceState[row.id] = { name: p?.proposedName ?? row.name, durationMinutes: String(p?.proposedDurationMinutes ?? row.durationMinutes), status: p?.proposedStatus ?? row.status, displayOrder: String(p?.proposedDisplayOrder ?? row.displayOrder) };
       }
-      for (const p of response.proposedServices.filter((item) => !item.practiceLocationServiceId)) serviceState[`proposal:${p.id}`] = { name: p.proposedName, durationMinutes: String(p.proposedDurationMinutes), status: p.proposedStatus };
+      for (const p of response.proposedServices.filter((item) => !item.practiceLocationServiceId)) serviceState[`proposal:${p.id}`] = { name: p.proposedName, durationMinutes: String(p.proposedDurationMinutes), status: p.proposedStatus, displayOrder: String(p.proposedDisplayOrder) };
       setServices(serviceState);
-      setServiceOrder(Object.keys(serviceState).filter((key) => serviceState[key].status === 'ACTIVE'));
+      setServiceOrder(Object.keys(serviceState).filter((key) => serviceState[key].status === 'ACTIVE').sort((a, b) => Number(serviceState[a].displayOrder) - Number(serviceState[b].displayOrder)));
 
       const questionState: Record<string, QuestionForm> = {};
       for (const row of response.practiceLocation.bookingQuestions) {
@@ -129,9 +129,23 @@ export function SecretarySettingsDraftPage() {
   async function saveSchedule(row: ScheduleForm) { if (!draftId) return; await run(`schedule:${row.weekday}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/practice-schedule`, { method: 'PUT', body: { weekday: row.weekday, isOpen: row.isOpen, opensAtLocal: row.isOpen ? row.opensAtLocal || undefined : undefined, closesAtLocal: row.isOpen ? row.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: row.isOpen ? row.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: row.isOpen ? row.maximumOperatingUntilLocal || undefined : undefined } }), `${dayLabel(row.weekday)} proposal saved.`); }
   async function updateService(key: string, patch: Partial<ServiceForm>, success: string) {
     if (!draftId) return; const form = { ...services[key], ...patch }; const proposal = key.startsWith('proposal:'); const target = proposal ? `/services/proposals/${encodeURIComponent(key.slice(9))}` : `/services/effective/${encodeURIComponent(key)}`;
-    await run(`service:${key}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status } }), success);
+    await run(`service:${key}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status, displayOrder: Number(form.displayOrder) } }), success);
   }
-  async function createService(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('new-service', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/services`, { method: 'POST', body: { name: newService.name, durationMinutes: Number(newService.durationMinutes), status: 'ACTIVE' } }), 'New service proposal added.'); setNewService({ name: '', durationMinutes: '15', status: 'ACTIVE' }); }
+  async function createService(event: FormEvent) {
+    event.preventDefault(); if (!draftId) return; const displayOrder = serviceOrder.length;
+    await run('new-service', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/services`, { method: 'POST', body: { name: newService.name, durationMinutes: Number(newService.durationMinutes), status: 'ACTIVE', displayOrder } }), 'New service proposal added.');
+    setNewService({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' });
+  }
+  async function reorderServices(nextOrder: string[]) {
+    if (!draftId) return; setServiceOrder(nextOrder); setWorking('service-order'); setError(''); setNotice('');
+    try {
+      for (let index = 0; index < nextOrder.length; index += 1) {
+        const key = nextOrder[index]; const form = { ...services[key], displayOrder: String(index) }; const proposal = key.startsWith('proposal:'); const target = proposal ? `/services/proposals/${encodeURIComponent(key.slice(9))}` : `/services/effective/${encodeURIComponent(key)}`;
+        await apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status, displayOrder: index } });
+      }
+      await load(); setNotice('Service display-order proposal saved.');
+    } catch (caught) { setError(errorMessage(caught)); await load(); } finally { setWorking(''); }
+  }
   function questionPayload(form: QuestionForm, source?: QuestionRow | QuestionProposal) {
     const e = source && 'questionText' in source ? source : undefined; const p = source && 'proposedQuestionText' in source ? source : undefined;
     return { questionText: form.questionText, helpText: form.helpText || undefined, type: form.type, isRequired: form.isRequired, displayOrder: Number(form.displayOrder), isActive: form.isActive, textMaximumLength: form.type === 'TEXT' ? (p?.proposedTextMaximumLength ?? e?.textMaximumLength ?? 500) : undefined, numberMinimum: form.type === 'NUMBER' ? Number(p?.proposedNumberMinimum ?? e?.numberMinimum ?? 0) : undefined, numberMaximum: form.type === 'NUMBER' ? Number(p?.proposedNumberMaximum ?? e?.numberMaximum ?? 1000000) : undefined, selectOptions: form.type === 'SINGLE_SELECT' ? selectOptions(p?.proposedSelectOptions ?? e?.selectOptions) : undefined };
@@ -159,7 +173,7 @@ export function SecretarySettingsDraftPage() {
       await load(); setNotice('Booking-question order proposal saved.');
     } catch (caught) { setError(errorMessage(caught)); await load(); } finally { setWorking(''); }
   }
-  function dropService(event: DragEvent, targetKey: string) { event.preventDefault(); if (!draggedService) return; setServiceOrder((current) => moveKey(current, draggedService, targetKey)); setDraggedService(''); }
+  function dropService(event: DragEvent, targetKey: string) { event.preventDefault(); if (!draggedService) return; const next = moveKey(serviceOrder, draggedService, targetKey); setDraggedService(''); if (next !== serviceOrder) void reorderServices(next); }
   function dropQuestion(event: DragEvent, targetKey: string) { event.preventDefault(); if (!draggedQuestion) return; const next = moveKey(questionOrder, draggedQuestion, targetKey); setDraggedQuestion(''); if (next !== questionOrder) void reorderQuestions(next); }
   async function saveException(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('exception', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate: exception.serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal || undefined : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? exception.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } }), 'Date-specific schedule proposal saved.'); }
   async function submit() { if (!draftId) return; await run('submit', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/submit`, { method: 'POST' }), 'Draft submitted to the Doctor for review.'); }
@@ -176,7 +190,7 @@ export function SecretarySettingsDraftPage() {
   const servicesPanel = access?.canManageServices ? <section className="secretary-content-panel approved-content-panel" aria-labelledby="secretary-services-heading">
     <div className="practice-panel-heading"><div><p className="eyebrow">Services</p><h2 id="secretary-services-heading">Clinic services</h2><p>Propose changes to this clinic's services or add a new service.<br />Changes take effect only after Doctor approval.</p></div></div>
     <div className="proposal-sort-list" aria-label="Clinic services">
-      {serviceOrder.map((key, index) => { const form = services[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable} onDragStart={() => setDraggedService(key)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropService(event, key)}>
+      {serviceOrder.map((key, index) => { const form = services[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={() => setDraggedService(key)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropService(event, key)}>
         <DragHandle /><span className="proposal-order">{index + 1}.</span><div className="proposal-row-copy"><strong>{form.name}</strong><span>{form.durationMinutes} minutes</span></div><span className={hasEffectiveService(key) ? 'proposal-badge active' : 'proposal-badge draft'}>{hasEffectiveService(key) ? 'Active' : 'Draft'}</span>
         {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.name}`} disabled={Boolean(working)} onClick={() => void updateService(key, { status: 'INACTIVE' }, 'Service removal proposal saved.')}><TrashIcon /></button> : null}
       </div>; })}
