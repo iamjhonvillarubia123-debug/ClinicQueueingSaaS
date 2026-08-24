@@ -63,6 +63,13 @@ export class DoctorSettingsDraftReviewReadService {
           select: {
             id: true,
             name: true,
+            addressLine1: true,
+            addressLine2: true,
+            cityMunicipality: true,
+            province: true,
+            postalCode: true,
+            contactNumber: true,
+            countryCode: true,
             lifecycleStatus: true,
             timeZone: true,
             practiceSchedules: {
@@ -114,6 +121,7 @@ export class DoctorSettingsDraftReviewReadService {
             },
           },
         },
+        proposedClinicDetails: true,
         proposedPracticeSchedules: { orderBy: { weekday: 'asc' } },
         proposedServices: { orderBy: { id: 'asc' } },
         proposedBookingQuestions: { orderBy: { id: 'asc' } },
