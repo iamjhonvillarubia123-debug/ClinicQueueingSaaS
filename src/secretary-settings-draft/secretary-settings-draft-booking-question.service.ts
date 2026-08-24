@@ -202,7 +202,10 @@ export class SecretarySettingsDraftBookingQuestionService {
     proposed: {
       proposedQuestionText: string;
       proposedType: BookingQuestionType;
-      proposedSelectOptions: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+      proposedSelectOptions:
+        | Prisma.InputJsonValue
+        | typeof Prisma.JsonNull
+        | typeof Prisma.DbNull;
     },
   ): void {
     const hasHistory =
@@ -214,7 +217,8 @@ export class SecretarySettingsDraftBookingQuestionService {
 
     const currentOptions = effectiveQuestion.selectOptions ?? null;
     const proposedOptions =
-      proposed.proposedSelectOptions === Prisma.JsonNull
+      proposed.proposedSelectOptions === Prisma.JsonNull ||
+      proposed.proposedSelectOptions === Prisma.DbNull
         ? null
         : proposed.proposedSelectOptions;
     const protectedMeaningChanged =
@@ -272,7 +276,7 @@ export class SecretarySettingsDraftBookingQuestionService {
         proposedTextMaximumLength: dto.textMaximumLength ?? null,
         proposedNumberMinimum: null,
         proposedNumberMaximum: null,
-        proposedSelectOptions: Prisma.JsonNull,
+        proposedSelectOptions: Prisma.DbNull,
       };
     }
 
@@ -298,7 +302,7 @@ export class SecretarySettingsDraftBookingQuestionService {
         proposedTextMaximumLength: null,
         proposedNumberMinimum: dto.numberMinimum ?? null,
         proposedNumberMaximum: dto.numberMaximum ?? null,
-        proposedSelectOptions: Prisma.JsonNull,
+        proposedSelectOptions: Prisma.DbNull,
       };
     }
 
@@ -317,7 +321,7 @@ export class SecretarySettingsDraftBookingQuestionService {
         proposedTextMaximumLength: null,
         proposedNumberMinimum: null,
         proposedNumberMaximum: null,
-        proposedSelectOptions: Prisma.JsonNull,
+        proposedSelectOptions: Prisma.DbNull,
       };
     }
 
