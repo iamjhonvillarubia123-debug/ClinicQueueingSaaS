@@ -11,6 +11,7 @@ import './styles/clinic-activation.css';
 import './styles/secretary-access.css';
 import './styles/secretary-proposal.css';
 import './styles/secretary-question-controls.css';
+import './styles/secretary-content-section.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
