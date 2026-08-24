@@ -38,7 +38,10 @@ export class SecretarySettingsDraftServiceProposalService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
-      const proposed = this.normalizeProposal(dto);
+      const proposed = this.normalizeProposal(
+        dto,
+        await this.nextDisplayOrder(transaction, draft),
+      );
 
       const saved = await transaction.secretarySettingsDraftService.create({
         data: {
@@ -55,6 +58,7 @@ export class SecretarySettingsDraftServiceProposalService {
         proposalId: saved.id,
         practiceLocationServiceId: null,
         proposedStatus: saved.proposedStatus,
+        proposedDisplayOrder: saved.proposedDisplayOrder,
       };
     });
   }
@@ -68,7 +72,6 @@ export class SecretarySettingsDraftServiceProposalService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
-      const proposed = this.normalizeProposal(dto);
 
       const effectiveService =
         await transaction.practiceLocationService.findFirst({
@@ -79,6 +82,7 @@ export class SecretarySettingsDraftServiceProposalService {
           select: {
             id: true,
             sourceDoctorServiceTemplateId: true,
+            displayOrder: true,
           },
         });
       if (!effectiveService) {
@@ -93,8 +97,13 @@ export class SecretarySettingsDraftServiceProposalService {
             secretarySettingsDraftId: draft.id,
             practiceLocationServiceId: effectiveService.id,
           },
-          select: { id: true },
+          select: { id: true, proposedDisplayOrder: true },
         });
+
+      const proposed = this.normalizeProposal(
+        dto,
+        existingProposal?.proposedDisplayOrder ?? effectiveService.displayOrder,
+      );
 
       const saved = existingProposal
         ? await transaction.secretarySettingsDraftService.update({
@@ -117,6 +126,7 @@ export class SecretarySettingsDraftServiceProposalService {
         proposalId: saved.id,
         practiceLocationServiceId: effectiveService.id,
         proposedStatus: saved.proposedStatus,
+        proposedDisplayOrder: saved.proposedDisplayOrder,
       };
     });
   }
@@ -130,7 +140,6 @@ export class SecretarySettingsDraftServiceProposalService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
-      const proposed = this.normalizeProposal(dto);
 
       const proposal =
         await transaction.secretarySettingsDraftService.findFirst({
@@ -141,12 +150,14 @@ export class SecretarySettingsDraftServiceProposalService {
           select: {
             id: true,
             practiceLocationServiceId: true,
+            proposedDisplayOrder: true,
           },
         });
       if (!proposal) {
         throw new NotFoundException('Service proposal was not found.');
       }
 
+      const proposed = this.normalizeProposal(dto, proposal.proposedDisplayOrder);
       const saved = await transaction.secretarySettingsDraftService.update({
         where: { id: proposal.id },
         data: proposed,
@@ -158,11 +169,15 @@ export class SecretarySettingsDraftServiceProposalService {
         proposalId: saved.id,
         practiceLocationServiceId: proposal.practiceLocationServiceId,
         proposedStatus: saved.proposedStatus,
+        proposedDisplayOrder: saved.proposedDisplayOrder,
       };
     });
   }
 
-  private normalizeProposal(dto: SaveSecretarySettingsDraftServiceDto) {
+  private normalizeProposal(
+    dto: SaveSecretarySettingsDraftServiceDto,
+    fallbackDisplayOrder: number,
+  ) {
     const name = dto.name.trim();
     if (!name) {
       throw new BadRequestException('Service name is required.');
@@ -183,12 +198,39 @@ export class SecretarySettingsDraftServiceProposalService {
     ) {
       throw new BadRequestException('Service availability status is invalid.');
     }
+    const displayOrder = dto.displayOrder ?? fallbackDisplayOrder;
+    if (!Number.isInteger(displayOrder) || displayOrder < 0) {
+      throw new BadRequestException(
+        'Service display order must be a non-negative whole number.',
+      );
+    }
 
     return {
       proposedName: name,
       proposedDurationMinutes: dto.durationMinutes,
       proposedStatus: dto.status,
+      proposedDisplayOrder: displayOrder,
     };
+  }
+
+  private async nextDisplayOrder(
+    transaction: TransactionClient,
+    draft: LockedEditableDraft,
+  ): Promise<number> {
+    const [effective, proposed] = await Promise.all([
+      transaction.practiceLocationService.aggregate({
+        where: { practiceLocationId: draft.practiceLocationId },
+        _max: { displayOrder: true },
+      }),
+      transaction.secretarySettingsDraftService.aggregate({
+        where: { secretarySettingsDraftId: draft.id },
+        _max: { proposedDisplayOrder: true },
+      }),
+    ]);
+    return Math.max(
+      effective._max.displayOrder ?? -1,
+      proposed._max.proposedDisplayOrder ?? -1,
+    ) + 1;
   }
 
   private async lockEditableDraft(
