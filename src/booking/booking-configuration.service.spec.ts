@@ -19,7 +19,7 @@ describe('BookingConfigurationService', () => {
     service = new BookingConfigurationService(prismaServiceMock as never);
   });
 
-  it('returns only effective public booking configuration from an available location', async () => {
+  it('returns only effective public booking configuration from an available location in configured presentation order', async () => {
     prismaServiceMock.practiceLocation.findFirst.mockResolvedValue({
       id: 'location-1',
       name: 'Clinic A',
@@ -28,7 +28,8 @@ describe('BookingConfigurationService', () => {
         accountSettings: { maximumAdvanceBookingDays: 30 },
       },
       services: [
-        { id: 'service-1', name: 'Consultation', durationMinutes: 30 },
+        { id: 'service-2', name: 'Follow-up', durationMinutes: 15, displayOrder: 0 },
+        { id: 'service-1', name: 'Consultation', durationMinutes: 30, displayOrder: 1 },
       ],
       bookingQuestions: [
         {
@@ -61,7 +62,8 @@ describe('BookingConfigurationService', () => {
           upperBoundaryInclusive: true,
         },
         services: [
-          { id: 'service-1', name: 'Consultation', durationMinutes: 30 },
+          { id: 'service-2', name: 'Follow-up', durationMinutes: 15, displayOrder: 0 },
+          { id: 'service-1', name: 'Consultation', durationMinutes: 30, displayOrder: 1 },
         ],
         serviceSelection: {
           maximumSelections: 3,
@@ -81,6 +83,11 @@ describe('BookingConfigurationService', () => {
           doctorProfile: expect.any(Object) as unknown,
           services: expect.objectContaining({
             where: { status: ServiceAvailabilityStatus.ACTIVE },
+            orderBy: [
+              { displayOrder: 'asc' },
+              { createdAt: 'asc' },
+              { id: 'asc' },
+            ],
           }) as unknown,
           bookingQuestions: expect.objectContaining({
             where: { isActive: true },
