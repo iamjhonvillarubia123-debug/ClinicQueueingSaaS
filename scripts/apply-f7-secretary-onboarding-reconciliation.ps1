@@ -28,7 +28,7 @@ Write-Host '6/9 Running backend typecheck...'
 npm run typecheck
 
 Write-Host '7/9 Running focused Secretary invitation/access unit tests...'
-npm test -- secretary-invitation.service.spec.ts practice-staff-read.service.spec.ts --runInBand
+npm test -- secretary-invitation.service.spec.ts practice-staff-read.service.spec.ts practice-staff-access.service.spec.ts secretary-settings-draft-access.service.spec.ts --runInBand
 
 Write-Host '8/9 Running backend build...'
 npm run build
