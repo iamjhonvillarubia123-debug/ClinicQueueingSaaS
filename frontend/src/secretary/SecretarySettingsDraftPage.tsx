@@ -1,4 +1,4 @@
-import { DragEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 
@@ -19,6 +19,8 @@ type ClinicDetailsForm = { name: string; addressLine1: string; addressLine2: str
 type ScheduleForm = { weekday: Weekday; isOpen: boolean; opensAtLocal: string; closesAtLocal: string; maximumOnlineBookingUntilLocal: string; maximumOperatingUntilLocal: string };
 type ServiceForm = { name: string; durationMinutes: string; status: ServiceStatus; displayOrder: string };
 type QuestionForm = { questionText: string; helpText: string; type: QuestionType; isRequired: boolean; displayOrder: string; isActive: boolean; selectOptionsText: string };
+type ServiceMutationResult = { saved: true; proposalId: string; practiceLocationServiceId: string | null; proposedStatus: ServiceStatus; proposedDisplayOrder: number };
+type QuestionMutationResult = { saved: true; proposalId: string; bookingQuestionId: string | null; proposedIsActive: boolean };
 type DraftDetail = {
   id: string; status: DraftStatus; submittedAt: string | null; reviewedAt: string | null; reviewComment: string | null;
   practiceLocation: {
@@ -83,14 +85,28 @@ export function SecretarySettingsDraftPage() {
   const [newService, setNewService] = useState<ServiceForm>({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' });
   const [newQuestion, setNewQuestion] = useState<QuestionForm>({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true, selectOptionsText: '' });
   const [exception, setException] = useState({ serviceDate: '', isOpen: false, opensAtLocal: '', closesAtLocal: '', maximumOnlineBookingUntilLocal: '', maximumOperatingUntilLocal: '' });
+  const [proposalCountDelta, setProposalCountDelta] = useState(0);
+  const knownProposalIds = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(true); const [working, setWorking] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
   const editable = detail?.status === 'DRAFT' || detail?.status === 'RETURNED_FOR_REWORK';
 
-  async function load() {
-    if (!draftId) return; setLoading(true); setError('');
+  function recordProposal(kind: 'service' | 'question', proposalId: string) {
+    const token = `${kind}:${proposalId}`;
+    if (knownProposalIds.current.has(token)) return;
+    knownProposalIds.current.add(token);
+    setProposalCountDelta((current) => current + 1);
+  }
+
+  async function load(showLoader = false) {
+    if (!draftId) return; if (showLoader) setLoading(true); setError('');
     try {
       const response = await apiRequest<DraftDetail>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}`);
       setDetail(response); setClinicDetails(clinicDetailsForm(response)); setSchedules(scheduleForms(response));
+      knownProposalIds.current = new Set([
+        ...response.proposedServices.map((row) => `service:${row.id}`),
+        ...response.proposedBookingQuestions.map((row) => `question:${row.id}`),
+      ]);
+      setProposalCountDelta(0);
       const serviceState: Record<string, ServiceForm> = {};
       for (const row of response.practiceLocation.services) {
         const p = response.proposedServices.find((item) => item.practiceLocationServiceId === row.id);
@@ -109,9 +125,10 @@ export function SecretarySettingsDraftPage() {
       for (const p of response.proposedBookingQuestions.filter((item) => !item.bookingQuestionId)) questionState[`proposal:${p.id}`] = { questionText: p.proposedQuestionText, helpText: p.proposedHelpText ?? '', type: p.proposedType, isRequired: p.proposedIsRequired, displayOrder: String(p.proposedDisplayOrder), isActive: p.proposedIsActive, selectOptionsText: selectOptionsText(p.proposedSelectOptions) };
       setQuestions(questionState);
       setQuestionOrder(Object.keys(questionState).filter((key) => questionState[key].isActive).sort((a, b) => Number(questionState[a].displayOrder) - Number(questionState[b].displayOrder)));
-    } catch (caught) { setError(errorMessage(caught)); } finally { setLoading(false); }
+    } catch (caught) { setError(errorMessage(caught)); } finally { if (showLoader) setLoading(false); }
   }
-  useEffect(() => { void load(); }, [draftId]);
+  useEffect(() => { void load(true); }, [draftId]);
+  useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 2800); return () => window.clearTimeout(timer); }, [notice]);
 
   const access = detail?.practiceLocation.currentRegularPracticeStaff;
   const availableSections = useMemo(() => [
@@ -123,30 +140,51 @@ export function SecretarySettingsDraftPage() {
 
   async function run(key: string, action: () => Promise<unknown>, success: string) {
     if (working) return; setWorking(key); setError(''); setNotice('');
-    try { await action(); await load(); setNotice(success); } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
+    try { await action(); await load(false); setNotice(success); } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
   }
   const updateSchedule = (weekday: Weekday, patch: Partial<ScheduleForm>) => setSchedules((current) => current.map((row) => row.weekday === weekday ? { ...row, ...patch } : row));
   async function saveClinicDetails(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('clinic-details', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/clinic-details`, { method: 'PUT', body: clinicDetails }), 'Clinic-details proposal saved.'); }
   async function saveSchedule(row: ScheduleForm) { if (!draftId) return; await run(`schedule:${row.weekday}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/practice-schedule`, { method: 'PUT', body: { weekday: row.weekday, isOpen: row.isOpen, opensAtLocal: row.isOpen ? row.opensAtLocal || undefined : undefined, closesAtLocal: row.isOpen ? row.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: row.isOpen ? row.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: row.isOpen ? row.maximumOperatingUntilLocal || undefined : undefined } }), `${dayLabel(row.weekday)} proposal saved.`); }
 
   async function updateService(key: string, patch: Partial<ServiceForm>, success: string) {
-    if (!draftId) return; const form = { ...services[key], ...patch }; const proposal = key.startsWith('proposal:'); const target = proposal ? `/services/proposals/${encodeURIComponent(key.slice(9))}` : `/services/effective/${encodeURIComponent(key)}`;
-    await run(`service:${key}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status, displayOrder: Number(form.displayOrder) } }), success);
+    if (!draftId || working) return;
+    const form = { ...services[key], ...patch }; const proposal = key.startsWith('proposal:'); const target = proposal ? `/services/proposals/${encodeURIComponent(key.slice(9))}` : `/services/effective/${encodeURIComponent(key)}`;
+    setWorking(`service:${key}`); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<ServiceMutationResult>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status, displayOrder: Number(form.displayOrder) } });
+      setServices((current) => ({ ...current, [key]: form }));
+      if (form.status === 'INACTIVE') setServiceOrder((current) => current.filter((item) => item !== key));
+      recordProposal('service', result.proposalId); setNotice(success);
+    } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
   }
+
   async function createService(event: FormEvent) {
-    event.preventDefault(); if (!draftId) return; const displayOrder = serviceOrder.length;
-    await run('new-service', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/services`, { method: 'POST', body: { name: newService.name, durationMinutes: Number(newService.durationMinutes), status: 'ACTIVE', displayOrder } }), 'New service proposal added.');
-    setNewService({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' });
+    event.preventDefault(); if (!draftId || working) return; const displayOrder = serviceOrder.length;
+    setWorking('new-service'); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<ServiceMutationResult>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/services`, { method: 'POST', body: { name: newService.name, durationMinutes: Number(newService.durationMinutes), status: 'ACTIVE', displayOrder } });
+      const key = `proposal:${result.proposalId}`;
+      const form: ServiceForm = { name: newService.name.trim(), durationMinutes: newService.durationMinutes, status: 'ACTIVE', displayOrder: String(result.proposedDisplayOrder ?? displayOrder) };
+      setServices((current) => ({ ...current, [key]: form })); setServiceOrder((current) => [...current, key]);
+      recordProposal('service', result.proposalId); setNewService({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' }); setNotice('New service proposal added.');
+    } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
   }
-  async function reorderServices(nextOrder: string[]) {
-    if (!draftId) return; setServiceOrder(nextOrder); setWorking('service-order'); setError(''); setNotice('');
+
+  async function reorderServices(nextOrder: string[], fallbackOrder: string[]) {
+    if (!draftId || working) return; setServiceOrder(nextOrder); setWorking('service-order'); setError(''); setNotice('');
+    const nextServices = { ...services };
+    nextOrder.forEach((key, index) => { if (nextServices[key]) nextServices[key] = { ...nextServices[key], displayOrder: String(index) }; });
+    setServices(nextServices);
     try {
       for (let index = 0; index < nextOrder.length; index += 1) {
-        const key = nextOrder[index]; const form = { ...services[key], displayOrder: String(index) }; const proposal = key.startsWith('proposal:'); const target = proposal ? `/services/proposals/${encodeURIComponent(key.slice(9))}` : `/services/effective/${encodeURIComponent(key)}`;
-        await apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status, displayOrder: index } });
+        const key = nextOrder[index]; const form = nextServices[key]; const proposal = key.startsWith('proposal:'); const target = proposal ? `/services/proposals/${encodeURIComponent(key.slice(9))}` : `/services/effective/${encodeURIComponent(key)}`;
+        const result = await apiRequest<ServiceMutationResult>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: { name: form.name, durationMinutes: Number(form.durationMinutes), status: form.status, displayOrder: index } });
+        recordProposal('service', result.proposalId);
       }
-      await load(); setNotice('Service display-order proposal saved.');
-    } catch (caught) { setError(errorMessage(caught)); await load(); } finally { setWorking(''); }
+      setNotice('Service display-order proposal saved.');
+    } catch (caught) {
+      setServiceOrder(fallbackOrder); const restored = { ...nextServices }; fallbackOrder.forEach((key, index) => { if (restored[key]) restored[key] = { ...restored[key], displayOrder: String(index) }; }); setServices(restored); setError(errorMessage(caught));
+    } finally { setWorking(''); }
   }
 
   function questionPayload(form: QuestionForm, source?: QuestionRow | QuestionProposal) {
@@ -159,47 +197,67 @@ export function SecretarySettingsDraftPage() {
     if (form.type === 'SINGLE_SELECT') return { ...base, selectOptions: enteredOptions.length ? enteredOptions : fallbackOptions };
     return base;
   }
+
   async function updateQuestion(key: string, patch: Partial<QuestionForm>, success: string) {
-    if (!draftId || !detail) return; const form = { ...questions[key], ...patch }; const proposal = key.startsWith('proposal:'); const id = proposal ? key.slice(9) : key;
+    if (!draftId || !detail || working) return; const form = { ...questions[key], ...patch }; const proposal = key.startsWith('proposal:'); const id = proposal ? key.slice(9) : key;
     const source = proposal ? detail.proposedBookingQuestions.find((row) => row.id === id) : detail.practiceLocation.bookingQuestions.find((row) => row.id === id);
     const target = proposal ? `/booking-questions/proposals/${encodeURIComponent(id)}` : `/booking-questions/effective/${encodeURIComponent(id)}`;
-    await run(`question:${key}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: questionPayload(form, source) }), success);
+    setWorking(`question:${key}`); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<QuestionMutationResult>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: questionPayload(form, source) });
+      setQuestions((current) => ({ ...current, [key]: form }));
+      if (!form.isActive) setQuestionOrder((current) => current.filter((item) => item !== key));
+      recordProposal('question', result.proposalId); setNotice(success);
+    } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
   }
+
   async function createQuestion(event: FormEvent) {
-    event.preventDefault(); if (!draftId) return;
+    event.preventDefault(); if (!draftId || working) return;
     if (newQuestion.type === 'SINGLE_SELECT' && parsedSelectOptions(newQuestion.selectOptionsText).length < 2) { setError('Single select questions need at least two choices. Enter one choice per line.'); return; }
-    const form = { ...newQuestion, displayOrder: String(questionOrder.length), isActive: true };
-    await run('new-question', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/booking-questions`, { method: 'POST', body: questionPayload(form) }), 'New booking-question proposal added.');
-    setNewQuestion({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true, selectOptionsText: '' });
+    const form = { ...newQuestion, questionText: newQuestion.questionText.trim(), displayOrder: String(questionOrder.length), isActive: true };
+    setWorking('new-question'); setError(''); setNotice('');
+    try {
+      const result = await apiRequest<QuestionMutationResult>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/booking-questions`, { method: 'POST', body: questionPayload(form) });
+      const key = `proposal:${result.proposalId}`;
+      setQuestions((current) => ({ ...current, [key]: form })); setQuestionOrder((current) => [...current, key]);
+      recordProposal('question', result.proposalId); setNewQuestion({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true, selectOptionsText: '' }); setNotice('New booking-question proposal added.');
+    } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
   }
-  async function reorderQuestions(nextOrder: string[]) {
-    if (!draftId || !detail) return; setQuestionOrder(nextOrder); setWorking('question-order'); setError(''); setNotice('');
+
+  async function reorderQuestions(nextOrder: string[], fallbackOrder: string[]) {
+    if (!draftId || !detail || working) return; setQuestionOrder(nextOrder); setWorking('question-order'); setError(''); setNotice('');
+    const nextQuestions = { ...questions };
+    nextOrder.forEach((key, index) => { if (nextQuestions[key]) nextQuestions[key] = { ...nextQuestions[key], displayOrder: String(index) }; });
+    setQuestions(nextQuestions);
     try {
       for (let index = 0; index < nextOrder.length; index += 1) {
-        const key = nextOrder[index]; const form = { ...questions[key], displayOrder: String(index) }; const proposal = key.startsWith('proposal:'); const id = proposal ? key.slice(9) : key;
+        const key = nextOrder[index]; const form = nextQuestions[key]; const proposal = key.startsWith('proposal:'); const id = proposal ? key.slice(9) : key;
         const source = proposal ? detail.proposedBookingQuestions.find((row) => row.id === id) : detail.practiceLocation.bookingQuestions.find((row) => row.id === id);
         const target = proposal ? `/booking-questions/proposals/${encodeURIComponent(id)}` : `/booking-questions/effective/${encodeURIComponent(id)}`;
-        await apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: questionPayload(form, source) });
+        const result = await apiRequest<QuestionMutationResult>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}${target}`, { method: 'PUT', body: questionPayload(form, source) });
+        recordProposal('question', result.proposalId);
       }
-      await load(); setNotice('Booking-question order proposal saved.');
-    } catch (caught) { setError(errorMessage(caught)); await load(); } finally { setWorking(''); }
+      setNotice('Booking-question order proposal saved.');
+    } catch (caught) {
+      setQuestionOrder(fallbackOrder); const restored = { ...nextQuestions }; fallbackOrder.forEach((key, index) => { if (restored[key]) restored[key] = { ...restored[key], displayOrder: String(index) }; }); setQuestions(restored); setError(errorMessage(caught));
+    } finally { setWorking(''); }
   }
 
   function startServiceDrag(event: DragEvent, key: string) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', key); setDraggedService(key); setServiceDragOrigin(serviceOrder); }
   function startQuestionDrag(event: DragEvent, key: string) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', key); setDraggedQuestion(key); setQuestionDragOrigin(questionOrder); }
   function previewService(targetKey: string) { if (draggedService) setServiceOrder((current) => moveKey(current, draggedService, targetKey)); }
   function previewQuestion(targetKey: string) { if (draggedQuestion) setQuestionOrder((current) => moveKey(current, draggedQuestion, targetKey)); }
-  function finishServiceDrag() { if (!draggedService) return; const next = serviceOrder; const changed = next.join('|') !== serviceDragOrigin.join('|'); setDraggedService(''); setServiceDragOrigin([]); if (changed) void reorderServices(next); }
-  function finishQuestionDrag() { if (!draggedQuestion) return; const next = questionOrder; const changed = next.join('|') !== questionDragOrigin.join('|'); setDraggedQuestion(''); setQuestionDragOrigin([]); if (changed) void reorderQuestions(next); }
+  function finishServiceDrag() { if (!draggedService) return; const next = serviceOrder; const origin = serviceDragOrigin; const changed = next.join('|') !== origin.join('|'); setDraggedService(''); setServiceDragOrigin([]); if (changed) void reorderServices(next, origin); }
+  function finishQuestionDrag() { if (!draggedQuestion) return; const next = questionOrder; const origin = questionDragOrigin; const changed = next.join('|') !== origin.join('|'); setDraggedQuestion(''); setQuestionDragOrigin([]); if (changed) void reorderQuestions(next, origin); }
 
   async function saveException(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('exception', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate: exception.serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal || undefined : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? exception.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } }), 'Date-specific schedule proposal saved.'); }
   async function submit() { if (!draftId) return; await run('submit', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/submit`, { method: 'POST' }), 'Draft submitted to the Doctor for review.'); }
 
-  if (loading && !detail) return <section className="practice-admin-page"><p className="practice-muted">Loading settings draft…</p></section>;
+  if (loading) return <section className="practice-admin-page"><p className="practice-muted">Loading settings draft…</p></section>;
   if (!detail) return <section className="practice-admin-page"><div className="form-error" role="alert">{error || 'Settings draft was not found.'}</div><Link to="/app/secretary/clinics">Clinics</Link></section>;
 
   const clinicName = detail.practiceLocation.name?.trim() || 'Clinic settings';
-  const proposalCount = (detail.proposedClinicDetails ? 1 : 0) + detail.proposedPracticeSchedules.length + detail.proposedServices.length + detail.proposedBookingQuestions.length + detail.proposedScheduleExceptions.length;
+  const proposalCount = (detail.proposedClinicDetails ? 1 : 0) + detail.proposedPracticeSchedules.length + detail.proposedServices.length + detail.proposedBookingQuestions.length + detail.proposedScheduleExceptions.length + proposalCountDelta;
   const sectionLabels: Record<EditorSection, string> = { clinic: 'Clinic details', content: 'Services & questions', schedules: 'Clinic schedules' };
   const hasEffectiveService = (key: string) => !key.startsWith('proposal:');
   const hasEffectiveQuestion = (key: string) => !key.startsWith('proposal:');
@@ -209,10 +267,10 @@ export function SecretarySettingsDraftPage() {
     <div className="proposal-sort-list" aria-label="Clinic services">
       {serviceOrder.map((key, index) => { const form = services[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={(event) => startServiceDrag(event, key)} onDragEnter={() => previewService(key)} onDragOver={(event) => event.preventDefault()} onDragEnd={finishServiceDrag}>
         <DragHandle /><span className="proposal-order">{index + 1}.</span><div className="proposal-row-copy"><strong>{form.name}</strong><span>{form.durationMinutes} minutes</span></div><span className={hasEffectiveService(key) ? 'proposal-badge active' : 'proposal-badge draft'}>{hasEffectiveService(key) ? 'Active' : 'Draft'}</span>
-        {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.name}`} disabled={Boolean(working)} onClick={() => void updateService(key, { status: 'INACTIVE' }, 'Service removal proposal saved.')}><TrashIcon /></button> : null}
+        {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.name}`} disabled={working === `service:${key}`} onClick={() => void updateService(key, { status: 'INACTIVE' }, 'Service removal proposal saved.')}><TrashIcon /></button> : null}
       </div>; })}
     </div>
-    {editable ? <form className="practice-form compact-form proposal-add-form" onSubmit={createService}><label>Service name<input required placeholder="Enter service name" value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} /></label><label>Expected duration (minutes)<input required type="number" min="1" placeholder="e.g., 15" value={newService.durationMinutes} onChange={(e) => setNewService({ ...newService, durationMinutes: e.target.value })} /></label><button className="proposal-add-button" disabled={Boolean(working)}>{working === 'new-service' ? 'Adding…' : 'Add service proposal'}</button></form> : null}
+    {editable ? <form className="practice-form compact-form proposal-add-form" onSubmit={createService}><label>Service name<input required placeholder="Enter service name" value={newService.name} onChange={(e) => setNewService({ ...newService, name: e.target.value })} /></label><label>Expected duration (minutes)<input required type="number" min="1" placeholder="e.g., 15" value={newService.durationMinutes} onChange={(e) => setNewService({ ...newService, durationMinutes: e.target.value })} /></label><button className="proposal-add-button" disabled={working === 'new-service'}>{working === 'new-service' ? 'Adding…' : 'Add service proposal'}</button></form> : null}
     <div className="proposal-legend"><span><span className="proposal-badge active">Active</span> Currently used in this clinic</span><span><span className="proposal-badge draft">Draft</span> Proposed change (not yet approved)</span></div>
   </section> : null;
 
@@ -221,7 +279,7 @@ export function SecretarySettingsDraftPage() {
     <div className="proposal-sort-list" aria-label="Patient booking questions">
       {questionOrder.map((key, index) => { const form = questions[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={(event) => startQuestionDrag(event, key)} onDragEnter={() => previewQuestion(key)} onDragOver={(event) => event.preventDefault()} onDragEnd={finishQuestionDrag}>
         <DragHandle /><span className="proposal-order">{index + 1}.</span><div className="proposal-row-copy"><strong>{form.questionText}</strong><span>{questionTypeLabel(form.type)} · {form.isRequired ? 'Required' : 'Optional'}</span></div><span className={hasEffectiveQuestion(key) ? 'proposal-badge active' : 'proposal-badge draft'}>{hasEffectiveQuestion(key) ? 'Active' : 'Draft'}</span>
-        {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.questionText}`} disabled={Boolean(working)} onClick={() => void updateQuestion(key, { isActive: false }, 'Booking-question removal proposal saved.')}><TrashIcon /></button> : null}
+        {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.questionText}`} disabled={working === `question:${key}`} onClick={() => void updateQuestion(key, { isActive: false }, 'Booking-question removal proposal saved.')}><TrashIcon /></button> : null}
       </div>; })}
     </div>
     {editable ? <form className="practice-form compact-form proposal-add-form" onSubmit={createQuestion}>
@@ -229,7 +287,7 @@ export function SecretarySettingsDraftPage() {
       <label>Answer type<select value={newQuestion.type} onChange={(e) => setNewQuestion({ ...newQuestion, type: e.target.value as QuestionType, selectOptionsText: e.target.value === 'SINGLE_SELECT' ? newQuestion.selectOptionsText : '' })}><option value="TEXT">Text</option><option value="NUMBER">Number</option><option value="BOOLEAN">Yes / No</option><option value="SINGLE_SELECT">Single select</option></select></label>
       <label className="proposal-checkbox"><input type="checkbox" checked={newQuestion.isRequired} onChange={(e) => setNewQuestion({ ...newQuestion, isRequired: e.target.checked })} /> Required before booking can continue</label>
       {newQuestion.type === 'SINGLE_SELECT' ? <label>Choices <span className="optional">One per line</span><textarea required rows={4} placeholder={'Option 1\nOption 2'} value={newQuestion.selectOptionsText} onChange={(e) => setNewQuestion({ ...newQuestion, selectOptionsText: e.target.value })} /></label> : null}
-      <button className="proposal-add-button" disabled={Boolean(working)}>{working === 'new-question' ? 'Adding…' : 'Add question proposal'}</button>
+      <button className="proposal-add-button" disabled={working === 'new-question'}>{working === 'new-question' ? 'Adding…' : 'Add question proposal'}</button>
     </form> : null}
     <div className="proposal-legend"><span><span className="proposal-badge active">Active</span> Currently used in this clinic</span><span><span className="proposal-badge draft">Draft</span> Proposed change (not yet approved)</span></div>
   </section> : null;
@@ -245,7 +303,8 @@ export function SecretarySettingsDraftPage() {
     {detail.status === 'APPROVED' ? <div className="practice-notice practice-success">This draft was approved and is closed.</div> : null}
     {detail.status === 'REJECTED' ? <div className="practice-notice">This draft was rejected and is permanently closed.</div> : null}
     {detail.status === 'RETURNED_FOR_REWORK' ? <div className="practice-notice">The Doctor returned this same draft for rework. Revise it and submit again when ready.</div> : null}
-    {error ? <div className="form-error" role="alert">{error}</div> : null}{notice ? <div className="practice-notice practice-success" role="status">{notice}</div> : null}
+    {error ? <div className="secretary-action-toast error" role="alert"><span className="secretary-toast-icon">!</span><span>{error}</span><button type="button" aria-label="Dismiss message" onClick={() => setError('')}>×</button></div> : null}
+    {notice ? <div className="secretary-action-toast success" role="status"><span className="secretary-toast-icon">✓</span><span>{notice}</span><button type="button" aria-label="Dismiss message" onClick={() => setNotice('')}>×</button></div> : null}
 
     <div className="secretary-proposal-layout">
       <nav className="secretary-proposal-nav" aria-label="Proposal sections">{availableSections.map((section) => <button key={section} type="button" className={activeSection === section ? 'active' : ''} onClick={() => setActiveSection(section)}>{sectionLabels[section]}</button>)}</nav>
