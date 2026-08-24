@@ -27,22 +27,22 @@ function renderDraft() {
 }
 
 describe('SecretarySettingsDraftPage', () => {
-  it('uses section navigation instead of stacking every granted configuration family', async () => {
+  it('groups services and booking questions in one section like Doctor defaults', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
     renderDraft();
 
     expect(await screen.findByRole('heading', { name: 'North Clinic' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clinic details' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Services' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Booking questions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Services & questions' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clinic schedules' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Identity, address & contact' })).toBeInTheDocument();
-    expect(screen.queryByDisplayValue('Consultation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Services' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Booking questions' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Services' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Services & questions' }));
     expect(screen.getByDisplayValue('Consultation')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Booking questions' }));
     expect(screen.getByDisplayValue('First visit?')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Clinic services' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Patient booking questions' })).toBeInTheDocument();
   });
 
   it('submits the draft without a Secretary withdrawal action', async () => {
@@ -84,9 +84,17 @@ describe('SecretarySettingsDraftPage', () => {
     renderDraft();
 
     expect(await screen.findByRole('heading', { name: 'Identity, address & contact' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Services' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Booking questions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Services & questions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clinic schedules' })).not.toBeInTheDocument();
+  });
+
+  it('shows only the granted panel inside the combined content section', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response({ ...editableDraft, practiceLocation: { ...editableDraft.practiceLocation, currentRegularPracticeStaff: { canManageClinicDetails: false, canManageServices: true, canManageBookingQuestions: false, canManageSchedules: false } } }));
+    renderDraft();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
+    expect(screen.getByRole('heading', { name: 'Clinic services' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Patient booking questions' })).not.toBeInTheDocument();
   });
 
   it('shows returned-for-rework as editable with the Doctor note and a clean exit', async () => {
