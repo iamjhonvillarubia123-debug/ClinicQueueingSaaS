@@ -8,6 +8,7 @@ import { DoctorSettingsDraftReviewReadService } from './doctor-settings-draft-re
 import { SecretarySettingsDraftAccessService } from './secretary-settings-draft-access.service';
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
+import { SecretarySettingsDraftClinicDetailsService } from './secretary-settings-draft-clinic-details.service';
 import { SecretarySettingsDraftController } from './secretary-settings-draft.controller';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftReadService } from './secretary-settings-draft-read.service';
@@ -26,6 +27,7 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
     SecretarySettingsDraftReadService,
     SecretarySettingsDraftAccessService,
     DoctorSettingsDraftReviewReadService,
+    SecretarySettingsDraftClinicDetailsService,
     SecretarySettingsDraftScheduleService,
     SecretarySettingsDraftExceptionService,
     SecretarySettingsDraftServiceProposalService,
