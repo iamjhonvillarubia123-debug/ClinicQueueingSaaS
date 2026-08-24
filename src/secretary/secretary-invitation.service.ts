@@ -13,8 +13,11 @@ import {
   NotificationOutboxStatus,
   NotificationType,
   PracticeLocationLifecycleStatus,
+  PracticeStaffCapabilityStatus,
+  PracticeStaffCapabilityType,
   PracticeStaffRole,
   Prisma,
+  SecretaryAccessProfile,
   SecretaryInvitationStatus,
   UserAccountStatus,
   UserRole,
@@ -32,9 +35,16 @@ const INVITATION_LIFETIME_MS = 72 * 60 * 60 * 1000;
 const INVITATION_PAYLOAD_PURPOSE = 'secretary-invitation';
 
 type TransactionClient = Prisma.TransactionClient;
+type LockedInvitation = { id: string };
 
-type LockedInvitation = {
-  id: string;
+type AccessSelection = {
+  accessProfile: SecretaryAccessProfile;
+  canManageClinicDetails: boolean;
+  canManageServices: boolean;
+  canManageBookingQuestions: boolean;
+  canManageSchedules: boolean;
+  cancelClinicDay: boolean;
+  assignDaySecretary: boolean;
 };
 
 @Injectable()
@@ -52,6 +62,7 @@ export class SecretaryInvitationService {
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
     const mobileNumber = this.mobileNumberService.normalize(dto.mobileNumber).canonical;
+    const access = this.normalizeAccess(dto);
     const activeInvitationKey = this.hash(
       `SECRETARY_INVITATION|${normalizedEmail}|${dto.practiceLocationId}`,
     );
@@ -64,10 +75,7 @@ export class SecretaryInvitationService {
       `;
 
       const location = await transaction.practiceLocation.findFirst({
-        where: {
-          id: dto.practiceLocationId,
-          doctorProfile: { userId: doctorUserId },
-        },
+        where: { id: dto.practiceLocationId, doctorProfile: { userId: doctorUserId } },
         select: {
           id: true,
           name: true,
@@ -87,9 +95,7 @@ export class SecretaryInvitationService {
         },
       });
 
-      if (!location) {
-        throw new NotFoundException('Practice location was not found.');
-      }
+      if (!location) throw new NotFoundException('Practice location was not found.');
       this.assertEligibleDoctor(location.doctorProfile.user);
       this.assertLocationCanReceiveSecretary(location.lifecycleStatus);
 
@@ -124,18 +130,15 @@ export class SecretaryInvitationService {
           secretaryUserId: currentUser.id,
           eligibleForAssignment:
             currentUser.accountStatus === UserAccountStatus.ACTIVE &&
-            currentUser.administrativeRestrictionStatus ===
-              AdministrativeRestrictionStatus.NONE &&
+            currentUser.administrativeRestrictionStatus === AdministrativeRestrictionStatus.NONE &&
             currentUser.emailVerifiedAt !== null,
+          requestedAccess: access,
         };
       }
 
       const now = new Date();
       const oldPending = await transaction.secretaryInvitation.findFirst({
-        where: {
-          activeInvitationKey,
-          status: SecretaryInvitationStatus.PENDING,
-        },
+        where: { activeInvitationKey, status: SecretaryInvitationStatus.PENDING },
         include: { notificationOutbox: true },
       });
 
@@ -164,6 +167,13 @@ export class SecretaryInvitationService {
           firstName,
           lastName,
           mobileNumber,
+          requestedAccessProfile: access.accessProfile,
+          requestedCanManageClinicDetails: access.canManageClinicDetails,
+          requestedCanManageServices: access.canManageServices,
+          requestedCanManageBookingQuestions: access.canManageBookingQuestions,
+          requestedCanManageSchedules: access.canManageSchedules,
+          requestedCancelClinicDay: access.cancelClinicDay,
+          requestedAssignDaySecretary: access.assignDaySecretary,
           tokenHash,
           activeInvitationKey,
           status: SecretaryInvitationStatus.PENDING,
@@ -175,9 +185,7 @@ export class SecretaryInvitationService {
       const invitationUrl = this.buildInvitationUrl(token);
       const clinicName = location.name?.trim() || 'the clinic';
       const messageBody = `${firstName}, you were invited to join ${clinicName} as a secretary in Clinic Queueing SaaS. Set your password using this secure link: ${invitationUrl}`;
-      const deliveryIdentityKey = this.hash(
-        `${NotificationType.SECRETARY_INVITATION}|${invitation.id}`,
-      );
+      const deliveryIdentityKey = this.hash(`${NotificationType.SECRETARY_INVITATION}|${invitation.id}`);
 
       await transaction.notificationOutbox.create({
         data: {
@@ -205,6 +213,7 @@ export class SecretaryInvitationService {
         outcome: 'INVITATION_CREATED' as const,
         invitationId: invitation.id,
         expiresAt,
+        requestedAccess: access,
       };
     });
   }
@@ -216,6 +225,7 @@ export class SecretaryInvitationService {
       firstName: invitation.firstName,
       clinicName: invitation.practiceLocation.name?.trim() || 'Clinic',
       expiresAt: invitation.expiresAt,
+      accessProfile: invitation.requestedAccessProfile,
     };
   }
 
@@ -226,11 +236,9 @@ export class SecretaryInvitationService {
 
     const accepted = await this.prisma.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<LockedInvitation[]>(Prisma.sql`
-        SELECT "id"
-        FROM "SecretaryInvitation"
+        SELECT "id" FROM "SecretaryInvitation"
         WHERE "tokenHash" = ${tokenHash}
-        LIMIT 1
-        FOR UPDATE
+        LIMIT 1 FOR UPDATE
       `);
       const row = rows[0];
       if (!row) return false;
@@ -239,11 +247,7 @@ export class SecretaryInvitationService {
         where: { id: row.id },
         include: {
           practiceLocation: {
-            select: {
-              id: true,
-              lifecycleStatus: true,
-              currentRegularPracticeStaffId: true,
-            },
+            select: { id: true, lifecycleStatus: true, currentRegularPracticeStaffId: true },
           },
           notificationOutbox: true,
         },
@@ -254,30 +258,18 @@ export class SecretaryInvitationService {
       if (
         invitation.status !== SecretaryInvitationStatus.PENDING ||
         invitation.activeInvitationKey === null
-      ) {
-        return false;
-      }
+      ) return false;
 
       if (invitation.expiresAt.getTime() <= now.getTime()) {
         await transaction.secretaryInvitation.update({
           where: { id: invitation.id },
-          data: {
-            status: SecretaryInvitationStatus.EXPIRED,
-            tokenHash: null,
-            activeInvitationKey: null,
-          },
+          data: { status: SecretaryInvitationStatus.EXPIRED, tokenHash: null, activeInvitationKey: null },
         });
-        await this.cancelPendingOutbox(
-          transaction,
-          invitation.notificationOutbox?.id,
-          now,
-        );
+        await this.cancelPendingOutbox(transaction, invitation.notificationOutbox?.id, now);
         return false;
       }
 
-      this.assertLocationCanReceiveSecretary(
-        invitation.practiceLocation.lifecycleStatus,
-      );
+      this.assertLocationCanReceiveSecretary(invitation.practiceLocation.lifecycleStatus);
       if (invitation.practiceLocation.currentRegularPracticeStaffId) {
         throw new ConflictException(
           'This clinic is no longer accepting this invitation. Contact the doctor for a new staffing action.',
@@ -323,8 +315,29 @@ export class SecretaryInvitationService {
           practiceLocationId: invitation.practiceLocationId,
           staffRole: PracticeStaffRole.SECRETARY,
           isActive: true,
+          accessProfile: invitation.requestedAccessProfile,
+          canManageClinicDetails: invitation.requestedCanManageClinicDetails,
+          canManageServices: invitation.requestedCanManageServices,
+          canManageBookingQuestions: invitation.requestedCanManageBookingQuestions,
+          canManageSchedules: invitation.requestedCanManageSchedules,
         },
       });
+
+      const capabilityTypes: PracticeStaffCapabilityType[] = [];
+      if (invitation.requestedCancelClinicDay) capabilityTypes.push(PracticeStaffCapabilityType.CANCEL_CLINIC_DAY);
+      if (invitation.requestedAssignDaySecretary) capabilityTypes.push(PracticeStaffCapabilityType.ASSIGN_DAY_SECRETARY);
+      for (const capabilityType of capabilityTypes) {
+        await transaction.practiceStaffCapability.create({
+          data: {
+            practiceStaffId: practiceStaff.id,
+            capabilityType,
+            status: PracticeStaffCapabilityStatus.ACTIVE,
+            activeCapabilityKey: this.hash(`PRACTICE_STAFF_CAPABILITY|${practiceStaff.id}|${capabilityType}`),
+            grantedByUserId: invitation.invitedByUserId,
+            grantedAt: now,
+          },
+        });
+      }
 
       await transaction.practiceLocation.update({
         where: { id: invitation.practiceLocationId },
@@ -342,17 +355,11 @@ export class SecretaryInvitationService {
         },
       });
 
-      await this.cancelPendingOutbox(
-        transaction,
-        invitation.notificationOutbox?.id,
-        now,
-      );
+      await this.cancelPendingOutbox(transaction, invitation.notificationOutbox?.id, now);
       return true;
     });
 
-    if (!accepted) {
-      throw new BadRequestException('Invalid or expired invitation link.');
-    }
+    if (!accepted) throw new BadRequestException('Invalid or expired invitation link.');
     return { accepted: true as const };
   }
 
@@ -389,13 +396,43 @@ export class SecretaryInvitationService {
           activeInvitationKey: null,
         },
       });
-      await this.cancelPendingOutbox(
-        transaction,
-        invitation.notificationOutbox?.id,
-        now,
-      );
+      await this.cancelPendingOutbox(transaction, invitation.notificationOutbox?.id, now);
       return { revoked: true as const };
     });
+  }
+
+  private normalizeAccess(dto: CreateSecretaryInvitationDto): AccessSelection {
+    if (dto.accessProfile === SecretaryAccessProfile.STANDARD) {
+      return {
+        accessProfile: dto.accessProfile,
+        canManageClinicDetails: false,
+        canManageServices: false,
+        canManageBookingQuestions: false,
+        canManageSchedules: false,
+        cancelClinicDay: Boolean(dto.cancelClinicDay),
+        assignDaySecretary: Boolean(dto.assignDaySecretary),
+      };
+    }
+    if (dto.accessProfile === SecretaryAccessProfile.FULL_CLINIC_CONFIGURATION) {
+      return {
+        accessProfile: dto.accessProfile,
+        canManageClinicDetails: true,
+        canManageServices: true,
+        canManageBookingQuestions: true,
+        canManageSchedules: true,
+        cancelClinicDay: Boolean(dto.cancelClinicDay),
+        assignDaySecretary: Boolean(dto.assignDaySecretary),
+      };
+    }
+    return {
+      accessProfile: SecretaryAccessProfile.CUSTOM,
+      canManageClinicDetails: Boolean(dto.canManageClinicDetails),
+      canManageServices: Boolean(dto.canManageServices),
+      canManageBookingQuestions: Boolean(dto.canManageBookingQuestions),
+      canManageSchedules: Boolean(dto.canManageSchedules),
+      cancelClinicDay: Boolean(dto.cancelClinicDay),
+      assignDaySecretary: Boolean(dto.assignDaySecretary),
+    };
   }
 
   private async findUsableInvitation(token: string) {
@@ -409,9 +446,7 @@ export class SecretaryInvitationService {
       invitation.status !== SecretaryInvitationStatus.PENDING ||
       invitation.activeInvitationKey === null ||
       invitation.expiresAt.getTime() <= Date.now()
-    ) {
-      throw new BadRequestException('Invalid or expired invitation link.');
-    }
+    ) throw new BadRequestException('Invalid or expired invitation link.');
     return invitation;
   }
 
@@ -437,26 +472,19 @@ export class SecretaryInvitationService {
       user.accountStatus !== UserAccountStatus.ACTIVE ||
       user.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
     ) {
-      throw new ForbiddenException(
-        'Only an eligible current doctor may invite a secretary.',
-      );
+      throw new ForbiddenException('Only an eligible current doctor may invite a secretary.');
     }
   }
 
-  private assertLocationCanReceiveSecretary(
-    status: PracticeLocationLifecycleStatus,
-  ): void {
+  private assertLocationCanReceiveSecretary(status: PracticeLocationLifecycleStatus): void {
     if (status === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED) {
-      throw new ConflictException(
-        'A permanently deleted practice location cannot receive staff authority.',
-      );
+      throw new ConflictException('A permanently deleted practice location cannot receive staff authority.');
     }
   }
 
   private buildInvitationUrl(token: string): string {
     const baseUrl = (
-      this.configService.get<string>('PUBLIC_APP_BASE_URL') ??
-      'http://localhost:5173'
+      this.configService.get<string>('PUBLIC_APP_BASE_URL') ?? 'http://localhost:5173'
     ).replace(/\/$/, '');
     return `${baseUrl}/secretary-invitation?token=${encodeURIComponent(token)}`;
   }
