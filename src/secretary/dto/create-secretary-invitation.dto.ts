@@ -14,6 +14,11 @@ import { SecretaryAccessProfile } from '../../../generated/prisma/client';
 const trimString = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
+const defaultStandardAccess = ({ value }: { value: unknown }): unknown =>
+  value === undefined || value === null || value === ''
+    ? SecretaryAccessProfile.STANDARD
+    : value;
+
 export class CreateSecretaryInvitationDto {
   @IsUUID()
   practiceLocationId!: string;
@@ -41,9 +46,9 @@ export class CreateSecretaryInvitationDto {
   @MaxLength(30)
   mobileNumber!: string;
 
-  @IsOptional()
+  @Transform(defaultStandardAccess)
   @IsEnum(SecretaryAccessProfile)
-  accessProfile?: SecretaryAccessProfile;
+  accessProfile: SecretaryAccessProfile = SecretaryAccessProfile.STANDARD;
 
   @IsOptional()
   @IsBoolean()
