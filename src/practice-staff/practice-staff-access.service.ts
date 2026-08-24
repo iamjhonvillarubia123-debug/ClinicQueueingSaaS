@@ -3,6 +3,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException } 
 import {
   PracticeStaffCapabilityStatus,
   PracticeStaffCapabilityType,
+  Prisma,
   SecretaryAccessProfile,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,20 +45,8 @@ export class PracticeStaffAccessService {
         },
       });
 
-      await this.reconcileCapability(
-        transaction,
-        assignment.id,
-        authenticatedUserId,
-        PracticeStaffCapabilityType.CANCEL_CLINIC_DAY,
-        Boolean(dto.cancelClinicDay),
-      );
-      await this.reconcileCapability(
-        transaction,
-        assignment.id,
-        authenticatedUserId,
-        PracticeStaffCapabilityType.ASSIGN_DAY_SECRETARY,
-        Boolean(dto.assignDaySecretary),
-      );
+      await this.reconcileCapability(transaction, assignment.id, authenticatedUserId, PracticeStaffCapabilityType.CANCEL_CLINIC_DAY, Boolean(dto.cancelClinicDay));
+      await this.reconcileCapability(transaction, assignment.id, authenticatedUserId, PracticeStaffCapabilityType.ASSIGN_DAY_SECRETARY, Boolean(dto.assignDaySecretary));
 
       return { configured: true, accessProfile: dto.accessProfile, ...flags };
     });
@@ -65,20 +54,10 @@ export class PracticeStaffAccessService {
 
   private normalizeFlags(dto: ConfigureSecretaryAccessDto) {
     if (dto.accessProfile === SecretaryAccessProfile.STANDARD) {
-      return {
-        canManageClinicDetails: false,
-        canManageServices: false,
-        canManageBookingQuestions: false,
-        canManageSchedules: false,
-      };
+      return { canManageClinicDetails: false, canManageServices: false, canManageBookingQuestions: false, canManageSchedules: false };
     }
     if (dto.accessProfile === SecretaryAccessProfile.FULL_CLINIC_CONFIGURATION) {
-      return {
-        canManageClinicDetails: true,
-        canManageServices: true,
-        canManageBookingQuestions: true,
-        canManageSchedules: true,
-      };
+      return { canManageClinicDetails: true, canManageServices: true, canManageBookingQuestions: true, canManageSchedules: true };
     }
     return {
       canManageClinicDetails: Boolean(dto.canManageClinicDetails),
@@ -89,7 +68,7 @@ export class PracticeStaffAccessService {
   }
 
   private async reconcileCapability(
-    transaction: Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
+    transaction: Prisma.TransactionClient,
     practiceStaffId: string,
     doctorUserId: string,
     capabilityType: PracticeStaffCapabilityType,
