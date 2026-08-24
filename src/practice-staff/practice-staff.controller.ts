@@ -14,8 +14,10 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
 import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
+import { ConfigureSecretaryAccessDto } from './dto/configure-secretary-access.dto';
 import { RemoveRegularSecretaryDto } from './dto/remove-regular-secretary.dto';
 import { ReplaceRegularSecretaryDto } from './dto/replace-regular-secretary.dto';
+import { PracticeStaffAccessService } from './practice-staff-access.service';
 import { PracticeStaffReadService } from './practice-staff-read.service';
 import { PracticeStaffService } from './practice-staff.service';
 
@@ -24,6 +26,7 @@ export class PracticeStaffController {
   constructor(
     private readonly practiceStaffService: PracticeStaffService,
     private readonly practiceStaffReadService: PracticeStaffReadService,
+    private readonly practiceStaffAccessService: PracticeStaffAccessService,
   ) {}
 
   @UseGuards(SessionAuthGuard)
@@ -43,6 +46,15 @@ export class PracticeStaffController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.practiceStaffReadService.resolveExistingSecretary(request.user.userId, practiceLocationId, body.email);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('regular/access')
+  configureAccess(
+    @Body() dto: ConfigureSecretaryAccessDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceStaffAccessService.configure(request.user.userId, dto);
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
