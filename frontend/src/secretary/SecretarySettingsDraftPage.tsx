@@ -296,7 +296,7 @@ export function SecretarySettingsDraftPage() {
     <Link className="secretary-back-link" to="/app/secretary/clinics">← Back to clinics</Link>
     <div className="secretary-proposal-header">
       <div><p className="eyebrow">Secretary settings proposal</p><div className="secretary-proposal-title-row"><h1 id="secretary-draft-heading">{clinicName}</h1><span className="practice-status">{statusLabel(detail.status)}</span></div><p className="practice-muted">Prepare proposed clinic changes for Doctor review. Nothing on this page becomes effective until the Doctor approves the draft.</p></div>
-      <div className="secretary-proposal-actions"><Link className="secondary-action" to="/app/secretary/clinics">Cancel</Link>{editable ? <button className="primary" type="button" disabled={Boolean(working) || proposalCount === 0} onClick={() => void submit()}>{working === 'submit' ? 'Submitting…' : 'Submit to Doctor'}</button> : null}</div>
+      <div className="secretary-proposal-actions"><Link className="secondary-action" to="/app/secretary/clinics">Cancel</Link>{editable ? <button className="primary" type="button" disabled={working === 'submit' || proposalCount === 0} onClick={() => void submit()}>{working === 'submit' ? 'Submitting…' : 'Submit to Doctor'}</button> : null}</div>
     </div>
     {detail.reviewComment ? <div className="practice-notice"><strong>Doctor note:</strong> {detail.reviewComment}</div> : null}
     {detail.status === 'SUBMITTED' ? <div className="practice-notice">Waiting for Doctor review. The Secretary cannot edit or withdraw this submitted draft.</div> : null}
