@@ -36,10 +36,8 @@ describe('SecretarySettingsDraftPage', () => {
   it('renders the approved compact services and questions proposal UI', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
     renderDraft();
-
     expect(await screen.findByRole('heading', { name: 'North Clinic' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Services & questions' }));
-
     expect(screen.getByRole('heading', { name: 'Clinic services' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Patient booking questions' })).toBeInTheDocument();
     expect(screen.getByText('Consultation')).toBeInTheDocument();
@@ -65,7 +63,6 @@ describe('SecretarySettingsDraftPage', () => {
     renderDraft();
     fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Consultation' }));
-
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/services/effective/service-1'))).toBe(true));
     const call = fetchMock.mock.calls.find(([input]) => String(input).includes('/services/effective/service-1'));
     expect(String(call?.[1]?.body)).toContain('"status":"INACTIVE"');
@@ -75,15 +72,11 @@ describe('SecretarySettingsDraftPage', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
     renderDraft();
     fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
-
-    const questionList = screen.getByRole('group', { name: 'Patient booking questions' });
+    const questionList = screen.getByLabelText('Patient booking questions');
     const firstRow = within(questionList).getByText('First visit?').closest('.proposal-sort-row');
     const secondRow = within(questionList).getByText('Reason for visit?').closest('.proposal-sort-row');
     expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();
-    fireEvent.dragStart(firstRow!);
-    fireEvent.dragOver(secondRow!);
-    fireEvent.drop(secondRow!);
-
+    fireEvent.dragStart(firstRow!); fireEvent.dragOver(secondRow!); fireEvent.drop(secondRow!);
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/booking-questions/'))).toBe(true));
     const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/booking-questions/')).map(([, init]) => String(init?.body));
     expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
