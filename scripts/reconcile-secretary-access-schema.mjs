@@ -5,60 +5,78 @@ let schema = await readFile(schemaPath, 'utf8');
 
 const fail = (message) => { throw new Error(`Secretary access schema reconciliation failed: ${message}`); };
 
-function insertAfter(pattern, insertion, marker) {
-  if (schema.includes(marker)) return;
+function replaceModel(name, transform) {
+  const pattern = new RegExp(`model ${name} \\{[\\s\\S]*?\\n\\}`, 'm');
   const match = schema.match(pattern);
-  if (!match || match.index === undefined) fail(`anchor not found for ${marker}`);
+  if (!match) fail(`${name} model not found`);
+  const updated = transform(match[0]);
+  schema = schema.replace(match[0], updated);
+}
+
+function removeFieldLines(model, fieldNames) {
+  const names = fieldNames.join('|');
+  return model.replace(new RegExp(`^\\s*(?:${names})\\s+[^\\n]*\\r?\\n`, 'gm'), '');
+}
+
+if (!/enum SecretaryAccessProfile\s*\{/.test(schema)) {
+  const match = schema.match(/enum PracticeStaffRole \{[\s\S]*?\}\r?\n\r?\n/);
+  if (!match || match.index === undefined) fail('PracticeStaffRole enum anchor not found');
   const index = match.index + match[0].length;
-  schema = `${schema.slice(0, index)}${insertion}${schema.slice(index)}`;
+  schema = `${schema.slice(0, index)}enum SecretaryAccessProfile {\n  STANDARD\n  FULL_CLINIC_CONFIGURATION\n  CUSTOM\n}\n\n${schema.slice(index)}`;
 }
 
-if (!schema.includes('enum SecretaryAccessProfile')) {
-  insertAfter(
-    /enum PracticeStaffRole \{[\s\S]*?\}\r?\n\r?\n/,
-    'enum SecretaryAccessProfile {\n  STANDARD\n  FULL_CLINIC_CONFIGURATION\n  CUSTOM\n}\n\n',
-    'enum SecretaryAccessProfile',
-  );
-}
-
-if (!/enum PracticeStaffCapabilityType \{[\s\S]*?ASSIGN_DAY_SECRETARY[\s\S]*?\}/.test(schema)) {
-  schema = schema.replace(
+if (!/enum PracticeStaffCapabilityType \{[\s\S]*?\bASSIGN_DAY_SECRETARY\b[\s\S]*?\}/.test(schema)) {
+  const updated = schema.replace(
     /(enum PracticeStaffCapabilityType \{\s*\r?\n\s*CANCEL_CLINIC_DAY\s*\r?\n)/,
     '$1  ASSIGN_DAY_SECRETARY\n',
   );
+  if (updated === schema) fail('PracticeStaffCapabilityType CANCEL_CLINIC_DAY anchor not found');
+  schema = updated;
 }
 
-if (!schema.includes('accessProfile SecretaryAccessProfile')) {
-  const modelMatch = schema.match(/model PracticeStaff \{[\s\S]*?\n\}/);
-  if (!modelMatch || modelMatch.index === undefined) fail('PracticeStaff model not found');
-  const original = modelMatch[0];
-  const updated = original.replace(
+replaceModel('PracticeStaff', (original) => {
+  const fieldNames = [
+    'accessProfile',
+    'canManageClinicDetails',
+    'canManageServices',
+    'canManageBookingQuestions',
+    'canManageSchedules',
+  ];
+  const cleaned = removeFieldLines(original, fieldNames);
+  const updated = cleaned.replace(
     /(\s+isActive\s+Boolean[^\n]*\r?\n)/,
     `$1\n  accessProfile             SecretaryAccessProfile @default(STANDARD)\n  canManageClinicDetails    Boolean @default(false)\n  canManageServices         Boolean @default(false)\n  canManageBookingQuestions Boolean @default(false)\n  canManageSchedules        Boolean @default(false)\n`,
   );
-  if (updated === original) fail('PracticeStaff isActive anchor not found');
-  schema = schema.replace(original, updated);
-}
+  if (updated === cleaned) fail('PracticeStaff isActive anchor not found');
+  return updated;
+});
 
-if (!schema.includes('requestedAccessProfile SecretaryAccessProfile')) {
-  const invitationMatch = schema.match(/model SecretaryInvitation \{[\s\S]*?\n\}/);
-  if (!invitationMatch || invitationMatch.index === undefined) fail('SecretaryInvitation model not found; run invitation reconciliation first');
-  const original = invitationMatch[0];
-  const updated = original.replace(
+replaceModel('SecretaryInvitation', (original) => {
+  const fieldNames = [
+    'requestedAccessProfile',
+    'requestedCanManageClinicDetails',
+    'requestedCanManageServices',
+    'requestedCanManageBookingQuestions',
+    'requestedCanManageSchedules',
+    'requestedCancelClinicDay',
+    'requestedAssignDaySecretary',
+  ];
+  const cleaned = removeFieldLines(original, fieldNames);
+  const updated = cleaned.replace(
     /(\s+mobileNumber\s+String[^\n]*\r?\n)/,
     `$1\n  requestedAccessProfile             SecretaryAccessProfile @default(STANDARD)\n  requestedCanManageClinicDetails    Boolean @default(false)\n  requestedCanManageServices         Boolean @default(false)\n  requestedCanManageBookingQuestions Boolean @default(false)\n  requestedCanManageSchedules        Boolean @default(false)\n  requestedCancelClinicDay           Boolean @default(false)\n  requestedAssignDaySecretary        Boolean @default(false)\n`,
   );
-  if (updated === original) fail('SecretaryInvitation mobileNumber anchor not found');
-  schema = schema.replace(original, updated);
-}
+  if (updated === cleaned) fail('SecretaryInvitation mobileNumber anchor not found');
+  return updated;
+});
 
-for (const marker of [
-  'enum SecretaryAccessProfile',
-  'ASSIGN_DAY_SECRETARY',
-  'accessProfile             SecretaryAccessProfile',
-  'requestedAccessProfile             SecretaryAccessProfile',
-]) {
-  if (!schema.includes(marker)) fail(`required marker missing: ${marker}`);
+const requiredCounts = [
+  ['accessProfile', /\baccessProfile\s+SecretaryAccessProfile\b/g, 1],
+  ['requestedAccessProfile', /\brequestedAccessProfile\s+SecretaryAccessProfile\b/g, 2],
+];
+for (const [label, pattern, expected] of requiredCounts) {
+  const count = (schema.match(pattern) ?? []).length;
+  if (count !== expected) fail(`${label} count is ${count}; expected ${expected}`);
 }
 
 await writeFile(schemaPath, schema, 'utf8');
