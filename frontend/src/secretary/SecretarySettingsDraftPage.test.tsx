@@ -47,12 +47,56 @@ describe('SecretarySettingsDraftPage', () => {
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
     expect(screen.queryByLabelText('Display order')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Required/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Required before booking can continue')).toBeInTheDocument();
     expect(screen.queryByLabelText(/Active for new bookings/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save service' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save question' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add service proposal' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add question proposal' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['TEXT', 'Text'],
+    ['NUMBER', 'Number'],
+    ['BOOLEAN', 'Yes / No'],
+  ])('creates a %s booking question with only fields valid for that answer type', async (type, optionLabel) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).endsWith('/booking-questions')) return response({ saved: true, proposalId: 'new-question' });
+      return response(editableDraft);
+    });
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
+    fireEvent.change(screen.getByLabelText('Question'), { target: { value: `${optionLabel} question` } });
+    fireEvent.change(screen.getByLabelText('Answer type'), { target: { value: type } });
+    fireEvent.click(screen.getByLabelText('Required before booking can continue'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add question proposal' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/booking-questions'))).toBe(true));
+    const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/booking-questions'));
+    const body = String(call?.[1]?.body);
+    expect(body).toContain(`\"type\":\"${type}\"`);
+    expect(body).toContain('\"isRequired\":true');
+    expect(body).not.toContain('selectOptions');
+    if (type !== 'TEXT') expect(body).not.toContain('textMaximumLength');
+    if (type !== 'NUMBER') { expect(body).not.toContain('numberMinimum'); expect(body).not.toContain('numberMaximum'); }
+  });
+
+  it('creates a SINGLE_SELECT booking question with entered choices', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).endsWith('/booking-questions')) return response({ saved: true, proposalId: 'new-question' });
+      return response(editableDraft);
+    });
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
+    fireEvent.change(screen.getByLabelText('Question'), { target: { value: 'Consultation type?' } });
+    fireEvent.change(screen.getByLabelText('Answer type'), { target: { value: 'SINGLE_SELECT' } });
+    fireEvent.change(screen.getByLabelText(/Choices/), { target: { value: 'In person\nOnline' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add question proposal' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/booking-questions'))).toBe(true));
+    const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/booking-questions'));
+    const body = String(call?.[1]?.body);
+    expect(body).toContain('\"type\":\"SINGLE_SELECT\"');
+    expect(body).toContain('In person');
+    expect(body).toContain('Online');
   });
 
   it('uses the trash action to propose service removal instead of deleting history', async () => {
@@ -79,7 +123,9 @@ describe('SecretarySettingsDraftPage', () => {
     const firstRow = within(serviceList as HTMLElement).getByText('Consultation').closest('.proposal-sort-row');
     const secondRow = within(serviceList as HTMLElement).getByText('Vaccination').closest('.proposal-sort-row');
     expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();
-    fireEvent.dragStart(firstRow!); fireEvent.dragOver(secondRow!); fireEvent.drop(secondRow!);
+    fireEvent.dragStart(firstRow!, { dataTransfer: { effectAllowed: 'move', setData: vi.fn() } });
+    fireEvent.dragEnter(secondRow!);
+    fireEvent.dragEnd(firstRow!);
     await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/services/')).length).toBeGreaterThanOrEqual(2));
     const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/services/')).map(([, init]) => String(init?.body));
     expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
@@ -97,7 +143,9 @@ describe('SecretarySettingsDraftPage', () => {
     const firstRow = within(questionList as HTMLElement).getByText('First visit?').closest('.proposal-sort-row');
     const secondRow = within(questionList as HTMLElement).getByText('Reason for visit?').closest('.proposal-sort-row');
     expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();
-    fireEvent.dragStart(firstRow!); fireEvent.dragOver(secondRow!); fireEvent.drop(secondRow!);
+    fireEvent.dragStart(firstRow!, { dataTransfer: { effectAllowed: 'move', setData: vi.fn() } });
+    fireEvent.dragEnter(secondRow!);
+    fireEvent.dragEnd(firstRow!);
     await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/booking-questions/')).length).toBeGreaterThanOrEqual(3));
     const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/booking-questions/')).map(([, init]) => String(init?.body));
     expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
