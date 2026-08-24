@@ -13,14 +13,10 @@ import {
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 
 describe('SecretarySettingsDraftApprovalService', () => {
-  const scheduleResolutionMock = {
-    resolveConfiguredSchedule: jest.fn(),
-  };
+  const scheduleResolutionMock = { resolveConfiguredSchedule: jest.fn() };
   const doctorCalendarMock = { isAvailableForInterval: jest.fn() };
   const crossLocationConflictMock = { assertNoConflictForInterval: jest.fn() };
-  const recurringScheduleConflictMock = {
-    assertNoConflictForLocation: jest.fn(),
-  };
+  const recurringScheduleConflictMock = { assertNoConflictForLocation: jest.fn() };
   const prismaServiceMock = {
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
@@ -28,23 +24,16 @@ describe('SecretarySettingsDraftApprovalService', () => {
     user: { findUnique: jest.fn() },
     commandIdempotency: { findUnique: jest.fn(), create: jest.fn() },
     secretarySettingsDraft: { update: jest.fn() },
+    secretarySettingsDraftClinicDetails: { findUnique: jest.fn() },
     secretarySettingsDraftService: { findMany: jest.fn() },
     secretarySettingsDraftPracticeSchedule: { findMany: jest.fn() },
     secretarySettingsDraftScheduleException: { findMany: jest.fn() },
     secretarySettingsDraftBookingQuestion: { findMany: jest.fn() },
-    practiceLocationService: {
-      findMany: jest.fn(),
-      update: jest.fn(),
-      create: jest.fn(),
-    },
+    practiceLocation: { update: jest.fn() },
+    practiceLocationService: { findMany: jest.fn(), update: jest.fn(), create: jest.fn() },
     practiceSchedule: { upsert: jest.fn(), findMany: jest.fn() },
     scheduleException: { upsert: jest.fn() },
-    bookingQuestion: {
-      findMany: jest.fn(),
-      aggregate: jest.fn(),
-      update: jest.fn(),
-      create: jest.fn(),
-    },
+    bookingQuestion: { findMany: jest.fn(), aggregate: jest.fn(), update: jest.fn(), create: jest.fn() },
   };
   let service: SecretarySettingsDraftApprovalService;
   let capturedApprovalUpdate: unknown;
@@ -70,11 +59,10 @@ describe('SecretarySettingsDraftApprovalService', () => {
       recurringScheduleConflictMock as never,
     );
     prismaServiceMock.$transaction.mockImplementation(
-      (callback: (transaction: typeof prismaServiceMock) => unknown) =>
-        callback(prismaServiceMock),
+      (callback: (transaction: typeof prismaServiceMock) => unknown) => callback(prismaServiceMock),
     );
     prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([lockedDraft])
+      .mockResolvedValueOnce([{ ...lockedDraft }])
       .mockResolvedValueOnce([{ id: 'doctor-1' }]);
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.user.findUnique.mockResolvedValue({
@@ -83,236 +71,143 @@ describe('SecretarySettingsDraftApprovalService', () => {
       administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     });
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.secretarySettingsDraft.update.mockImplementation(
-      (value: unknown) => {
-        capturedApprovalUpdate = value;
-        return Promise.resolve(undefined);
-      },
-    );
-    prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue(
-      [],
-    );
-    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue(
-      [],
-    );
-    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue(
-      [],
-    );
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
-      [],
-    );
+    prismaServiceMock.secretarySettingsDraft.update.mockImplementation((value: unknown) => {
+      capturedApprovalUpdate = value;
+      return Promise.resolve(undefined);
+    });
+    prismaServiceMock.secretarySettingsDraftClinicDetails.findUnique.mockResolvedValue(null);
+    prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([]);
+    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue([]);
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([]);
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([]);
     prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([]);
     prismaServiceMock.bookingQuestion.findMany.mockResolvedValue([]);
-    prismaServiceMock.bookingQuestion.aggregate.mockResolvedValue({
-      _max: { displayOrder: null },
-    });
-    recurringScheduleConflictMock.assertNoConflictForLocation.mockResolvedValue(
-      undefined,
-    );
+    prismaServiceMock.bookingQuestion.aggregate.mockResolvedValue({ _max: { displayOrder: null } });
+    recurringScheduleConflictMock.assertNoConflictForLocation.mockResolvedValue(undefined);
   });
 
   it('atomically applies all proposal families and marks the submitted draft approved', async () => {
+    prismaServiceMock.secretarySettingsDraftClinicDetails.findUnique.mockResolvedValue({
+      proposedName: 'North Clinic Updated',
+      proposedAddressLine1: '2 New Street',
+      proposedAddressLine2: null,
+      proposedCityMunicipality: 'Quezon City',
+      proposedProvince: 'Metro Manila',
+      proposedPostalCode: '1100',
+      proposedContactNumber: '09170000000',
+      proposedCountryCode: 'PH',
+      proposedTimeZone: 'Asia/Manila',
+    });
     const serviceProposal = {
-      id: 'service-proposal-1',
-      secretarySettingsDraftId: 'draft-1',
-      practiceLocationServiceId: 'service-1',
-      sourceDoctorServiceTemplateId: null,
-      proposedName: 'Consultation',
-      proposedDurationMinutes: 30,
-      proposedStatus: ServiceAvailabilityStatus.ACTIVE,
+      id: 'service-proposal-1', secretarySettingsDraftId: 'draft-1', practiceLocationServiceId: 'service-1', sourceDoctorServiceTemplateId: null,
+      proposedName: 'Consultation', proposedDurationMinutes: 30, proposedStatus: ServiceAvailabilityStatus.ACTIVE,
     };
     const scheduleProposal = {
-      id: 'schedule-proposal-1',
-      secretarySettingsDraftId: 'draft-1',
-      weekday: Weekday.MONDAY,
-      proposedIsOpen: true,
-      proposedOpensAtLocal: new Date('1970-01-01T01:00:00.000Z'),
-      proposedClosesAtLocal: new Date('1970-01-01T09:00:00.000Z'),
-      proposedMaximumOnlineBookingUntilLocal: null,
-      proposedMaximumOperatingUntilLocal: null,
+      id: 'schedule-proposal-1', secretarySettingsDraftId: 'draft-1', weekday: Weekday.MONDAY, proposedIsOpen: true,
+      proposedOpensAtLocal: new Date('1970-01-01T01:00:00.000Z'), proposedClosesAtLocal: new Date('1970-01-01T09:00:00.000Z'),
+      proposedMaximumOnlineBookingUntilLocal: null, proposedMaximumOperatingUntilLocal: null,
     };
     const exceptionProposal = {
-      id: 'exception-proposal-1',
-      secretarySettingsDraftId: 'draft-1',
-      serviceDate: new Date('2026-08-20T00:00:00.000Z'),
-      proposedIsOpen: false,
-      proposedOpensAtLocal: null,
-      proposedClosesAtLocal: null,
-      proposedMaximumOnlineBookingUntilLocal: null,
-      proposedMaximumOperatingUntilLocal: null,
+      id: 'exception-proposal-1', secretarySettingsDraftId: 'draft-1', serviceDate: new Date('2026-08-20T00:00:00.000Z'),
+      proposedIsOpen: false, proposedOpensAtLocal: null, proposedClosesAtLocal: null,
+      proposedMaximumOnlineBookingUntilLocal: null, proposedMaximumOperatingUntilLocal: null,
     };
     const questionProposal = {
-      id: 'question-proposal-1',
-      secretarySettingsDraftId: 'draft-1',
-      bookingQuestionId: 'question-1',
-      sourceDoctorBookingQuestionTemplateId: null,
-      proposedQuestionText: 'Existing patient?',
-      proposedHelpText: null,
-      proposedType: BookingQuestionType.BOOLEAN,
-      proposedIsRequired: true,
-      proposedDisplayOrder: 0,
-      proposedIsActive: true,
-      proposedEstimatedMinutesAdjustment: 0,
-      proposedTextMaximumLength: null,
-      proposedNumberMinimum: null,
-      proposedNumberMaximum: null,
-      proposedSelectOptions: null,
+      id: 'question-proposal-1', secretarySettingsDraftId: 'draft-1', bookingQuestionId: 'question-1', sourceDoctorBookingQuestionTemplateId: null,
+      proposedQuestionText: 'Existing patient?', proposedHelpText: null, proposedType: BookingQuestionType.BOOLEAN,
+      proposedIsRequired: true, proposedDisplayOrder: 0, proposedIsActive: true, proposedEstimatedMinutesAdjustment: 0,
+      proposedTextMaximumLength: null, proposedNumberMinimum: null, proposedNumberMaximum: null, proposedSelectOptions: null,
     };
-    prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([
-      serviceProposal,
-    ]);
-    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue(
-      [scheduleProposal],
-    );
-    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue(
-      [exceptionProposal],
-    );
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
-      [questionProposal],
-    );
-    prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([
-      { id: 'service-1' },
-    ]);
-    prismaServiceMock.bookingQuestion.findMany.mockResolvedValue([
-      { id: 'question-1', displayOrder: 0, isActive: true },
-    ]);
-    prismaServiceMock.bookingQuestion.aggregate.mockResolvedValue({
-      _max: { displayOrder: 0 },
+    prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([serviceProposal]);
+    prismaServiceMock.secretarySettingsDraftPracticeSchedule.findMany.mockResolvedValue([scheduleProposal]);
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([exceptionProposal]);
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([questionProposal]);
+    prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([{ id: 'service-1' }]);
+    prismaServiceMock.bookingQuestion.findMany.mockResolvedValue([{ id: 'question-1', displayOrder: 0, isActive: true }]);
+    prismaServiceMock.bookingQuestion.aggregate.mockResolvedValue({ _max: { displayOrder: 0 } });
+
+    await expect(service.approve('doctor-1', 'draft-1', 'approve-key')).resolves.toEqual({
+      approved: true, replayed: false, draftId: 'draft-1', status: SecretarySettingsDraftStatus.APPROVED,
     });
 
-    await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-key'),
-    ).resolves.toEqual({
-      approved: true,
-      replayed: false,
-      draftId: 'draft-1',
-      status: SecretarySettingsDraftStatus.APPROVED,
+    expect(prismaServiceMock.practiceLocation.update).toHaveBeenCalledWith({
+      where: { id: 'location-1' },
+      data: expect.objectContaining({ name: 'North Clinic Updated', addressLine1: '2 New Street' }),
     });
-
     expect(prismaServiceMock.practiceLocationService.update).toHaveBeenCalled();
     expect(prismaServiceMock.practiceSchedule.upsert).toHaveBeenCalled();
     expect(prismaServiceMock.scheduleException.upsert).toHaveBeenCalled();
     expect(prismaServiceMock.bookingQuestion.update).toHaveBeenCalled();
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).toHaveBeenCalledTimes(1);
+    expect(prismaServiceMock.secretarySettingsDraft.update).toHaveBeenCalledTimes(1);
     expect(capturedApprovalUpdate).toEqual({
       where: { id: 'draft-1' },
-      data: expect.objectContaining({
-        status: SecretarySettingsDraftStatus.APPROVED,
-        reviewedByUserId: 'doctor-1',
-      }) as unknown,
+      data: expect.objectContaining({ status: SecretarySettingsDraftStatus.APPROVED, reviewedByUserId: 'doctor-1' }) as unknown,
     });
-    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(
-      1,
+    expect(prismaServiceMock.commandIdempotency.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the proposed clinic time zone during active-location schedule revalidation', async () => {
+    prismaServiceMock.$queryRaw.mockReset();
+    prismaServiceMock.$queryRaw
+      .mockResolvedValueOnce([{ ...lockedDraft, lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE }])
+      .mockResolvedValueOnce([{ id: 'doctor-1' }]);
+    prismaServiceMock.secretarySettingsDraftClinicDetails.findUnique.mockResolvedValue({
+      proposedName: 'North Clinic', proposedAddressLine1: '1 Street', proposedAddressLine2: null,
+      proposedCityMunicipality: 'Manila', proposedProvince: 'Metro Manila', proposedPostalCode: null,
+      proposedContactNumber: '09170000000', proposedCountryCode: 'PH', proposedTimeZone: 'Asia/Singapore',
+    });
+
+    await service.approve('doctor-1', 'draft-1', 'approve-timezone-key');
+
+    expect(recurringScheduleConflictMock.assertNoConflictForLocation).toHaveBeenCalledWith(
+      'doctor-profile-1', 'location-1', 'Asia/Singapore', prismaServiceMock,
     );
   });
 
   it('rejects approval when the resulting active BookingQuestion count exceeds five', async () => {
     prismaServiceMock.bookingQuestion.findMany.mockResolvedValue(
-      Array.from({ length: 5 }, (_, index) => ({
-        id: `question-${index + 1}`,
-        displayOrder: index,
-        isActive: true,
-      })),
+      Array.from({ length: 5 }, (_, index) => ({ id: `question-${index + 1}`, displayOrder: index, isActive: true })),
     );
-    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue(
-      [
-        {
-          id: 'proposal-new',
-          bookingQuestionId: null,
-          proposedDisplayOrder: 5,
-          proposedIsActive: true,
-        },
-      ],
-    );
-
-    await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-key'),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(
-      prismaServiceMock.practiceLocationService.update,
-    ).not.toHaveBeenCalled();
+    prismaServiceMock.secretarySettingsDraftBookingQuestion.findMany.mockResolvedValue([
+      { id: 'proposal-new', bookingQuestionId: null, proposedDisplayOrder: 5, proposedIsActive: true },
+    ]);
+    await expect(service.approve('doctor-1', 'draft-1', 'approve-key')).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
     expect(prismaServiceMock.bookingQuestion.create).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).not.toHaveBeenCalled();
+    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
   });
 
   it('rejects stale Service targets before applying effective settings', async () => {
     prismaServiceMock.secretarySettingsDraftService.findMany.mockResolvedValue([
-      {
-        practiceLocationServiceId: 'service-missing',
-        sourceDoctorServiceTemplateId: null,
-        proposedName: 'Consultation',
-        proposedDurationMinutes: 30,
-        proposedStatus: ServiceAvailabilityStatus.ACTIVE,
-      },
+      { practiceLocationServiceId: 'service-missing', sourceDoctorServiceTemplateId: null, proposedName: 'Consultation', proposedDurationMinutes: 30, proposedStatus: ServiceAvailabilityStatus.ACTIVE },
     ]);
     prismaServiceMock.practiceLocationService.findMany.mockResolvedValue([]);
-
-    await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-key'),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(
-      prismaServiceMock.practiceLocationService.update,
-    ).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).not.toHaveBeenCalled();
+    await expect(service.approve('doctor-1', 'draft-1', 'approve-key')).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaServiceMock.practiceLocationService.update).not.toHaveBeenCalled();
+    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
   });
 
   it('denies approval to a user who is not the owning Doctor', async () => {
-    prismaServiceMock.user.findUnique.mockResolvedValue({
-      role: UserRole.DOCTOR,
-      accountStatus: UserAccountStatus.ACTIVE,
-      administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
-    });
     prismaServiceMock.$queryRaw.mockReset();
     prismaServiceMock.$queryRaw
       .mockResolvedValueOnce([{ ...lockedDraft, doctorUserId: 'doctor-owner' }])
       .mockResolvedValueOnce([{ id: 'doctor-other' }]);
-
-    await expect(
-      service.approve('doctor-other', 'draft-1', 'approve-key'),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).not.toHaveBeenCalled();
+    await expect(service.approve('doctor-other', 'draft-1', 'approve-key')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
   });
 
   it('blocks ACTIVE-location approval when recurring schedule validation conflicts', async () => {
     prismaServiceMock.$queryRaw.mockReset();
     prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([
-        {
-          ...lockedDraft,
-          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
-        },
-      ])
+      .mockResolvedValueOnce([{ ...lockedDraft, lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE }])
       .mockResolvedValueOnce([{ id: 'doctor-1' }]);
-    recurringScheduleConflictMock.assertNoConflictForLocation.mockRejectedValue(
-      new ConflictException('Recurring schedule conflict.'),
+    recurringScheduleConflictMock.assertNoConflictForLocation.mockRejectedValue(new ConflictException('Recurring schedule conflict.'));
+    await expect(service.approve('doctor-1', 'draft-1', 'approve-recurring-conflict-key')).rejects.toBeInstanceOf(ConflictException);
+    expect(recurringScheduleConflictMock.assertNoConflictForLocation).toHaveBeenCalledWith(
+      'doctor-profile-1', 'location-1', 'Asia/Manila', prismaServiceMock,
     );
-
-    await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-recurring-conflict-key'),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(
-      recurringScheduleConflictMock.assertNoConflictForLocation,
-    ).toHaveBeenCalledWith(
-      'doctor-profile-1',
-      'location-1',
-      'Asia/Manila',
-      prismaServiceMock,
-    );
-    expect(
-      scheduleResolutionMock.resolveConfiguredSchedule,
-    ).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).not.toHaveBeenCalled();
+    expect(scheduleResolutionMock.resolveConfiguredSchedule).not.toHaveBeenCalled();
+    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
     expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 
@@ -321,89 +216,36 @@ describe('SecretarySettingsDraftApprovalService', () => {
     const closesAt = new Date('2026-08-20T09:00:00.000Z');
     prismaServiceMock.$queryRaw.mockReset();
     prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([
-        {
-          ...lockedDraft,
-          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
-        },
-      ])
+      .mockResolvedValueOnce([{ ...lockedDraft, lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE }])
       .mockResolvedValueOnce([{ id: 'doctor-1' }]);
-    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue(
-      [
-        {
-          serviceDate: new Date('2026-08-20T00:00:00.000Z'),
-          proposedIsOpen: true,
-          proposedOpensAtLocal: new Date('1970-01-01T09:00:00.000Z'),
-          proposedClosesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
-          proposedMaximumOnlineBookingUntilLocal: null,
-          proposedMaximumOperatingUntilLocal: null,
-        },
-      ],
-    );
-    scheduleResolutionMock.resolveConfiguredSchedule.mockResolvedValue({
-      isOpen: true,
-      opensAt,
-      closesAt,
-    });
+    prismaServiceMock.secretarySettingsDraftScheduleException.findMany.mockResolvedValue([
+      {
+        serviceDate: new Date('2026-08-20T00:00:00.000Z'), proposedIsOpen: true,
+        proposedOpensAtLocal: new Date('1970-01-01T09:00:00.000Z'), proposedClosesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
+        proposedMaximumOnlineBookingUntilLocal: null, proposedMaximumOperatingUntilLocal: null,
+      },
+    ]);
+    scheduleResolutionMock.resolveConfiguredSchedule.mockResolvedValue({ isOpen: true, opensAt, closesAt });
     doctorCalendarMock.isAvailableForInterval.mockResolvedValue(true);
-    crossLocationConflictMock.assertNoConflictForInterval.mockRejectedValue(
-      new ConflictException('Schedule conflict.'),
-    );
-
-    await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-exception-conflict-key'),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(
-      scheduleResolutionMock.resolveConfiguredSchedule,
-    ).toHaveBeenCalledWith('location-1', '2026-08-20', prismaServiceMock);
-    expect(doctorCalendarMock.isAvailableForInterval).toHaveBeenCalledWith(
-      'doctor-profile-1',
-      opensAt,
-      closesAt,
-      prismaServiceMock,
-    );
-    expect(
-      crossLocationConflictMock.assertNoConflictForInterval,
-    ).toHaveBeenCalledWith(
-      'doctor-profile-1',
-      'location-1',
-      opensAt,
-      closesAt,
-      prismaServiceMock,
-    );
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).not.toHaveBeenCalled();
+    crossLocationConflictMock.assertNoConflictForInterval.mockRejectedValue(new ConflictException('Schedule conflict.'));
+    await expect(service.approve('doctor-1', 'draft-1', 'approve-exception-conflict-key')).rejects.toBeInstanceOf(ConflictException);
+    expect(scheduleResolutionMock.resolveConfiguredSchedule).toHaveBeenCalledWith('location-1', '2026-08-20', prismaServiceMock);
+    expect(doctorCalendarMock.isAvailableForInterval).toHaveBeenCalledWith('doctor-profile-1', opensAt, closesAt, prismaServiceMock);
+    expect(crossLocationConflictMock.assertNoConflictForInterval).toHaveBeenCalledWith('doctor-profile-1', 'location-1', opensAt, closesAt, prismaServiceMock);
+    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
     expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 
   it('replays a committed approval without applying settings twice', async () => {
     const fingerprint = createHash('sha256')
-      .update(
-        'PRACTICE_LOCATION_APPROVE_SETTINGS_DRAFT|doctor-1|draft-1',
-        'utf8',
-      )
+      .update('PRACTICE_LOCATION_APPROVE_SETTINGS_DRAFT|doctor-1|draft-1', 'utf8')
       .digest('hex');
-    prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({
-      requestFingerprint: fingerprint,
+    prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue({ requestFingerprint: fingerprint });
+    await expect(service.approve('doctor-1', 'draft-1', 'approve-key')).resolves.toEqual({
+      approved: true, replayed: true, draftId: 'draft-1', status: SecretarySettingsDraftStatus.APPROVED,
     });
-
-    await expect(
-      service.approve('doctor-1', 'draft-1', 'approve-key'),
-    ).resolves.toEqual({
-      approved: true,
-      replayed: true,
-      draftId: 'draft-1',
-      status: SecretarySettingsDraftStatus.APPROVED,
-    });
-
-    expect(
-      prismaServiceMock.secretarySettingsDraftService.findMany,
-    ).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.secretarySettingsDraft.update,
-    ).not.toHaveBeenCalled();
+    expect(prismaServiceMock.secretarySettingsDraftService.findMany).not.toHaveBeenCalled();
+    expect(prismaServiceMock.secretarySettingsDraft.update).not.toHaveBeenCalled();
     expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 });
