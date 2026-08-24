@@ -1,6 +1,13 @@
 import { FormEvent, useState } from 'react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from './api/client';
+import {
+  DoctorReactivationPage,
+  DoctorRegistrationPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  VerifyEmailPage,
+} from './auth/AccountAccessPages';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
@@ -66,6 +73,12 @@ function LoginPage() {
           <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           {error ? <div className="form-error" role="alert">{error}</div> : null}
           <button className="primary" type="submit" disabled={submitting || !email || !password}>{submitting ? 'Signing in…' : 'Continue'}</button>
+          <div className="auth-links">
+            <Link className="quiet-link" to="/forgot-password">Forgot password?</Link>
+            <Link className="quiet-link" to="/reactivate">Reactivate Doctor account</Link>
+          </div>
+          <div className="auth-divider"><span>New Doctor?</span></div>
+          <Link className="secondary-action" to="/register/doctor">Create Doctor account</Link>
         </form>
       </section>
     </main>
@@ -118,6 +131,11 @@ export function App() {
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/reactivate" element={<DoctorReactivationPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
           <Route path="/app" element={<WorkspacePage />} />
