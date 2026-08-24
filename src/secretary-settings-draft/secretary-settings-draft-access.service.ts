@@ -13,9 +13,13 @@ export class SecretarySettingsDraftAccessService {
 
   async assertMayCreateDraft(authenticatedUserId: string, practiceLocationId: string) {
     const assignment = await this.currentAssignment(authenticatedUserId, practiceLocationId);
-    if (!this.hasAnyConfigurationAccess(assignment)) {
-      throw new ForbiddenException('This Secretary has Standard access only and cannot prepare clinic configuration changes.');
-    }
+    this.assertAnyConfigurationAccess(assignment);
+  }
+
+  async assertMaySubmitDraft(authenticatedUserId: string, draftId: string) {
+    const draft = await this.requireDraft(draftId);
+    const assignment = await this.currentAssignment(authenticatedUserId, draft.practiceLocationId);
+    this.assertAnyConfigurationAccess(assignment);
   }
 
   async assertMayEditDraft(
@@ -23,11 +27,7 @@ export class SecretarySettingsDraftAccessService {
     draftId: string,
     area: SecretaryConfigurationArea,
   ) {
-    const draft = await this.prisma.secretarySettingsDraft.findUnique({
-      where: { id: draftId },
-      select: { practiceLocationId: true },
-    });
-    if (!draft) throw new NotFoundException('Settings draft was not found.');
+    const draft = await this.requireDraft(draftId);
     const assignment = await this.currentAssignment(authenticatedUserId, draft.practiceLocationId);
     const allowed =
       area === 'CLINIC_DETAILS' ? assignment.canManageClinicDetails :
@@ -37,6 +37,15 @@ export class SecretarySettingsDraftAccessService {
     if (!allowed) {
       throw new ForbiddenException('This Secretary was not granted access to propose changes in this configuration area.');
     }
+  }
+
+  private async requireDraft(draftId: string) {
+    const draft = await this.prisma.secretarySettingsDraft.findUnique({
+      where: { id: draftId },
+      select: { practiceLocationId: true },
+    });
+    if (!draft) throw new NotFoundException('Settings draft was not found.');
+    return draft;
   }
 
   private async currentAssignment(authenticatedUserId: string, practiceLocationId: string) {
@@ -66,12 +75,19 @@ export class SecretarySettingsDraftAccessService {
     return assignment;
   }
 
-  private hasAnyConfigurationAccess(assignment: {
+  private assertAnyConfigurationAccess(assignment: {
     canManageClinicDetails: boolean;
     canManageServices: boolean;
     canManageBookingQuestions: boolean;
     canManageSchedules: boolean;
   }) {
-    return assignment.canManageClinicDetails || assignment.canManageServices || assignment.canManageBookingQuestions || assignment.canManageSchedules;
+    if (
+      !assignment.canManageClinicDetails &&
+      !assignment.canManageServices &&
+      !assignment.canManageBookingQuestions &&
+      !assignment.canManageSchedules
+    ) {
+      throw new ForbiddenException('This Secretary has Standard access only and cannot prepare clinic configuration changes.');
+    }
   }
 }
