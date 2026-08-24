@@ -1,5 +1,15 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
+import { SecretaryAccessProfile } from '../../../generated/prisma/client';
 
 const trimString = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
@@ -30,4 +40,31 @@ export class CreateSecretaryInvitationDto {
   @IsNotEmpty()
   @MaxLength(30)
   mobileNumber!: string;
+
+  @IsEnum(SecretaryAccessProfile)
+  accessProfile!: SecretaryAccessProfile;
+
+  @IsOptional()
+  @IsBoolean()
+  canManageClinicDetails?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canManageServices?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canManageBookingQuestions?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  canManageSchedules?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  cancelClinicDay?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  assignDaySecretary?: boolean;
 }
