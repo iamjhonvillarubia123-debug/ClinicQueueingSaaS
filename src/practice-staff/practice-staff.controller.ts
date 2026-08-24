@@ -36,6 +36,16 @@ export class PracticeStaffController {
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('regular/:practiceLocationId/resolve-existing')
+  resolveExisting(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Body() body: { email: string },
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceStaffReadService.resolveExistingSecretary(request.user.userId, practiceLocationId, body.email);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('regular/assign')
   assignRegular(
     @Body() dto: AssignPracticeStaffDto,
