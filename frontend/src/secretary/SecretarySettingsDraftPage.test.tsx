@@ -33,7 +33,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('SecretarySettingsDraftPage', () => {
   it('loads effective settings and submits the draft without a Secretary withdrawal action', async () => {
     let current = editableDraft;
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('/submit')) {
         current = { ...editableDraft, status: 'SUBMITTED' };
