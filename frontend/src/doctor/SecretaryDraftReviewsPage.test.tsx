@@ -17,12 +17,31 @@ const submittedDraft = {
   practiceLocation: {
     id: 'location-1',
     name: 'North Clinic',
+    addressLine1: '1 Main Street',
+    addressLine2: null,
+    cityMunicipality: 'Manila',
+    province: 'Metro Manila',
+    postalCode: '1000',
+    contactNumber: '09170000000',
+    countryCode: 'PH',
     lifecycleStatus: 'ACTIVE',
     timeZone: 'Asia/Manila',
     practiceSchedules: [{ weekday: 'MONDAY', isOpen: true, opensAtLocal: '1970-01-01T09:00:00.000Z', closesAtLocal: '1970-01-01T17:00:00.000Z', maximumOnlineBookingUntilLocal: null, maximumOperatingUntilLocal: null }],
     scheduleExceptions: [],
     services: [{ id: 'service-1', name: 'Consultation', durationMinutes: 15, status: 'ACTIVE' }],
     bookingQuestions: [{ id: 'question-1', questionText: 'First visit?', type: 'BOOLEAN', isRequired: false, displayOrder: 0, isActive: true }],
+  },
+  proposedClinicDetails: {
+    id: 'clinic-proposal-1',
+    proposedName: 'North Clinic Updated',
+    proposedAddressLine1: '2 New Street',
+    proposedAddressLine2: null,
+    proposedCityMunicipality: 'Manila',
+    proposedProvince: 'Metro Manila',
+    proposedPostalCode: '1000',
+    proposedContactNumber: '09171111111',
+    proposedCountryCode: 'PH',
+    proposedTimeZone: 'Asia/Manila',
   },
   proposedPracticeSchedules: [{ id: 'schedule-proposal-1', weekday: 'MONDAY', proposedIsOpen: true, proposedOpensAtLocal: '1970-01-01T10:00:00.000Z', proposedClosesAtLocal: '1970-01-01T17:00:00.000Z', proposedMaximumOnlineBookingUntilLocal: null, proposedMaximumOperatingUntilLocal: null }],
   proposedScheduleExceptions: [],
@@ -42,7 +61,7 @@ describe('Doctor Secretary settings draft review', () => {
     expect(screen.getByRole('link', { name: 'Review changes' })).toHaveAttribute('href', '/app/secretary-draft-reviews/draft-1');
   });
 
-  it('compares current and proposed values and sends approval with an idempotency key', async () => {
+  it('compares current and proposed clinic details and sends approval with an idempotency key', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('/approve')) return response({ approved: true, draftId: 'draft-1', status: 'APPROVED' });
@@ -60,6 +79,9 @@ describe('Doctor Secretary settings draft review', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'North Clinic' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Identity, address & contact proposal' })).toBeInTheDocument();
+    expect(screen.getByText(/2 New Street/)).toBeInTheDocument();
+    expect(screen.getByText(/North Clinic Updated/)).toBeInTheDocument();
     expect(screen.getByText(/09:00–17:00/)).toBeInTheDocument();
     expect(screen.getByText(/10:00–17:00/)).toBeInTheDocument();
     expect(screen.getByText(/Consultation · 15 min/)).toBeInTheDocument();
