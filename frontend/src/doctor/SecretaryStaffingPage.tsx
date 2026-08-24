@@ -39,6 +39,7 @@ type ExistingResult = { user: SecretaryUser; eligible: boolean };
 type InvitationResult =
   | { outcome: 'INVITATION_CREATED'; invitationId: string; expiresAt: string }
   | { outcome: 'EXISTING_SECRETARY'; secretaryUserId: string; eligibleForAssignment: boolean };
+type StaffingMode = 'none' | 'add' | 'replace-existing' | 'replace-new' | 'manage-access' | 'remove';
 
 function errorMessage(error: unknown) {
   return error instanceof ApiError ? error.message : 'Unable to complete the staffing action. Please try again.';
@@ -51,12 +52,24 @@ function profileLabel(profile: SecretaryAccessSelection['accessProfile']) {
   if (profile === 'CUSTOM') return 'Custom';
   return 'Standard';
 }
+function selectionFromCurrent(current: CurrentSecretary): SecretaryAccessSelection {
+  const capabilities = new Set(current.capabilities.map((item) => item.capabilityType));
+  return {
+    accessProfile: current.accessProfile,
+    canManageClinicDetails: current.canManageClinicDetails,
+    canManageServices: current.canManageServices,
+    canManageBookingQuestions: current.canManageBookingQuestions,
+    canManageSchedules: current.canManageSchedules,
+    cancelClinicDay: capabilities.has('CANCEL_CLINIC_DAY'),
+    assignDaySecretary: capabilities.has('ASSIGN_DAY_SECRETARY'),
+  };
+}
 
 export function SecretaryStaffingPage() {
   const { practiceLocationId } = useParams();
   const [staffing, setStaffing] = useState<Staffing | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<'none' | 'add' | 'replace-existing' | 'replace-new'>('none');
+  const [mode, setMode] = useState<StaffingMode>('none');
   const [email, setEmail] = useState('');
   const [candidate, setCandidate] = useState<ExistingResult | null>(null);
   const [password, setPassword] = useState('');
@@ -80,6 +93,7 @@ export function SecretaryStaffingPage() {
   function resetSelection() {
     setCandidate(null); setEmail(''); setPassword(''); setAccess({ ...standardSecretaryAccess });
   }
+  function closeAction() { resetSelection(); setMode('none'); }
 
   async function resolveExisting(event: FormEvent) {
     event.preventDefault(); if (!practiceLocationId || busy) return;
@@ -90,12 +104,23 @@ export function SecretaryStaffingPage() {
     finally { setBusy(false); }
   }
 
-  async function configureAccess(userId: string) {
+  async function configureAccess(userId: string, selectedAccess = access) {
     if (!practiceLocationId) return;
     await apiRequest('/practice-staff/regular/access', {
-      method: 'POST',
-      body: { practiceLocationId, userId, ...access },
+      method: 'POST', body: { practiceLocationId, userId, ...selectedAccess },
     });
+  }
+
+  async function saveCurrentAccess() {
+    const current = staffing?.regularSecretary;
+    if (!current || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await configureAccess(current.user.id);
+      setNotice('Secretary clinic access updated. Configuration changes remain subject to Doctor approval.');
+      closeAction(); await load();
+    } catch (caught) { setError(errorMessage(caught)); }
+    finally { setBusy(false); }
   }
 
   async function assignOrReplace() {
@@ -108,7 +133,7 @@ export function SecretaryStaffingPage() {
           body: { practiceLocationId, userId: candidate.user.id, password },
         });
         await configureAccess(candidate.user.id);
-        setNotice('Regular Secretary replaced with the selected clinic access.');
+        setNotice('Regular Secretary replaced with the newly selected clinic access.');
       } else {
         await apiRequest('/practice-staff/regular/assign', {
           method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
@@ -117,7 +142,21 @@ export function SecretaryStaffingPage() {
         await configureAccess(candidate.user.id);
         setNotice('Existing Secretary assigned with the selected clinic access.');
       }
-      setMode('none'); resetSelection(); await load();
+      closeAction(); await load();
+    } catch (caught) { setError(errorMessage(caught)); }
+    finally { setBusy(false); }
+  }
+
+  async function removeSecretary() {
+    if (!practiceLocationId || !staffing?.regularSecretary || !password || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await apiRequest('/practice-staff/regular/remove', {
+        method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: { practiceLocationId, password },
+      });
+      setNotice('Regular Secretary removed. The former Secretary no longer has current authority for this clinic.');
+      closeAction(); await load();
     } catch (caught) { setError(errorMessage(caught)); }
     finally { setBusy(false); }
   }
@@ -127,8 +166,7 @@ export function SecretaryStaffingPage() {
     setBusy(true); setError(''); setNotice('');
     try {
       const result = await apiRequest<InvitationResult>('/secretary/invitations', {
-        method: 'POST',
-        body: { practiceLocationId, firstName, lastName, email, mobileNumber, ...access },
+        method: 'POST', body: { practiceLocationId, firstName, lastName, email, mobileNumber, ...access },
       });
       if (result.outcome === 'EXISTING_SECRETARY') {
         setMode('add');
@@ -169,7 +207,7 @@ export function SecretaryStaffingPage() {
 
         <section className="practice-create-panel">
           <div className="practice-panel-heading"><p className="eyebrow">Secretary authority</p><h2>{current ? profileLabel(current.accessProfile) : 'No access profile'}</h2><p>Standard operations are direct. Configuration changes outside Standard remain proposals until Doctor approval.</p></div>
-          {current ? <div className="staff-authority-list">
+          {current ? <><div className="staff-authority-list">
             <div className="staff-authority-row"><span>Queue & ordinary clinic-day operations</span><strong>Standard</strong></div>
             <div className="staff-authority-row"><span>Clinic details</span><strong>{current.canManageClinicDetails ? 'May propose' : 'Not granted'}</strong></div>
             <div className="staff-authority-row"><span>Services</span><strong>{current.canManageServices ? 'May propose' : 'Not granted'}</strong></div>
@@ -177,24 +215,27 @@ export function SecretaryStaffingPage() {
             <div className="staff-authority-row"><span>Clinic schedules</span><strong>{current.canManageSchedules ? 'May propose' : 'Not granted'}</strong></div>
             <div className="staff-authority-row"><span>Assign day Secretary</span><strong>{capabilitySet.has('ASSIGN_DAY_SECRETARY') ? 'Granted' : 'Not granted'}</strong></div>
             <div className="staff-authority-row"><span>Cancel entire clinic day</span><strong>{capabilitySet.has('CANCEL_CLINIC_DAY') ? 'Granted' : 'Not granted'}</strong></div>
-          </div> : <p className="practice-muted">Choose access when adding the clinic's Secretary.</p>}
+          </div><button className="secondary" type="button" onClick={() => { setAccess(selectionFromCurrent(current)); setMode('manage-access'); }}>Change access</button></> : <p className="practice-muted">Choose access when adding the clinic's Secretary.</p>}
         </section>
       </div>
 
+      {current && mode === 'manage-access' ? <section className="practice-create-panel"><div className="practice-panel-heading"><p className="eyebrow">Change access</p><h2>Update {fullName(current.user)}'s clinic access</h2><p>Changing configuration access does not make Secretary proposals effective. Doctor approval is still required.</p></div><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="button-row"><button className="primary" type="button" disabled={busy} onClick={() => void saveCurrentAccess()}>Save access</button><button className="secondary" type="button" onClick={closeAction}>Cancel</button></div></section> : null}
+
       {secretary ? (
         <section className="practice-create-panel">
-          <div className="practice-panel-heading"><p className="eyebrow">Change Secretary</p><h2>Replace the current regular Secretary</h2><p>The incoming Secretary starts from Standard access and never inherits the outgoing Secretary's optional authority. Replacement requires the Doctor's current password.</p></div>
-          {mode === 'none' ? <button className="primary" type="button" onClick={() => { resetSelection(); setMode('replace-existing'); }}>Replace Secretary</button> : null}
-          {mode === 'replace-existing' || mode === 'replace-new' ? <div className="clinic-replacement-choices"><button className={mode === 'replace-existing' ? 'primary' : 'secondary'} type="button" onClick={() => { resetSelection(); setMode('replace-existing'); }}>Existing Secretary</button><button className={mode === 'replace-new' ? 'primary' : 'secondary'} type="button" onClick={() => { resetSelection(); setMode('replace-new'); }}>New Secretary</button><button className="secondary" type="button" onClick={() => { resetSelection(); setMode('none'); }}>Cancel</button></div> : null}
-          {mode === 'replace-existing' ? <><form className="practice-form" onSubmit={resolveExisting}><label>Existing Secretary email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><button className="secondary" disabled={busy || !email.trim()} type="submit">Find existing Secretary</button></form>{candidate ? <><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="practice-create-panel"><h3>{fullName(candidate.user)}</h3><p>{candidate.user.email} · {candidate.user.mobileNumber}</p><p>{candidate.eligible ? 'Eligible for replacement' : 'Not currently eligible for replacement'}</p><label>Current Doctor password<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label><button className="primary" type="button" disabled={busy || !candidate.eligible || !password} onClick={() => void assignOrReplace()}>Confirm replacement</button></div></> : null}</> : null}
+          <div className="practice-panel-heading"><p className="eyebrow">Secretary lifecycle</p><h2>Replace or remove the current regular Secretary</h2><p>Replacement never inherits optional authority from the outgoing Secretary. Replacement and removal both require the Doctor's current password.</p></div>
+          {mode === 'none' ? <div className="button-row"><button className="primary" type="button" onClick={() => { resetSelection(); setMode('replace-existing'); }}>Replace Secretary</button><button className="secondary" type="button" onClick={() => { resetSelection(); setMode('remove'); }}>Remove Secretary</button></div> : null}
+          {mode === 'replace-existing' || mode === 'replace-new' ? <div className="clinic-replacement-choices"><button className={mode === 'replace-existing' ? 'primary' : 'secondary'} type="button" onClick={() => { resetSelection(); setMode('replace-existing'); }}>Existing Secretary</button><button className={mode === 'replace-new' ? 'primary' : 'secondary'} type="button" onClick={() => { resetSelection(); setMode('replace-new'); }}>New Secretary</button><button className="secondary" type="button" onClick={closeAction}>Cancel</button></div> : null}
+          {mode === 'replace-existing' ? <><form className="practice-form" onSubmit={resolveExisting}><label>Existing Secretary email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><button className="secondary" disabled={busy || !email.trim()} type="submit">Find existing Secretary</button></form>{candidate ? <><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="practice-create-panel"><h3>{fullName(candidate.user)}</h3><p>{candidate.user.email} · {candidate.user.mobileNumber}</p><p>{candidate.eligible ? 'Eligible for replacement' : 'Not currently eligible for replacement'}</p><label>Current Doctor password<input aria-label="Current Doctor password for replacement" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label><button className="primary" type="button" disabled={busy || !candidate.eligible || !password} onClick={() => void assignOrReplace()}>Confirm replacement</button></div></> : null}</> : null}
           {mode === 'replace-new' ? <div className="practice-notice"><strong>New-person replacement onboarding is the next protected handoff step.</strong><p>The incoming person must complete onboarding without receiving clinic authority until the Doctor performs the password-confirmed replacement. The current Secretary remains active until then.</p></div> : null}
+          {mode === 'remove' ? <div className="practice-form"><div className="practice-notice">Removing the regular Secretary immediately removes current authority for this clinic. It does not delete the Secretary's account or assignments to other clinics.</div><label>Current Doctor password<input aria-label="Current Doctor password for removal" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label><div className="button-row"><button className="primary" type="button" disabled={busy || !password} onClick={() => void removeSecretary()}>Confirm removal</button><button className="secondary" type="button" onClick={closeAction}>Cancel</button></div></div> : null}
         </section>
       ) : (
         <section className="practice-create-panel">
           <div className="practice-panel-heading"><p className="eyebrow">Add Secretary</p><h2>Add a regular Secretary</h2><p>Choose the clinic access before sending the invitation or assigning an existing Secretary.</p></div>
           {mode === 'none' ? <div className="button-row"><button className="primary" type="button" onClick={() => { resetSelection(); setMode('add'); }}>Add new Secretary</button><button className="secondary" type="button" onClick={() => { resetSelection(); setMode('replace-existing'); }}>Use existing Secretary</button></div> : null}
-          {mode === 'add' ? <form className="practice-form" onSubmit={inviteNew}><div className="practice-form-grid"><label>First name<input required value={firstName} onChange={(e) => setFirstName(e.target.value)} /></label><label>Last name<input required value={lastName} onChange={(e) => setLastName(e.target.value)} /></label></div><label>Email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><label>Mobile number<input required value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} /></label><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="button-row"><button className="primary" disabled={busy} type="submit">Send secure invitation</button><button className="secondary" type="button" onClick={() => { resetSelection(); setMode('none'); }}>Cancel</button></div></form> : null}
-          {mode === 'replace-existing' ? <><form className="practice-form" onSubmit={resolveExisting}><label>Existing Secretary email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><div className="button-row"><button className="primary" disabled={busy} type="submit">Find existing Secretary</button><button className="secondary" type="button" onClick={() => { resetSelection(); setMode('none'); }}>Cancel</button></div></form>{candidate ? <><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="practice-create-panel"><h3>{fullName(candidate.user)}</h3><p>{candidate.user.email} · {candidate.user.mobileNumber}</p><button className="primary" type="button" disabled={busy || !candidate.eligible} onClick={() => void assignOrReplace()}>Assign Secretary</button></div></> : null}</> : null}
+          {mode === 'add' ? <form className="practice-form" onSubmit={inviteNew}><div className="practice-form-grid"><label>First name<input required value={firstName} onChange={(e) => setFirstName(e.target.value)} /></label><label>Last name<input required value={lastName} onChange={(e) => setLastName(e.target.value)} /></label></div><label>Email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><label>Mobile number<input required value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} /></label><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="button-row"><button className="primary" disabled={busy} type="submit">Send secure invitation</button><button className="secondary" type="button" onClick={closeAction}>Cancel</button></div></form> : null}
+          {mode === 'replace-existing' ? <><form className="practice-form" onSubmit={resolveExisting}><label>Existing Secretary email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><div className="button-row"><button className="primary" disabled={busy} type="submit">Find existing Secretary</button><button className="secondary" type="button" onClick={closeAction}>Cancel</button></div></form>{candidate ? <><SecretaryAccessSelector value={access} onChange={setAccess} /><div className="practice-create-panel"><h3>{fullName(candidate.user)}</h3><p>{candidate.user.email} · {candidate.user.mobileNumber}</p><button className="primary" type="button" disabled={busy || !candidate.eligible} onClick={() => void assignOrReplace()}>Assign Secretary</button></div></> : null}</> : null}
         </section>
       )}
     </section>
