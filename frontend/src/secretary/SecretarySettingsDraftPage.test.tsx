@@ -69,7 +69,7 @@ describe('SecretarySettingsDraftPage', () => {
   });
 
   it('persists service drag order as presentation-only displayOrder proposals', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => response(editableDraft));
     renderDraft();
     fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
     const servicePanel = screen.getByRole('heading', { name: 'Clinic services' }).closest('section');
@@ -87,7 +87,7 @@ describe('SecretarySettingsDraftPage', () => {
   });
 
   it('persists booking-question drag order through displayOrder without exposing the field', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => response(editableDraft));
     renderDraft();
     fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
     const questionPanel = screen.getByRole('heading', { name: 'Patient booking questions' }).closest('section');
