@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
+  Param,
   Post,
   Request,
   UseGuards,
@@ -14,11 +16,24 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
 import { RemoveRegularSecretaryDto } from './dto/remove-regular-secretary.dto';
 import { ReplaceRegularSecretaryDto } from './dto/replace-regular-secretary.dto';
+import { PracticeStaffReadService } from './practice-staff-read.service';
 import { PracticeStaffService } from './practice-staff.service';
 
 @Controller('practice-staff')
 export class PracticeStaffController {
-  constructor(private readonly practiceStaffService: PracticeStaffService) {}
+  constructor(
+    private readonly practiceStaffService: PracticeStaffService,
+    private readonly practiceStaffReadService: PracticeStaffReadService,
+  ) {}
+
+  @UseGuards(SessionAuthGuard)
+  @Get('regular/:practiceLocationId')
+  getRegular(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceStaffReadService.getClinicStaffing(request.user.userId, practiceLocationId);
+  }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('regular/assign')
@@ -27,11 +42,7 @@ export class PracticeStaffController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.practiceStaffService.assignRegular(
-      request.user.userId,
-      dto,
-      idempotencyKey,
-    );
+    return this.practiceStaffService.assignRegular(request.user.userId, dto, idempotencyKey);
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -41,11 +52,7 @@ export class PracticeStaffController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.practiceStaffService.replaceRegular(
-      request.user.userId,
-      dto,
-      idempotencyKey,
-    );
+    return this.practiceStaffService.replaceRegular(request.user.userId, dto, idempotencyKey);
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -55,10 +62,6 @@ export class PracticeStaffController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.practiceStaffService.removeRegular(
-      request.user.userId,
-      dto,
-      idempotencyKey,
-    );
+    return this.practiceStaffService.removeRegular(request.user.userId, dto, idempotencyKey);
   }
 }
