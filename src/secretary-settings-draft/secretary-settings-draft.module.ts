@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
+import { DoctorSettingsDraftReviewController } from './doctor-settings-draft-review.controller';
 import { DoctorSettingsDraftReviewReadService } from './doctor-settings-draft-review-read.service';
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
@@ -15,7 +16,10 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
 
 @Module({
   imports: [PrismaModule, AuthModule, ScheduleModule],
-  controllers: [SecretarySettingsDraftController],
+  controllers: [
+    SecretarySettingsDraftController,
+    DoctorSettingsDraftReviewController,
+  ],
   providers: [
     SecretarySettingsDraftService,
     SecretarySettingsDraftReadService,
