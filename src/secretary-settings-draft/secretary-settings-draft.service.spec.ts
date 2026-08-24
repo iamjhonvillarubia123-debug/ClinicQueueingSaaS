@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AdministrativeRestrictionStatus,
@@ -80,6 +80,29 @@ describe('SecretarySettingsDraftService', () => {
     expect(
       prismaServiceMock.secretarySettingsDraft.create,
     ).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks a parallel draft while a proposal is submitted for Doctor review', async () => {
+    prismaServiceMock.$queryRaw.mockResolvedValueOnce([
+      {
+        practiceLocationId: 'location-1',
+        lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+        currentRegularPracticeStaffId: 'staff-current',
+        currentSecretaryUserId: 'secretary-1',
+        currentAssignmentActive: true,
+      },
+    ]);
+    prismaServiceMock.secretarySettingsDraft.findFirst.mockResolvedValue({
+      id: 'draft-submitted',
+      practiceLocationId: 'location-1',
+      authorPracticeStaffId: 'staff-current',
+      status: SecretarySettingsDraftStatus.SUBMITTED,
+    });
+
+    await expect(
+      service.create('secretary-1', { practiceLocationId: 'location-1' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prismaServiceMock.secretarySettingsDraft.create).not.toHaveBeenCalled();
   });
 
   it('allows the new current regular Secretary to submit a surviving draft authored by the outgoing Secretary', async () => {
