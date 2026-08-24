@@ -36,14 +36,9 @@ describe('Doctor Data Retention activation boundary (e2e)', () => {
   beforeAll(async () => {
     for (const [key, value] of Object.entries(testEnvironment)) {
       originalEnvironment[key] = process.env[key];
-      if (!process.env[key]) {
-        process.env[key] = value;
-      }
+      if (!process.env[key]) process.env[key] = value;
     }
-
-    moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
     prisma = moduleFixture.get(PrismaService);
     gate = moduleFixture.get(PracticeLocationDataRetentionGateService);
     activation = moduleFixture.get(PracticeLocationActivationService);
@@ -51,13 +46,9 @@ describe('Doctor Data Retention activation boundary (e2e)', () => {
 
   afterAll(async () => {
     await moduleFixture?.close();
-
     for (const [key, value] of Object.entries(originalEnvironment)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
     }
   });
 
@@ -103,33 +94,23 @@ describe('Doctor Data Retention activation boundary (e2e)', () => {
       },
     });
 
-    await expect(gate.assertCurrentAcknowledgement(doctor.id)).rejects.toThrow(
-      ForbiddenException,
-    );
-    expect(
-      await prisma.practiceLocation.findUniqueOrThrow({
-        where: { id: location.id },
-        select: { lifecycleStatus: true },
-      }),
-    ).toEqual({ lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT });
+    await expect(gate.assertCurrentAcknowledgement(doctor.id)).rejects.toThrow(ForbiddenException);
+    expect(await prisma.practiceLocation.findUniqueOrThrow({ where: { id: location.id }, select: { lifecycleStatus: true } })).toEqual({ lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT });
 
     const acknowledgedAt = new Date();
     await prisma.doctorDataRetentionAcknowledgement.create({
       data: {
         doctorUserId: doctor.id,
-        acknowledgementVersion:
-          CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
+        acknowledgementVersion: CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
         acknowledgedAt,
       },
     });
 
-    await expect(gate.assertCurrentAcknowledgement(doctor.id)).resolves.toBe(
-      undefined,
-    );
+    await expect(gate.assertCurrentAcknowledgement(doctor.id)).resolves.toBe(undefined);
     await expect(
       activation.activate(
         doctor.id,
-        { practiceLocationId: location.id },
+        { practiceLocationId: location.id, currentPassword: 'e2e-not-used' },
         `m12s8-activate-${unique}`,
       ),
     ).resolves.toEqual({ activated: true, replayed: false });
@@ -139,22 +120,14 @@ describe('Doctor Data Retention activation boundary (e2e)', () => {
         where: {
           doctorUserId_acknowledgementVersion: {
             doctorUserId: doctor.id,
-            acknowledgementVersion:
-              CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
+            acknowledgementVersion: CURRENT_DOCTOR_RETENTION_ACKNOWLEDGEMENT_VERSION,
           },
         },
       }),
-      prisma.practiceLocation.findUniqueOrThrow({
-        where: { id: location.id },
-        select: { lifecycleStatus: true },
-      }),
+      prisma.practiceLocation.findUniqueOrThrow({ where: { id: location.id }, select: { lifecycleStatus: true } }),
     ]);
 
-    expect(persistedAcknowledgement.acknowledgedAt.getTime()).toBe(
-      acknowledgedAt.getTime(),
-    );
-    expect(activeLocation.lifecycleStatus).toBe(
-      PracticeLocationLifecycleStatus.ACTIVE,
-    );
+    expect(persistedAcknowledgement.acknowledgedAt.getTime()).toBe(acknowledgedAt.getTime());
+    expect(activeLocation.lifecycleStatus).toBe(PracticeLocationLifecycleStatus.ACTIVE);
   });
 });
