@@ -14,14 +14,14 @@ const editableDraft = {
     cityMunicipality: 'Manila', province: 'Metro Manila', postalCode: '1000', contactNumber: '09170000000', countryCode: 'PH', lifecycleStatus: 'ACTIVE', timeZone: 'Asia/Manila',
     currentRegularPracticeStaff: { canManageClinicDetails: true, canManageServices: true, canManageBookingQuestions: true, canManageSchedules: true },
     practiceSchedules: [{ weekday: 'MONDAY', isOpen: true, opensAtLocal: '1970-01-01T09:00:00.000Z', closesAtLocal: '1970-01-01T17:00:00.000Z', maximumOnlineBookingUntilLocal: null, maximumOperatingUntilLocal: null }],
-    services: [{ id: 'service-1', name: 'Consultation', durationMinutes: 15, status: 'ACTIVE' }],
+    services: [{ id: 'service-1', name: 'Consultation', durationMinutes: 15, status: 'ACTIVE', displayOrder: 0 }],
     bookingQuestions: [
       { id: 'question-1', questionText: 'First visit?', helpText: null, type: 'BOOLEAN', isRequired: false, displayOrder: 0, isActive: true, textMaximumLength: null, numberMinimum: null, numberMaximum: null, selectOptions: null },
       { id: 'question-2', questionText: 'Reason for visit?', helpText: null, type: 'TEXT', isRequired: true, displayOrder: 1, isActive: true, textMaximumLength: 500, numberMinimum: null, numberMaximum: null, selectOptions: null },
     ],
   },
   proposedClinicDetails: null, proposedPracticeSchedules: [],
-  proposedServices: [{ id: 'service-proposal-1', practiceLocationServiceId: null, proposedName: 'Vaccination', proposedDurationMinutes: 20, proposedStatus: 'ACTIVE' }],
+  proposedServices: [{ id: 'service-proposal-1', practiceLocationServiceId: null, proposedName: 'Vaccination', proposedDurationMinutes: 20, proposedStatus: 'ACTIVE', proposedDisplayOrder: 1 }],
   proposedBookingQuestions: [{ id: 'question-proposal-1', bookingQuestionId: null, proposedQuestionText: 'Any allergies?', proposedHelpText: null, proposedType: 'TEXT', proposedIsRequired: false, proposedDisplayOrder: 2, proposedIsActive: true, proposedTextMaximumLength: 500, proposedNumberMinimum: null, proposedNumberMaximum: null, proposedSelectOptions: null }],
   proposedScheduleExceptions: [],
 };
@@ -66,6 +66,21 @@ describe('SecretarySettingsDraftPage', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/services/effective/service-1'))).toBe(true));
     const call = fetchMock.mock.calls.find(([input]) => String(input).includes('/services/effective/service-1'));
     expect(String(call?.[1]?.body)).toContain('"status":"INACTIVE"');
+  });
+
+  it('persists service drag order as presentation-only displayOrder proposals', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Services & questions' }));
+    const serviceList = screen.getByLabelText('Clinic services');
+    const firstRow = within(serviceList).getByText('Consultation').closest('.proposal-sort-row');
+    const secondRow = within(serviceList).getByText('Vaccination').closest('.proposal-sort-row');
+    expect(firstRow).not.toBeNull(); expect(secondRow).not.toBeNull();
+    fireEvent.dragStart(firstRow!); fireEvent.dragOver(secondRow!); fireEvent.drop(secondRow!);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/services/'))).toBe(true));
+    const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/services/')).map(([, init]) => String(init?.body));
+    expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
+    expect(updateBodies.some((body) => body.includes('"displayOrder":1'))).toBe(true);
   });
 
   it('persists booking-question drag order through displayOrder without exposing the field', async () => {
