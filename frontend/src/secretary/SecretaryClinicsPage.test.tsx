@@ -7,11 +7,24 @@ function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 }
 
-function clinic(access: Record<string, unknown>) {
+function clinic(access: Record<string, unknown>, latestSettingsDraft: Record<string, unknown> | null = null) {
   return {
     id: 'clinic-1', lifecycleStatus: 'ACTIVE', name: 'North Clinic', addressLine1: 'Makati', addressLine2: null,
     cityMunicipality: 'Makati', province: 'Metro Manila', postalCode: null, contactNumber: null, timeZone: 'Asia/Manila',
-    isBookingEnabled: true, latestSettingsDraft: null, settingsDrafts: [], access,
+    isBookingEnabled: true, latestSettingsDraft, settingsDrafts: latestSettingsDraft ? [latestSettingsDraft] : [], access,
+  };
+}
+
+const fullAccess = {
+  accessProfile: 'FULL_CLINIC_CONFIGURATION', canManageClinicDetails: true, canManageServices: true,
+  canManageBookingQuestions: true, canManageSchedules: true, capabilities: [],
+};
+
+function draft(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REWORK') {
+  return {
+    id: 'draft-1', status, submittedAt: status === 'DRAFT' ? null : '2026-08-24T01:00:00.000Z',
+    reviewedAt: status === 'APPROVED' || status === 'REJECTED' ? '2026-08-24T02:00:00.000Z' : null,
+    reviewComment: null, createdAt: '2026-08-24T00:00:00.000Z', updatedAt: '2026-08-24T02:00:00.000Z',
   };
 }
 
@@ -39,5 +52,22 @@ describe('Secretary assigned clinics access profile', () => {
     expect(await screen.findByText('North Clinic')).toBeInTheDocument();
     expect(screen.getByText('Custom access')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Propose configuration changes' })).toBeInTheDocument();
+  });
+
+  it('allows a new proposal after the latest draft was approved while preserving history access', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([clinic(fullAccess, draft('APPROVED'))])));
+    render(<MemoryRouter><SecretaryClinicsPage /></MemoryRouter>);
+    expect(await screen.findByText('North Clinic')).toBeInTheDocument();
+    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Propose configuration changes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View latest closed draft' })).toBeInTheDocument();
+  });
+
+  it('does not allow a parallel proposal while a draft is submitted for Doctor review', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([clinic(fullAccess, draft('SUBMITTED'))])));
+    render(<MemoryRouter><SecretaryClinicsPage /></MemoryRouter>);
+    expect(await screen.findByText('North Clinic')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View submitted draft' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Propose configuration changes' })).not.toBeInTheDocument();
   });
 });
