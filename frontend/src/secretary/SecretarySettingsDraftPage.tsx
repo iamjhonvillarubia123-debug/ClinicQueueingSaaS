@@ -151,9 +151,13 @@ export function SecretarySettingsDraftPage() {
 
   function questionPayload(form: QuestionForm, source?: QuestionRow | QuestionProposal) {
     const e = source && 'questionText' in source ? source : undefined; const p = source && 'proposedQuestionText' in source ? source : undefined;
-    const fallbackOptions = selectOptions(p?.proposedSelectOptions ?? e?.selectOptions);
     const enteredOptions = parsedSelectOptions(form.selectOptionsText);
-    return { questionText: form.questionText, helpText: form.helpText || undefined, type: form.type, isRequired: form.isRequired, displayOrder: Number(form.displayOrder), isActive: form.isActive, textMaximumLength: form.type === 'TEXT' ? (p?.proposedTextMaximumLength ?? e?.textMaximumLength ?? 500) : undefined, numberMinimum: form.type === 'NUMBER' ? Number(p?.proposedNumberMinimum ?? e?.numberMinimum ?? 0) : undefined, numberMaximum: form.type === 'NUMBER' ? Number(p?.proposedNumberMaximum ?? e?.numberMaximum ?? 1000000) : undefined, selectOptions: form.type === 'SINGLE_SELECT' ? (enteredOptions.length ? enteredOptions : fallbackOptions) : undefined };
+    const fallbackOptions = selectOptions(p?.proposedSelectOptions ?? e?.selectOptions);
+    const base = { questionText: form.questionText, helpText: form.helpText || undefined, type: form.type, isRequired: form.isRequired, displayOrder: Number(form.displayOrder), isActive: form.isActive };
+    if (form.type === 'TEXT') return { ...base, textMaximumLength: p?.proposedTextMaximumLength ?? e?.textMaximumLength ?? undefined };
+    if (form.type === 'NUMBER') return { ...base, numberMinimum: p?.proposedNumberMinimum ?? e?.numberMinimum ?? undefined, numberMaximum: p?.proposedNumberMaximum ?? e?.numberMaximum ?? undefined };
+    if (form.type === 'SINGLE_SELECT') return { ...base, selectOptions: enteredOptions.length ? enteredOptions : fallbackOptions };
+    return base;
   }
   async function updateQuestion(key: string, patch: Partial<QuestionForm>, success: string) {
     if (!draftId || !detail) return; const form = { ...questions[key], ...patch }; const proposal = key.startsWith('proposal:'); const id = proposal ? key.slice(9) : key;
@@ -164,7 +168,7 @@ export function SecretarySettingsDraftPage() {
   async function createQuestion(event: FormEvent) {
     event.preventDefault(); if (!draftId) return;
     if (newQuestion.type === 'SINGLE_SELECT' && parsedSelectOptions(newQuestion.selectOptionsText).length < 2) { setError('Single select questions need at least two choices. Enter one choice per line.'); return; }
-    const form = { ...newQuestion, displayOrder: String(questionOrder.length), isRequired: false, isActive: true };
+    const form = { ...newQuestion, displayOrder: String(questionOrder.length), isActive: true };
     await run('new-question', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/booking-questions`, { method: 'POST', body: questionPayload(form) }), 'New booking-question proposal added.');
     setNewQuestion({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true, selectOptionsText: '' });
   }
@@ -181,12 +185,12 @@ export function SecretarySettingsDraftPage() {
     } catch (caught) { setError(errorMessage(caught)); await load(); } finally { setWorking(''); }
   }
 
-  function startServiceDrag(key: string) { setDraggedService(key); setServiceDragOrigin(serviceOrder); }
-  function startQuestionDrag(key: string) { setDraggedQuestion(key); setQuestionDragOrigin(questionOrder); }
+  function startServiceDrag(event: DragEvent, key: string) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', key); setDraggedService(key); setServiceDragOrigin(serviceOrder); }
+  function startQuestionDrag(event: DragEvent, key: string) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', key); setDraggedQuestion(key); setQuestionDragOrigin(questionOrder); }
   function previewService(targetKey: string) { if (draggedService) setServiceOrder((current) => moveKey(current, draggedService, targetKey)); }
   function previewQuestion(targetKey: string) { if (draggedQuestion) setQuestionOrder((current) => moveKey(current, draggedQuestion, targetKey)); }
-  function dropService(event: DragEvent, targetKey: string) { event.preventDefault(); if (!draggedService) return; const next = serviceOrder === serviceDragOrigin ? moveKey(serviceOrder, draggedService, targetKey) : serviceOrder; setDraggedService(''); setServiceDragOrigin([]); void reorderServices(next); }
-  function dropQuestion(event: DragEvent, targetKey: string) { event.preventDefault(); if (!draggedQuestion) return; const next = questionOrder === questionDragOrigin ? moveKey(questionOrder, draggedQuestion, targetKey) : questionOrder; setDraggedQuestion(''); setQuestionDragOrigin([]); void reorderQuestions(next); }
+  function finishServiceDrag() { if (!draggedService) return; const next = serviceOrder; const changed = next.join('|') !== serviceDragOrigin.join('|'); setDraggedService(''); setServiceDragOrigin([]); if (changed) void reorderServices(next); }
+  function finishQuestionDrag() { if (!draggedQuestion) return; const next = questionOrder; const changed = next.join('|') !== questionDragOrigin.join('|'); setDraggedQuestion(''); setQuestionDragOrigin([]); if (changed) void reorderQuestions(next); }
 
   async function saveException(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('exception', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate: exception.serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal || undefined : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? exception.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } }), 'Date-specific schedule proposal saved.'); }
   async function submit() { if (!draftId) return; await run('submit', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/submit`, { method: 'POST' }), 'Draft submitted to the Doctor for review.'); }
@@ -203,7 +207,7 @@ export function SecretarySettingsDraftPage() {
   const servicesPanel = access?.canManageServices ? <section className="secretary-content-panel approved-content-panel" aria-labelledby="secretary-services-heading">
     <div className="practice-panel-heading"><div><p className="eyebrow">Services</p><h2 id="secretary-services-heading">Clinic services</h2><p>Propose changes to this clinic's services or add a new service.<br />Changes take effect only after Doctor approval.</p></div></div>
     <div className="proposal-sort-list" aria-label="Clinic services">
-      {serviceOrder.map((key, index) => { const form = services[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={() => startServiceDrag(key)} onDragEnter={() => previewService(key)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropService(event, key)}>
+      {serviceOrder.map((key, index) => { const form = services[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={(event) => startServiceDrag(event, key)} onDragEnter={() => previewService(key)} onDragOver={(event) => event.preventDefault()} onDragEnd={finishServiceDrag}>
         <DragHandle /><span className="proposal-order">{index + 1}.</span><div className="proposal-row-copy"><strong>{form.name}</strong><span>{form.durationMinutes} minutes</span></div><span className={hasEffectiveService(key) ? 'proposal-badge active' : 'proposal-badge draft'}>{hasEffectiveService(key) ? 'Active' : 'Draft'}</span>
         {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.name}`} disabled={Boolean(working)} onClick={() => void updateService(key, { status: 'INACTIVE' }, 'Service removal proposal saved.')}><TrashIcon /></button> : null}
       </div>; })}
@@ -215,7 +219,7 @@ export function SecretarySettingsDraftPage() {
   const questionsPanel = access?.canManageBookingQuestions ? <section className="secretary-content-panel approved-content-panel" aria-labelledby="secretary-questions-heading">
     <div className="practice-panel-heading"><div><p className="eyebrow">Booking questions</p><h2 id="secretary-questions-heading">Patient booking questions</h2><p>Propose the questions patients answer when booking this clinic.<br />Changes take effect only after Doctor approval.</p></div></div>
     <div className="proposal-sort-list" aria-label="Patient booking questions">
-      {questionOrder.map((key, index) => { const form = questions[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={() => startQuestionDrag(key)} onDragEnter={() => previewQuestion(key)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropQuestion(event, key)}>
+      {questionOrder.map((key, index) => { const form = questions[key]; if (!form) return null; return <div className="proposal-sort-row" key={key} draggable={editable && !working} onDragStart={(event) => startQuestionDrag(event, key)} onDragEnter={() => previewQuestion(key)} onDragOver={(event) => event.preventDefault()} onDragEnd={finishQuestionDrag}>
         <DragHandle /><span className="proposal-order">{index + 1}.</span><div className="proposal-row-copy"><strong>{form.questionText}</strong><span>{questionTypeLabel(form.type)} · {form.isRequired ? 'Required' : 'Optional'}</span></div><span className={hasEffectiveQuestion(key) ? 'proposal-badge active' : 'proposal-badge draft'}>{hasEffectiveQuestion(key) ? 'Active' : 'Draft'}</span>
         {editable ? <button className="proposal-trash" type="button" aria-label={`Remove ${form.questionText}`} disabled={Boolean(working)} onClick={() => void updateQuestion(key, { isActive: false }, 'Booking-question removal proposal saved.')}><TrashIcon /></button> : null}
       </div>; })}
@@ -223,6 +227,7 @@ export function SecretarySettingsDraftPage() {
     {editable ? <form className="practice-form compact-form proposal-add-form" onSubmit={createQuestion}>
       <label>Question<input required placeholder="Enter your question" value={newQuestion.questionText} onChange={(e) => setNewQuestion({ ...newQuestion, questionText: e.target.value })} /></label>
       <label>Answer type<select value={newQuestion.type} onChange={(e) => setNewQuestion({ ...newQuestion, type: e.target.value as QuestionType, selectOptionsText: e.target.value === 'SINGLE_SELECT' ? newQuestion.selectOptionsText : '' })}><option value="TEXT">Text</option><option value="NUMBER">Number</option><option value="BOOLEAN">Yes / No</option><option value="SINGLE_SELECT">Single select</option></select></label>
+      <label className="proposal-checkbox"><input type="checkbox" checked={newQuestion.isRequired} onChange={(e) => setNewQuestion({ ...newQuestion, isRequired: e.target.checked })} /> Required before booking can continue</label>
       {newQuestion.type === 'SINGLE_SELECT' ? <label>Choices <span className="optional">One per line</span><textarea required rows={4} placeholder={'Option 1\nOption 2'} value={newQuestion.selectOptionsText} onChange={(e) => setNewQuestion({ ...newQuestion, selectOptionsText: e.target.value })} /></label> : null}
       <button className="proposal-add-button" disabled={Boolean(working)}>{working === 'new-question' ? 'Adding…' : 'Add question proposal'}</button>
     </form> : null}
