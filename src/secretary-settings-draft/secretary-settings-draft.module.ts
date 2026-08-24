@@ -7,6 +7,7 @@ import { SecretarySettingsDraftApprovalService } from './secretary-settings-draf
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
 import { SecretarySettingsDraftController } from './secretary-settings-draft.controller';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
+import { SecretarySettingsDraftReadService } from './secretary-settings-draft-read.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
 import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
@@ -16,6 +17,7 @@ import { SecretarySettingsDraftService } from './secretary-settings-draft.servic
   controllers: [SecretarySettingsDraftController],
   providers: [
     SecretarySettingsDraftService,
+    SecretarySettingsDraftReadService,
     SecretarySettingsDraftScheduleService,
     SecretarySettingsDraftExceptionService,
     SecretarySettingsDraftServiceProposalService,
