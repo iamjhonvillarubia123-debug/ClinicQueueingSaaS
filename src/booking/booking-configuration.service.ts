@@ -41,11 +41,12 @@ export class BookingConfigurationService {
         },
         services: {
           where: { status: ServiceAvailabilityStatus.ACTIVE },
-          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             name: true,
             durationMinutes: true,
+            displayOrder: true,
           },
         },
         bookingQuestions: {
