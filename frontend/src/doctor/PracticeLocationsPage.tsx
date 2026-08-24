@@ -168,11 +168,13 @@ export function PracticeLocationsPage() {
               <div className="practice-location-meta">
                 <span>{location.timeZone || 'Time zone not configured'}</span>
                 <span>{location.contactNumber || 'No contact number'}</span>
+                <span>{location.currentRegularPracticeStaffId ? 'Regular Secretary assigned' : 'No regular Secretary assigned'}</span>
                 <span>{location.isBookingEnabled ? 'Booking enabled' : 'Booking not enabled'}</span>
               </div>
             </div>
             <div className="practice-card-actions clinic-list-actions">
               <Link className="secondary-action" to={`/app/practice-locations/${encodeURIComponent(location.id)}`}>Configure</Link>
+              <Link className="secondary-action" to={`/app/practice-locations/${encodeURIComponent(location.id)}/staff`}>Staff</Link>
               {location.lifecycleStatus === 'DRAFT' ? (
                 <button className="primary" type="button" onClick={() => { setNotice(''); setActivationTarget(location); }}>Activate</button>
               ) : null}
