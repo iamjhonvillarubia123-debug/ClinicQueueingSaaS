@@ -50,6 +50,11 @@ export class SecretarySettingsDraftReadService {
                 userId: true,
                 isActive: true,
                 staffRole: true,
+                accessProfile: true,
+                canManageClinicDetails: true,
+                canManageServices: true,
+                canManageBookingQuestions: true,
+                canManageSchedules: true,
               },
             },
             practiceSchedules: {
@@ -90,18 +95,10 @@ export class SecretarySettingsDraftReadService {
             },
           },
         },
-        proposedPracticeSchedules: {
-          orderBy: { weekday: 'asc' },
-        },
-        proposedServices: {
-          orderBy: { id: 'asc' },
-        },
-        proposedBookingQuestions: {
-          orderBy: { id: 'asc' },
-        },
-        proposedScheduleExceptions: {
-          orderBy: { serviceDate: 'asc' },
-        },
+        proposedPracticeSchedules: { orderBy: { weekday: 'asc' } },
+        proposedServices: { orderBy: { id: 'asc' } },
+        proposedBookingQuestions: { orderBy: { id: 'asc' } },
+        proposedScheduleExceptions: { orderBy: { serviceDate: 'asc' } },
       },
     });
 
