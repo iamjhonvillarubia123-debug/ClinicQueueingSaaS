@@ -76,12 +76,13 @@ export class SecretarySettingsDraftReadService {
               },
             },
             services: {
-              orderBy: [{ status: 'asc' }, { name: 'asc' }],
+              orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
               select: {
                 id: true,
                 name: true,
                 durationMinutes: true,
                 status: true,
+                displayOrder: true,
               },
             },
             bookingQuestions: {
@@ -104,7 +105,7 @@ export class SecretarySettingsDraftReadService {
         },
         proposedClinicDetails: true,
         proposedPracticeSchedules: { orderBy: { weekday: 'asc' } },
-        proposedServices: { orderBy: { id: 'asc' } },
+        proposedServices: { orderBy: [{ proposedDisplayOrder: 'asc' }, { id: 'asc' }] },
         proposedBookingQuestions: { orderBy: { id: 'asc' } },
         proposedScheduleExceptions: { orderBy: { serviceDate: 'asc' } },
       },
