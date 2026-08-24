@@ -16,12 +16,14 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { CreateSecretarySettingsDraftDto } from './dto/create-secretary-settings-draft.dto';
 import { ReviewSecretarySettingsDraftDto } from './dto/review-secretary-settings-draft.dto';
 import { SaveSecretarySettingsDraftBookingQuestionDto } from './dto/save-secretary-settings-draft-booking-question.dto';
+import { SaveSecretarySettingsDraftClinicDetailsDto } from './dto/save-secretary-settings-draft-clinic-details.dto';
 import { SaveSecretarySettingsDraftServiceDto } from './dto/save-secretary-settings-draft-service.dto';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
 import { UpsertSecretarySettingsDraftScheduleExceptionDto } from './dto/upsert-secretary-settings-draft-schedule-exception.dto';
 import { SecretarySettingsDraftAccessService } from './secretary-settings-draft-access.service';
 import { SecretarySettingsDraftApprovalService } from './secretary-settings-draft-approval.service';
 import { SecretarySettingsDraftBookingQuestionService } from './secretary-settings-draft-booking-question.service';
+import { SecretarySettingsDraftClinicDetailsService } from './secretary-settings-draft-clinic-details.service';
 import { SecretarySettingsDraftExceptionService } from './secretary-settings-draft-exception.service';
 import { SecretarySettingsDraftReadService } from './secretary-settings-draft-read.service';
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
@@ -35,6 +37,7 @@ export class SecretarySettingsDraftController {
     private readonly secretarySettingsDraftService: SecretarySettingsDraftService,
     private readonly secretarySettingsDraftReadService: SecretarySettingsDraftReadService,
     private readonly secretarySettingsDraftAccessService: SecretarySettingsDraftAccessService,
+    private readonly secretarySettingsDraftClinicDetailsService: SecretarySettingsDraftClinicDetailsService,
     private readonly secretarySettingsDraftScheduleService: SecretarySettingsDraftScheduleService,
     private readonly secretarySettingsDraftExceptionService: SecretarySettingsDraftExceptionService,
     private readonly secretarySettingsDraftServiceProposalService: SecretarySettingsDraftServiceProposalService,
@@ -51,6 +54,16 @@ export class SecretarySettingsDraftController {
   async create(@Body() dto: CreateSecretarySettingsDraftDto, @Request() request: AuthenticatedRequest) {
     await this.secretarySettingsDraftAccessService.assertMayCreateDraft(request.user.userId, dto.practiceLocationId);
     return this.secretarySettingsDraftService.create(request.user.userId, dto);
+  }
+
+  @Put(':draftId/clinic-details')
+  async upsertClinicDetails(
+    @Param('draftId') draftId: string,
+    @Body() dto: SaveSecretarySettingsDraftClinicDetailsDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'CLINIC_DETAILS');
+    return this.secretarySettingsDraftClinicDetailsService.upsert(request.user.userId, draftId, dto);
   }
 
   @Post(':draftId/services')
