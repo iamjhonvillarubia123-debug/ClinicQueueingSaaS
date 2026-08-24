@@ -161,12 +161,18 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Shell />}>
           <Route path="/app" element={<WorkspacePage />} />
-          <Route path="/app/practice-locations" element={<PracticeLocationsPage />} />
-          <Route path="/app/practice-locations/:practiceLocationId" element={<PracticeLocationConfigurationPage />} />
-          <Route path="/app/defaults" element={<DoctorDefaultsPage />} />
-          <Route path="/app/data-privacy" element={<DoctorDataPrivacyPage />} />
-          <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
-          <Route path="/app/account" element={<AccountSecurityPage />} />
+          <Route element={<ProtectedRoute allowedRoles={['DOCTOR']} />}>
+            <Route path="/app/practice-locations" element={<PracticeLocationsPage />} />
+            <Route path="/app/practice-locations/:practiceLocationId" element={<PracticeLocationConfigurationPage />} />
+            <Route path="/app/defaults" element={<DoctorDefaultsPage />} />
+            <Route path="/app/data-privacy" element={<DoctorDataPrivacyPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={['SECRETARY']} />}>
+            <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={['DOCTOR', 'SECRETARY']} />}>
+            <Route path="/app/account" element={<AccountSecurityPage />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<NotFound />} />
