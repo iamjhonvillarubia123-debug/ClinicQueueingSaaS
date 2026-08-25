@@ -38,7 +38,7 @@ describe('AppShell', () => {
 
     renderShell('/app/practice-locations');
 
-    expect(screen.getByText('Clinic Queueing')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Clinic Queueing' })).toBeInTheDocument();
     expect(screen.getByText('DOCTOR')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Clinics' })).toHaveClass('active');
     expect(screen.getByRole('link', { name: 'Reviews' })).toBeInTheDocument();
@@ -74,9 +74,10 @@ describe('AppShell', () => {
     const trigger = screen.getByRole('button', { name: 'Open navigation' });
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: 'Close navigation' })).toBeInTheDocument();
+    const closeButtons = screen.getAllByRole('button', { name: 'Close navigation' });
+    expect(closeButtons).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Workspace content' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close navigation' }));
+    fireEvent.click(closeButtons.find((button) => button.textContent === '×') ?? closeButtons[0]);
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 });
