@@ -1,3 +1,16 @@
+.secretary-proposal-header .practice-status.draft {
+  border-color: #b8d7f5;
+  background: #edf6ff;
+  color: #1769aa;
+}
+.secretary-proposal-nav button:last-child {
+  font-size: 0;
+}
+.secretary-proposal-nav button:last-child::after {
+  content: 'Special day clinic';
+  font-size: .92rem;
+}
+
 .special-date-editor .special-date-heading {
   display: flex;
   align-items: flex-start;
@@ -78,7 +91,7 @@
 
 .special-date-form-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(0, 2.1fr);
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(0, 2.15fr);
   gap: 14px 22px;
   align-items: end;
 }
@@ -121,9 +134,9 @@
 }
 .special-date-type > label {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto 34px minmax(0, 1fr);
   gap: 10px;
-  align-items: start;
+  align-items: center;
   min-height: 92px;
   padding: 14px;
   border: 1px solid var(--border);
@@ -132,31 +145,48 @@
   cursor: pointer;
 }
 .special-date-type > label.selected { border-color: #111; box-shadow: inset 0 0 0 1px #111; }
-.special-date-type input { margin-top: 3px; }
-.special-date-type span { display: grid; gap: 4px; }
+.special-date-type input { margin: 0; align-self: start; margin-top: 6px; }
+.special-date-type span:not(.special-type-icon) { display: grid; gap: 4px; }
 .special-date-type small { color: var(--muted); font-weight: 400; line-height: 1.4; }
+.special-type-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: #111;
+}
+.special-type-icon svg { width: 30px; height: 30px; }
 
 .special-date-hours {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 18px;
+  padding-top: 2px;
+}
+.special-date-hours label {
+  display: grid;
+  gap: 7px;
+  font-size: .78rem;
+  font-weight: 650;
 }
 .special-date-hours[hidden],
 .special-date-type[hidden],
 .special-date-form-grid > label[hidden],
+.special-wizard-section-title[hidden],
 .special-wizard-review[hidden],
 .special-wizard-nav button[hidden] { display: none !important; }
 
 .special-wizard-review {
   margin-top: 6px;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fafafa;
 }
-.special-wizard-review h4 { margin: 0 0 12px; }
-.special-wizard-review dl { margin: 0; display: grid; gap: 8px; }
+.special-wizard-review h4 { margin: 0 0 6px; }
+.special-wizard-review > p { margin: 0 0 14px; color: var(--muted); }
+.special-wizard-review dl { margin: 0; display: grid; gap: 9px; }
 .special-wizard-review dl div { display: flex; justify-content: space-between; gap: 20px; }
 .special-wizard-review dt { color: var(--muted); }
 .special-wizard-review dd { margin: 0; font-weight: 650; text-align: right; }
@@ -167,13 +197,13 @@
   justify-content: flex-end;
   gap: 10px;
   margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
-.special-wizard-nav .primary { min-width: 96px; }
+.special-wizard-nav .primary { min-width: 104px; }
 
 .special-date-list { margin-top: 0; }
-.special-date-list-heading {
-  margin-bottom: 10px;
-}
+.special-date-list-heading { margin-bottom: 10px; }
 .special-date-list-heading h3 { font-size: 1rem; }
 .special-date-table {
   overflow: hidden;
