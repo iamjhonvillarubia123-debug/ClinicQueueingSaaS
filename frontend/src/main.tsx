@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
+import { installClinicConfigurationTabPersistence } from './secretary/clinicConfigurationTabPersistence';
 import { installScheduleCutoffPreview } from './secretary/scheduleCutoffPreview';
 import { installSpecialDateListPresentation } from './secretary/specialDateListPresentation';
 import './styles/global.css';
@@ -19,6 +20,7 @@ import './styles/secretary-schedule-approved.css';
 import './styles/secretary-tab-icons.css';
 import './styles/special-day-clinic-ui.css';
 
+installClinicConfigurationTabPersistence();
 installScheduleCutoffPreview();
 installSpecialDateListPresentation();
 
