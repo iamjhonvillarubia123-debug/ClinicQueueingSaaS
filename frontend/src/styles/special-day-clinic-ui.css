@@ -3,17 +3,10 @@
   background: #edf6ff;
   color: #1769aa;
 }
+
 .secretary-proposal-nav button:last-child {
-  min-width: 152px;
+  min-width: 0;
   white-space: nowrap;
-}
-.secretary-proposal-nav button:last-child::after {
-  content: 'Special day clinic';
-  display: inline-block;
-  margin-left: 8px;
-  font-size: .92rem;
-  color: inherit;
-  line-height: 1;
 }
 
 .special-date-editor .special-date-heading {
@@ -31,93 +24,31 @@
 
 .special-date-form {
   margin: 0 0 24px;
-  padding: 18px 18px 20px;
+  padding: 20px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #fff;
 }
-.special-wizard-title { margin: 0 0 14px; font-size: 1rem; }
-.special-wizard-stepper {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  margin-bottom: 26px;
-}
-.special-wizard-step {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: #555;
-}
-.special-wizard-step:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  left: 34px;
-  right: -10px;
-  top: 50%;
-  height: 1px;
-  background: var(--border);
-  z-index: 0;
-}
-.special-wizard-step span,
-.special-wizard-step strong { position: relative; z-index: 1; background: #fff; }
-.special-wizard-step span {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid #9b9b9b;
-  border-radius: 50%;
-  font-size: .75rem;
-  font-weight: 700;
-}
-.special-wizard-step strong {
-  padding-right: 8px;
-  font-size: .82rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.special-wizard-step.active { color: #111; }
-.special-wizard-step.active span,
-.special-wizard-step.complete span {
-  border-color: #111;
-  background: #111;
-  color: #fff;
-}
-
 .special-date-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 22px;
-  align-items: end;
-}
-.special-wizard-section-title {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: .9rem;
-}
-.special-date-format-hint {
-  grid-column: 1 / -1;
-  margin: -8px 0 2px;
-  color: var(--muted);
-  font-size: .76rem;
+  gap: 18px 22px;
+  align-items: start;
 }
 .special-date-form-grid > label {
   display: grid;
   gap: 7px;
   margin: 0;
-  font-size: .78rem;
+  font-size: .8rem;
   font-weight: 650;
 }
 .special-date-form-grid input[type='date'],
 .special-date-hours input[type='time'] {
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0 10px;
+  padding: 0 12px;
   background: #fff;
 }
 .special-date-type {
@@ -137,93 +68,44 @@
 }
 .special-date-type > label {
   display: grid;
-  grid-template-columns: auto 38px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
-  align-items: center;
-  min-height: 108px;
+  align-items: start;
+  min-height: 96px;
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: #fff;
   cursor: pointer;
 }
-.special-date-type > label.selected { border-color: #111; box-shadow: inset 0 0 0 1px #111; }
-.special-date-type input { margin: 0; align-self: start; margin-top: 7px; }
-.special-date-type span:not(.special-type-icon) { display: grid; gap: 4px; }
-.special-date-type strong { font-size: .92rem; }
-.special-date-type small { color: var(--muted); font-weight: 400; line-height: 1.45; }
-.special-type-icon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  color: #111;
+.special-date-type > label.selected {
+  border-color: #111;
+  box-shadow: inset 0 0 0 1px #111;
 }
-.special-type-icon svg { width: 32px; height: 32px; }
-
-.special-note-field {
-  grid-column: 1 / -1;
-  display: grid;
-  gap: 7px;
-}
-.special-note-field textarea {
-  width: 100%;
-  min-height: 82px;
-  resize: vertical;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  background: #fff;
-  font: inherit;
-}
-.special-note-field small { color: var(--muted); font-weight: 400; }
-
+.special-date-type input { margin: 4px 0 0; }
+.special-date-type span { display: grid; gap: 4px; }
+.special-date-type strong { font-size: .95rem; }
+.special-date-type small { color: var(--muted); font-weight: 400; line-height: 1.45; max-width: 300px; }
 .special-date-hours {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
-  padding-top: 2px;
 }
 .special-date-hours label {
   display: grid;
   gap: 7px;
-  font-size: .78rem;
+  font-size: .8rem;
   font-weight: 650;
 }
-.special-date-hours[hidden],
-.special-date-type[hidden],
-.special-note-field[hidden],
-.special-date-form-grid > label[hidden],
-.special-wizard-section-title[hidden],
-.special-date-format-hint[hidden],
-.special-wizard-review[hidden],
-.special-wizard-nav button[hidden] { display: none !important; }
-
-.special-wizard-review {
-  margin-top: 6px;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fafafa;
-}
-.special-wizard-review h4 { margin: 0 0 6px; }
-.special-wizard-review > p { margin: 0 0 14px; color: var(--muted); }
-.special-wizard-review dl { margin: 0; display: grid; gap: 9px; }
-.special-wizard-review dl div { display: flex; justify-content: space-between; gap: 20px; }
-.special-wizard-review dt { color: var(--muted); }
-.special-wizard-review dd { margin: 0; max-width: 66%; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
-
-.special-date-form .special-date-form-actions { display: none !important; }
-.special-wizard-nav {
+.special-date-form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 18px;
+  padding-top: 18px;
   border-top: 1px solid var(--border);
 }
-.special-wizard-nav .primary { min-width: 104px; }
 
 .special-date-list { margin-top: 0; }
 .special-date-list-heading { margin-bottom: 10px; }
@@ -237,7 +119,7 @@
 .special-date-table-head,
 .special-date-table-row {
   display: grid;
-  grid-template-columns: 1.25fr 1.15fr .8fr .8fr 1.05fr 1.35fr .75fr;
+  grid-template-columns: 1.25fr 1fr .9fr .9fr 1.1fr;
   gap: 12px;
   align-items: center;
   padding: 10px 12px;
@@ -250,11 +132,6 @@
 }
 .special-date-table-row { border-bottom: 1px solid var(--border); }
 .special-date-table-row:last-child { border-bottom: 0; }
-.special-date-cell-date::before {
-  content: '▣';
-  margin-right: 8px;
-  font-size: .72rem;
-}
 .special-date-status {
   display: inline-flex;
   align-items: center;
@@ -274,23 +151,6 @@
   background: #fff0ef;
   color: #b52f27;
 }
-.special-date-note-cell { color: #333; overflow-wrap: anywhere; }
-.special-date-actions { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; }
-.special-date-action-button {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #111;
-  cursor: pointer;
-}
-.special-date-action-button:hover { background: #f3f3f3; }
-.special-date-action-button.delete:hover { background: #fff0ef; color: #b52f27; }
-.special-date-action-button svg { width: 18px; height: 18px; }
 .special-date-table .exception-empty {
   padding: 26px 12px;
   text-align: center;
@@ -303,22 +163,17 @@
   .special-date-hours { grid-template-columns: 1fr; }
   .special-date-table { overflow-x: auto; }
   .special-date-table-head,
-  .special-date-table-row { min-width: 930px; }
+  .special-date-table-row { min-width: 760px; }
 }
 
 @media (max-width: 760px) {
   .special-date-editor .special-date-heading { display: grid; }
   .special-date-editor .special-date-heading .primary { width: 100%; }
-  .special-wizard-stepper { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .special-wizard-step::after { display: none; }
   .special-date-form-grid,
   .special-date-type,
   .special-date-hours { grid-template-columns: 1fr; }
-  .special-wizard-section-title,
-  .special-date-format-hint,
   .special-date-type,
-  .special-note-field,
   .special-date-hours { grid-column: 1; }
-  .special-wizard-nav { flex-direction: column-reverse; }
-  .special-wizard-nav button { width: 100%; }
+  .special-date-form-actions { flex-direction: column-reverse; }
+  .special-date-form-actions button { width: 100%; }
 }
