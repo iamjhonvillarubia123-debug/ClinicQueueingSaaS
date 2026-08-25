@@ -5,6 +5,7 @@ import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { installScheduleCutoffPreview } from './secretary/scheduleCutoffPreview';
 import './styles/global.css';
+import './styles/app-shell.css';
 import './styles/account-lifecycle.css';
 import './styles/patient.css';
 import './styles/practice-admin.css';
