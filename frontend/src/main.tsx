@@ -4,7 +4,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { installScheduleCutoffPreview } from './secretary/scheduleCutoffPreview';
-import { installSpecialDayClinicUi } from './secretary/specialDayClinicUi';
 import './styles/global.css';
 import './styles/app-shell.css';
 import './styles/account-lifecycle.css';
@@ -17,10 +16,8 @@ import './styles/secretary-question-controls.css';
 import './styles/secretary-content-section.css';
 import './styles/secretary-schedule-approved.css';
 import './styles/secretary-tab-icons.css';
-import './styles/special-day-clinic-ui.css';
 
 installScheduleCutoffPreview();
-installSpecialDayClinicUi();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
