@@ -43,6 +43,31 @@ const errorMessage = (error: unknown) => error instanceof ApiError ? error.messa
 const selectOptions = (value: unknown) => Array.isArray(value) ? value : undefined;
 const selectOptionsText = (value: unknown) => Array.isArray(value) ? value.map((item) => typeof item === 'object' && item !== null && typeof (item as { label?: unknown }).label === 'string' ? (item as { label: string }).label : '').filter(Boolean).join('\n') : '';
 const parsedSelectOptions = (value: string) => value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((label) => ({ value: label, label }));
+const timeToMinutes = (value: string) => { const [hours, minutes] = value.split(':').map(Number); return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null; };
+const minutesToTime = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+const cutoffFromClosing = (closing: string, hoursBefore: string) => {
+  if (!hoursBefore.trim()) return '';
+  const closeMinutes = timeToMinutes(closing); const allowance = Number(hoursBefore);
+  if (closeMinutes === null || !Number.isFinite(allowance) || allowance < 0) return '';
+  const cutoff = closeMinutes - Math.round(allowance * 60);
+  return cutoff >= 0 ? minutesToTime(cutoff) : '';
+};
+const inferredCutoffHours = (rows: ScheduleForm[]) => {
+  const values = rows.filter((row) => row.isOpen && row.closesAtLocal && row.maximumOnlineBookingUntilLocal).map((row) => {
+    const close = timeToMinutes(row.closesAtLocal); const cutoff = timeToMinutes(row.maximumOnlineBookingUntilLocal);
+    return close === null || cutoff === null ? null : (close - cutoff) / 60;
+  }).filter((value): value is number => value !== null && value >= 0);
+  if (!values.length || values.some((value) => Math.abs(value - values[0]) > 0.001)) return '';
+  return String(values[0]);
+};
+const datesInclusive = (startDate: string, endDate: string) => {
+  if (!startDate) return [];
+  const start = new Date(`${startDate}T00:00:00Z`); const end = new Date(`${endDate || startDate}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
+  const result: string[] = [];
+  for (let cursor = new Date(start); cursor <= end && result.length <= 366; cursor.setUTCDate(cursor.getUTCDate() + 1)) result.push(cursor.toISOString().slice(0, 10));
+  return result;
+};
 
 function scheduleForms(detail: DraftDetail): ScheduleForm[] {
   const effective = new Map(detail.practiceLocation.practiceSchedules.map((row) => [row.weekday, row]));
@@ -74,6 +99,7 @@ export function SecretarySettingsDraftPage() {
   const [activeSection, setActiveSection] = useState<EditorSection>('clinic');
   const [clinicDetails, setClinicDetails] = useState<ClinicDetailsForm>(blankClinicDetails);
   const [schedules, setSchedules] = useState<ScheduleForm[]>([]);
+  const [onlineCutoffHours, setOnlineCutoffHours] = useState('');
   const [services, setServices] = useState<Record<string, ServiceForm>>({});
   const [questions, setQuestions] = useState<Record<string, QuestionForm>>({});
   const [serviceOrder, setServiceOrder] = useState<string[]>([]);
@@ -84,7 +110,7 @@ export function SecretarySettingsDraftPage() {
   const [questionDragOrigin, setQuestionDragOrigin] = useState<string[]>([]);
   const [newService, setNewService] = useState<ServiceForm>({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' });
   const [newQuestion, setNewQuestion] = useState<QuestionForm>({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true, selectOptionsText: '' });
-  const [exception, setException] = useState({ serviceDate: '', isOpen: false, opensAtLocal: '', closesAtLocal: '', maximumOnlineBookingUntilLocal: '', maximumOperatingUntilLocal: '' });
+  const [exception, setException] = useState({ startDate: '', endDate: '', isOpen: true, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '', overrideOnlineCutoff: false, onlineCutoffHours: '' });
   const [proposalCountDelta, setProposalCountDelta] = useState(0);
   const knownProposalIds = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(true); const [working, setWorking] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -101,7 +127,8 @@ export function SecretarySettingsDraftPage() {
     if (!draftId) return; if (showLoader) setLoading(true); setError('');
     try {
       const response = await apiRequest<DraftDetail>(`/secretary-settings-drafts/${encodeURIComponent(draftId)}`);
-      setDetail(response); setClinicDetails(clinicDetailsForm(response)); setSchedules(scheduleForms(response));
+      const nextSchedules = scheduleForms(response);
+      setDetail(response); setClinicDetails(clinicDetailsForm(response)); setSchedules(nextSchedules); setOnlineCutoffHours(inferredCutoffHours(nextSchedules));
       knownProposalIds.current = new Set([
         ...response.proposedServices.map((row) => `service:${row.id}`),
         ...response.proposedBookingQuestions.map((row) => `question:${row.id}`),
@@ -144,7 +171,28 @@ export function SecretarySettingsDraftPage() {
   }
   const updateSchedule = (weekday: Weekday, patch: Partial<ScheduleForm>) => setSchedules((current) => current.map((row) => row.weekday === weekday ? { ...row, ...patch } : row));
   async function saveClinicDetails(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('clinic-details', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/clinic-details`, { method: 'PUT', body: clinicDetails }), 'Clinic-details proposal saved.'); }
-  async function saveSchedule(row: ScheduleForm) { if (!draftId) return; await run(`schedule:${row.weekday}`, () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/practice-schedule`, { method: 'PUT', body: { weekday: row.weekday, isOpen: row.isOpen, opensAtLocal: row.isOpen ? row.opensAtLocal || undefined : undefined, closesAtLocal: row.isOpen ? row.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: row.isOpen ? row.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: row.isOpen ? row.maximumOperatingUntilLocal || undefined : undefined } }), `${dayLabel(row.weekday)} proposal saved.`); }
+
+  async function saveWeeklySchedules(event: FormEvent) {
+    event.preventDefault(); if (!draftId || working) return;
+    const allowance = onlineCutoffHours.trim() ? Number(onlineCutoffHours) : null;
+    if (allowance !== null && (!Number.isFinite(allowance) || allowance < 0)) { setError('Online cutoff allowance must be zero or a positive number of hours.'); return; }
+    for (const row of schedules.filter((item) => item.isOpen)) {
+      if (!row.opensAtLocal || !row.closesAtLocal) { setError(`${dayLabel(row.weekday)} needs both opening and closing times.`); return; }
+      if (allowance !== null) {
+        const cutoff = cutoffFromClosing(row.closesAtLocal, onlineCutoffHours); const opening = timeToMinutes(row.opensAtLocal); const cutoffMinutes = timeToMinutes(cutoff);
+        if (!cutoff || opening === null || cutoffMinutes === null || cutoffMinutes < opening) { setError(`The online cutoff allowance is too large for ${dayLabel(row.weekday)}'s clinic hours.`); return; }
+      }
+    }
+    setWorking('weekly-schedules'); setError(''); setNotice('');
+    try {
+      for (const row of schedules) {
+        const cutoff = row.isOpen && allowance !== null ? cutoffFromClosing(row.closesAtLocal, onlineCutoffHours) : '';
+        await apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/practice-schedule`, { method: 'PUT', body: { weekday: row.weekday, isOpen: row.isOpen, opensAtLocal: row.isOpen ? row.opensAtLocal : undefined, closesAtLocal: row.isOpen ? row.closesAtLocal : undefined, maximumOnlineBookingUntilLocal: row.isOpen ? cutoff || undefined : undefined, maximumOperatingUntilLocal: row.isOpen ? row.maximumOperatingUntilLocal || undefined : undefined } });
+      }
+      setSchedules((current) => current.map((row) => ({ ...row, maximumOnlineBookingUntilLocal: row.isOpen && allowance !== null ? cutoffFromClosing(row.closesAtLocal, onlineCutoffHours) : '' })));
+      await load(false); setNotice('Weekly schedule proposal saved.');
+    } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
+  }
 
   async function updateService(key: string, patch: Partial<ServiceForm>, success: string) {
     if (!draftId || working) return;
@@ -250,7 +298,24 @@ export function SecretarySettingsDraftPage() {
   function finishServiceDrag() { if (!draggedService) return; const next = serviceOrder; const origin = serviceDragOrigin; const changed = next.join('|') !== origin.join('|'); setDraggedService(''); setServiceDragOrigin([]); if (changed) void reorderServices(next, origin); }
   function finishQuestionDrag() { if (!draggedQuestion) return; const next = questionOrder; const origin = questionDragOrigin; const changed = next.join('|') !== origin.join('|'); setDraggedQuestion(''); setQuestionDragOrigin([]); if (changed) void reorderQuestions(next, origin); }
 
-  async function saveException(event: FormEvent) { event.preventDefault(); if (!draftId) return; await run('exception', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate: exception.serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal || undefined : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal || undefined : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? exception.maximumOnlineBookingUntilLocal || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } }), 'Date-specific schedule proposal saved.'); }
+  async function saveException(event: FormEvent) {
+    event.preventDefault(); if (!draftId || working) return;
+    const dates = datesInclusive(exception.startDate, exception.endDate || exception.startDate);
+    if (!dates.length) { setError('Choose a valid start and end date.'); return; }
+    if (dates.length > 366) { setError('A date-specific exception range cannot exceed 366 days.'); return; }
+    if (exception.isOpen && (!exception.opensAtLocal || !exception.closesAtLocal)) { setError('Open date exceptions need both opening and closing times.'); return; }
+    const hours = exception.overrideOnlineCutoff ? exception.onlineCutoffHours : onlineCutoffHours;
+    const cutoff = exception.isOpen && hours.trim() ? cutoffFromClosing(exception.closesAtLocal, hours) : '';
+    if (exception.isOpen && hours.trim() && !cutoff) { setError('The date-specific online cutoff allowance is not valid for the selected closing time.'); return; }
+    setWorking('exception'); setError(''); setNotice('');
+    try {
+      for (const serviceDate of dates) {
+        await apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? cutoff || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } });
+      }
+      setException({ startDate: '', endDate: '', isOpen: true, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '', overrideOnlineCutoff: false, onlineCutoffHours: '' });
+      await load(false); setNotice(dates.length === 1 ? 'Date-specific schedule proposal saved.' : `${dates.length} date-specific schedule proposals saved.`);
+    } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
+  }
   async function submit() { if (!draftId) return; await run('submit', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/submit`, { method: 'POST' }), 'Draft submitted to the Doctor for review.'); }
 
   if (loading) return <section className="practice-admin-page"><p className="practice-muted">Loading settings draft…</p></section>;
@@ -295,7 +360,7 @@ export function SecretarySettingsDraftPage() {
   return <section className="secretary-proposal-page" aria-labelledby="secretary-draft-heading">
     <Link className="secretary-back-link" to="/app/secretary/clinics">← Back to clinics</Link>
     <div className="secretary-proposal-header">
-      <div><p className="eyebrow">Secretary settings proposal</p><div className="secretary-proposal-title-row"><h1 id="secretary-draft-heading">{clinicName}</h1><span className="practice-status">{statusLabel(detail.status)}</span></div><p className="practice-muted">Prepare proposed clinic changes for Doctor review. Nothing on this page becomes effective until the Doctor approves the draft.</p></div>
+      <div><p className="eyebrow">{clinicName}</p><div className="secretary-proposal-title-row"><h1 id="secretary-draft-heading">Clinic configuration</h1><span className="practice-status">{statusLabel(detail.status)}</span></div><p className="practice-muted">Prepare and propose changes to this clinic. Nothing on this page becomes effective until the Doctor approves the draft.</p></div>
       <div className="secretary-proposal-actions"><Link className="secondary-action" to="/app/secretary/clinics">Cancel</Link>{editable ? <button className="primary" type="button" disabled={working === 'submit' || proposalCount === 0} onClick={() => void submit()}>{working === 'submit' ? 'Submitting…' : 'Submit to Doctor'}</button> : null}</div>
     </div>
     {detail.reviewComment ? <div className="practice-notice"><strong>Doctor note:</strong> {detail.reviewComment}</div> : null}
@@ -311,7 +376,32 @@ export function SecretarySettingsDraftPage() {
       <div className="secretary-proposal-content">
         {activeSection === 'clinic' && access?.canManageClinicDetails ? <section className="secretary-proposal-panel"><div className="practice-panel-heading"><div><h2>Identity, address & contact</h2><p>These fields remain unchanged for patients and staff until the Doctor approves this draft.</p></div></div><form className="practice-form" onSubmit={saveClinicDetails}><div className="practice-form-grid"><label>Clinic name<input required disabled={!editable} value={clinicDetails.name} onChange={(e) => setClinicDetails({ ...clinicDetails, name: e.target.value })} /></label><label>Contact number<input required disabled={!editable} value={clinicDetails.contactNumber} onChange={(e) => setClinicDetails({ ...clinicDetails, contactNumber: e.target.value })} /></label><label>Address line 1<input required disabled={!editable} value={clinicDetails.addressLine1} onChange={(e) => setClinicDetails({ ...clinicDetails, addressLine1: e.target.value })} /></label><label>Address line 2 <span className="optional">Optional</span><input disabled={!editable} value={clinicDetails.addressLine2} onChange={(e) => setClinicDetails({ ...clinicDetails, addressLine2: e.target.value })} /></label><label>City / municipality<input required disabled={!editable} value={clinicDetails.cityMunicipality} onChange={(e) => setClinicDetails({ ...clinicDetails, cityMunicipality: e.target.value })} /></label><label>Province<input required disabled={!editable} value={clinicDetails.province} onChange={(e) => setClinicDetails({ ...clinicDetails, province: e.target.value })} /></label><label>Postal code <span className="optional">Optional</span><input disabled={!editable} value={clinicDetails.postalCode} onChange={(e) => setClinicDetails({ ...clinicDetails, postalCode: e.target.value })} /></label><label>Country code<input required maxLength={2} disabled={!editable} value={clinicDetails.countryCode} onChange={(e) => setClinicDetails({ ...clinicDetails, countryCode: e.target.value.toUpperCase() })} /></label><label>Time zone<input required disabled={!editable} value={clinicDetails.timeZone} onChange={(e) => setClinicDetails({ ...clinicDetails, timeZone: e.target.value })} /></label></div>{editable ? <button className="secondary" disabled={Boolean(working)}>{working === 'clinic-details' ? 'Saving…' : 'Save clinic details'}</button> : null}</form></section> : null}
         {activeSection === 'content' ? <section className="secretary-proposal-panel secretary-content-section"><div className="secretary-content-grid">{servicesPanel}{questionsPanel}</div></section> : null}
-        {activeSection === 'schedules' && access?.canManageSchedules ? <section className="secretary-proposal-panel"><div className="practice-panel-heading"><div><h2>Clinic schedules</h2><p>Recurring hours and date-specific exceptions are proposed here. Final conflict validation happens at Doctor approval.</p></div></div><div className="secretary-schedule-list">{schedules.map((row) => <div className="secretary-schedule-row" key={row.weekday}><div className="stack"><label><input type="checkbox" disabled={!editable} checked={row.isOpen} onChange={(e) => updateSchedule(row.weekday, { isOpen: e.target.checked })} /> {dayLabel(row.weekday)} open</label>{row.isOpen ? <div className="practice-form-grid"><label>Opens<input type="time" disabled={!editable} value={row.opensAtLocal} onChange={(e) => updateSchedule(row.weekday, { opensAtLocal: e.target.value })} /></label><label>Closes<input type="time" disabled={!editable} value={row.closesAtLocal} onChange={(e) => updateSchedule(row.weekday, { closesAtLocal: e.target.value })} /></label><label>Online cutoff <span className="optional">Optional</span><input type="time" disabled={!editable} value={row.maximumOnlineBookingUntilLocal} onChange={(e) => updateSchedule(row.weekday, { maximumOnlineBookingUntilLocal: e.target.value })} /></label><label>Maximum operating until <span className="optional">Optional</span><input type="time" disabled={!editable} value={row.maximumOperatingUntilLocal} onChange={(e) => updateSchedule(row.weekday, { maximumOperatingUntilLocal: e.target.value })} /></label></div> : null}</div>{editable ? <button className="secondary" type="button" disabled={Boolean(working)} onClick={() => void saveSchedule(row)}>{working === `schedule:${row.weekday}` ? 'Saving…' : 'Save day'}</button> : null}</div>)}</div><div className="secretary-proposal-add"><h3>Date-specific exception</h3>{detail.proposedScheduleExceptions.length ? <div className="practice-location-meta">{detail.proposedScheduleExceptions.map((row) => <span key={row.id}>{dateOnly(row.serviceDate)} · {row.proposedIsOpen ? `${timeOnly(row.proposedOpensAtLocal)}–${timeOnly(row.proposedClosesAtLocal)}` : 'Closed'}</span>)}</div> : <p className="practice-muted">No date-specific proposals yet.</p>}{editable ? <form className="practice-form" onSubmit={saveException}><div className="practice-form-grid"><label>Date<input required type="date" value={exception.serviceDate} onChange={(e) => setException({ ...exception, serviceDate: e.target.value })} /></label><label><input type="checkbox" checked={exception.isOpen} onChange={(e) => setException({ ...exception, isOpen: e.target.checked })} /> Clinic open on this date</label></div>{exception.isOpen ? <div className="practice-form-grid"><label>Opens<input required type="time" value={exception.opensAtLocal} onChange={(e) => setException({ ...exception, opensAtLocal: e.target.value })} /></label><label>Closes<input required type="time" value={exception.closesAtLocal} onChange={(e) => setException({ ...exception, closesAtLocal: e.target.value })} /></label><label>Online cutoff <span className="optional">Optional</span><input type="time" value={exception.maximumOnlineBookingUntilLocal} onChange={(e) => setException({ ...exception, maximumOnlineBookingUntilLocal: e.target.value })} /></label><label>Maximum operating until <span className="optional">Optional</span><input type="time" value={exception.maximumOperatingUntilLocal} onChange={(e) => setException({ ...exception, maximumOperatingUntilLocal: e.target.value })} /></label></div> : null}<button className="secondary" disabled={Boolean(working)}>Save date exception</button></form> : null}</div></section> : null}
+        {activeSection === 'schedules' && access?.canManageSchedules ? <section className="secretary-proposal-panel schedule-editor"><div className="practice-panel-heading"><div><h2>Clinic schedules</h2><p>Set the regular weekly schedule for this clinic and any date-specific exceptions.</p></div></div>
+          <form className="weekly-schedule-card" onSubmit={saveWeeklySchedules}>
+            <div className="weekly-schedule-grid weekly-schedule-head"><span>Day</span><span>Opens</span><span>Closes</span><span>Max operating until</span></div>
+            {schedules.map((row) => <div className="weekly-schedule-grid weekly-schedule-row" key={row.weekday}>
+              <label className="weekly-day"><input type="checkbox" disabled={!editable} checked={row.isOpen} onChange={(e) => updateSchedule(row.weekday, { isOpen: e.target.checked, opensAtLocal: e.target.checked ? row.opensAtLocal : '', closesAtLocal: e.target.checked ? row.closesAtLocal : '', maximumOperatingUntilLocal: e.target.checked ? row.maximumOperatingUntilLocal : '' })} /><strong>{dayLabel(row.weekday)}</strong></label>
+              <input aria-label={`${dayLabel(row.weekday)} opens`} type="time" disabled={!editable || !row.isOpen} required={row.isOpen} value={row.opensAtLocal} onChange={(e) => updateSchedule(row.weekday, { opensAtLocal: e.target.value })} />
+              <input aria-label={`${dayLabel(row.weekday)} closes`} type="time" disabled={!editable || !row.isOpen} required={row.isOpen} value={row.closesAtLocal} onChange={(e) => updateSchedule(row.weekday, { closesAtLocal: e.target.value })} />
+              <input aria-label={`${dayLabel(row.weekday)} maximum operating until`} type="time" disabled={!editable || !row.isOpen} value={row.maximumOperatingUntilLocal} onChange={(e) => updateSchedule(row.weekday, { maximumOperatingUntilLocal: e.target.value })} />
+            </div>)}
+            <div className="weekly-schedule-footer"><div><strong>Online cutoff (hours before clinic closing)</strong><p>Patients can only book up to this many hours before the clinic closing time.</p></div><label className="cutoff-hours"><input aria-label="Online cutoff hours before clinic closing" type="number" min="0" step="0.25" disabled={!editable} value={onlineCutoffHours} onChange={(e) => setOnlineCutoffHours(e.target.value)} /><span>hour(s)</span></label>{editable ? <button className="primary" disabled={working === 'weekly-schedules'}>{working === 'weekly-schedules' ? 'Saving…' : 'Save schedules'}</button> : null}</div>
+          </form>
+          <section className="schedule-exception-card"><div className="exception-heading"><div><h3>Date-specific exceptions</h3><p>Add special hours or a closure for specific dates. Each saved date remains a complete schedule replacement.</p></div></div>
+            {editable ? <form className="exception-form" onSubmit={saveException}>
+              <label>Start date<input required type="date" value={exception.startDate} onChange={(e) => setException({ ...exception, startDate: e.target.value, endDate: exception.endDate || e.target.value })} /></label>
+              <label>End date<input required type="date" min={exception.startDate || undefined} value={exception.endDate} onChange={(e) => setException({ ...exception, endDate: e.target.value })} /></label>
+              <label className="exception-open"><input type="checkbox" checked={exception.isOpen} onChange={(e) => setException({ ...exception, isOpen: e.target.checked })} /> Clinic open</label>
+              <label>Opens<input required={exception.isOpen} type="time" disabled={!exception.isOpen} value={exception.opensAtLocal} onChange={(e) => setException({ ...exception, opensAtLocal: e.target.value })} /></label>
+              <label>Closes<input required={exception.isOpen} type="time" disabled={!exception.isOpen} value={exception.closesAtLocal} onChange={(e) => setException({ ...exception, closesAtLocal: e.target.value })} /></label>
+              <label>Max operating until<input type="time" disabled={!exception.isOpen} value={exception.maximumOperatingUntilLocal} onChange={(e) => setException({ ...exception, maximumOperatingUntilLocal: e.target.value })} /></label>
+              <label className="exception-cutoff-toggle"><input type="checkbox" disabled={!exception.isOpen} checked={exception.overrideOnlineCutoff} onChange={(e) => setException({ ...exception, overrideOnlineCutoff: e.target.checked })} /> Override online cutoff</label>
+              {exception.overrideOnlineCutoff && exception.isOpen ? <label>Cutoff hours<input type="number" min="0" step="0.25" value={exception.onlineCutoffHours} onChange={(e) => setException({ ...exception, onlineCutoffHours: e.target.value })} /></label> : null}
+              <button className="secondary" disabled={working === 'exception'}>{working === 'exception' ? 'Adding…' : 'Add exception'}</button>
+            </form> : null}
+            <div className="exception-table"><div className="exception-table-head"><span>Date</span><span>Opens</span><span>Closes</span><span>Online cutoff</span><span>Max operating until</span></div>{detail.proposedScheduleExceptions.length ? detail.proposedScheduleExceptions.map((row) => <div className="exception-table-row" key={row.id}><span>{dateOnly(row.serviceDate)}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedOpensAtLocal) : 'Closed'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedClosesAtLocal) : '—'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedMaximumOnlineBookingUntilLocal) || 'None' : '—'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedMaximumOperatingUntilLocal) || 'None' : '—'}</span></div>) : <div className="exception-empty">No date-specific exceptions added.</div>}</div>
+          </section>
+        </section> : null}
       </div>
       <aside className="secretary-proposal-summary"><h2>Draft summary</h2><p className="practice-muted">Only submitted proposals are reviewed by the Doctor.</p><dl><div><dt>Status</dt><dd>{statusLabel(detail.status)}</dd></div><div><dt>Saved proposals</dt><dd>{proposalCount}</dd></div><div><dt>Current section</dt><dd>{sectionLabels[activeSection]}</dd></div></dl>{editable ? <p className="practice-muted">Save changes within each section, then submit the draft when it is ready for review.</p> : null}</aside>
     </div>
