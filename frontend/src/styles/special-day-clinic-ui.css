@@ -158,7 +158,7 @@
 .special-date-table-head,
 .special-date-table-row {
   display: grid;
-  grid-template-columns: 1.25fr 1fr .9fr .9fr 1.1fr;
+  grid-template-columns: 1.15fr .85fr .85fr .85fr 1.65fr .65fr;
   gap: 12px;
   align-items: center;
   padding: 10px 12px;
@@ -190,6 +190,31 @@
   background: #fff0ef;
   color: #b52f27;
 }
+.special-date-note-cell {
+  min-width: 0;
+  color: #333;
+  overflow-wrap: anywhere;
+}
+.special-date-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.special-date-action-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+}
+.special-date-action-button:hover { background: #f2f2f2; }
+.special-date-action-button.delete:hover { background: #fff0ef; color: #b52f27; }
+.special-date-action-button svg { width: 18px; height: 18px; }
 .special-date-table .exception-empty {
   padding: 26px 12px;
   text-align: center;
@@ -202,7 +227,7 @@
   .special-date-hours { grid-template-columns: 1fr; }
   .special-date-table { overflow-x: auto; }
   .special-date-table-head,
-  .special-date-table-row { min-width: 760px; }
+  .special-date-table-row { min-width: 820px; }
 }
 
 @media (max-width: 760px) {
