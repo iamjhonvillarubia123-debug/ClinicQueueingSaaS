@@ -15,6 +15,7 @@ import './styles/secretary-proposal.css';
 import './styles/secretary-question-controls.css';
 import './styles/secretary-content-section.css';
 import './styles/secretary-schedule-approved.css';
+import './styles/secretary-header-approved.css';
 
 installScheduleCutoffPreview();
 
