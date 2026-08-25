@@ -29,7 +29,8 @@ function selectedIsOpen(form: HTMLFormElement) {
 }
 
 function formatClock(value: string) {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  const normalized = to24Hour(value);
+  const match = /^(\d{2}):(\d{2})$/.exec(normalized);
   if (!match) return value || '—';
   const hour = Number(match[1]);
   const suffix = hour >= 12 ? 'pm' : 'am';
@@ -37,9 +38,33 @@ function formatClock(value: string) {
   return `${String(twelve).padStart(2, '0')}:${match[2]} ${suffix}`;
 }
 
+function to24Hour(value: string) {
+  const trimmed = value.trim();
+  const twentyFour = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (twentyFour) return `${String(Number(twentyFour[1])).padStart(2, '0')}:${twentyFour[2]}`;
+  const twelveHour = /^(\d{1,2}):(\d{2})\s*(am|pm)$/i.exec(trimmed);
+  if (!twelveHour) return trimmed;
+  let hour = Number(twelveHour[1]) % 12;
+  if (twelveHour[3].toLowerCase() === 'pm') hour += 12;
+  return `${String(hour).padStart(2, '0')}:${twelveHour[2]}`;
+}
+
 function formatUsDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
   return match ? `${match[2]}/${match[3]}/${match[1]}` : value;
+}
+
+function parseUsDate(value: string) {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (!match) return '';
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+  const iso = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const check = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(check.getTime()) || check.getUTCFullYear() !== year || check.getUTCMonth() + 1 !== month || check.getUTCDate() !== day) return '';
+  return iso;
 }
 
 function currentDraftId() {
@@ -60,14 +85,68 @@ function datesInclusive(startValue: string, endValue: string) {
   const end = new Date(`${endValue || startValue}T00:00:00Z`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
   const dates: string[] = [];
-  for (let cursor = new Date(start); cursor <= end && dates.length <= 366; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
-    dates.push(cursor.toISOString().slice(0, 10));
-  }
+  for (let cursor = new Date(start); cursor <= end && dates.length <= 366; cursor.setUTCDate(cursor.getUTCDate() + 1)) dates.push(cursor.toISOString().slice(0, 10));
   return dates;
 }
 
 function getNote(form: HTMLFormElement) {
   return form.querySelector<HTMLTextAreaElement>('[data-special-note]')?.value.trim() ?? '';
+}
+
+function syncDateProxy(native: HTMLInputElement) {
+  const proxy = native.parentElement?.querySelector<HTMLInputElement>('[data-special-us-date]');
+  if (proxy) proxy.value = native.value ? formatUsDate(native.value) : '';
+}
+
+function setNativeDate(native: HTMLInputElement, iso: string) {
+  native.value = iso;
+  native.dispatchEvent(new Event('input', { bubbles: true }));
+  native.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function enhanceDateInput(native: HTMLInputElement) {
+  if (native.dataset.specialUsEnhanced === 'true') return;
+  native.dataset.specialUsEnhanced = 'true';
+  native.classList.add('special-native-date-input');
+
+  const control = document.createElement('span');
+  control.className = 'special-us-date-control';
+  const proxy = document.createElement('input');
+  proxy.type = 'text';
+  proxy.inputMode = 'numeric';
+  proxy.placeholder = 'MM/DD/YYYY';
+  proxy.autocomplete = 'off';
+  proxy.dataset.specialUsDate = 'true';
+  proxy.value = native.value ? formatUsDate(native.value) : '';
+  proxy.setAttribute('aria-label', native.getAttribute('aria-label') || 'Date');
+
+  const picker = document.createElement('button');
+  picker.type = 'button';
+  picker.className = 'special-date-picker-button';
+  picker.setAttribute('aria-label', 'Open calendar');
+  picker.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3m10-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+
+  proxy.addEventListener('blur', () => {
+    if (!proxy.value.trim()) { setNativeDate(native, ''); return; }
+    const iso = parseUsDate(proxy.value);
+    if (iso) {
+      proxy.setCustomValidity('');
+      proxy.value = formatUsDate(iso);
+      setNativeDate(native, iso);
+    } else {
+      proxy.setCustomValidity('Enter a valid date in MM/DD/YYYY format.');
+      setNativeDate(native, '');
+      proxy.reportValidity();
+    }
+  });
+  proxy.addEventListener('input', () => proxy.setCustomValidity(''));
+  native.addEventListener('change', () => syncDateProxy(native));
+  picker.addEventListener('click', () => {
+    try { native.showPicker(); } catch { native.focus(); }
+  });
+
+  control.append(proxy, picker);
+  native.after(control);
 }
 
 function applyStep(form: HTMLFormElement, step: WizardStep) {
@@ -119,7 +198,7 @@ function updateReview(form: HTMLFormElement) {
     <p>Check the proposed exception before adding it to this draft.</p>
     <dl>
       <div><dt>Date / range</dt><dd>${start}${end ? ` → ${end}` : ''}</dd></div>
-      <div><dt>Type</dt><dd>${isOpen ? 'Open (special hours)' : 'Closed'}</dd></div>
+      <div><dt>Type</dt><dd>${isOpen ? 'Open' : 'Closed'}</dd></div>
       <div><dt>Reason / notes</dt><dd>${note}</dd></div>
       ${isOpen ? `<div><dt>Opening</dt><dd>${formatClock(times[0]?.value || '')}</dd></div><div><dt>Closing</dt><dd>${formatClock(times[1]?.value || '')}</dd></div><div><dt>Max operating until</dt><dd>${formatClock(times[2]?.value || '')}</dd></div>` : ''}
     </dl>`;
@@ -127,13 +206,15 @@ function updateReview(form: HTMLFormElement) {
 
 function validateDates(form: HTMLFormElement) {
   const dates = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="date"]'));
+  const proxies = Array.from(form.querySelectorAll<HTMLInputElement>('[data-special-us-date]'));
+  proxies.forEach((proxy) => proxy.dispatchEvent(new Event('blur')));
   const start = dates[0];
   const end = dates[1];
-  if (!start?.value) { start?.reportValidity(); return false; }
+  if (!start?.value) { proxies[0]?.reportValidity(); return false; }
   if (end?.value && end.value < start.value) {
-    end.setCustomValidity('End date cannot be before the start date.');
-    end.reportValidity();
-    end.setCustomValidity('');
+    proxies[1]?.setCustomValidity('End date cannot be before the start date.');
+    proxies[1]?.reportValidity();
+    proxies[1]?.setCustomValidity('');
     return false;
   }
   return true;
@@ -186,10 +267,7 @@ function enhanceForm(form: HTMLFormElement) {
       sectionTitle.after(hint);
     }
 
-    grid.querySelectorAll<HTMLInputElement>('input[type="date"]').forEach((input) => {
-      input.lang = 'en-US';
-      input.setAttribute('aria-description', 'Date format: MM/DD/YYYY');
-    });
+    grid.querySelectorAll<HTMLInputElement>('input[type="date"]').forEach(enhanceDateInput);
 
     const type = grid.querySelector<HTMLElement>('.special-date-type');
     type?.querySelectorAll<HTMLLabelElement>('label').forEach((label) => {
@@ -199,7 +277,7 @@ function enhanceForm(form: HTMLFormElement) {
       label.insertBefore(typeIcon(isOpen ? 'open' : 'closed'), copy);
       const strong = label.querySelector('strong');
       const small = label.querySelector('small');
-      if (strong) strong.textContent = isOpen ? 'Open (special hours)' : 'Closed';
+      if (strong) strong.textContent = isOpen ? 'Open' : 'Closed';
       if (small) small.textContent = isOpen ? 'Clinic will be open with different hours.' : 'Clinic will be closed all day.';
     });
 
@@ -236,20 +314,9 @@ function enhanceForm(form: HTMLFormElement) {
 
   nav.querySelector<HTMLButtonElement>('[data-special-next]')?.addEventListener('click', () => {
     const current = Number(form.dataset.specialStep || '1') as WizardStep;
-    if (current === 1) {
-      if (validateDates(form)) applyStep(form, 2);
-      return;
-    }
-    if (current === 2) {
-      if (selectedIsOpen(form)) applyStep(form, 3);
-      else { updateReview(form); applyStep(form, 4); }
-      return;
-    }
-    if (current === 3) {
-      if (!validateRules(form)) return;
-      updateReview(form);
-      applyStep(form, 4);
-    }
+    if (current === 1) { if (validateDates(form)) applyStep(form, 2); return; }
+    if (current === 2) { if (selectedIsOpen(form)) applyStep(form, 3); else { updateReview(form); applyStep(form, 4); } return; }
+    if (current === 3) { if (!validateRules(form)) return; updateReview(form); applyStep(form, 4); }
   });
 
   nav.querySelector<HTMLButtonElement>('[data-special-save]')?.addEventListener('click', () => {
@@ -264,8 +331,7 @@ function openEditorForRow(row: HTMLElement) {
   if (!editor) return;
   let form = editor.querySelector<HTMLFormElement>('.special-date-form');
   if (!form) {
-    const toggle = editor.querySelector<HTMLButtonElement>('.special-date-heading .primary');
-    toggle?.click();
+    editor.querySelector<HTMLButtonElement>('.special-date-heading .primary')?.click();
     window.setTimeout(() => {
       form = editor.querySelector<HTMLFormElement>('.special-date-form');
       if (form) populateEditor(form, row);
@@ -279,16 +345,13 @@ function populateEditor(form: HTMLFormElement, row: HTMLElement) {
   enhanceForm(form);
   const date = row.dataset.serviceDate ?? '';
   const dateInputs = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="date"]'));
-  if (dateInputs[0]) dateInputs[0].value = date;
-  if (dateInputs[1]) dateInputs[1].value = date;
+  if (dateInputs[0]) { dateInputs[0].value = date; syncDateProxy(dateInputs[0]); }
+  if (dateInputs[1]) { dateInputs[1].value = date; syncDateProxy(dateInputs[1]); }
 
   const isOpen = row.dataset.isOpen === 'true';
   const radios = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="special-date-type"]'));
   const targetRadio = radios.find((radio) => (radio.closest('label')?.textContent?.includes('Open') ?? false) === isOpen);
-  if (targetRadio) {
-    targetRadio.checked = true;
-    targetRadio.dispatchEvent(new Event('change', { bubbles: true }));
-  }
+  if (targetRadio) { targetRadio.checked = true; targetRadio.dispatchEvent(new Event('change', { bubbles: true })); }
 
   const times = Array.from(form.querySelectorAll<HTMLInputElement>('.special-date-hours input[type="time"]'));
   if (times[0]) times[0].value = row.dataset.opening ?? '';
@@ -298,6 +361,24 @@ function populateEditor(form: HTMLFormElement, row: HTMLElement) {
   if (note) note.value = sessionStorage.getItem(noteKey(date)) ?? '';
   applyStep(form, 1);
   form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderRowTime(row: HTMLElement, expanded: boolean) {
+  const cells = Array.from(row.children) as HTMLElement[];
+  const values = [row.dataset.opening ?? '', row.dataset.closing ?? '', row.dataset.maxOperating ?? ''];
+  [2, 3, 4].forEach((cellIndex, valueIndex) => {
+    if (cells[cellIndex]) cells[cellIndex].textContent = values[valueIndex] ? (expanded ? formatClock(values[valueIndex]) : to24Hour(values[valueIndex])) : '—';
+  });
+}
+
+function toggleRowDetails(row: HTMLElement) {
+  const detail = row.querySelector<HTMLElement>('.special-date-row-detail');
+  const expanded = row.dataset.expanded !== 'true';
+  row.dataset.expanded = expanded ? 'true' : 'false';
+  row.classList.toggle('expanded', expanded);
+  row.setAttribute('aria-expanded', String(expanded));
+  if (detail) detail.hidden = !expanded;
+  renderRowTime(row, expanded);
 }
 
 function enhanceHeader() {
@@ -318,7 +399,7 @@ function enhanceEditor() {
   const editor = document.querySelector<HTMLElement>('.special-date-editor');
   if (!editor) return;
   const heading = editor.querySelector<HTMLElement>('.special-date-heading h2');
-  if (heading) heading.textContent = 'Special day clinic';
+  if (heading) heading.textContent = 'Special dates';
   const description = editor.querySelector<HTMLElement>('.special-date-heading p');
   if (description) description.textContent = 'Manage dates with special hours or clinic closures. These dates override the regular weekly schedule.';
   const listTitle = editor.querySelector<HTMLElement>('.special-date-list-heading h3');
@@ -333,11 +414,9 @@ function enhanceEditor() {
     head.dataset.specialEnhanced = 'true';
     const headers = Array.from(head.children) as HTMLElement[];
     if (headers[0]) headers[0].textContent = 'Date / range';
-    const notes = document.createElement('span');
-    notes.textContent = 'Notes';
     const actions = document.createElement('span');
     actions.textContent = 'Actions';
-    head.append(notes, actions);
+    head.append(actions);
   }
 
   editor.querySelectorAll<HTMLElement>('.special-date-table-row').forEach((row) => {
@@ -345,54 +424,73 @@ function enhanceEditor() {
     if (!row.dataset.serviceDate) row.dataset.serviceDate = cells[0]?.textContent?.trim() ?? '';
     const serviceDate = row.dataset.serviceDate;
     if (!serviceDate) return;
-    if (!row.dataset.opening) row.dataset.opening = cells[2]?.textContent?.trim() === '—' ? '' : cells[2]?.textContent?.trim() ?? '';
-    if (!row.dataset.closing) row.dataset.closing = cells[3]?.textContent?.trim() === '—' ? '' : cells[3]?.textContent?.trim() ?? '';
-    if (!row.dataset.maxOperating) row.dataset.maxOperating = cells[4]?.textContent?.trim() === '—' ? '' : cells[4]?.textContent?.trim() ?? '';
+    if (!row.dataset.opening) row.dataset.opening = to24Hour(cells[2]?.textContent?.trim() === '—' ? '' : cells[2]?.textContent?.trim() ?? '');
+    if (!row.dataset.closing) row.dataset.closing = to24Hour(cells[3]?.textContent?.trim() === '—' ? '' : cells[3]?.textContent?.trim() ?? '');
+    if (!row.dataset.maxOperating) row.dataset.maxOperating = to24Hour(cells[4]?.textContent?.trim() === '—' ? '' : cells[4]?.textContent?.trim() ?? '');
     const badge = row.querySelector<HTMLElement>('.special-date-status');
     row.dataset.isOpen = badge?.classList.contains('open') ? 'true' : 'false';
 
-    if (sessionStorage.getItem(hiddenKey(serviceDate)) === 'true') {
-      row.hidden = true;
-      return;
-    }
+    if (sessionStorage.getItem(hiddenKey(serviceDate)) === 'true') { row.hidden = true; return; }
+    if (cells[0]) { cells[0].classList.add('special-date-cell-date'); cells[0].textContent = formatUsDate(serviceDate); }
+    if (badge?.classList.contains('open')) badge.textContent = 'Open';
+    renderRowTime(row, row.dataset.expanded === 'true');
 
-    if (cells[0]) {
-      cells[0].classList.add('special-date-cell-date');
-      cells[0].textContent = formatUsDate(serviceDate);
-    }
-    for (const index of [2, 3, 4]) if (cells[index]) cells[index].textContent = formatClock(row.dataset[index === 2 ? 'opening' : index === 3 ? 'closing' : 'maxOperating'] ?? '');
-    if (badge?.classList.contains('open')) badge.textContent = 'Open (special hours)';
-
-    if (!row.querySelector('.special-date-note-cell')) {
-      const noteCell = document.createElement('span');
-      noteCell.className = 'special-date-note-cell';
-      noteCell.textContent = sessionStorage.getItem(noteKey(serviceDate)) || '—';
+    if (!row.querySelector('.special-date-actions')) {
       const actionsCell = document.createElement('span');
       actionsCell.className = 'special-date-actions';
       const edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'special-date-action-button';
-      edit.setAttribute('aria-label', `Edit special date ${formatUsDate(serviceDate)}`);
-      edit.title = 'Edit special date';
-      edit.innerHTML = actionIcon('edit');
-      edit.addEventListener('click', () => openEditorForRow(row));
+      edit.type = 'button'; edit.className = 'special-date-action-button'; edit.title = 'Edit special date'; edit.setAttribute('aria-label', `Edit special date ${formatUsDate(serviceDate)}`); edit.innerHTML = actionIcon('edit');
+      edit.addEventListener('click', (event) => { event.stopPropagation(); openEditorForRow(row); });
       const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'special-date-action-button delete';
-      remove.setAttribute('aria-label', `Remove special date ${formatUsDate(serviceDate)}`);
-      remove.title = 'Remove special date';
-      remove.innerHTML = actionIcon('delete');
-      remove.addEventListener('click', () => {
-        sessionStorage.setItem(hiddenKey(serviceDate), 'true');
-        row.hidden = true;
-      });
+      remove.type = 'button'; remove.className = 'special-date-action-button delete'; remove.title = 'Remove special date'; remove.setAttribute('aria-label', `Remove special date ${formatUsDate(serviceDate)}`); remove.innerHTML = actionIcon('delete');
+      remove.addEventListener('click', (event) => { event.stopPropagation(); sessionStorage.setItem(hiddenKey(serviceDate), 'true'); row.hidden = true; });
       actionsCell.append(edit, remove);
-      row.append(noteCell, actionsCell);
+      row.append(actionsCell);
+    }
+
+    if (!row.querySelector('.special-date-row-detail')) {
+      const detail = document.createElement('div');
+      detail.className = 'special-date-row-detail';
+      detail.hidden = true;
+      detail.innerHTML = `<strong>Notes</strong><span>${sessionStorage.getItem(noteKey(serviceDate)) || 'No notes'}</span>`;
+      row.append(detail);
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-expanded', 'false');
+      row.addEventListener('click', () => toggleRowDetails(row));
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleRowDetails(row); }
+      });
     }
   });
 }
 
+function installUiOverrides() {
+  if (document.getElementById('special-date-approved-overrides')) return;
+  const style = document.createElement('style');
+  style.id = 'special-date-approved-overrides';
+  style.textContent = `
+    .secretary-proposal-nav button:last-child { font-size: .92rem !important; }
+    .secretary-proposal-nav button:last-child::after { content: none !important; display: none !important; }
+    .special-native-date-input { position:absolute !important; opacity:0 !important; width:1px !important; height:1px !important; pointer-events:none !important; }
+    .special-us-date-control { display:grid; grid-template-columns:1fr 42px; width:100%; min-height:42px; border:1px solid var(--border); border-radius:8px; background:#fff; overflow:hidden; }
+    .special-us-date-control > input { min-width:0; border:0 !important; border-radius:0 !important; padding:0 12px !important; background:transparent !important; outline:none; }
+    .special-date-picker-button { display:grid; place-items:center; border:0; border-left:1px solid var(--border); background:#fff; cursor:pointer; }
+    .special-date-picker-button svg { width:18px; height:18px; }
+    .special-date-table-head, .special-date-table-row { grid-template-columns:1.25fr 1fr .8fr .8fr 1.05fr .7fr !important; }
+    .special-date-table-row { cursor:pointer; }
+    .special-date-table-row:focus-visible { outline:2px solid #111; outline-offset:-2px; }
+    .special-date-row-detail { grid-column:1 / -1; display:grid; grid-template-columns:90px 1fr; gap:12px; padding:10px 12px 4px; margin-top:2px; border-top:1px dashed var(--border); cursor:default; }
+    .special-date-row-detail[hidden] { display:none !important; }
+    .special-date-row-detail span { color:var(--muted); }
+    .special-date-note-cell { display:none !important; }
+    @media (max-width:760px) { .special-date-table-head, .special-date-table-row { min-width:760px !important; } }
+  `;
+  document.head.append(style);
+}
+
 function refreshApprovedUi() {
+  installUiOverrides();
   enhanceHeader();
   enhanceEditor();
 }
@@ -401,5 +499,6 @@ export function installSpecialDayClinicUi() {
   const refresh = () => window.setTimeout(refreshApprovedUi, 0);
   document.addEventListener('click', refresh, true);
   document.addEventListener('change', refresh, true);
+  document.addEventListener('input', refresh, true);
   refresh();
 }
