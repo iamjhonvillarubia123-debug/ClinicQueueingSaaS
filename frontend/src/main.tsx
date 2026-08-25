@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthContext';
 import { installClinicConfigurationTabPersistence } from './secretary/clinicConfigurationTabPersistence';
 import { installScheduleCutoffPreview } from './secretary/scheduleCutoffPreview';
 import { installSpecialDateDeletePresentation } from './secretary/specialDateDeletePresentation';
+import { installSpecialDateEditorPresentation } from './secretary/specialDateEditorPresentation';
 import { installSpecialDateListPresentation } from './secretary/specialDateListPresentation';
 import './styles/global.css';
 import './styles/app-shell.css';
@@ -20,10 +21,12 @@ import './styles/secretary-content-section.css';
 import './styles/secretary-schedule-approved.css';
 import './styles/secretary-tab-icons.css';
 import './styles/special-day-clinic-ui.css';
+import './styles/special-date-editor-alignment.css';
 
 installClinicConfigurationTabPersistence();
 installScheduleCutoffPreview();
 installSpecialDateDeletePresentation();
+installSpecialDateEditorPresentation();
 installSpecialDateListPresentation();
 
 createRoot(document.getElementById('root')!).render(
