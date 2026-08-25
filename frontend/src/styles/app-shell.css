@@ -1,0 +1,250 @@
+:root {
+  --shell-topbar-height: 64px;
+  --shell-sidebar-width: 214px;
+  --shell-content-max: 1180px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background: #fff;
+  color: #111;
+}
+
+.app-shell-topbar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  height: var(--shell-topbar-height);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 24px;
+  border-bottom: 1px solid #e7e7e7;
+  background: rgba(255, 255, 255, .97);
+  backdrop-filter: blur(10px);
+}
+
+.app-shell-brand {
+  color: #111;
+  text-decoration: none;
+  font-weight: 750;
+  letter-spacing: -.02em;
+  white-space: nowrap;
+}
+
+.app-shell-topbar-context {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.app-shell-role {
+  color: #555;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.app-shell-account-menu {
+  position: relative;
+}
+
+.app-shell-account-menu summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #ddd;
+  border-radius: 9px;
+  background: #fff;
+  font-size: .84rem;
+  font-weight: 650;
+}
+
+.app-shell-account-menu summary::-webkit-details-marker { display: none; }
+
+.app-shell-account-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 178px;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 35px rgba(0,0,0,.08);
+}
+
+.app-shell-account-popover a,
+.app-shell-account-popover button {
+  width: 100%;
+  display: block;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #111;
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+  font-size: .84rem;
+  cursor: pointer;
+}
+
+.app-shell-account-popover a:hover,
+.app-shell-account-popover button:hover { background: #f5f5f5; }
+
+.app-shell-sidebar {
+  position: fixed;
+  z-index: 40;
+  top: var(--shell-topbar-height);
+  bottom: 0;
+  left: 0;
+  width: var(--shell-sidebar-width);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px 16px;
+  border-right: 1px solid #e7e7e7;
+  background: #fff;
+}
+
+.app-shell-nav {
+  display: grid;
+  gap: 4px;
+}
+
+.app-shell-nav a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 42px;
+  padding: 0 11px;
+  border-radius: 8px;
+  color: #333;
+  text-decoration: none;
+  font-size: .88rem;
+  font-weight: 560;
+}
+
+.app-shell-nav a:hover { background: #f7f7f7; }
+
+.app-shell-nav a.active {
+  background: #111;
+  color: #fff;
+}
+
+.app-shell-icon {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.app-shell-sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 10px;
+  color: #555;
+  font-size: .82rem;
+}
+
+.app-shell-sidebar-footer > span:first-child {
+  display: flex;
+  width: 19px;
+}
+
+.app-shell-workspace {
+  min-height: 100vh;
+  padding-top: var(--shell-topbar-height);
+  padding-left: var(--shell-sidebar-width);
+}
+
+.app-shell-content-frame {
+  width: min(100%, calc(var(--shell-content-max) + 64px));
+  margin: 0 auto;
+  padding: 38px 32px 64px;
+}
+
+.app-shell-mobile-trigger,
+.app-shell-sidebar-mobile-head,
+.app-shell-mobile-backdrop { display: none; }
+
+/* Normalize legacy workspace wrappers inside the approved shell without changing page behavior. */
+.app-shell .workspace,
+.app-shell .shell { width: auto; max-width: none; }
+.app-shell .practice-admin-page,
+.app-shell .secretary-proposal-page,
+.app-shell .doctor-defaults-page,
+.app-shell .account-page {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+@media (max-width: 920px) {
+  :root { --shell-sidebar-width: 0px; }
+
+  .app-shell-topbar { padding: 0 16px; }
+  .app-shell-mobile-trigger {
+    display: grid;
+    gap: 4px;
+    width: 34px;
+    height: 34px;
+    place-content: center;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .app-shell-mobile-trigger span { width: 18px; height: 1.5px; background: #111; }
+  .app-shell-role { display: none; }
+
+  .app-shell-sidebar {
+    top: 0;
+    z-index: 80;
+    width: min(82vw, 290px);
+    transform: translateX(-105%);
+    transition: transform .18s ease;
+    box-shadow: 14px 0 40px rgba(0,0,0,.08);
+  }
+  .app-shell-sidebar.mobile-open { transform: translateX(0); }
+  .app-shell-sidebar-mobile-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 44px;
+    margin-bottom: 14px;
+    padding: 0 8px;
+  }
+  .app-shell-sidebar-mobile-head button {
+    border: 0;
+    background: transparent;
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+  .app-shell-mobile-backdrop {
+    display: block;
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    border: 0;
+    background: rgba(0,0,0,.18);
+  }
+
+  .app-shell-workspace { padding-left: 0; }
+  .app-shell-content-frame { padding: 28px 20px 54px; }
+}
+
+@media (max-width: 560px) {
+  .app-shell-topbar { height: 58px; }
+  :root { --shell-topbar-height: 58px; }
+  .app-shell-brand { font-size: .94rem; }
+  .app-shell-account-menu summary { min-height: 34px; padding: 0 9px; }
+  .app-shell-account-menu summary span { display: none; }
+  .app-shell-content-frame { padding: 22px 14px 44px; }
+}
