@@ -36,7 +36,8 @@ describe('SecretarySettingsDraftPage', () => {
   it('renders the approved compact services and questions proposal UI', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
     renderDraft();
-    expect(await screen.findByRole('heading', { name: 'North Clinic' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Clinic configuration' })).toBeInTheDocument();
+    expect(screen.getByText('North Clinic')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Services & questions' }));
     expect(screen.getByRole('heading', { name: 'Clinic services' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Patient booking questions' })).toBeInTheDocument();
@@ -150,6 +151,53 @@ describe('SecretarySettingsDraftPage', () => {
     const updateBodies = fetchMock.mock.calls.filter(([input]) => String(input).includes('/booking-questions/')).map(([, init]) => String(init?.body));
     expect(updateBodies.some((body) => body.includes('"displayOrder":0'))).toBe(true);
     expect(updateBodies.some((body) => body.includes('"displayOrder":1'))).toBe(true);
+  });
+
+  it('saves the weekly schedule with one cutoff allowance applied to every open day', async () => {
+    const scheduleDraft = {
+      ...editableDraft,
+      practiceLocation: {
+        ...editableDraft.practiceLocation,
+        practiceSchedules: [
+          { weekday: 'MONDAY', isOpen: true, opensAtLocal: '1970-01-01T09:00:00.000Z', closesAtLocal: '1970-01-01T17:00:00.000Z', maximumOnlineBookingUntilLocal: '1970-01-01T16:00:00.000Z', maximumOperatingUntilLocal: '1970-01-01T18:00:00.000Z' },
+          { weekday: 'TUESDAY', isOpen: true, opensAtLocal: '1970-01-01T08:00:00.000Z', closesAtLocal: '1970-01-01T16:00:00.000Z', maximumOnlineBookingUntilLocal: '1970-01-01T15:00:00.000Z', maximumOperatingUntilLocal: '1970-01-01T17:00:00.000Z' },
+        ],
+      },
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).endsWith('/practice-schedule')) return response({ saved: true });
+      return response(scheduleDraft);
+    });
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clinic schedules' }));
+    expect(screen.getByLabelText('Monday opens')).toHaveValue('09:00');
+    expect(screen.queryByText(/Monday open/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save day' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Online cutoff hours before clinic closing')).toHaveValue(1);
+    fireEvent.change(screen.getByLabelText('Online cutoff hours before clinic closing'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save schedules' }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/practice-schedule')).length).toBe(7));
+    const bodies = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/practice-schedule')).map(([, init]) => String(init?.body));
+    expect(bodies.some((body) => body.includes('"weekday":"MONDAY"') && body.includes('"maximumOnlineBookingUntilLocal":"15:00"'))).toBe(true);
+    expect(bodies.some((body) => body.includes('"weekday":"TUESDAY"') && body.includes('"maximumOnlineBookingUntilLocal":"14:00"'))).toBe(true);
+  });
+
+  it('saves a date range as individual complete date-specific exceptions', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).endsWith('/schedule-exception')) return response({ saved: true });
+      return response(editableDraft);
+    });
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clinic schedules' }));
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-08-25' } });
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-26' } });
+    fireEvent.change(screen.getByLabelText('Opens'), { target: { value: '09:00' } });
+    fireEvent.change(screen.getByLabelText('Closes'), { target: { value: '17:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/schedule-exception')).length).toBe(2));
+    const bodies = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/schedule-exception')).map(([, init]) => String(init?.body));
+    expect(bodies.some((body) => body.includes('"serviceDate":"2026-08-25"'))).toBe(true);
+    expect(bodies.some((body) => body.includes('"serviceDate":"2026-08-26"'))).toBe(true);
   });
 
   it('submits the draft without a Secretary withdrawal action', async () => {
