@@ -1,6 +1,6 @@
-import { ReactNode, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth, UserRole } from '../auth/AuthContext';
+import { useAuth, type UserRole } from '../auth/AuthContext';
 import { ClinicConfigurationTabs } from '../doctor/ClinicConfigurationTabs';
 
 type NavItem = {
