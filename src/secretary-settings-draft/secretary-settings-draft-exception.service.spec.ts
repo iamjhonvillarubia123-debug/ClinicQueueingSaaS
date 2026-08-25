@@ -18,7 +18,10 @@ describe('SecretarySettingsDraftExceptionService', () => {
   const prismaServiceMock = {
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
-    secretarySettingsDraftScheduleException: { upsert: jest.fn() },
+    secretarySettingsDraftScheduleException: {
+      upsert: jest.fn(),
+      deleteMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -40,6 +43,9 @@ describe('SecretarySettingsDraftExceptionService', () => {
     ]);
     prismaServiceMock.secretarySettingsDraftScheduleException.upsert.mockResolvedValue(
       { serviceDate: new Date('2026-08-20T00:00:00.000Z') },
+    );
+    prismaServiceMock.secretarySettingsDraftScheduleException.deleteMany.mockResolvedValue(
+      { count: 1 },
     );
 
     const module: TestingModule = await Test.createTestingModule({
@@ -134,6 +140,25 @@ describe('SecretarySettingsDraftExceptionService', () => {
         proposedClosesAtLocal: null,
         proposedMaximumOnlineBookingUntilLocal: null,
         proposedMaximumOperatingUntilLocal: null,
+      },
+    });
+  });
+
+  it('deletes only the selected draft special-date proposal', async () => {
+    await expect(
+      service.deleteScheduleException('secretary-1', 'draft-1', '2026-08-20'),
+    ).resolves.toEqual({
+      deleted: true,
+      draftId: 'draft-1',
+      serviceDate: '2026-08-20',
+    });
+
+    expect(
+      prismaServiceMock.secretarySettingsDraftScheduleException.deleteMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        secretarySettingsDraftId: 'draft-1',
+        serviceDate: new Date('2026-08-20T00:00:00.000Z'),
       },
     });
   });
