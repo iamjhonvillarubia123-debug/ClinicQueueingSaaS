@@ -173,6 +173,7 @@ describe('SecretarySettingsDraftPage', () => {
     expect(screen.getByLabelText('Monday opens')).toHaveValue('09:00');
     expect(screen.queryByText(/Monday open/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save day' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Special dates' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Online cutoff hours before clinic closing')).toHaveValue(1);
     fireEvent.change(screen.getByLabelText('Online cutoff hours before clinic closing'), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save schedules' }));
@@ -182,22 +183,52 @@ describe('SecretarySettingsDraftPage', () => {
     expect(bodies.some((body) => body.includes('"weekday":"TUESDAY"') && body.includes('"maximumOnlineBookingUntilLocal":"14:00"'))).toBe(true);
   });
 
-  it('saves a date range as individual complete date-specific exceptions', async () => {
+  it('keeps special-date controls hidden until the dedicated tab and add action are opened', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(editableDraft));
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Special dates' }));
+    expect(screen.getByRole('heading', { name: 'Special dates' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add special date' }));
+    expect(screen.getByLabelText('Start date')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Open with special hours/i)).toBeChecked();
+    expect(screen.getByLabelText(/Clinic closed/i)).not.toBeChecked();
+  });
+
+  it('saves a date range as individual complete special-date exceptions', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       if (String(input).endsWith('/schedule-exception')) return response({ saved: true });
       return response(editableDraft);
     });
     renderDraft();
-    fireEvent.click(await screen.findByRole('button', { name: 'Clinic schedules' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Special dates' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add special date' }));
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-08-25' } });
-    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-08-26' } });
+    fireEvent.change(screen.getByLabelText(/End date/), { target: { value: '2026-08-26' } });
     fireEvent.change(screen.getByLabelText('Opens'), { target: { value: '09:00' } });
     fireEvent.change(screen.getByLabelText('Closes'), { target: { value: '17:00' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add exception' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add special date' }));
     await waitFor(() => expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/schedule-exception')).length).toBe(2));
     const bodies = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/schedule-exception')).map(([, init]) => String(init?.body));
-    expect(bodies.some((body) => body.includes('"serviceDate":"2026-08-25"'))).toBe(true);
-    expect(bodies.some((body) => body.includes('"serviceDate":"2026-08-26"'))).toBe(true);
+    expect(bodies.some((body) => body.includes('"serviceDate":"2026-08-25"') && body.includes('"isOpen":true'))).toBe(true);
+    expect(bodies.some((body) => body.includes('"serviceDate":"2026-08-26"') && body.includes('"isOpen":true'))).toBe(true);
+  });
+
+  it('saves a planned clinic closure as a closed special-date exception', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).endsWith('/schedule-exception')) return response({ saved: true });
+      return response(editableDraft);
+    });
+    renderDraft();
+    fireEvent.click(await screen.findByRole('button', { name: 'Special dates' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add special date' }));
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-12-25' } });
+    fireEvent.click(screen.getByLabelText(/Clinic closed/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Add special date' }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/schedule-exception'))).toBe(true));
+    const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/schedule-exception'));
+    expect(String(call?.[1]?.body)).toContain('"serviceDate":"2026-12-25"');
+    expect(String(call?.[1]?.body)).toContain('"isOpen":false');
   });
 
   it('submits the draft without a Secretary withdrawal action', async () => {
@@ -235,6 +266,7 @@ describe('SecretarySettingsDraftPage', () => {
     expect(await screen.findByRole('heading', { name: 'Identity, address & contact' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Services & questions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clinic schedules' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Special dates' })).not.toBeInTheDocument();
   });
 
   it('shows only the granted panel inside the combined content section', async () => {
