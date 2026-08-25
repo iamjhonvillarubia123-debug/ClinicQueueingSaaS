@@ -74,6 +74,40 @@ export class SecretarySettingsDraftExceptionService {
     });
   }
 
+  async deleteScheduleException(
+    authenticatedUserId: string,
+    draftId: string,
+    serviceDateText: string,
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const draft = await this.lockEditableDraft(transaction, draftId);
+      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+
+      const dateParts = this.scheduleTimeService.parseServiceDate(serviceDateText);
+      const serviceDate = new Date(
+        Date.UTC(dateParts.year, dateParts.month - 1, dateParts.day),
+      );
+
+      const result =
+        await transaction.secretarySettingsDraftScheduleException.deleteMany({
+          where: {
+            secretarySettingsDraftId: draft.id,
+            serviceDate,
+          },
+        });
+
+      if (result.count === 0) {
+        throw new NotFoundException('Special date proposal was not found.');
+      }
+
+      return {
+        deleted: true,
+        draftId: draft.id,
+        serviceDate: serviceDateText,
+      };
+    });
+  }
+
   private normalizeSchedule(
     dto: UpsertSecretarySettingsDraftScheduleExceptionDto,
   ) {
