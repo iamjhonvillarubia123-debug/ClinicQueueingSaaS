@@ -13,6 +13,10 @@ function formatTime(minutes: number) {
   return `${String(hours12).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${suffix}`;
 }
 
+function setCutoffLabel(row: HTMLElement, value: string) {
+  if (row.dataset.cutoffLabel !== value) row.dataset.cutoffLabel = value;
+}
+
 function refreshScheduleCutoffPreview() {
   const editor = document.querySelector<HTMLElement>('.schedule-editor');
   if (!editor) return;
@@ -25,23 +29,23 @@ function refreshScheduleCutoffPreview() {
     const closingInput = row.querySelector<HTMLInputElement>('input[aria-label$=" closes"]');
 
     if (!openCheckbox?.checked) {
-      row.dataset.cutoffLabel = '—';
+      setCutoffLabel(row, '—');
       return;
     }
 
     if (!cutoffInput?.value.trim()) {
-      row.dataset.cutoffLabel = 'Set clinic cutoff';
+      setCutoffLabel(row, 'Set clinic cutoff');
       return;
     }
 
     const closing = closingInput ? timeToMinutes(closingInput.value) : null;
     if (closing === null || !Number.isFinite(hours) || hours < 0) {
-      row.dataset.cutoffLabel = 'Invalid cutoff';
+      setCutoffLabel(row, 'Invalid cutoff');
       return;
     }
 
     const cutoff = closing - Math.round(hours * 60);
-    row.dataset.cutoffLabel = cutoff >= 0 ? formatTime(cutoff) : 'Invalid cutoff';
+    setCutoffLabel(row, cutoff >= 0 ? formatTime(cutoff) : 'Invalid cutoff');
   });
 }
 
@@ -51,6 +55,11 @@ export function installScheduleCutoffPreview() {
   document.addEventListener('change', refresh, true);
 
   const observer = new MutationObserver(refresh);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['data-cutoff-label'],
+  });
   refresh();
 }
