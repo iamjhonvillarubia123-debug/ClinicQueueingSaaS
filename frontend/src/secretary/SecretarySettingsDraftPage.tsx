@@ -6,7 +6,7 @@ type DraftStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'RETURNED_F
 type Weekday = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 type ServiceStatus = 'ACTIVE' | 'INACTIVE';
 type QuestionType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
-type EditorSection = 'clinic' | 'content' | 'schedules';
+type EditorSection = 'clinic' | 'content' | 'schedules' | 'special';
 type ScheduleRow = { weekday: Weekday; isOpen: boolean; opensAtLocal: string | null; closesAtLocal: string | null; maximumOnlineBookingUntilLocal: string | null; maximumOperatingUntilLocal: string | null };
 type ProposedSchedule = { weekday: Weekday; proposedIsOpen: boolean; proposedOpensAtLocal: string | null; proposedClosesAtLocal: string | null; proposedMaximumOnlineBookingUntilLocal: string | null; proposedMaximumOperatingUntilLocal: string | null };
 type ServiceRow = { id: string; name: string; durationMinutes: number; status: ServiceStatus; displayOrder: number };
@@ -34,6 +34,7 @@ type DraftDetail = {
 
 const weekdays: Weekday[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const blankClinicDetails: ClinicDetailsForm = { name: '', addressLine1: '', addressLine2: '', cityMunicipality: '', province: '', postalCode: '', contactNumber: '', countryCode: '', timeZone: '' };
+const blankException = { startDate: '', endDate: '', isOpen: true, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '' };
 const timeOnly = (value: string | null | undefined) => { if (!value) return ''; const match = /T(\d{2}):(\d{2})/.exec(value); return match ? `${match[1]}:${match[2]}` : value.slice(0, 5); };
 const dateOnly = (value: string) => /^(\d{4}-\d{2}-\d{2})/.exec(value)?.[1] ?? value;
 const dayLabel = (value: Weekday) => value.charAt(0) + value.slice(1).toLowerCase();
@@ -110,7 +111,8 @@ export function SecretarySettingsDraftPage() {
   const [questionDragOrigin, setQuestionDragOrigin] = useState<string[]>([]);
   const [newService, setNewService] = useState<ServiceForm>({ name: '', durationMinutes: '15', status: 'ACTIVE', displayOrder: '0' });
   const [newQuestion, setNewQuestion] = useState<QuestionForm>({ questionText: '', helpText: '', type: 'TEXT', isRequired: false, displayOrder: '0', isActive: true, selectOptionsText: '' });
-  const [exception, setException] = useState({ startDate: '', endDate: '', isOpen: true, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '', overrideOnlineCutoff: false, onlineCutoffHours: '' });
+  const [exception, setException] = useState(blankException);
+  const [showExceptionEditor, setShowExceptionEditor] = useState(false);
   const [proposalCountDelta, setProposalCountDelta] = useState(0);
   const knownProposalIds = useRef<Set<string>>(new Set());
   const [loading, setLoading] = useState(true); const [working, setWorking] = useState(''); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -162,6 +164,7 @@ export function SecretarySettingsDraftPage() {
     access?.canManageClinicDetails ? 'clinic' as const : null,
     access?.canManageServices || access?.canManageBookingQuestions ? 'content' as const : null,
     access?.canManageSchedules ? 'schedules' as const : null,
+    access?.canManageSchedules ? 'special' as const : null,
   ].filter((value): value is EditorSection => Boolean(value)), [access]);
   useEffect(() => { if (availableSections.length && !availableSections.includes(activeSection)) setActiveSection(availableSections[0]); }, [availableSections, activeSection]);
 
@@ -302,18 +305,17 @@ export function SecretarySettingsDraftPage() {
     event.preventDefault(); if (!draftId || working) return;
     const dates = datesInclusive(exception.startDate, exception.endDate || exception.startDate);
     if (!dates.length) { setError('Choose a valid start and end date.'); return; }
-    if (dates.length > 366) { setError('A date-specific exception range cannot exceed 366 days.'); return; }
-    if (exception.isOpen && (!exception.opensAtLocal || !exception.closesAtLocal)) { setError('Open date exceptions need both opening and closing times.'); return; }
-    const hours = exception.overrideOnlineCutoff ? exception.onlineCutoffHours : onlineCutoffHours;
-    const cutoff = exception.isOpen && hours.trim() ? cutoffFromClosing(exception.closesAtLocal, hours) : '';
-    if (exception.isOpen && hours.trim() && !cutoff) { setError('The date-specific online cutoff allowance is not valid for the selected closing time.'); return; }
+    if (dates.length > 366) { setError('A special-date range cannot exceed 366 days.'); return; }
+    if (exception.isOpen && (!exception.opensAtLocal || !exception.closesAtLocal)) { setError('Open special dates need both opening and closing times.'); return; }
+    const cutoff = exception.isOpen && onlineCutoffHours.trim() ? cutoffFromClosing(exception.closesAtLocal, onlineCutoffHours) : '';
+    if (exception.isOpen && onlineCutoffHours.trim() && !cutoff) { setError('The clinic online cutoff allowance is not valid for the selected closing time.'); return; }
     setWorking('exception'); setError(''); setNotice('');
     try {
       for (const serviceDate of dates) {
         await apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/schedule-exception`, { method: 'PUT', body: { serviceDate, isOpen: exception.isOpen, opensAtLocal: exception.isOpen ? exception.opensAtLocal : undefined, closesAtLocal: exception.isOpen ? exception.closesAtLocal : undefined, maximumOnlineBookingUntilLocal: exception.isOpen ? cutoff || undefined : undefined, maximumOperatingUntilLocal: exception.isOpen ? exception.maximumOperatingUntilLocal || undefined : undefined } });
       }
-      setException({ startDate: '', endDate: '', isOpen: true, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '', overrideOnlineCutoff: false, onlineCutoffHours: '' });
-      await load(false); setNotice(dates.length === 1 ? 'Date-specific schedule proposal saved.' : `${dates.length} date-specific schedule proposals saved.`);
+      setException(blankException); setShowExceptionEditor(false);
+      await load(false); setNotice(dates.length === 1 ? 'Special-date proposal saved.' : `${dates.length} special-date proposals saved.`);
     } catch (caught) { setError(errorMessage(caught)); } finally { setWorking(''); }
   }
   async function submit() { if (!draftId) return; await run('submit', () => apiRequest(`/secretary-settings-drafts/${encodeURIComponent(draftId)}/submit`, { method: 'POST' }), 'Draft submitted to the Doctor for review.'); }
@@ -323,7 +325,7 @@ export function SecretarySettingsDraftPage() {
 
   const clinicName = detail.practiceLocation.name?.trim() || 'Clinic settings';
   const proposalCount = (detail.proposedClinicDetails ? 1 : 0) + detail.proposedPracticeSchedules.length + detail.proposedServices.length + detail.proposedBookingQuestions.length + detail.proposedScheduleExceptions.length + proposalCountDelta;
-  const sectionLabels: Record<EditorSection, string> = { clinic: 'Clinic details', content: 'Services & questions', schedules: 'Clinic schedules' };
+  const sectionLabels: Record<EditorSection, string> = { clinic: 'Clinic details', content: 'Services & questions', schedules: 'Clinic schedules', special: 'Special dates' };
   const hasEffectiveService = (key: string) => !key.startsWith('proposal:');
   const hasEffectiveQuestion = (key: string) => !key.startsWith('proposal:');
 
@@ -376,10 +378,10 @@ export function SecretarySettingsDraftPage() {
       <div className="secretary-proposal-content">
         {activeSection === 'clinic' && access?.canManageClinicDetails ? <section className="secretary-proposal-panel"><div className="practice-panel-heading"><div><h2>Identity, address & contact</h2><p>These fields remain unchanged for patients and staff until the Doctor approves this draft.</p></div></div><form className="practice-form" onSubmit={saveClinicDetails}><div className="practice-form-grid"><label>Clinic name<input required disabled={!editable} value={clinicDetails.name} onChange={(e) => setClinicDetails({ ...clinicDetails, name: e.target.value })} /></label><label>Contact number<input required disabled={!editable} value={clinicDetails.contactNumber} onChange={(e) => setClinicDetails({ ...clinicDetails, contactNumber: e.target.value })} /></label><label>Address line 1<input required disabled={!editable} value={clinicDetails.addressLine1} onChange={(e) => setClinicDetails({ ...clinicDetails, addressLine1: e.target.value })} /></label><label>Address line 2 <span className="optional">Optional</span><input disabled={!editable} value={clinicDetails.addressLine2} onChange={(e) => setClinicDetails({ ...clinicDetails, addressLine2: e.target.value })} /></label><label>City / municipality<input required disabled={!editable} value={clinicDetails.cityMunicipality} onChange={(e) => setClinicDetails({ ...clinicDetails, cityMunicipality: e.target.value })} /></label><label>Province<input required disabled={!editable} value={clinicDetails.province} onChange={(e) => setClinicDetails({ ...clinicDetails, province: e.target.value })} /></label><label>Postal code <span className="optional">Optional</span><input disabled={!editable} value={clinicDetails.postalCode} onChange={(e) => setClinicDetails({ ...clinicDetails, postalCode: e.target.value })} /></label><label>Country code<input required maxLength={2} disabled={!editable} value={clinicDetails.countryCode} onChange={(e) => setClinicDetails({ ...clinicDetails, countryCode: e.target.value.toUpperCase() })} /></label><label>Time zone<input required disabled={!editable} value={clinicDetails.timeZone} onChange={(e) => setClinicDetails({ ...clinicDetails, timeZone: e.target.value })} /></label></div>{editable ? <button className="secondary" disabled={Boolean(working)}>{working === 'clinic-details' ? 'Saving…' : 'Save clinic details'}</button> : null}</form></section> : null}
         {activeSection === 'content' ? <section className="secretary-proposal-panel secretary-content-section"><div className="secretary-content-grid">{servicesPanel}{questionsPanel}</div></section> : null}
-        {activeSection === 'schedules' && access?.canManageSchedules ? <section className="secretary-proposal-panel schedule-editor"><div className="practice-panel-heading"><div><h2>Clinic schedules</h2><p>Set the regular weekly schedule for this clinic and any date-specific exceptions.</p></div></div>
+        {activeSection === 'schedules' && access?.canManageSchedules ? <section className="secretary-proposal-panel schedule-editor"><div className="practice-panel-heading"><div><h2>Clinic schedules</h2><p>Set the regular weekly schedule and clinic-wide online booking cutoff.</p></div></div>
           <form className="weekly-schedule-card" onSubmit={saveWeeklySchedules}>
             <div className="weekly-schedule-grid weekly-schedule-head"><span>Day</span><span>Opens</span><span>Closes</span><span>Max operating until</span></div>
-            {schedules.map((row) => <div className="weekly-schedule-grid weekly-schedule-row" key={row.weekday}>
+            {schedules.map((row) => <div className="weekly-schedule-grid weekly-schedule-row" key={row.weekday} data-cutoff-label={row.isOpen ? cutoffFromClosing(row.closesAtLocal, onlineCutoffHours) || (onlineCutoffHours ? 'Invalid cutoff' : 'Set clinic cutoff') : '—'}>
               <label className="weekly-day"><input type="checkbox" disabled={!editable} checked={row.isOpen} onChange={(e) => updateSchedule(row.weekday, { isOpen: e.target.checked, opensAtLocal: e.target.checked ? row.opensAtLocal : '', closesAtLocal: e.target.checked ? row.closesAtLocal : '', maximumOperatingUntilLocal: e.target.checked ? row.maximumOperatingUntilLocal : '' })} /><strong>{dayLabel(row.weekday)}</strong></label>
               <input aria-label={`${dayLabel(row.weekday)} opens`} type="time" disabled={!editable || !row.isOpen} required={row.isOpen} value={row.opensAtLocal} onChange={(e) => updateSchedule(row.weekday, { opensAtLocal: e.target.value })} />
               <input aria-label={`${dayLabel(row.weekday)} closes`} type="time" disabled={!editable || !row.isOpen} required={row.isOpen} value={row.closesAtLocal} onChange={(e) => updateSchedule(row.weekday, { closesAtLocal: e.target.value })} />
@@ -387,20 +389,19 @@ export function SecretarySettingsDraftPage() {
             </div>)}
             <div className="weekly-schedule-footer"><div><strong>Online cutoff (hours before clinic closing)</strong><p>Patients can only book up to this many hours before the clinic closing time.</p></div><label className="cutoff-hours"><input aria-label="Online cutoff hours before clinic closing" type="number" min="0" step="0.25" disabled={!editable} value={onlineCutoffHours} onChange={(e) => setOnlineCutoffHours(e.target.value)} /><span>hour(s)</span></label>{editable ? <button className="primary" disabled={working === 'weekly-schedules'}>{working === 'weekly-schedules' ? 'Saving…' : 'Save schedules'}</button> : null}</div>
           </form>
-          <section className="schedule-exception-card"><div className="exception-heading"><div><h3>Date-specific exceptions</h3><p>Add special hours or a closure for specific dates. Each saved date remains a complete schedule replacement.</p></div></div>
-            {editable ? <form className="exception-form" onSubmit={saveException}>
+        </section> : null}
+        {activeSection === 'special' && access?.canManageSchedules ? <section className="secretary-proposal-panel special-date-editor">
+          <div className="practice-panel-heading special-date-heading"><div><h2>Special dates</h2><p>Manage dates with special clinic hours or planned clinic closures. Special dates override the regular weekly schedule.</p></div>{editable ? <button className="primary" type="button" onClick={() => { setException(blankException); setShowExceptionEditor((current) => !current); }}>{showExceptionEditor ? 'Hide editor' : '+ Add special date'}</button> : null}</div>
+          {editable && showExceptionEditor ? <form className="special-date-form" onSubmit={saveException}>
+            <div className="special-date-form-grid">
               <label>Start date<input required type="date" value={exception.startDate} onChange={(e) => setException({ ...exception, startDate: e.target.value, endDate: exception.endDate || e.target.value })} /></label>
-              <label>End date<input required type="date" min={exception.startDate || undefined} value={exception.endDate} onChange={(e) => setException({ ...exception, endDate: e.target.value })} /></label>
-              <label className="exception-open"><input type="checkbox" checked={exception.isOpen} onChange={(e) => setException({ ...exception, isOpen: e.target.checked })} /> Clinic open</label>
-              <label>Opens<input required={exception.isOpen} type="time" disabled={!exception.isOpen} value={exception.opensAtLocal} onChange={(e) => setException({ ...exception, opensAtLocal: e.target.value })} /></label>
-              <label>Closes<input required={exception.isOpen} type="time" disabled={!exception.isOpen} value={exception.closesAtLocal} onChange={(e) => setException({ ...exception, closesAtLocal: e.target.value })} /></label>
-              <label>Max operating until<input type="time" disabled={!exception.isOpen} value={exception.maximumOperatingUntilLocal} onChange={(e) => setException({ ...exception, maximumOperatingUntilLocal: e.target.value })} /></label>
-              <label className="exception-cutoff-toggle"><input type="checkbox" disabled={!exception.isOpen} checked={exception.overrideOnlineCutoff} onChange={(e) => setException({ ...exception, overrideOnlineCutoff: e.target.checked })} /> Override online cutoff</label>
-              {exception.overrideOnlineCutoff && exception.isOpen ? <label>Cutoff hours<input type="number" min="0" step="0.25" value={exception.onlineCutoffHours} onChange={(e) => setException({ ...exception, onlineCutoffHours: e.target.value })} /></label> : null}
-              <button className="secondary" disabled={working === 'exception'}>{working === 'exception' ? 'Adding…' : 'Add exception'}</button>
-            </form> : null}
-            <div className="exception-table"><div className="exception-table-head"><span>Date</span><span>Opens</span><span>Closes</span><span>Online cutoff</span><span>Max operating until</span></div>{detail.proposedScheduleExceptions.length ? detail.proposedScheduleExceptions.map((row) => <div className="exception-table-row" key={row.id}><span>{dateOnly(row.serviceDate)}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedOpensAtLocal) : 'Closed'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedClosesAtLocal) : '—'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedMaximumOnlineBookingUntilLocal) || 'None' : '—'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedMaximumOperatingUntilLocal) || 'None' : '—'}</span></div>) : <div className="exception-empty">No date-specific exceptions added.</div>}</div>
-          </section>
+              <label>End date <span className="optional">Optional</span><input type="date" min={exception.startDate || undefined} value={exception.endDate} onChange={(e) => setException({ ...exception, endDate: e.target.value })} /></label>
+              <fieldset className="special-date-type"><legend>Type</legend><label className={exception.isOpen ? 'selected' : ''}><input type="radio" name="special-date-type" checked={exception.isOpen} onChange={() => setException({ ...exception, isOpen: true })} /><span><strong>Open with special hours</strong><small>Clinic operates with different hours for the selected date.</small></span></label><label className={!exception.isOpen ? 'selected' : ''}><input type="radio" name="special-date-type" checked={!exception.isOpen} onChange={() => setException({ ...exception, isOpen: false, opensAtLocal: '', closesAtLocal: '', maximumOperatingUntilLocal: '' })} /><span><strong>Clinic closed</strong><small>Clinic will be closed for the selected date.</small></span></label></fieldset>
+              {exception.isOpen ? <div className="special-date-hours"><label>Opens<input required type="time" value={exception.opensAtLocal} onChange={(e) => setException({ ...exception, opensAtLocal: e.target.value })} /></label><label>Closes<input required type="time" value={exception.closesAtLocal} onChange={(e) => setException({ ...exception, closesAtLocal: e.target.value })} /></label><label>Max operating until <span className="optional">Optional</span><input type="time" value={exception.maximumOperatingUntilLocal} onChange={(e) => setException({ ...exception, maximumOperatingUntilLocal: e.target.value })} /></label></div> : null}
+            </div>
+            <div className="special-date-form-actions"><button className="secondary" type="button" onClick={() => { setShowExceptionEditor(false); setException(blankException); }}>Cancel</button><button className="primary" disabled={working === 'exception'}>{working === 'exception' ? 'Adding…' : 'Add special date'}</button></div>
+          </form> : null}
+          <section className="special-date-list"><div className="special-date-list-heading"><h3>Special dates list</h3><p className="practice-muted">Saved special-date proposals in this draft.</p></div><div className="special-date-table"><div className="special-date-table-head"><span>Date</span><span>Status</span><span>Opening</span><span>Closing</span><span>Max operating until</span></div>{detail.proposedScheduleExceptions.length ? detail.proposedScheduleExceptions.map((row) => <div className="special-date-table-row" key={row.id}><span>{dateOnly(row.serviceDate)}</span><span><span className={row.proposedIsOpen ? 'special-date-status open' : 'special-date-status closed'}>{row.proposedIsOpen ? 'Special hours' : 'Closed'}</span></span><span>{row.proposedIsOpen ? timeOnly(row.proposedOpensAtLocal) || '—' : '—'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedClosesAtLocal) || '—' : '—'}</span><span>{row.proposedIsOpen ? timeOnly(row.proposedMaximumOperatingUntilLocal) || '—' : '—'}</span></div>) : <div className="exception-empty">No special dates added.</div>}</div></section>
         </section> : null}
       </div>
       <aside className="secretary-proposal-summary"><h2>Draft summary</h2><p className="practice-muted">Only submitted proposals are reviewed by the Doctor.</p><dl><div><dt>Status</dt><dd>{statusLabel(detail.status)}</dd></div><div><dt>Saved proposals</dt><dd>{proposalCount}</dd></div><div><dt>Current section</dt><dd>{sectionLabels[activeSection]}</dd></div></dl>{editable ? <p className="practice-muted">Save changes within each section, then submit the draft when it is ready for review.</p> : null}</aside>
