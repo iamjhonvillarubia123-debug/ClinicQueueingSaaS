@@ -7,13 +7,6 @@ function replaceTextNode(element: HTMLElement, from: string, to: string) {
   }
 }
 
-function setNativeValue(input: HTMLInputElement, value: string) {
-  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  descriptor?.set?.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-  input.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
 function stepItem(number: number, label: string) {
   const item = document.createElement('div');
   item.className = 'special-wizard-step';
@@ -93,12 +86,14 @@ function enhanceForm(form: HTMLFormElement) {
     type?.querySelectorAll('label').forEach((label) => {
       const text = label.textContent || '';
       if (text.includes('Open with special hours')) {
-        label.querySelector('strong')!.textContent = 'Open (special hours)';
+        const strong = label.querySelector('strong');
+        if (strong) strong.textContent = 'Open (special hours)';
         const small = label.querySelector('small');
         if (small) small.textContent = 'Clinic will be open with different hours.';
       }
       if (text.includes('Clinic closed')) {
-        label.querySelector('strong')!.textContent = 'Closed';
+        const strong = label.querySelector('strong');
+        if (strong) strong.textContent = 'Closed';
         const small = label.querySelector('small');
         if (small) small.textContent = 'Clinic will be closed all day.';
       }
@@ -156,9 +151,6 @@ function enhanceTable(editor: HTMLElement) {
   head.dataset.specialEnhanced = 'true';
   const headers = Array.from(head.children) as HTMLElement[];
   if (headers[0]) headers[0].textContent = 'Date / range';
-  headers.forEach((header) => {
-    if (header.textContent === 'Max operating until') return;
-  });
 
   editor.querySelectorAll<HTMLElement>('.special-date-table-row').forEach((row) => {
     const cells = Array.from(row.children) as HTMLElement[];
