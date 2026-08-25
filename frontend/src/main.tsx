@@ -5,6 +5,7 @@ import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { installScheduleCutoffPreview } from './secretary/scheduleCutoffPreview';
 import { installSpecialDayClinicUi } from './secretary/specialDayClinicUi';
+import { installSecretaryUiStabilityFixes } from './secretary/secretaryUiStabilityFixes';
 import './styles/global.css';
 import './styles/app-shell.css';
 import './styles/account-lifecycle.css';
@@ -21,6 +22,7 @@ import './styles/special-day-clinic-ui.css';
 
 installScheduleCutoffPreview();
 installSpecialDayClinicUi();
+installSecretaryUiStabilityFixes();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
