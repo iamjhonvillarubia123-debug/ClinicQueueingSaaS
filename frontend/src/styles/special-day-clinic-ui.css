@@ -1,7 +1,46 @@
-.secretary-proposal-header .practice-status.draft {
+.secretary-proposal-header > div:first-child {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'context context context'
+    'name badge .'
+    'description description description';
+  column-gap: 12px;
+  align-items: center;
+}
+.secretary-proposal-header > div:first-child > .eyebrow {
+  grid-area: name;
+  margin: 0;
+  color: #111;
+  font-size: clamp(2rem, 3vw, 3rem);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -.03em;
+  text-transform: none;
+}
+.secretary-proposal-header .secretary-proposal-title-row {
+  display: contents;
+}
+.secretary-proposal-header .secretary-proposal-title-row h1 {
+  grid-area: context;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.secretary-proposal-header .practice-status {
+  grid-area: badge;
+  justify-self: start;
   border-color: #b8d7f5;
   background: #edf6ff;
   color: #1769aa;
+}
+.secretary-proposal-header > div:first-child > .practice-muted {
+  grid-area: description;
+  margin-top: 10px;
 }
 
 .secretary-proposal-nav button:last-child {
@@ -167,6 +206,16 @@
 }
 
 @media (max-width: 760px) {
+  .secretary-proposal-header > div:first-child {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      'context context'
+      'name badge'
+      'description description';
+  }
+  .secretary-proposal-header > div:first-child > .eyebrow {
+    font-size: 2rem;
+  }
   .special-date-editor .special-date-heading { display: grid; }
   .special-date-editor .special-date-heading .primary { width: 100%; }
   .special-date-form-grid,
