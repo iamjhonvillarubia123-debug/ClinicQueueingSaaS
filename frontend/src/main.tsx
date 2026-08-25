@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { installScheduleCutoffPreview } from './secretary/scheduleCutoffPreview';
+import { installSecretaryUiStabilityFixes } from './secretary/secretaryUiStabilityFixes';
 import './styles/global.css';
 import './styles/app-shell.css';
 import './styles/account-lifecycle.css';
@@ -19,6 +20,7 @@ import './styles/secretary-tab-icons.css';
 import './styles/special-day-clinic-ui.css';
 
 installScheduleCutoffPreview();
+installSecretaryUiStabilityFixes();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
