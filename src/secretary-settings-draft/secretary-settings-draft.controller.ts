@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -132,6 +133,16 @@ export class SecretarySettingsDraftController {
   async upsertScheduleException(@Param('draftId') draftId: string, @Body() dto: UpsertSecretarySettingsDraftScheduleExceptionDto, @Request() request: AuthenticatedRequest) {
     await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SCHEDULES');
     return this.secretarySettingsDraftExceptionService.upsertScheduleException(request.user.userId, draftId, dto);
+  }
+
+  @Delete(':draftId/schedule-exception/:serviceDate')
+  async deleteScheduleException(
+    @Param('draftId') draftId: string,
+    @Param('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    await this.secretarySettingsDraftAccessService.assertMayEditDraft(request.user.userId, draftId, 'SCHEDULES');
+    return this.secretarySettingsDraftExceptionService.deleteScheduleException(request.user.userId, draftId, serviceDate);
   }
 
   @Post(':draftId/submit')
