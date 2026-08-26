@@ -20,11 +20,13 @@ import { DisablePracticeLocationDto } from './dto/disable-practice-location.dto'
 import { PermanentlyDeletePracticeLocationDto } from './dto/permanently-delete-practice-location.dto';
 import { ReactivatePracticeLocationDto } from './dto/reactivate-practice-location.dto';
 import { UpdatePracticeLocationDto } from './dto/update-practice-location.dto';
+import { ValidatePracticeScheduleDto } from './dto/validate-practice-schedule.dto';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationService } from './practice-location.service';
+import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 
 @Controller('practice-location')
 export class PracticeLocationController {
@@ -34,6 +36,7 @@ export class PracticeLocationController {
     private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
+    private readonly practiceSchedulePreflightService: PracticeSchedulePreflightService,
   ) {}
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -58,6 +61,18 @@ export class PracticeLocationController {
     return this.practiceLocationService.updateOwned(
       request.user.userId,
       practiceLocationId,
+      dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('schedule-preflight')
+  validateSchedule(
+    @Body() dto: ValidatePracticeScheduleDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceSchedulePreflightService.validate(
+      request.user.userId,
       dto,
     );
   }
