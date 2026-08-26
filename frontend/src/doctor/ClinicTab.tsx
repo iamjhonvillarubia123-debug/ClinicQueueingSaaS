@@ -54,9 +54,17 @@ const initialQuestions: QuestionRow[] = [
   { id: 2, order: 2, question: 'Have you had this condition before?', type: 'BOOLEAN', required: true },
 ];
 
+function clockMatch(value: string) {
+  return value.trim().toUpperCase().match(/^(0?[1-9]|1[0-2]):([0-5]\d)\s(AM|PM)$/);
+}
+
+function isValidClock(value: string) {
+  return Boolean(clockMatch(value));
+}
+
 function parseClock(value: string) {
-  const match = value.match(/^(\d{1,2}):(\d{2})\s(AM|PM)$/);
-  if (!match) return 0;
+  const match = clockMatch(value);
+  if (!match) return Number.NaN;
   let hour = Number(match[1]) % 12;
   const minute = Number(match[2]);
   if (match[3] === 'PM') hour += 12;
@@ -64,6 +72,7 @@ function parseClock(value: string) {
 }
 
 function formatClock(totalMinutes: number) {
+  if (!Number.isFinite(totalMinutes)) return '—';
   const normalized = ((totalMinutes % 1440) + 1440) % 1440;
   const hour24 = Math.floor(normalized / 60);
   const minute = normalized % 60;
@@ -71,6 +80,8 @@ function formatClock(totalMinutes: number) {
   const hour12 = hour24 % 12 || 12;
   return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${suffix}`;
 }
+
+const quarterHourSuggestions = Array.from({ length: 96 }, (_, index) => formatClock(index * 15));
 
 function toApiLocalTime(value: string) {
   const total = parseClock(value);
@@ -84,6 +95,7 @@ function weekdayFor(day: string): Weekday {
 function onlineCutoffFor(row: DayHours, leadHours: number) {
   const opening = parseClock(row.opens);
   const closing = parseClock(row.closes);
+  if (!Number.isFinite(opening) || !Number.isFinite(closing)) return '—';
   return formatClock(Math.max(opening, closing - leadHours * 60));
 }
 
@@ -155,12 +167,14 @@ function HoursEditor({ hours, setHours, cutoffLeadHours, setCutoffLeadHours }: {
       {hours.map((row, index) => <div className={`clinic-hours-row${row.open ? '' : ' is-closed'}`} key={row.day}>
         <label className="clinic-open-toggle"><input aria-label={`${row.day} open`} type="checkbox" checked={row.open} onChange={(e) => update(index, { open: e.target.checked })} /><span>Open</span></label>
         <strong>{row.day.slice(0, 3)}</strong>
-        <select disabled={!row.open} value={row.opens} onChange={(e) => update(index, { opens: e.target.value })}><option>08:00 AM</option><option>09:00 AM</option><option>10:00 AM</option></select>
-        <select disabled={!row.open} value={row.closes} onChange={(e) => update(index, { closes: e.target.value })}><option>01:00 PM</option><option>05:00 PM</option><option>06:00 PM</option></select>
+        <input className="clinic-search" list="clinic-quarter-hour-options" disabled={!row.open} value={row.opens} onChange={(e) => update(index, { opens: e.target.value })} aria-label={`${row.day} opening time`} placeholder="e.g. 08:07 AM" />
+        <input className="clinic-search" list="clinic-quarter-hour-options" disabled={!row.open} value={row.closes} onChange={(e) => update(index, { closes: e.target.value })} aria-label={`${row.day} closing time`} placeholder="e.g. 05:43 PM" />
         <output className="clinic-cutoff-output" aria-label={`${row.day} online booking cutoff`}>{row.open ? onlineCutoffFor(row, cutoffLeadHours) : '—'}</output>
-        <select disabled={!row.open} value={row.maximumUntil} onChange={(e) => update(index, { maximumUntil: e.target.value })}><option>02:00 PM</option><option>06:00 PM</option><option>07:00 PM</option></select>
+        <input className="clinic-search" list="clinic-quarter-hour-options" disabled={!row.open} value={row.maximumUntil} onChange={(e) => update(index, { maximumUntil: e.target.value })} aria-label={`${row.day} maximum operating time`} placeholder="e.g. 06:10 PM" />
       </div>)}
     </div>
+    <datalist id="clinic-quarter-hour-options">{quarterHourSuggestions.map((time) => <option value={time} key={time} />)}</datalist>
+    <div className="clinic-info-strip">ⓘ Quarter-hour times are suggested for convenience. You may type any exact valid time, for example 08:07 AM.</div>
     <div className="clinic-cutoff-setting">
       <div><strong>Online booking cutoff</strong><p>Calculated automatically for every open day from the clinic closing time.</p></div>
       <label><input type="number" min={0} max={12} step={1} value={cutoffLeadHours} onChange={(e) => setCutoffLeadHours(Math.max(0, Number(e.target.value) || 0))} /><span>hours before clinic closing</span></label>
@@ -222,6 +236,11 @@ function ClinicWizard({ onExit, onSaved, initialValue, editing, editingClinicId 
     if (saving) return;
     setSaveError('');
 
+    const invalidFormatRow = hours.find((row) => row.open && (!isValidClock(row.opens) || !isValidClock(row.closes) || !isValidClock(row.maximumUntil)));
+    if (invalidFormatRow) {
+      setSaveError(`${invalidFormatRow.day} contains an invalid time. Use a time such as 08:07 AM.`);
+      return;
+    }
     const invalidRow = hours.find((row) => row.open && parseClock(row.closes) <= parseClock(row.opens));
     if (invalidRow) {
       setSaveError(`${invalidRow.day} closing time must be later than its opening time.`);
