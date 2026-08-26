@@ -7,6 +7,7 @@ import { PracticeLocationDataRetentionGateService } from './practice-location-da
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationService } from './practice-location.service';
+import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 import { PracticeLocationController } from './practice-location.controller';
 
 @Module({
@@ -17,6 +18,7 @@ import { PracticeLocationController } from './practice-location.controller';
     PracticeLocationDataRetentionGateService,
     PracticeLocationLifecycleService,
     PracticeLocationPermanentDeleteService,
+    PracticeSchedulePreflightService,
   ],
   controllers: [PracticeLocationController],
 })
