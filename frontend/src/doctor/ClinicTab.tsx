@@ -3,6 +3,7 @@ import { apiRequest } from '../api/client';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type ClinicStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
+type Weekday = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 
 type ClinicDraft = {
   name: string;
@@ -69,6 +70,15 @@ function formatClock(totalMinutes: number) {
   const suffix = hour24 >= 12 ? 'PM' : 'AM';
   const hour12 = hour24 % 12 || 12;
   return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${suffix}`;
+}
+
+function toApiLocalTime(value: string) {
+  const total = parseClock(value);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function weekdayFor(day: string): Weekday {
+  return day.toUpperCase() as Weekday;
 }
 
 function onlineCutoffFor(row: DayHours, leadHours: number) {
@@ -172,7 +182,7 @@ function Review({ draft, hours, services, questions, cutoffLeadHours }: { draft:
   return <div className="clinic-review-layout"><div className="clinic-review-stack"><div className="clinic-review-card"><h3>Basic Information</h3><dl><dt>Clinic Name</dt><dd>{draft.name || 'Not entered'}</dd><dt>Address</dt><dd>{draft.address || 'Not entered'}</dd><dt>Country</dt><dd>{draft.country}</dd><dt>Timezone</dt><dd>{draft.timeZone}</dd><dt>Contact Number</dt><dd>{draft.contactNumber || 'Optional'}</dd></dl></div><div className="clinic-review-card"><h3>Clinic Hours</h3>{hours.filter((row) => row.open).map((row) => <p key={row.day}><strong>{row.day}</strong> {row.opens} – {row.closes} · Online cutoff {onlineCutoffFor(row, cutoffLeadHours)} · Max until {row.maximumUntil}</p>)}</div><div className="clinic-review-card"><h3>Services ({services.length})</h3><p>{services.map((service) => service.name).join(' · ') || 'No services configured'}</p></div><div className="clinic-review-card"><h3>Booking Questions ({questions.length})</h3><p>{questions.filter((question) => question.required).length} required, {questions.filter((question) => !question.required).length} optional</p></div></div><aside className="clinic-readiness-card"><span className="clinic-ready-icon">✓</span><h3>Activation Readiness</h3><p>Your clinic can be activated once required items are complete.</p><h4>Required for Activation</h4><p className="clinic-ready-line">Clinic Hours <span>✓</span></p><h4>Optional Configuration</h4><p className="clinic-ready-line">Services <span>○</span></p><p className="clinic-ready-line">Booking Questions <span>○</span></p><p className="clinic-ready-line">Secretaries <span>○</span></p><p className="clinic-ready-line">Public Information <span>○</span></p></aside></div>;
 }
 
-function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () => void; onSaved: (clinic: ClinicDraft, status: ClinicStatus) => Promise<void>; initialValue?: ClinicDraft; editing?: boolean }) {
+function ClinicWizard({ onExit, onSaved, initialValue, editing, editingClinicId }: { onExit: () => void; onSaved: (clinic: ClinicDraft, status: ClinicStatus) => Promise<void>; initialValue?: ClinicDraft; editing?: boolean; editingClinicId?: string }) {
   const [step, setStep] = useState<Step>(1);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
   const [hours, setHours] = useState(initialHours);
@@ -183,6 +193,7 @@ function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () =
   const [saveError, setSaveError] = useState('');
   const title = step === 1 ? (editing ? 'Edit Clinic' : 'Add New Clinic') : step === 2 ? 'Clinic Hours (Required)' : step === 3 ? 'Services' : step === 4 ? 'Booking Questions' : 'Review Your Clinic';
   const canContinue = step !== 1 || Boolean(draft.name.trim() && draft.address.trim() && draft.country && draft.timeZone);
+
   async function saveDraft() {
     if (saving) return;
     setSaveError('');
@@ -191,6 +202,7 @@ function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () =
     catch (error) { setSaveError(error instanceof Error ? error.message : 'Unable to save this clinic draft.'); }
     finally { setSaving(false); }
   }
+
   function next() {
     setSaveError('');
     if (!canContinue) {
@@ -205,7 +217,52 @@ function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () =
     }
     setStep((Math.min(5, step + 1)) as Step);
   }
-  return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{title}</h1><p>{step === 1 ? (editing ? 'Update the basic clinic identity and location details.' : 'Enter the basic details of your clinic.') : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} cutoffLeadHours={cutoffLeadHours} setCutoffLeadHours={setCutoffLeadHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} cutoffLeadHours={cutoffLeadHours} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? (editing ? 'Save Clinic' : 'Create Clinic') : 'Save and Continue'} onPrimary={step === 5 ? () => { void saveDraft(); } : next} onDraft={() => { void saveDraft(); }} /></div></div></section>;
+
+  async function validateHoursAndContinue() {
+    if (saving) return;
+    setSaveError('');
+
+    const invalidRow = hours.find((row) => row.open && parseClock(row.closes) <= parseClock(row.opens));
+    if (invalidRow) {
+      setSaveError(`${invalidRow.day} closing time must be later than its opening time.`);
+      return;
+    }
+    if (!hours.some((row) => row.open)) {
+      setSaveError('Select at least one open clinic day before continuing.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await apiRequest<{ valid: true }>('/practice-location/schedule-preflight', {
+        method: 'POST',
+        body: {
+          practiceLocationId: editingClinicId,
+          timeZone: draft.timeZone,
+          schedules: hours.map((row) => ({
+            weekday: weekdayFor(row.day),
+            isOpen: row.open,
+            opensAtLocal: row.open ? toApiLocalTime(row.opens) : undefined,
+            closesAtLocal: row.open ? toApiLocalTime(row.closes) : undefined,
+          })),
+        },
+      });
+      setStep(3);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Clinic hours could not be validated.';
+      setSaveError(`Cannot continue with these clinic hours. ${message} Adjust the schedule so it does not overlap another active clinic.`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const primaryAction = step === 5
+    ? () => { void saveDraft(); }
+    : step === 2
+      ? () => { void validateHoursAndContinue(); }
+      : next;
+
+  return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{title}</h1><p>{step === 1 ? (editing ? 'Update the basic clinic identity and location details.' : 'Enter the basic details of your clinic.') : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} cutoffLeadHours={cutoffLeadHours} setCutoffLeadHours={setCutoffLeadHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} cutoffLeadHours={cutoffLeadHours} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? (editing ? 'Save Clinic' : 'Create Clinic') : 'Save and Continue'} onPrimary={primaryAction} onDraft={() => { void saveDraft(); }} /></div></div></section>;
 }
 
 function ClinicList({ clinics, onAdd, onOpen }: { clinics: ClinicRecord[]; onAdd: () => void; onOpen: (clinic: ClinicRecord) => void }) {
@@ -270,6 +327,6 @@ export function ClinicTabPage() {
   }
 
   if (mode === 'create') return <ClinicWizard onExit={() => setMode('list')} onSaved={saved} />;
-  if (mode === 'edit' && editingClinic) return <ClinicWizard editing initialValue={editingClinic} onExit={() => { setEditingClinic(null); setMode('list'); }} onSaved={saved} />;
+  if (mode === 'edit' && editingClinic) return <ClinicWizard editing editingClinicId={editingClinic.id} initialValue={editingClinic} onExit={() => { setEditingClinic(null); setMode('list'); }} onSaved={saved} />;
   return <>{loadError ? <div className="form-error" role="alert">{loadError}</div> : null}<ClinicList clinics={clinics} onAdd={() => { setEditingClinic(null); setMode('create'); }} onOpen={(clinic) => { setEditingClinic(clinic); setMode('edit'); }} /></>;
 }
