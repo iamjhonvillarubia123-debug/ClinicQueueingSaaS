@@ -1,3 +1,3 @@
 export function formatQueueNumber(queueNumber: number): string {
-  return String(queueNumber).padStart(3, '0');
+  return String(queueNumber).padStart(2, '0');
 }
