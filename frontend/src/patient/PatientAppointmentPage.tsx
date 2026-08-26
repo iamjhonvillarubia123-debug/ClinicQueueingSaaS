@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
-import { formatQueueNumber } from '../presentation/queueNumber';
 
 type AppointmentStatus =
   | 'WAITING'
@@ -50,6 +49,10 @@ type PatientPresentation = {
   tone: Tone;
   clinicState: string;
 };
+
+function formatPatientQueueNumber(queueNumber: number): string {
+  return String(queueNumber).padStart(3, '0');
+}
 
 function formatServiceDate(value: string) {
   const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -319,7 +322,7 @@ export function PatientAppointmentPage() {
               <div className="patient-appointment-grid">
                 <div className="patient-queue-identity" aria-label={`Queue number ${dashboard.queueNumber}`}>
                   <span>Queue Number</span>
-                  <strong>{formatQueueNumber(dashboard.queueNumber)}</strong>
+                  <strong>{formatPatientQueueNumber(dashboard.queueNumber)}</strong>
                 </div>
                 <div className="patient-appointment-facts">
                   <div>
@@ -342,7 +345,7 @@ export function PatientAppointmentPage() {
               <div className="patient-queue-metrics">
                 <div>
                   <span>Now Serving</span>
-                  <strong>{dashboard.nowServingQueueNumber === null ? '—' : formatQueueNumber(dashboard.nowServingQueueNumber)}</strong>
+                  <strong>{dashboard.nowServingQueueNumber === null ? '—' : formatPatientQueueNumber(dashboard.nowServingQueueNumber)}</strong>
                 </div>
                 <div>
                   <span>People Ahead</span>
