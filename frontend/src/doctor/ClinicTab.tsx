@@ -116,15 +116,15 @@ function Review({ draft, hours, services, questions }: { draft: ClinicDraft; hou
   return <div className="clinic-review-layout"><div className="clinic-review-stack"><div className="clinic-review-card"><h3>Basic Information</h3><dl><dt>Clinic Name</dt><dd>{draft.name || 'Not entered'}</dd><dt>Address</dt><dd>{draft.address || 'Not entered'}</dd><dt>Country</dt><dd>{draft.country}</dd><dt>Timezone</dt><dd>{draft.timeZone}</dd><dt>Contact Number</dt><dd>{draft.contactNumber || 'Optional'}</dd></dl></div><div className="clinic-review-card"><h3>Clinic Hours</h3>{hours.filter((row) => row.open).map((row) => <p key={row.day}><strong>{row.day}</strong> {row.opens} – {row.closes} · Max until {row.maximumUntil}</p>)}</div><div className="clinic-review-card"><h3>Services ({services.length})</h3><p>{services.map((service) => service.name).join(' · ') || 'No services configured'}</p></div><div className="clinic-review-card"><h3>Booking Questions ({questions.length})</h3><p>{questions.filter((question) => question.required).length} required, {questions.filter((question) => !question.required).length} optional</p></div></div><aside className="clinic-readiness-card"><span className="clinic-ready-icon">✓</span><h3>Activation Readiness</h3><p>Your clinic can be activated once required items are complete.</p><h4>Required for Activation</h4><p className="clinic-ready-line">Clinic Hours <span>✓</span></p><h4>Optional Configuration</h4><p className="clinic-ready-line">Services <span>○</span></p><p className="clinic-ready-line">Booking Questions <span>○</span></p><p className="clinic-ready-line">Secretaries <span>○</span></p><p className="clinic-ready-line">Public Information <span>○</span></p></aside></div>;
 }
 
-function ClinicWizard({ onExit, onSaved }: { onExit: () => void; onSaved: (clinic: ClinicDraft, status: ClinicStatus) => Promise<void> }) {
+function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () => void; onSaved: (clinic: ClinicDraft, status: ClinicStatus) => Promise<void>; initialValue?: ClinicDraft; editing?: boolean }) {
   const [step, setStep] = useState<Step>(1);
-  const [draft, setDraft] = useState(initialDraft);
+  const [draft, setDraft] = useState(initialValue ?? initialDraft);
   const [hours, setHours] = useState(initialHours);
   const [services, setServices] = useState(initialServices);
   const [questions, setQuestions] = useState(initialQuestions);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const title = step === 1 ? 'Add New Clinic' : step === 2 ? 'Clinic Hours (Required)' : step === 3 ? 'Services' : step === 4 ? 'Booking Questions' : 'Review Your Clinic';
+  const title = step === 1 ? (editing ? 'Edit Clinic' : 'Add New Clinic') : step === 2 ? 'Clinic Hours (Required)' : step === 3 ? 'Services' : step === 4 ? 'Booking Questions' : 'Review Your Clinic';
   const canContinue = step !== 1 || Boolean(draft.name.trim() && draft.address.trim() && draft.country && draft.timeZone);
   async function saveDraft() {
     if (saving) return;
@@ -135,19 +135,20 @@ function ClinicWizard({ onExit, onSaved }: { onExit: () => void; onSaved: (clini
     finally { setSaving(false); }
   }
   function next() { if (!canContinue) return; setStep((Math.min(5, step + 1)) as Step); }
-  return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{step === 1 ? 'Add New Clinic' : title}</h1><p>{step === 1 ? 'Enter the basic details of your clinic.' : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? 'Create Clinic' : 'Save and Continue'} onPrimary={step === 5 ? () => { void saveDraft(); } : next} onDraft={() => { void saveDraft(); }} /></div></div></section>;
+  return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{step === 1 ? title : title}</h1><p>{step === 1 ? (editing ? 'Update the basic clinic identity and location details.' : 'Enter the basic details of your clinic.') : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? (editing ? 'Save Clinic' : 'Create Clinic') : 'Save and Continue'} onPrimary={step === 5 ? () => { void saveDraft(); } : next} onDraft={() => { void saveDraft(); }} /></div></div></section>;
 }
 
-function ClinicList({ clinics, onAdd }: { clinics: ClinicRecord[]; onAdd: () => void }) {
+function ClinicList({ clinics, onAdd, onOpen }: { clinics: ClinicRecord[]; onAdd: () => void; onOpen: (clinic: ClinicRecord) => void }) {
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
   const filtered = useMemo(() => clinics.filter((clinic) => (filter === 'ALL' || clinic.status === filter) && clinic.name.toLowerCase().includes(search.toLowerCase())), [clinics, filter, search]);
-  return <section className="clinic-page"><div className="clinic-list-heading"><div><h1>Clinics</h1><p>Manage your practice locations. You can view, edit, activate, disable, or continue setup.</p></div><button className="clinic-primary" type="button" onClick={onAdd}>+ Add New Clinic</button></div><div className="clinic-list-controls"><div className="clinic-tabs">{(['ALL', 'ACTIVE', 'DRAFT', 'DISABLED'] as const).map((value) => <button className={filter === value ? 'is-active' : ''} type="button" onClick={() => setFilter(value)} key={value}>{value === 'ALL' ? 'All Clinics' : value.charAt(0) + value.slice(1).toLowerCase()} <span>{value === 'ALL' ? clinics.length : clinics.filter((clinic) => clinic.status === value).length}</span></button>)}</div><input className="clinic-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search clinics…" /></div><div className="clinic-table-card">{filtered.length === 0 ? <div className="clinic-empty"><div className="clinic-empty-icon">+</div><h2>No clinics yet</h2><p>Create your first clinic to begin configuration.</p><button className="clinic-primary" type="button" onClick={onAdd}>Add New Clinic</button></div> : filtered.map((clinic) => <article className="clinic-clinic-row" key={clinic.id}><div className="clinic-building-icon">+</div><div className="clinic-clinic-copy"><strong>{clinic.name || 'Untitled Clinic'} <span>{clinic.status}</span></strong><p>{clinic.address || 'Address not entered'}</p><small>{clinic.country} · {clinic.timeZone}</small></div><div><span className={`clinic-status-pill${clinic.status === 'ACTIVE' ? ' is-active' : ''}`}>{clinic.status}</span><small className="clinic-readiness">{clinic.status === 'DRAFT' ? 'Ready to continue setup' : ''}</small></div><div className="clinic-secretary"><strong>Secretary</strong><span>Not assigned</span></div><button className="clinic-secondary" type="button">Open</button><button className="clinic-kebab" type="button" aria-label={`Actions for ${clinic.name}`}>⋮</button></article>)}</div></section>;
+  return <section className="clinic-page"><div className="clinic-list-heading"><div><h1>Clinics</h1><p>Manage your practice locations. You can view, edit, activate, disable, or continue setup.</p></div><button className="clinic-primary" type="button" onClick={onAdd}>+ Add New Clinic</button></div><div className="clinic-list-controls"><div className="clinic-tabs">{(['ALL', 'ACTIVE', 'DRAFT', 'DISABLED'] as const).map((value) => <button className={filter === value ? 'is-active' : ''} type="button" onClick={() => setFilter(value)} key={value}>{value === 'ALL' ? 'All Clinics' : value.charAt(0) + value.slice(1).toLowerCase()} <span>{value === 'ALL' ? clinics.length : clinics.filter((clinic) => clinic.status === value).length}</span></button>)}</div><input className="clinic-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search clinics…" /></div><div className="clinic-table-card">{filtered.length === 0 ? <div className="clinic-empty"><div className="clinic-empty-icon">+</div><h2>No clinics yet</h2><p>Create your first clinic to begin configuration.</p><button className="clinic-primary" type="button" onClick={onAdd}>Add New Clinic</button></div> : filtered.map((clinic) => <article className="clinic-clinic-row" key={clinic.id}><div className="clinic-building-icon">+</div><div className="clinic-clinic-copy"><strong>{clinic.name || 'Untitled Clinic'} <span>{clinic.status}</span></strong><p>{clinic.address || 'Address not entered'}</p><small>{clinic.country} · {clinic.timeZone}</small></div><div><span className={`clinic-status-pill${clinic.status === 'ACTIVE' ? ' is-active' : ''}`}>{clinic.status}</span><small className="clinic-readiness">{clinic.status === 'DRAFT' ? 'Ready to continue setup' : ''}</small></div><div className="clinic-secretary"><strong>Secretary</strong><span>Not assigned</span></div><button className="clinic-secondary" type="button" onClick={() => onOpen(clinic)}>Open</button><button className="clinic-kebab" type="button" aria-label={`Actions for ${clinic.name}`}>⋮</button></article>)}</div></section>;
 }
 
 export function ClinicTabPage() {
-  const [mode, setMode] = useState<'list' | 'create'>('list');
+  const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
+  const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
   const [loadError, setLoadError] = useState('');
 
   async function loadClinics() {
@@ -172,18 +173,33 @@ export function ClinicTabPage() {
   }, []);
 
   async function saved(clinic: ClinicDraft, _status: ClinicStatus) {
-    await apiRequest<PracticeLocationResponse>('/practice-location', {
-      method: 'POST',
-      body: {
-        name: clinic.name.trim() || undefined,
-        addressLine1: clinic.address.trim() || undefined,
-        contactNumber: clinic.contactNumber.trim() || undefined,
-      },
-    });
+    if (editingClinic) {
+      await apiRequest<PracticeLocationResponse>(`/practice-location/${editingClinic.id}`, {
+        method: 'PATCH',
+        body: {
+          name: clinic.name.trim() || undefined,
+          addressLine1: clinic.address.trim() || undefined,
+          contactNumber: clinic.contactNumber.trim() || undefined,
+          countryCode: clinic.country === 'Philippines' ? 'PH' : clinic.country.slice(0, 2).toUpperCase(),
+          timeZone: clinic.timeZone,
+        },
+      });
+    } else {
+      await apiRequest<PracticeLocationResponse>('/practice-location', {
+        method: 'POST',
+        body: {
+          name: clinic.name.trim() || undefined,
+          addressLine1: clinic.address.trim() || undefined,
+          contactNumber: clinic.contactNumber.trim() || undefined,
+        },
+      });
+    }
     await loadClinics();
+    setEditingClinic(null);
     setMode('list');
   }
 
   if (mode === 'create') return <ClinicWizard onExit={() => setMode('list')} onSaved={saved} />;
-  return <>{loadError ? <div className="form-error" role="alert">{loadError}</div> : null}<ClinicList clinics={clinics} onAdd={() => setMode('create')} /></>;
+  if (mode === 'edit' && editingClinic) return <ClinicWizard editing initialValue={editingClinic} onExit={() => { setEditingClinic(null); setMode('list'); }} onSaved={saved} />;
+  return <>{loadError ? <div className="form-error" role="alert">{loadError}</div> : null}<ClinicList clinics={clinics} onAdd={() => { setEditingClinic(null); setMode('create'); }} onOpen={(clinic) => { setEditingClinic(clinic); setMode('edit'); }} /></>;
 }
