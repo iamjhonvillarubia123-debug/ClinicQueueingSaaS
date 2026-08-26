@@ -1,3 +1,5 @@
+export {};
+
 const TARGET = 'input[list="clinic-quarter-hour-options"]';
 
 type ParsedTime = { minutes: number; formatted: string };
