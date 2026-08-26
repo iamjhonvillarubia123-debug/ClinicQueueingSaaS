@@ -5,6 +5,11 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
+import {
+  DoctorOnly,
+  DoctorWorkspacePlaceholder,
+  DoctorWorkspaceShell,
+} from './doctor/DoctorWorkspace';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
@@ -72,7 +77,7 @@ function LoginPage() {
   );
 }
 
-function Shell() {
+function LegacyShell() {
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
   async function signOut() { await logout(); navigate('/login', { replace: true }); }
@@ -84,13 +89,16 @@ function Shell() {
   );
 }
 
-function WorkspacePage() {
+function WorkspaceEntryPage() {
   const { profile } = useAuth();
-  const copy = profile?.role === 'DOCTOR'
-    ? ['Doctor workspace', 'Clinic oversight and configuration will be built here.']
-    : profile?.role === 'SECRETARY'
-      ? ['Secretary workspace', 'Fast assigned-clinic operations will be built here.']
-      : ['System administration', 'Restricted administrative operations will remain separate from clinic navigation.'];
+
+  if (profile?.role === 'DOCTOR') {
+    return <Navigate to="/app/overview" replace />;
+  }
+
+  const copy = profile?.role === 'SECRETARY'
+    ? ['Secretary workspace', 'Fast assigned-clinic operations will be built here.']
+    : ['System administration', 'Restricted administrative operations will remain separate from clinic navigation.'];
   return <section className="intro"><p className="eyebrow">Foundation ready</p><h1>{copy[0]}</h1><p>{copy[1]}</p></section>;
 }
 
@@ -118,11 +126,24 @@ export function App() {
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
+
       <Route element={<ProtectedRoute />}>
-        <Route element={<Shell />}>
-          <Route path="/app" element={<WorkspacePage />} />
+        <Route element={<LegacyShell />}>
+          <Route path="/app" element={<WorkspaceEntryPage />} />
+        </Route>
+
+        <Route element={<DoctorOnly />}>
+          <Route element={<DoctorWorkspaceShell />}>
+            <Route path="/app/overview" element={<DoctorWorkspacePlaceholder title="Overview" description="Your clinic overview will appear here once the approved workspace content is designed and connected." />} />
+            <Route path="/app/clinics" element={<DoctorWorkspacePlaceholder title="Clinics" description="Create and manage your clinic locations from this area. Clinic setup content will be designed in the next slice." />} />
+            <Route path="/app/calendar" element={<DoctorWorkspacePlaceholder title="Calendar" description="Doctor-wide availability and calendar controls will be placed here after workflow review." />} />
+            <Route path="/app/secretaries" element={<DoctorWorkspacePlaceholder title="Secretaries" description="Secretary invitations, assignments, and governance will be connected here in its approved workflow slice." />} />
+            <Route path="/app/settings" element={<DoctorWorkspacePlaceholder title="Settings" description="Doctor profile, account settings, privacy, and approved configuration areas will be organized here after review." />} />
+            <Route path="/app/billing" element={<DoctorWorkspacePlaceholder title="Billing" description="Subscription and financial controls will be connected here when the billing frontend slice is implemented." />} />
+          </Route>
         </Route>
       </Route>
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
