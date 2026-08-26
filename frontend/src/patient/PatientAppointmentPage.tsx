@@ -6,14 +6,21 @@ import { formatQueueNumber } from '../presentation/queueNumber';
 type AppointmentStatus =
   | 'WAITING'
   | 'CALLED'
-  | 'SERVING'
   | 'TEMPORARILY_ABSENT'
   | 'OUT_FOR_PROCEDURE'
   | 'COMPLETED'
+  | 'EXPIRED'
   | 'CANCELLED'
-  | 'NO_SHOW';
+  | 'NO_SHOW'
+  | 'RESCHEDULED';
 
-type ClinicDayStatus = 'NOT_STARTED' | 'STARTED' | 'CLOSED' | 'CANCELLED' | null;
+type ClinicDayStatus =
+  | 'NOT_STARTED'
+  | 'DELAYED'
+  | 'STARTED'
+  | 'CLOSED'
+  | 'CANCELLED'
+  | null;
 
 type AppointmentDashboard = {
   bookingReference: string;
@@ -35,31 +42,139 @@ type AppointmentDashboard = {
 };
 
 type ViewState = 'loading' | 'ready' | 'unavailable' | 'inaccessible' | 'error';
+type Tone = 'neutral' | 'success' | 'attention' | 'danger';
 
-function formatPatientName(name: AppointmentDashboard['patientName']) {
-  return [name.firstName, name.middleName, name.lastName, name.suffix].filter(Boolean).join(' ') || 'Patient';
-}
+type PatientPresentation = {
+  title: string;
+  detail: string;
+  tone: Tone;
+  clinicState: string;
+};
 
 function formatServiceDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+  const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!dateOnly) return value;
+
+  const [, year, month, day] = dateOnly;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
-function statusCopy(status: AppointmentStatus, clinicDayStatus: ClinicDayStatus) {
-  if (clinicDayStatus === 'NOT_STARTED') return ['Clinic has not started', 'Your Queue Number is already reserved. This page will update when the clinic starts.'];
-  switch (status) {
-    case 'WAITING': return ['You are in the queue', 'Keep this page available on this device. Your Queue Number will not change.'];
-    case 'CALLED': return ['Please proceed when ready', 'The clinic has called your Queue Number.'];
-    case 'SERVING': return ['You are being served', 'Your appointment is currently in service.'];
-    case 'TEMPORARILY_ABSENT': return ['You were marked temporarily absent', 'If the I’m Here action is available below, you may use it once to return to the queue. Otherwise, please approach clinic staff.'];
-    case 'OUT_FOR_PROCEDURE': return ['You are out for a procedure', 'Clinic staff will return you to the queue when appropriate. Your Queue Number stays the same.'];
-    case 'COMPLETED': return ['Appointment completed', 'This appointment has been completed.'];
-    case 'CANCELLED': return ['Appointment cancelled', 'This appointment is no longer active.'];
-    case 'NO_SHOW': return ['Appointment marked no-show', 'Please contact the clinic if you need assistance.'];
-    default: return ['Appointment status', 'Your appointment information is shown below.'];
+function presentationFor(dashboard: AppointmentDashboard): PatientPresentation {
+  if (dashboard.status === 'COMPLETED') {
+    return {
+      title: 'APPOINTMENT COMPLETED',
+      detail: 'Thank you for visiting.',
+      tone: 'neutral',
+      clinicState: 'Completed',
+    };
   }
+  if (dashboard.status === 'CANCELLED') {
+    return {
+      title: 'APPOINTMENT CANCELLED',
+      detail: 'This appointment has been cancelled.',
+      tone: 'neutral',
+      clinicState: 'Cancelled',
+    };
+  }
+  if (dashboard.status === 'NO_SHOW') {
+    return {
+      title: 'APPOINTMENT ENDED',
+      detail: 'The clinic day ended before you were served.',
+      tone: 'neutral',
+      clinicState: 'Closed',
+    };
+  }
+  if (dashboard.status === 'EXPIRED') {
+    return {
+      title: 'APPOINTMENT EXPIRED',
+      detail: 'This appointment is no longer active.',
+      tone: 'neutral',
+      clinicState: 'Closed',
+    };
+  }
+  if (dashboard.status === 'RESCHEDULED') {
+    return {
+      title: 'APPOINTMENT RESCHEDULED',
+      detail: 'Please use the latest appointment information provided by the clinic.',
+      tone: 'neutral',
+      clinicState: 'Updated',
+    };
+  }
+  if (dashboard.status === 'CALLED') {
+    return {
+      title: "IT'S YOUR TURN",
+      detail: 'Please proceed as instructed by the clinic.',
+      tone: 'success',
+      clinicState: 'Open · Serving',
+    };
+  }
+  if (dashboard.status === 'TEMPORARILY_ABSENT') {
+    return dashboard.canUseImHere
+      ? {
+          title: 'YOU MISSED YOUR TURN',
+          detail: 'Your number was called but we did not hear from you.',
+          tone: 'danger',
+          clinicState: 'Open · Serving',
+        }
+      : {
+          title: 'PLEASE SEE CLINIC STAFF',
+          detail: 'Your number was called again. Please go to the reception desk for assistance.',
+          tone: 'danger',
+          clinicState: 'Open · Serving',
+        };
+  }
+  if (dashboard.status === 'OUT_FOR_PROCEDURE') {
+    return {
+      title: 'OUT FOR PROCEDURE',
+      detail: 'Clinic staff will return you to the queue when appropriate.',
+      tone: 'attention',
+      clinicState: 'Open · Serving',
+    };
+  }
+  if (dashboard.clinicDayStatus === 'NOT_STARTED') {
+    return {
+      title: 'CLINIC NOT YET STARTED',
+      detail: 'The queue will appear here when the clinic starts.',
+      tone: 'attention',
+      clinicState: 'Not yet started',
+    };
+  }
+  if (dashboard.clinicDayStatus === 'DELAYED') {
+    return {
+      title: 'CLINIC START DELAYED',
+      detail: 'Please wait for the clinic to start. Your Queue Number remains valid.',
+      tone: 'attention',
+      clinicState: 'Delayed',
+    };
+  }
+  if (dashboard.clinicDayStatus === 'CLOSED' || dashboard.clinicDayStatus === 'CANCELLED') {
+    return {
+      title: 'CLINIC DAY ENDED',
+      detail: 'The clinic is no longer serving this queue.',
+      tone: 'neutral',
+      clinicState: 'Closed',
+    };
+  }
+  return {
+    title: 'QUEUE IN PROGRESS',
+    detail: 'The clinic is now serving patients.',
+    tone: 'success',
+    clinicState: 'Open · Serving',
+  };
+}
+
+function isLiveQueue(status: AppointmentStatus, clinicDayStatus: ClinicDayStatus) {
+  return (
+    clinicDayStatus === 'STARTED' &&
+    !['COMPLETED', 'CANCELLED', 'NO_SHOW', 'EXPIRED', 'RESCHEDULED'].includes(status)
+  );
 }
 
 export function PatientAppointmentPage() {
@@ -77,26 +192,42 @@ export function PatientAppointmentPage() {
     setViewState('loading');
     setMessage('');
     try {
-      const result = await apiRequest<AppointmentDashboard>(`/patient-bookings/${encodeURIComponent(bookingReference)}/dashboard`);
+      const result = await apiRequest<AppointmentDashboard>(
+        `/patient-bookings/${encodeURIComponent(bookingReference)}/dashboard`,
+      );
       setDashboard(result);
       setViewState('ready');
     } catch (error) {
       setDashboard(null);
       if (error instanceof ApiError && error.status === 503) {
-        setMessage('This online service is temporarily unavailable. Your existing appointment has not been cancelled. Please try again later.');
+        setMessage(
+          'This online service is temporarily unavailable. Your existing appointment has not been cancelled. Please try again later.',
+        );
         setViewState('unavailable');
-      } else if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.status === 404)) {
+      } else if (
+        error instanceof ApiError &&
+        (error.status === 401 || error.status === 403 || error.status === 404)
+      ) {
         setViewState('inaccessible');
       } else {
-        setMessage(error instanceof ApiError ? error.message : 'Unable to load your appointment right now.');
+        setMessage(
+          error instanceof ApiError
+            ? error.message
+            : 'Unable to load your appointment right now.',
+        );
         setViewState('error');
       }
     }
   }, [bookingReference]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const heading = useMemo(() => dashboard ? statusCopy(dashboard.status, dashboard.clinicDayStatus) : null, [dashboard]);
+  const presentation = useMemo(
+    () => (dashboard ? presentationFor(dashboard) : null),
+    [dashboard],
+  );
 
   async function imHere() {
     if (!bookingReference || !dashboard?.canUseImHere || submitting) return;
@@ -108,74 +239,162 @@ export function PatientAppointmentPage() {
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       });
       await load();
-      setMessage('You are back in the queue. Your permanent Queue Number is unchanged.');
+      setMessage("YOU'RE BACK IN THE QUEUE. Your Queue Number remains the same.");
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : 'Unable to return you to the queue right now.');
+      setMessage(
+        error instanceof ApiError
+          ? error.message
+          : 'Unable to return you to the queue right now.',
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <main className="public-detail patient-dashboard-page">
-      <header className="public-header">
-        <Link className="brand" to="/">Clinic Queueing</Link>
-        {viewState === 'ready' ? <button className="text-button patient-refresh" type="button" onClick={() => void load()}>Refresh</button> : null}
+    <main className="patient-page-shell">
+      <header className="patient-site-header">
+        <Link className="patient-clinic-brand" to="/" aria-label="Clinic Queueing home">
+          <span className="patient-clinic-mark" aria-hidden="true">+</span>
+          <span>
+            <strong>{dashboard?.practiceLocation.name ?? 'Clinic Queueing'}</strong>
+            <small>Patient queue</small>
+          </span>
+        </Link>
+        {viewState === 'ready' ? (
+          <button className="patient-menu-button" type="button" onClick={() => void load()} aria-label="Refresh queue status">
+            ↻
+          </button>
+        ) : null}
       </header>
 
-      {viewState === 'loading' ? (
-        <section className="patient-dashboard patient-state" aria-live="polite"><p className="eyebrow">Appointment</p><h1>Loading your queue status…</h1></section>
-      ) : null}
-
-      {viewState === 'inaccessible' ? (
-        <section className="patient-dashboard patient-state"><p className="eyebrow">Appointment</p><h1>Appointment access is unavailable.</h1><p>This device does not currently have access to this appointment. Use the approved recovery flow or contact the clinic if you need help.</p></section>
-      ) : null}
-
-      {viewState === 'unavailable' || viewState === 'error' ? (
-        <section className="patient-dashboard patient-state"><p className="eyebrow">{viewState === 'unavailable' ? 'Temporarily unavailable' : 'Connection problem'}</p><h1>{viewState === 'unavailable' ? 'Your appointment is still booked.' : 'We could not load your appointment.'}</h1><p>{message}</p><button className="secondary" type="button" onClick={() => void load()}>Try again</button></section>
-      ) : null}
-
-      {viewState === 'ready' && dashboard && heading ? (
-        <article className="patient-dashboard" aria-live="polite">
-          <section className="patient-dashboard-hero">
-            <p className="eyebrow">{dashboard.practiceLocation.name}</p>
-            <h1>{heading[0]}</h1>
-            <p>{heading[1]}</p>
+      <div className="patient-page-body">
+        {viewState === 'loading' ? (
+          <section className="patient-system-state" aria-live="polite">
+            <p className="eyebrow">Appointment</p>
+            <h1>Loading your queue status…</h1>
           </section>
+        ) : null}
 
-          <section className="patient-queue-number" aria-label={`Queue number ${dashboard.queueNumber}`}>
-            <span>Your Queue Number</span>
-            <strong>{formatQueueNumber(dashboard.queueNumber)}</strong>
+        {viewState === 'inaccessible' ? (
+          <section className="patient-system-state">
+            <p className="eyebrow">Appointment</p>
+            <h1>Appointment access is unavailable.</h1>
+            <p>Use the approved recovery flow or contact the clinic if you need help.</p>
           </section>
+        ) : null}
 
-          <section className="patient-live-grid" aria-label="Live queue information">
-            <div><span>Now serving</span><strong>{dashboard.nowServingQueueNumber === null ? '—' : formatQueueNumber(dashboard.nowServingQueueNumber)}</strong></div>
-            <div><span>People ahead</span><strong>{dashboard.patientsAhead ?? '—'}</strong></div>
+        {viewState === 'unavailable' || viewState === 'error' ? (
+          <section className="patient-system-state">
+            <p className="eyebrow">
+              {viewState === 'unavailable' ? 'Temporarily unavailable' : 'Connection problem'}
+            </p>
+            <h1>
+              {viewState === 'unavailable'
+                ? 'Your appointment is still booked.'
+                : 'We could not load your appointment.'}
+            </h1>
+            <p>{message}</p>
+            <button className="secondary" type="button" onClick={() => void load()}>
+              Try again
+            </button>
           </section>
+        ) : null}
 
-          {dashboard.canUseImHere ? (
-            <section className="patient-action-panel">
-              <div><h2>I’m here</h2><p>Use this once if you have returned after being marked temporarily absent. Your Queue Number stays the same.</p></div>
-              <button className="primary" type="button" disabled={submitting} onClick={() => void imHere()}>{submitting ? 'Returning to queue…' : 'I’m here'}</button>
+        {viewState === 'ready' && dashboard && presentation ? (
+          <article className="patient-dashboard-shell" aria-live="polite">
+            <section className={`patient-status-banner patient-tone-${presentation.tone}`}>
+              <span className="patient-status-icon" aria-hidden="true">●</span>
+              <div>
+                <h1>{presentation.title}</h1>
+                <p>{presentation.detail}</p>
+              </div>
+              {isLiveQueue(dashboard.status, dashboard.clinicDayStatus) ? (
+                <span className="patient-live-badge">LIVE</span>
+              ) : null}
             </section>
-          ) : dashboard.status === 'TEMPORARILY_ABSENT' ? (
-            <section className="patient-action-panel"><div><h2>Need to return to the queue?</h2><p>Please approach clinic staff for assistance. Self-service reinsertion is not available for this appointment.</p></div></section>
-          ) : null}
 
-          {message ? <div className="patient-message" role="status">{message}</div> : null}
+            <section className="patient-shell-card patient-appointment-card" aria-labelledby="patient-appointment-heading">
+              <h2 id="patient-appointment-heading">YOUR APPOINTMENT</h2>
+              <div className="patient-appointment-grid">
+                <div className="patient-queue-identity" aria-label={`Queue number ${dashboard.queueNumber}`}>
+                  <span>Queue Number</span>
+                  <strong>{formatQueueNumber(dashboard.queueNumber)}</strong>
+                </div>
+                <div className="patient-appointment-facts">
+                  <div>
+                    <span>Service Date</span>
+                    <strong>{formatServiceDate(dashboard.serviceDate)}</strong>
+                  </div>
+                  <div>
+                    <span>Service</span>
+                    <strong>—</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <section className="patient-details" aria-labelledby="appointment-details-heading">
-            <h2 id="appointment-details-heading">Appointment details</h2>
-            <dl>
-              <div><dt>Patient</dt><dd>{formatPatientName(dashboard.patientName)}</dd></div>
-              <div><dt>Clinic</dt><dd>{dashboard.practiceLocation.name}</dd></div>
-              <div><dt>Date</dt><dd>{formatServiceDate(dashboard.serviceDate)}</dd></div>
-              <div><dt>Booking reference</dt><dd>{dashboard.bookingReference}</dd></div>
-              <div><dt>Status</dt><dd>{dashboard.status.replaceAll('_', ' ').toLowerCase()}</dd></div>
-            </dl>
-          </section>
-        </article>
-      ) : null}
+            <section className="patient-shell-card patient-queue-card" aria-labelledby="patient-queue-heading">
+              <div className="patient-card-heading-row">
+                <h2 id="patient-queue-heading">QUEUE STATUS</h2>
+                <button className="patient-inline-refresh" type="button" onClick={() => void load()} aria-label="Refresh queue status">↻</button>
+              </div>
+              <div className="patient-queue-metrics">
+                <div>
+                  <span>Now Serving</span>
+                  <strong>{dashboard.nowServingQueueNumber === null ? '—' : formatQueueNumber(dashboard.nowServingQueueNumber)}</strong>
+                </div>
+                <div>
+                  <span>People Ahead</span>
+                  <strong>{dashboard.status === 'WAITING' ? (dashboard.patientsAhead ?? '—') : '—'}</strong>
+                </div>
+                <div>
+                  <span>Estimated Wait</span>
+                  <strong>—</strong>
+                </div>
+              </div>
+              {dashboard.status === 'TEMPORARILY_ABSENT' ? (
+                <p className="patient-queue-note">Not in queue.</p>
+              ) : dashboard.clinicDayStatus === 'NOT_STARTED' ? (
+                <p className="patient-queue-note">The queue will appear when the clinic starts.</p>
+              ) : null}
+            </section>
+
+            <section className="patient-shell-card patient-action-area" aria-labelledby="patient-action-heading">
+              <h2 id="patient-action-heading">ACTION AREA</h2>
+              {dashboard.canUseImHere ? (
+                <>
+                  <button className="patient-im-here-button" type="button" disabled={submitting} onClick={() => void imHere()}>
+                    {submitting ? 'RETURNING TO QUEUE…' : "I'M HERE"}
+                  </button>
+                  <p>Rejoin today’s queue.</p>
+                </>
+              ) : dashboard.status === 'TEMPORARILY_ABSENT' ? (
+                <div className="patient-staff-assistance">
+                  <strong>Please go to the reception desk for assistance.</strong>
+                </div>
+              ) : dashboard.status === 'CALLED' ? (
+                <p>No action is needed. Please proceed to the clinic.</p>
+              ) : ['COMPLETED', 'CANCELLED', 'NO_SHOW', 'EXPIRED', 'RESCHEDULED'].includes(dashboard.status) ? (
+                <p>No further queue action is available.</p>
+              ) : (
+                <p>No action is needed right now. Please wait for your turn.</p>
+              )}
+            </section>
+
+            {message ? <div className="patient-message" role="status">{message}</div> : null}
+
+            <section className="patient-shell-card patient-today-card" aria-labelledby="patient-today-heading">
+              <div>
+                <h2 id="patient-today-heading">TODAY'S CLINIC</h2>
+                <span>Scheduled Hours</span>
+                <strong>—</strong>
+              </div>
+              <span className={`patient-clinic-state patient-tone-${presentation.tone}`}>{presentation.clinicState}</span>
+            </section>
+          </article>
+        ) : null}
+      </div>
     </main>
   );
 }
