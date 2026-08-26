@@ -158,7 +158,13 @@ describe('C1 approved individual patient dashboard shell', () => {
     expect(
       await screen.findByRole('heading', { name: 'PLEASE SEE CLINIC STAFF' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/reception desk for assistance/i)).toBeInTheDocument();
+    const actionArea = screen
+      .getByRole('heading', { name: 'ACTION AREA' })
+      .closest('section');
+    expect(actionArea).not.toBeNull();
+    expect(
+      within(actionArea as HTMLElement).getByText(/reception desk for assistance/i),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /I'M HERE/i })).not.toBeInTheDocument();
   });
 
