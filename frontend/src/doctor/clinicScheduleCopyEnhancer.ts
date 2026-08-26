@@ -1,3 +1,5 @@
+export {};
+
 type CopiedSchedule = {
   sourceRow: HTMLElement;
   opens: string;
@@ -38,15 +40,17 @@ function install() {
       const { openToggle } = rowFields(row);
       const isOpen = Boolean(openToggle?.checked);
       const isSource = copied?.sourceRow === row;
-
-      button.disabled = !isOpen;
-      button.textContent = copied && !isSource ? '⇩' : '⧉';
-      button.classList.toggle('is-paste', Boolean(copied && !isSource));
-      button.classList.toggle('is-source', Boolean(isSource));
-      button.title = copied && !isSource
+      const nextText = copied && !isSource ? '⇩' : '⧉';
+      const nextTitle = copied && !isSource
         ? `Paste ${rowName(copied.sourceRow)} schedule to ${rowName(row)}`
         : `Copy ${rowName(row)} schedule`;
-      button.setAttribute('aria-label', button.title);
+
+      button.disabled = !isOpen;
+      if (button.textContent !== nextText) button.textContent = nextText;
+      button.classList.toggle('is-paste', Boolean(copied && !isSource));
+      button.classList.toggle('is-source', Boolean(isSource));
+      if (button.title !== nextTitle) button.title = nextTitle;
+      if (button.getAttribute('aria-label') !== nextTitle) button.setAttribute('aria-label', nextTitle);
     });
   }
 
@@ -87,7 +91,12 @@ function install() {
     refreshButtons();
   }
 
-  const observer = new MutationObserver(() => enhanceHours());
+  const observer = new MutationObserver((records) => {
+    const needsEnhance = records.some((record) => Array.from(record.addedNodes).some((node) =>
+      node instanceof Element && (node.matches('.clinic-hours-table, .clinic-hours-row') || Boolean(node.querySelector('.clinic-hours-table, .clinic-hours-row'))),
+    ));
+    if (needsEnhance) enhanceHours();
+  });
   observer.observe(document.documentElement, { childList: true, subtree: true });
   enhanceHours();
 
