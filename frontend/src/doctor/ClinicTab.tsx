@@ -81,7 +81,23 @@ function Stepper({ step }: { step: Step }) {
 
 function SplitAction({ primaryLabel, onPrimary, onDraft }: { primaryLabel: string; onPrimary: () => void; onDraft: () => void }) {
   const [open, setOpen] = useState(false);
-  return <div className="clinic-split-action"><button className="clinic-primary" type="button" onClick={onPrimary}>{primaryLabel}</button><button className="clinic-primary clinic-split-toggle" type="button" aria-label="More save options" onClick={() => setOpen((value) => !value)}>⌄</button>{open ? <div className="clinic-action-menu"><button type="button" onClick={() => { onDraft(); setOpen(false); }}>Save as Draft<span>You can continue later.</span></button></div> : null}</div>;
+  const [selectedAction, setSelectedAction] = useState<'PRIMARY' | 'DRAFT'>('PRIMARY');
+  const selectedLabel = selectedAction === 'DRAFT' ? 'Save as Draft' : primaryLabel;
+  const executeSelectedAction = selectedAction === 'DRAFT' ? onDraft : onPrimary;
+
+  function choose(action: 'PRIMARY' | 'DRAFT') {
+    setSelectedAction(action);
+    setOpen(false);
+  }
+
+  return <div className="clinic-split-action">
+    <button className="clinic-primary clinic-split-main" type="button" onClick={executeSelectedAction}>{selectedLabel}</button>
+    <button className="clinic-primary clinic-split-toggle" type="button" aria-label="Choose save action" aria-expanded={open} onClick={() => setOpen((value) => !value)}>⌄</button>
+    {open ? <div className="clinic-action-menu" role="menu">
+      <button className={selectedAction === 'PRIMARY' ? 'is-selected' : ''} type="button" role="menuitem" onClick={() => choose('PRIMARY')}><span className="clinic-action-label">{primaryLabel}</span>{selectedAction === 'PRIMARY' ? <span className="clinic-action-check">✓</span> : null}</button>
+      <button className={selectedAction === 'DRAFT' ? 'is-selected' : ''} type="button" role="menuitem" onClick={() => choose('DRAFT')}><span className="clinic-action-label">Save as Draft</span>{selectedAction === 'DRAFT' ? <span className="clinic-action-check">✓</span> : null}<small>You can continue later.</small></button>
+    </div> : null}
+  </div>;
 }
 
 function BasicInformation({ value, onChange }: { value: ClinicDraft; onChange: (next: ClinicDraft) => void }) {
