@@ -5,7 +5,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
-import { ClinicTabPage } from './doctor/ClinicTab';
+import { ClinicTabPageV2 } from './doctor/ClinicTabV2';
 import {
   DoctorOnly,
   DoctorWorkspacePlaceholder,
@@ -136,7 +136,7 @@ export function App() {
         <Route element={<DoctorOnly />}>
           <Route element={<DoctorWorkspaceShell />}>
             <Route path="/app/overview" element={<DoctorWorkspacePlaceholder title="Overview" description="Your clinic overview will appear here once the approved workspace content is designed and connected." />} />
-            <Route path="/app/clinics" element={<ClinicTabPage />} />
+            <Route path="/app/clinics" element={<ClinicTabPageV2 />} />
             <Route path="/app/calendar" element={<DoctorWorkspacePlaceholder title="Calendar" description="Doctor-wide availability and calendar controls will be placed here after workflow review." />} />
             <Route path="/app/secretaries" element={<DoctorWorkspacePlaceholder title="Secretaries" description="Secretary invitations, assignments, and governance will be connected here in its approved workflow slice." />} />
             <Route path="/app/settings" element={<DoctorWorkspacePlaceholder title="Settings" description="Doctor profile, account settings, privacy, and approved configuration areas will be organized here after review." />} />
