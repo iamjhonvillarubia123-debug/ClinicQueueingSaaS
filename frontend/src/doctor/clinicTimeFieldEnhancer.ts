@@ -25,15 +25,7 @@ function parseFlexibleTime(raw: string): ParsedTime | null {
   return { minutes, formatted: formatMinutes(minutes) };
 }
 
-function nearestQuarter(minutes: number) {
-  return Math.round(minutes / 15) * 15;
-}
-
-function suggestionTimes(input: HTMLInputElement) {
-  const parsed = parseFlexibleTime(input.value);
-  const center = parsed ? nearestQuarter(parsed.minutes) : 8 * 60;
-  return Array.from({ length: 11 }, (_, index) => formatMinutes(center + (index - 5) * 15));
-}
+const quarterHourSuggestions = Array.from({ length: 96 }, (_, index) => formatMinutes(index * 15));
 
 function setReactInputValue(input: HTMLInputElement, value: string) {
   const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
@@ -84,13 +76,20 @@ function install() {
     if (input.disabled) return;
     activeInput = input;
     popup.replaceChildren();
-    suggestionTimes(input).forEach((time) => {
+    const current = parseFlexibleTime(input.value)?.formatted;
+    let selectedOption: HTMLButtonElement | null = null;
+
+    quarterHourSuggestions.forEach((time) => {
       const option = document.createElement('button');
       option.type = 'button';
       option.className = 'clinic-time-option';
       option.textContent = time;
       option.setAttribute('role', 'option');
-      if (parseFlexibleTime(input.value)?.formatted === time) option.classList.add('is-selected');
+      if (current === time) {
+        option.classList.add('is-selected');
+        option.setAttribute('aria-selected', 'true');
+        selectedOption = option;
+      }
       option.addEventListener('mousedown', (event) => {
         event.preventDefault();
         setReactInputValue(input, time);
@@ -99,9 +98,14 @@ function install() {
       });
       popup.appendChild(option);
     });
+
     positionPopup(input);
     popup.hidden = false;
     input.setAttribute('aria-expanded', 'true');
+    window.requestAnimationFrame(() => {
+      if (selectedOption) selectedOption.scrollIntoView({ block: 'center' });
+      else popup.scrollTop = 8 * 4 * 15;
+    });
   }
 
   const observer = new MutationObserver((records) => {
@@ -135,7 +139,7 @@ function install() {
   document.addEventListener('input', (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || !target.classList.contains('clinic-exact-time-input')) return;
-    openPopup(target);
+    activeInput = target;
   });
 
   document.addEventListener('focusout', (event) => {
