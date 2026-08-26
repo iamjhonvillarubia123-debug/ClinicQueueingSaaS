@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthContext';
 import './styles/global.css';
 import './styles/patient.css';
 import './styles/doctor.css';
+import './styles/clinic.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
