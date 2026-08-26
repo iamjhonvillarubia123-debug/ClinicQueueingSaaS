@@ -150,7 +150,20 @@ function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () =
     catch (error) { setSaveError(error instanceof Error ? error.message : 'Unable to save this clinic draft.'); }
     finally { setSaving(false); }
   }
-  function next() { if (!canContinue) return; setStep((Math.min(5, step + 1)) as Step); }
+  function next() {
+    setSaveError('');
+    if (!canContinue) {
+      const missing = [
+        !draft.name.trim() ? 'Clinic Name' : '',
+        !draft.address.trim() ? 'Address' : '',
+        !draft.country ? 'Country' : '',
+        !draft.timeZone ? 'Timezone' : '',
+      ].filter(Boolean);
+      setSaveError(`Complete the required fields before continuing: ${missing.join(', ')}.`);
+      return;
+    }
+    setStep((Math.min(5, step + 1)) as Step);
+  }
   return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{step === 1 ? title : title}</h1><p>{step === 1 ? (editing ? 'Update the basic clinic identity and location details.' : 'Enter the basic details of your clinic.') : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? (editing ? 'Save Clinic' : 'Create Clinic') : 'Save and Continue'} onPrimary={step === 5 ? () => { void saveDraft(); } : next} onDraft={() => { void saveDraft(); }} /></div></div></section>;
 }
 
