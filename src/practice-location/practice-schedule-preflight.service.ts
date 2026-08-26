@@ -32,10 +32,10 @@ export class PracticeSchedulePreflightService {
       throw new ConflictException('Practice location time zone is required.');
     }
 
-    let locationId = dto.practiceLocationId;
-    if (locationId) {
+    const requestedLocationId = dto.practiceLocationId;
+    if (requestedLocationId) {
       const owned = await this.prisma.practiceLocation.findFirst({
-        where: { id: locationId, doctorProfileId: doctorProfile.id },
+        where: { id: requestedLocationId, doctorProfileId: doctorProfile.id },
         select: { id: true, lifecycleStatus: true },
       });
       if (!owned || owned.lifecycleStatus === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED) {
@@ -45,7 +45,8 @@ export class PracticeSchedulePreflightService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        if (!locationId) {
+        let candidateLocationId = requestedLocationId;
+        if (!candidateLocationId) {
           const temporary = await tx.practiceLocation.create({
             data: {
               doctorProfileId: doctorProfile.id,
@@ -54,11 +55,11 @@ export class PracticeSchedulePreflightService {
             },
             select: { id: true },
           });
-          locationId = temporary.id;
+          candidateLocationId = temporary.id;
         }
 
         await tx.practiceSchedule.deleteMany({
-          where: { practiceLocationId: locationId },
+          where: { practiceLocationId: candidateLocationId },
         });
 
         for (const schedule of dto.schedules) {
@@ -70,7 +71,7 @@ export class PracticeSchedulePreflightService {
 
           await tx.practiceSchedule.create({
             data: {
-              practiceLocationId: locationId,
+              practiceLocationId: candidateLocationId,
               weekday: schedule.weekday,
               isOpen: schedule.isOpen,
               opensAtLocal: schedule.isOpen ? this.localTime(schedule.opensAtLocal!) : null,
@@ -81,7 +82,7 @@ export class PracticeSchedulePreflightService {
 
         await this.recurringConflict.assertNoConflictForLocation(
           doctorProfile.id,
-          locationId,
+          candidateLocationId,
           timeZone,
           tx as Prisma.TransactionClient,
         );
