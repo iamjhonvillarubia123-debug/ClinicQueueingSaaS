@@ -53,6 +53,30 @@ const initialQuestions: QuestionRow[] = [
   { id: 2, order: 2, question: 'Have you had this condition before?', type: 'BOOLEAN', required: true },
 ];
 
+function parseClock(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})\s(AM|PM)$/);
+  if (!match) return 0;
+  let hour = Number(match[1]) % 12;
+  const minute = Number(match[2]);
+  if (match[3] === 'PM') hour += 12;
+  return hour * 60 + minute;
+}
+
+function formatClock(totalMinutes: number) {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const hour24 = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${suffix}`;
+}
+
+function onlineCutoffFor(row: DayHours, leadHours: number) {
+  const opening = parseClock(row.opens);
+  const closing = parseClock(row.closes);
+  return formatClock(Math.max(opening, closing - leadHours * 60));
+}
+
 function toClinicRecord(location: PracticeLocationResponse): ClinicRecord | null {
   if (location.lifecycleStatus === 'PERMANENTLY_DELETED') return null;
   return {
@@ -113,9 +137,25 @@ function BasicInformation({ value, onChange }: { value: ClinicDraft; onChange: (
   </div>;
 }
 
-function HoursEditor({ hours, setHours }: { hours: DayHours[]; setHours: (hours: DayHours[]) => void }) {
+function HoursEditor({ hours, setHours, cutoffLeadHours, setCutoffLeadHours }: { hours: DayHours[]; setHours: (hours: DayHours[]) => void; cutoffLeadHours: number; setCutoffLeadHours: (value: number) => void }) {
   const update = (index: number, patch: Partial<DayHours>) => setHours(hours.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
-  return <div className="clinic-hours-table"><div className="clinic-table-head"><span>Day</span><span>Opens</span><span>Closes</span><span>Maximum Operating Until</span><span>Closed</span></div>{hours.map((row, index) => <div className="clinic-hours-row" key={row.day}><strong>{row.day.slice(0, 3)}</strong><select disabled={!row.open} value={row.opens} onChange={(e) => update(index, { opens: e.target.value })}><option>08:00 AM</option><option>09:00 AM</option><option>10:00 AM</option></select><select disabled={!row.open} value={row.closes} onChange={(e) => update(index, { closes: e.target.value })}><option>01:00 PM</option><option>05:00 PM</option><option>06:00 PM</option></select><select disabled={!row.open} value={row.maximumUntil} onChange={(e) => update(index, { maximumUntil: e.target.value })}><option>02:00 PM</option><option>06:00 PM</option><option>07:00 PM</option></select><input aria-label={`${row.day} closed`} type="checkbox" checked={!row.open} onChange={(e) => update(index, { open: !e.target.checked })} /></div>)}</div>;
+  return <>
+    <div className="clinic-hours-table">
+      <div className="clinic-table-head"><span>Open</span><span>Day</span><span>Opens</span><span>Closes</span><span>Online Booking Cutoff</span><span>Maximum Operating Until</span></div>
+      {hours.map((row, index) => <div className={`clinic-hours-row${row.open ? '' : ' is-closed'}`} key={row.day}>
+        <label className="clinic-open-toggle"><input aria-label={`${row.day} open`} type="checkbox" checked={row.open} onChange={(e) => update(index, { open: e.target.checked })} /><span>Open</span></label>
+        <strong>{row.day.slice(0, 3)}</strong>
+        <select disabled={!row.open} value={row.opens} onChange={(e) => update(index, { opens: e.target.value })}><option>08:00 AM</option><option>09:00 AM</option><option>10:00 AM</option></select>
+        <select disabled={!row.open} value={row.closes} onChange={(e) => update(index, { closes: e.target.value })}><option>01:00 PM</option><option>05:00 PM</option><option>06:00 PM</option></select>
+        <output className="clinic-cutoff-output" aria-label={`${row.day} online booking cutoff`}>{row.open ? onlineCutoffFor(row, cutoffLeadHours) : '—'}</output>
+        <select disabled={!row.open} value={row.maximumUntil} onChange={(e) => update(index, { maximumUntil: e.target.value })}><option>02:00 PM</option><option>06:00 PM</option><option>07:00 PM</option></select>
+      </div>)}
+    </div>
+    <div className="clinic-cutoff-setting">
+      <div><strong>Online booking cutoff</strong><p>Calculated automatically for every open day from the clinic closing time.</p></div>
+      <label><input type="number" min={0} max={12} step={1} value={cutoffLeadHours} onChange={(e) => setCutoffLeadHours(Math.max(0, Number(e.target.value) || 0))} /><span>hours before clinic closing</span></label>
+    </div>
+  </>;
 }
 
 function ServicesEditor({ services, setServices }: { services: ServiceRow[]; setServices: (value: ServiceRow[]) => void }) {
@@ -128,14 +168,15 @@ function QuestionsEditor({ questions, setQuestions }: { questions: QuestionRow[]
   return <><div className="clinic-section-toolbar"><p>Add questions to ask patients during booking. Maximum 5 active questions.</p><button className="clinic-secondary" disabled={questions.length >= 5} type="button" onClick={addQuestion}>+ Add Question</button></div><div className="clinic-question-list">{questions.map((question) => <div className="clinic-question-row" key={question.id}><span className="clinic-order">{question.order}</span><input className="clinic-question-input" value={question.question} onChange={(e) => setQuestions(questions.map((row) => row.id === question.id ? { ...row, question: e.target.value } : row))} /><select value={question.type} onChange={(e) => setQuestions(questions.map((row) => row.id === question.id ? { ...row, type: e.target.value as QuestionRow['type'] } : row))}><option value="TEXT">Text</option><option value="NUMBER">Number</option><option value="BOOLEAN">Yes / No</option><option value="SINGLE_SELECT">Single Choice</option></select><label className="clinic-check"><input type="checkbox" checked={question.required} onChange={(e) => setQuestions(questions.map((row) => row.id === question.id ? { ...row, required: e.target.checked } : row))} /> Required</label><button className="clinic-kebab" type="button" aria-label={`Actions for question ${question.order}`}>⋮</button></div>)}</div><div className="clinic-info-strip">ⓘ Supported question types: Text, Number, Yes / No, and Single Choice.</div></>;
 }
 
-function Review({ draft, hours, services, questions }: { draft: ClinicDraft; hours: DayHours[]; services: ServiceRow[]; questions: QuestionRow[] }) {
-  return <div className="clinic-review-layout"><div className="clinic-review-stack"><div className="clinic-review-card"><h3>Basic Information</h3><dl><dt>Clinic Name</dt><dd>{draft.name || 'Not entered'}</dd><dt>Address</dt><dd>{draft.address || 'Not entered'}</dd><dt>Country</dt><dd>{draft.country}</dd><dt>Timezone</dt><dd>{draft.timeZone}</dd><dt>Contact Number</dt><dd>{draft.contactNumber || 'Optional'}</dd></dl></div><div className="clinic-review-card"><h3>Clinic Hours</h3>{hours.filter((row) => row.open).map((row) => <p key={row.day}><strong>{row.day}</strong> {row.opens} – {row.closes} · Max until {row.maximumUntil}</p>)}</div><div className="clinic-review-card"><h3>Services ({services.length})</h3><p>{services.map((service) => service.name).join(' · ') || 'No services configured'}</p></div><div className="clinic-review-card"><h3>Booking Questions ({questions.length})</h3><p>{questions.filter((question) => question.required).length} required, {questions.filter((question) => !question.required).length} optional</p></div></div><aside className="clinic-readiness-card"><span className="clinic-ready-icon">✓</span><h3>Activation Readiness</h3><p>Your clinic can be activated once required items are complete.</p><h4>Required for Activation</h4><p className="clinic-ready-line">Clinic Hours <span>✓</span></p><h4>Optional Configuration</h4><p className="clinic-ready-line">Services <span>○</span></p><p className="clinic-ready-line">Booking Questions <span>○</span></p><p className="clinic-ready-line">Secretaries <span>○</span></p><p className="clinic-ready-line">Public Information <span>○</span></p></aside></div>;
+function Review({ draft, hours, services, questions, cutoffLeadHours }: { draft: ClinicDraft; hours: DayHours[]; services: ServiceRow[]; questions: QuestionRow[]; cutoffLeadHours: number }) {
+  return <div className="clinic-review-layout"><div className="clinic-review-stack"><div className="clinic-review-card"><h3>Basic Information</h3><dl><dt>Clinic Name</dt><dd>{draft.name || 'Not entered'}</dd><dt>Address</dt><dd>{draft.address || 'Not entered'}</dd><dt>Country</dt><dd>{draft.country}</dd><dt>Timezone</dt><dd>{draft.timeZone}</dd><dt>Contact Number</dt><dd>{draft.contactNumber || 'Optional'}</dd></dl></div><div className="clinic-review-card"><h3>Clinic Hours</h3>{hours.filter((row) => row.open).map((row) => <p key={row.day}><strong>{row.day}</strong> {row.opens} – {row.closes} · Online cutoff {onlineCutoffFor(row, cutoffLeadHours)} · Max until {row.maximumUntil}</p>)}</div><div className="clinic-review-card"><h3>Services ({services.length})</h3><p>{services.map((service) => service.name).join(' · ') || 'No services configured'}</p></div><div className="clinic-review-card"><h3>Booking Questions ({questions.length})</h3><p>{questions.filter((question) => question.required).length} required, {questions.filter((question) => !question.required).length} optional</p></div></div><aside className="clinic-readiness-card"><span className="clinic-ready-icon">✓</span><h3>Activation Readiness</h3><p>Your clinic can be activated once required items are complete.</p><h4>Required for Activation</h4><p className="clinic-ready-line">Clinic Hours <span>✓</span></p><h4>Optional Configuration</h4><p className="clinic-ready-line">Services <span>○</span></p><p className="clinic-ready-line">Booking Questions <span>○</span></p><p className="clinic-ready-line">Secretaries <span>○</span></p><p className="clinic-ready-line">Public Information <span>○</span></p></aside></div>;
 }
 
 function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () => void; onSaved: (clinic: ClinicDraft, status: ClinicStatus) => Promise<void>; initialValue?: ClinicDraft; editing?: boolean }) {
   const [step, setStep] = useState<Step>(1);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
   const [hours, setHours] = useState(initialHours);
+  const [cutoffLeadHours, setCutoffLeadHours] = useState(2);
   const [services, setServices] = useState(initialServices);
   const [questions, setQuestions] = useState(initialQuestions);
   const [saving, setSaving] = useState(false);
@@ -164,7 +205,7 @@ function ClinicWizard({ onExit, onSaved, initialValue, editing }: { onExit: () =
     }
     setStep((Math.min(5, step + 1)) as Step);
   }
-  return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{step === 1 ? title : title}</h1><p>{step === 1 ? (editing ? 'Update the basic clinic identity and location details.' : 'Enter the basic details of your clinic.') : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? (editing ? 'Save Clinic' : 'Create Clinic') : 'Save and Continue'} onPrimary={step === 5 ? () => { void saveDraft(); } : next} onDraft={() => { void saveDraft(); }} /></div></div></section>;
+  return <section className="clinic-page"><button className="clinic-back-link" type="button" onClick={onExit}>← Back to Clinics</button><div className="clinic-page-heading"><h1>{title}</h1><p>{step === 1 ? (editing ? 'Update the basic clinic identity and location details.' : 'Enter the basic details of your clinic.') : step === 5 ? 'Please review all information before creating your clinic.' : 'Configure this clinic now or save it as a draft and continue later.'}</p></div><Stepper step={step} /><div className="clinic-work-card"><div className="clinic-work-heading"><h2>{title}</h2>{step === 1 ? <p>Start with the clinic identity and location details.</p> : null}</div>{step === 1 ? <BasicInformation value={draft} onChange={setDraft} /> : null}{step === 2 ? <HoursEditor hours={hours} setHours={setHours} cutoffLeadHours={cutoffLeadHours} setCutoffLeadHours={setCutoffLeadHours} /> : null}{step === 3 ? <ServicesEditor services={services} setServices={setServices} /> : null}{step === 4 ? <QuestionsEditor questions={questions} setQuestions={setQuestions} /> : null}{step === 5 ? <Review draft={draft} hours={hours} services={services} questions={questions} cutoffLeadHours={cutoffLeadHours} /> : null}{saveError ? <div className="form-error" role="alert">{saveError}</div> : null}<div className="clinic-footer-actions">{step === 1 ? <button className="clinic-secondary" type="button" onClick={onExit}>Cancel</button> : <button className="clinic-secondary" type="button" onClick={() => setStep((step - 1) as Step)}>Back</button>}<SplitAction primaryLabel={step === 5 ? (editing ? 'Save Clinic' : 'Create Clinic') : 'Save and Continue'} onPrimary={step === 5 ? () => { void saveDraft(); } : next} onDraft={() => { void saveDraft(); }} /></div></div></section>;
 }
 
 function ClinicList({ clinics, onAdd, onOpen }: { clinics: ClinicRecord[]; onAdd: () => void; onOpen: (clinic: ClinicRecord) => void }) {
