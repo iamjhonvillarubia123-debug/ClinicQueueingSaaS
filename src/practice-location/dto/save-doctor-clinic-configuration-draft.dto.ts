@@ -31,7 +31,8 @@ export class DoctorClinicDraftBasicInfoDto {
   @IsString()
   @MaxLength(40)
   @Matches(/^[A-Za-z0-9_-]+$/, {
-    message: 'Short code may contain only letters, numbers, hyphens, and underscores.',
+    message:
+      'Short code may contain only letters, numbers, hyphens, and underscores.',
   })
   shortCode?: string;
 
