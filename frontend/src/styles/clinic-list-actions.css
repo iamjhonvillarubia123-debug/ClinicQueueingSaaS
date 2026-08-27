@@ -66,10 +66,10 @@
   font-size: 13px;
 }
 
-/* Keep required and optional markers on the same line as their field label. */
+/* Keep markers inline with the field title while preserving full-width controls. */
 .clinic-form-grid > label {
-  grid-template-columns: max-content max-content;
-  justify-content: start;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  justify-content: stretch;
   column-gap: 5px;
   row-gap: 8px;
 }
