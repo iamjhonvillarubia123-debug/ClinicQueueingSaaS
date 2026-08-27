@@ -24,13 +24,14 @@
 }
 
 .clinic-row-action-menu button {
+  position: relative;
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
   column-gap: 12px;
   justify-content: stretch;
   padding-left: 14px;
-  padding-right: 14px;
+  padding-right: 34px;
   text-align: left;
 }
 
@@ -40,16 +41,27 @@
   justify-self: center;
 }
 
-.clinic-row-action-menu button span:last-child {
+.clinic-row-action-menu button > span:not(.clinic-action-check) {
   justify-self: start;
+  min-width: 0;
+  white-space: nowrap;
   text-align: left;
 }
 
-.clinic-row-action-menu button.is-danger span:last-child {
+.clinic-row-action-menu .clinic-action-check {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.clinic-row-action-menu button.is-danger > span:not(.clinic-action-check) {
   font-size: 0;
 }
 
-.clinic-row-action-menu button.is-danger span:last-child::after {
+.clinic-row-action-menu button.is-danger > span:not(.clinic-action-check)::after {
   content: 'Delete Clinic';
   font-size: 13px;
 }
