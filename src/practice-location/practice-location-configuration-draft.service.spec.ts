@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BookingQuestionType,
@@ -22,7 +23,11 @@ describe('PracticeLocationConfigurationDraftService', () => {
       deleteMany: jest.fn(),
       createMany: jest.fn(),
     },
-    bookingQuestion: { deleteMany: jest.fn(), createMany: jest.fn() },
+    bookingQuestion: {
+      findMany: jest.fn(),
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
+    },
     doctorPracticeScheduleDraft: { upsert: jest.fn() },
     doctorPracticeScheduleDraftRow: {
       deleteMany: jest.fn(),
@@ -81,7 +86,7 @@ describe('PracticeLocationConfigurationDraftService', () => {
         questionText: 'Draft question?',
         type: BookingQuestionType.TEXT,
         isRequired: true,
-        displayOrder: 1,
+        displayOrder: 0,
         isActive: true,
       },
     ],
@@ -103,6 +108,7 @@ describe('PracticeLocationConfigurationDraftService', () => {
         lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
       })
       .mockResolvedValueOnce(null);
+    transactionMock.bookingQuestion.findMany.mockResolvedValue([]);
     transactionMock.doctorPracticeScheduleDraft.upsert.mockResolvedValue({
       id: 'doctor-draft-1',
     });
@@ -150,13 +156,14 @@ describe('PracticeLocationConfigurationDraftService', () => {
           expect.objectContaining({
             effectiveBookingQuestionId: 'question-1',
             questionText: 'Draft question?',
+            displayOrder: 0,
           }),
         ],
       }),
     );
   });
 
-  it('stores DRAFT clinic setup as non-operational effective setup records', async () => {
+  it('stores DRAFT setup while preserving hidden BookingQuestion operational meaning', async () => {
     transactionMock.practiceLocation.findFirst.mockReset();
     transactionMock.practiceLocation.findFirst
       .mockResolvedValueOnce({
@@ -164,6 +171,17 @@ describe('PracticeLocationConfigurationDraftService', () => {
         lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
       })
       .mockResolvedValueOnce(null);
+    transactionMock.bookingQuestion.findMany.mockResolvedValue([
+      {
+        id: 'question-1',
+        helpText: 'Existing help',
+        estimatedMinutesAdjustment: 15,
+        textMaximumLength: 250,
+        numberMinimum: null,
+        numberMaximum: null,
+        selectOptions: null,
+      },
+    ]);
 
     await service.save('user-1', 'location-1', dto);
 
@@ -179,7 +197,51 @@ describe('PracticeLocationConfigurationDraftService', () => {
     );
     expect(transactionMock.practiceSchedule.upsert).toHaveBeenCalledTimes(7);
     expect(transactionMock.practiceLocationService.createMany).toHaveBeenCalled();
-    expect(transactionMock.bookingQuestion.createMany).toHaveBeenCalled();
+    expect(transactionMock.bookingQuestion.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          questionText: 'Draft question?',
+          displayOrder: 0,
+          helpText: 'Existing help',
+          estimatedMinutesAdjustment: 15,
+          textMaximumLength: 250,
+        }),
+      ],
+    });
     expect(transactionMock.doctorPracticeScheduleDraft.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects a cross-clinic BookingQuestion reference in DRAFT setup', async () => {
+    transactionMock.practiceLocation.findFirst.mockReset();
+    transactionMock.practiceLocation.findFirst
+      .mockResolvedValueOnce({
+        id: 'location-1',
+        lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
+      })
+      .mockResolvedValueOnce(null);
+    transactionMock.bookingQuestion.findMany.mockResolvedValue([]);
+
+    await expect(service.save('user-1', 'location-1', dto)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(transactionMock.bookingQuestion.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('permits display order zero but rejects more than five active questions', async () => {
+    const sixActiveQuestions = Array.from({ length: 6 }, (_, index) => ({
+      questionText: `Question ${index}`,
+      type: BookingQuestionType.TEXT,
+      isRequired: false,
+      displayOrder: index,
+      isActive: true,
+    }));
+
+    await expect(
+      service.save('user-1', 'location-1', {
+        ...dto,
+        bookingQuestions: sixActiveQuestions,
+      }),
+    ).rejects.toThrow('no more than 5 active BookingQuestions');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });
