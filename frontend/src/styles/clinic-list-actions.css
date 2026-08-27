@@ -180,3 +180,46 @@
   position: relative;
   z-index: 1;
 }
+
+/* Editable service name and short description retain the compact service-row visual hierarchy. */
+.clinic-service-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.clinic-service-name-input,
+.clinic-service-description-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 6px;
+  font: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.clinic-service-name-input {
+  color: #171717;
+  font-weight: 700;
+}
+
+.clinic-service-description-input {
+  color: #6e7681;
+  font-size: 12px;
+}
+
+.clinic-service-name-input:hover,
+.clinic-service-description-input:hover {
+  border-color: #e0e4e8;
+  background: #fafafa;
+}
+
+.clinic-service-name-input:focus,
+.clinic-service-description-input:focus {
+  outline: none;
+  border-color: #aeb7c2;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.05);
+}
