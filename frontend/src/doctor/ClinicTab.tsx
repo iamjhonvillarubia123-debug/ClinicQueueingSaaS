@@ -807,6 +807,15 @@ function ServicesEditor({
       },
     ]);
   }
+
+  function updateService(id: number, patch: Partial<ServiceRow>) {
+    setServices(
+      services.map((service) =>
+        service.id === id ? { ...service, ...patch } : service,
+      ),
+    );
+  }
+
   return (
     <>
       <div className="clinic-section-toolbar">
@@ -823,9 +832,25 @@ function ServicesEditor({
       <div className="clinic-card-list">
         {services.map((service) => (
           <div className="clinic-list-row" key={service.id}>
-            <div>
-              <strong>{service.name}</strong>
-              <small>{service.description}</small>
+            <div className="clinic-service-copy">
+              <input
+                className="clinic-service-name-input"
+                aria-label={`Service name for ${service.name}`}
+                value={service.name}
+                onChange={(event) =>
+                  updateService(service.id, { name: event.target.value })
+                }
+                placeholder="Service name"
+              />
+              <input
+                className="clinic-service-description-input"
+                aria-label={`Service description for ${service.name}`}
+                value={service.description}
+                onChange={(event) =>
+                  updateService(service.id, { description: event.target.value })
+                }
+                placeholder="Short service description"
+              />
             </div>
             <label className="clinic-inline-field">
               <span>Duration</span>
@@ -834,14 +859,10 @@ function ServicesEditor({
                 min={1}
                 max={1440}
                 value={service.minutes}
-                onChange={(e) =>
-                  setServices(
-                    services.map((row) =>
-                      row.id === service.id
-                        ? { ...row, minutes: Number(e.target.value) }
-                        : row,
-                    ),
-                  )
+                onChange={(event) =>
+                  updateService(service.id, {
+                    minutes: Number(event.target.value),
+                  })
                 }
               />{' '}
               min
@@ -850,13 +871,7 @@ function ServicesEditor({
               className={`clinic-status-pill${service.active ? ' is-active' : ''}`}
               type="button"
               onClick={() =>
-                setServices(
-                  services.map((row) =>
-                    row.id === service.id
-                      ? { ...row, active: !row.active }
-                      : row,
-                  ),
-                )
+                updateService(service.id, { active: !service.active })
               }
             >
               {service.active ? 'Active' : 'Inactive'}
@@ -959,9 +974,8 @@ function QuestionsEditor({
                       row.id === question.id
                         ? { ...row, required: e.target.checked }
                         : row,
-                    ),
-                  )
-                }
+                  ),
+                )
               />{' '}
               Required
             </label>
