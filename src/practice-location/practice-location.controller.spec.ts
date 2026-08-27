@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
+import { PracticeLocationConfigurationDraftService } from './practice-location-configuration-draft.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
@@ -17,6 +18,9 @@ describe('PracticeLocationController', () => {
   const practiceLocationActivationServiceMock = {
     activate: jest.fn(),
     reactivate: jest.fn(),
+  };
+  const practiceLocationConfigurationDraftServiceMock = {
+    save: jest.fn(),
   };
   const practiceLocationDataRetentionGateServiceMock = {
     assertCurrentAcknowledgement: jest.fn(),
@@ -56,6 +60,10 @@ describe('PracticeLocationController', () => {
           useValue: practiceLocationActivationServiceMock,
         },
         {
+          provide: PracticeLocationConfigurationDraftService,
+          useValue: practiceLocationConfigurationDraftServiceMock,
+        },
+        {
           provide: PracticeLocationDataRetentionGateService,
           useValue: practiceLocationDataRetentionGateServiceMock,
         },
@@ -93,6 +101,31 @@ describe('PracticeLocationController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('delegates whole clinic configuration draft saves to the Doctor draft service', async () => {
+    const request = { user: { userId: 'doctor-1' } };
+    const dto = {
+      basicInfo: { name: 'Clinic', timeZone: 'Asia/Manila' },
+      schedules: [],
+      services: [],
+      bookingQuestions: [],
+    };
+    practiceLocationConfigurationDraftServiceMock.save.mockResolvedValue({
+      id: 'location-1',
+    });
+
+    await controller.saveConfigurationDraft(
+      'location-1',
+      dto as never,
+      request as never,
+    );
+
+    expect(practiceLocationConfigurationDraftServiceMock.save).toHaveBeenCalledWith(
+      'doctor-1',
+      'location-1',
+      dto,
+    );
   });
 
   it('checks current Doctor acknowledgement before activation', async () => {
