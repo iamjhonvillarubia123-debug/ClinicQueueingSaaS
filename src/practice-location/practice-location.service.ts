@@ -91,6 +91,7 @@ export class PracticeLocationService {
             create: serviceTemplates.map((template) => ({
               sourceDoctorServiceTemplateId: template.id,
               name: template.name,
+              description: template.description,
               durationMinutes: template.durationMinutes,
               status: template.status,
             })),
@@ -120,12 +121,15 @@ export class PracticeLocationService {
           publicIdentifier: true,
           lifecycleStatus: true,
           name: true,
+          shortCode: true,
           addressLine1: true,
           addressLine2: true,
           cityMunicipality: true,
           province: true,
           postalCode: true,
           contactNumber: true,
+          clinicEmail: true,
+          clinicDescription: true,
           countryCode: true,
           timeZone: true,
           isBookingEnabled: true,
@@ -183,6 +187,12 @@ export class PracticeLocationService {
       throw new NotFoundException('Practice location not found.');
     }
 
+    if (existing.lifecycleStatus !== PracticeLocationLifecycleStatus.DRAFT) {
+      throw new ConflictException(
+        'Effective clinic configuration cannot be edited directly. Save a Doctor configuration draft instead.',
+      );
+    }
+
     const name =
       dto.name === undefined
         ? existing.name
@@ -191,29 +201,6 @@ export class PracticeLocationService {
       dto.addressLine1 === undefined
         ? existing.addressLine1
         : this.normalizeOptionalText(dto.addressLine1);
-
-    if (
-      existing.lifecycleStatus === PracticeLocationLifecycleStatus.ACTIVE &&
-      name &&
-      addressLine1
-    ) {
-      const duplicate = await this.prisma.practiceLocation.findFirst({
-        where: {
-          doctorProfileId: doctorProfile.id,
-          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
-          id: { not: practiceLocationId },
-          name: { equals: name, mode: 'insensitive' },
-          addressLine1: { equals: addressLine1, mode: 'insensitive' },
-        },
-        select: { id: true },
-      });
-
-      if (duplicate) {
-        throw new ConflictException(
-          'An active practice location with this name and address already exists.',
-        );
-      }
-    }
 
     return this.prisma.practiceLocation.update({
       where: { id: practiceLocationId },
@@ -254,43 +241,20 @@ export class PracticeLocationService {
         publicIdentifier: true,
         lifecycleStatus: true,
         name: true,
+        shortCode: true,
         addressLine1: true,
         addressLine2: true,
         cityMunicipality: true,
         province: true,
         postalCode: true,
         contactNumber: true,
+        clinicEmail: true,
+        clinicDescription: true,
         countryCode: true,
         timeZone: true,
         isBookingEnabled: true,
         createdAt: true,
         updatedAt: true,
-        practiceSchedules: {
-          orderBy: { weekday: 'asc' },
-          select: {
-            weekday: true,
-            isOpen: true,
-            opensAtLocal: true,
-            closesAtLocal: true,
-            maximumOnlineBookingUntilLocal: true,
-            maximumOperatingUntilLocal: true,
-          },
-        },
-        doctorScheduleDraft: {
-          select: {
-            schedules: {
-              orderBy: { weekday: 'asc' },
-              select: {
-                weekday: true,
-                isOpen: true,
-                opensAtLocal: true,
-                closesAtLocal: true,
-                maximumOnlineBookingUntilLocal: true,
-                maximumOperatingUntilLocal: true,
-              },
-            },
-          },
-        },
       },
     });
   }
@@ -298,6 +262,7 @@ export class PracticeLocationService {
   async findAllForDoctor(userId: string) {
     const doctorProfile = await this.prisma.doctorProfile.findUnique({
       where: { userId },
+      select: { id: true },
     });
 
     if (!doctorProfile) {
@@ -314,18 +279,43 @@ export class PracticeLocationService {
         publicIdentifier: true,
         lifecycleStatus: true,
         name: true,
+        shortCode: true,
         addressLine1: true,
         addressLine2: true,
         cityMunicipality: true,
         province: true,
         postalCode: true,
         contactNumber: true,
+        clinicEmail: true,
+        clinicDescription: true,
         countryCode: true,
         timeZone: true,
         isBookingEnabled: true,
         currentRegularPracticeStaffId: true,
         createdAt: true,
         updatedAt: true,
+        services: {
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            sourceDoctorServiceTemplateId: true,
+            name: true,
+            description: true,
+            durationMinutes: true,
+            status: true,
+          },
+        },
+        bookingQuestions: {
+          orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            questionText: true,
+            type: true,
+            isRequired: true,
+            displayOrder: true,
+            isActive: true,
+          },
+        },
         practiceSchedules: {
           orderBy: { weekday: 'asc' },
           select: {
@@ -339,6 +329,18 @@ export class PracticeLocationService {
         },
         doctorScheduleDraft: {
           select: {
+            name: true,
+            shortCode: true,
+            addressLine1: true,
+            addressLine2: true,
+            cityMunicipality: true,
+            province: true,
+            postalCode: true,
+            contactNumber: true,
+            clinicEmail: true,
+            clinicDescription: true,
+            countryCode: true,
+            timeZone: true,
             schedules: {
               orderBy: { weekday: 'asc' },
               select: {
@@ -348,6 +350,31 @@ export class PracticeLocationService {
                 closesAtLocal: true,
                 maximumOnlineBookingUntilLocal: true,
                 maximumOperatingUntilLocal: true,
+              },
+            },
+            services: {
+              orderBy: [{ name: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                effectiveServiceId: true,
+                sourceDoctorServiceTemplateId: true,
+                name: true,
+                description: true,
+                durationMinutes: true,
+                status: true,
+              },
+            },
+            bookingQuestions: {
+              orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                effectiveBookingQuestionId: true,
+                sourceDoctorBookingQuestionTemplateId: true,
+                questionText: true,
+                type: true,
+                isRequired: true,
+                displayOrder: true,
+                isActive: true,
               },
             },
           },
