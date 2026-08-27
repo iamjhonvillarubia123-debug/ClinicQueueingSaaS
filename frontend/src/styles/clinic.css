@@ -714,14 +714,14 @@
 .clinic-row-action-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 5px);
+  top: calc(100% + 4px);
   z-index: 8;
-  width: 204px;
-  padding: 5px;
+  width: 200px;
+  padding: 4px;
   border: 1px solid #d9dee4;
   border-radius: 9px;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.12);
+  box-shadow: 0 7px 18px rgba(16, 24, 40, 0.11);
 }
 .clinic-row-action-menu::before {
   content: '';
@@ -739,13 +739,13 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
   border: 0;
   border-radius: 6px;
   background: #fff;
-  min-height: 37px;
-  padding: 7px 9px;
+  min-height: 36px;
+  padding: 6px 8px;
   text-align: left;
   font: inherit;
   font-size: 13px;
@@ -764,13 +764,13 @@
 }
 .clinic-row-action-icon {
   flex: 0 0 auto;
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   color: #69717c;
 }
 .clinic-row-action-menu button.is-danger {
-  margin-top: 4px;
-  padding-top: 9px;
+  margin-top: 3px;
+  padding-top: 8px;
   border-top: 1px solid #edf0f2;
   border-radius: 0 0 6px 6px;
   color: #b42318;
