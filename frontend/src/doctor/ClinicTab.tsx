@@ -30,11 +30,40 @@ export type DayHours = {
   closes: string;
   maximumUntil: string;
 };
+
+type ServiceRow = {
+  id: string | number;
+  effectiveServiceId?: string;
+  sourceDoctorServiceTemplateId?: string;
+  name: string;
+  description: string;
+  minutes: number;
+  active: boolean;
+};
+
+type QuestionRow = {
+  id: string | number;
+  effectiveBookingQuestionId?: string;
+  sourceDoctorBookingQuestionTemplateId?: string;
+  order: number;
+  question: string;
+  type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
+  required: boolean;
+  active: boolean;
+};
+
+type ClinicEditorState = {
+  draft: ClinicDraft;
+  hours: DayHours[];
+  cutoffLeadHours: number;
+  services: ServiceRow[];
+  questions: QuestionRow[];
+};
+
 type ClinicRecord = ClinicDraft & {
   id: string;
   status: ClinicStatus;
-  hours: DayHours[];
-  cutoffLeadHours: number;
+  editor: ClinicEditorState;
 };
 
 type PracticeScheduleResponse = {
@@ -46,31 +75,60 @@ type PracticeScheduleResponse = {
   maximumOperatingUntilLocal: string | null;
 };
 
+type PracticeServiceResponse = {
+  id: string;
+  sourceDoctorServiceTemplateId?: string | null;
+  effectiveServiceId?: string | null;
+  name: string;
+  description?: string | null;
+  durationMinutes: number;
+  status: 'ACTIVE' | 'INACTIVE';
+};
+
+type BookingQuestionResponse = {
+  id: string;
+  effectiveBookingQuestionId?: string | null;
+  sourceDoctorBookingQuestionTemplateId?: string | null;
+  questionText: string;
+  type: QuestionRow['type'];
+  isRequired: boolean;
+  displayOrder: number;
+  isActive: boolean;
+};
+
+type DoctorConfigurationDraftResponse = {
+  name: string | null;
+  shortCode: string | null;
+  addressLine1: string | null;
+  addressLine2?: string | null;
+  cityMunicipality?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  contactNumber: string | null;
+  clinicEmail: string | null;
+  clinicDescription: string | null;
+  countryCode: string | null;
+  timeZone: string | null;
+  schedules: PracticeScheduleResponse[];
+  services: PracticeServiceResponse[];
+  bookingQuestions: BookingQuestionResponse[];
+};
+
 type PracticeLocationResponse = {
   id: string;
   lifecycleStatus: ClinicStatus | 'PERMANENTLY_DELETED';
   name: string | null;
+  shortCode?: string | null;
   addressLine1: string | null;
   contactNumber: string | null;
+  clinicEmail?: string | null;
+  clinicDescription?: string | null;
   countryCode: string | null;
   timeZone: string | null;
+  services?: PracticeServiceResponse[];
+  bookingQuestions?: BookingQuestionResponse[];
   practiceSchedules?: PracticeScheduleResponse[];
-  doctorScheduleDraft?: { schedules: PracticeScheduleResponse[] } | null;
-};
-
-type ServiceRow = {
-  id: number;
-  name: string;
-  description: string;
-  minutes: number;
-  active: boolean;
-};
-type QuestionRow = {
-  id: number;
-  order: number;
-  question: string;
-  type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
-  required: boolean;
+  doctorScheduleDraft?: DoctorConfigurationDraftResponse | null;
 };
 
 const initialDraft: ClinicDraft = {
@@ -100,39 +158,8 @@ const initialHours: DayHours[] = [
   maximumUntil: index < 5 ? '06:00 PM' : '02:00 PM',
 }));
 
-const initialServices: ServiceRow[] = [
-  {
-    id: 1,
-    name: 'General Consultation',
-    description: 'Regular check-up and consultation',
-    minutes: 30,
-    active: true,
-  },
-  {
-    id: 2,
-    name: 'Follow-up Consultation',
-    description: 'Follow-up check-up for existing patients',
-    minutes: 20,
-    active: true,
-  },
-];
-
-const initialQuestions: QuestionRow[] = [
-  {
-    id: 1,
-    order: 1,
-    question: 'What is the reason for your visit?',
-    type: 'SINGLE_SELECT',
-    required: true,
-  },
-  {
-    id: 2,
-    order: 2,
-    question: 'Have you had this condition before?',
-    type: 'BOOLEAN',
-    required: true,
-  },
-];
+const initialServices: ServiceRow[] = [];
+const initialQuestions: QuestionRow[] = [];
 
 function clockMatch(value: string) {
   return value
@@ -242,29 +269,110 @@ function cutoffLeadHoursFromSchedules(
   return Math.max(0, Math.min(12, Math.round((closing - cutoff) / 60)));
 }
 
+function countryName(countryCode: string | null | undefined) {
+  return countryCode === 'PH' || !countryCode ? 'Philippines' : countryCode;
+}
+
+function basicInfoFromLocation(location: PracticeLocationResponse): ClinicDraft {
+  return {
+    name: location.name ?? '',
+    shortCode: location.shortCode ?? '',
+    address: location.addressLine1 ?? '',
+    country: countryName(location.countryCode),
+    timeZone: location.timeZone ?? 'Asia/Manila',
+    contactNumber: location.contactNumber ?? '',
+    email: location.clinicEmail ?? '',
+    description: location.clinicDescription ?? '',
+  };
+}
+
+function basicInfoFromDoctorDraft(
+  draft: DoctorConfigurationDraftResponse,
+): ClinicDraft {
+  return {
+    name: draft.name ?? '',
+    shortCode: draft.shortCode ?? '',
+    address: draft.addressLine1 ?? '',
+    country: countryName(draft.countryCode),
+    timeZone: draft.timeZone ?? 'Asia/Manila',
+    contactNumber: draft.contactNumber ?? '',
+    email: draft.clinicEmail ?? '',
+    description: draft.clinicDescription ?? '',
+  };
+}
+
+function servicesFromResponse(
+  services: PracticeServiceResponse[] | undefined,
+  fromDraft: boolean,
+): ServiceRow[] {
+  return (services ?? []).map((service) => ({
+    id: service.id,
+    effectiveServiceId: fromDraft
+      ? service.effectiveServiceId ?? undefined
+      : service.id,
+    sourceDoctorServiceTemplateId:
+      service.sourceDoctorServiceTemplateId ?? undefined,
+    name: service.name,
+    description: service.description ?? '',
+    minutes: service.durationMinutes,
+    active: service.status === 'ACTIVE',
+  }));
+}
+
+function questionsFromResponse(
+  questions: BookingQuestionResponse[] | undefined,
+  fromDraft: boolean,
+): QuestionRow[] {
+  return (questions ?? []).map((question) => ({
+    id: question.id,
+    effectiveBookingQuestionId: fromDraft
+      ? question.effectiveBookingQuestionId ?? undefined
+      : question.id,
+    sourceDoctorBookingQuestionTemplateId:
+      question.sourceDoctorBookingQuestionTemplateId ?? undefined,
+    order: question.displayOrder,
+    question: question.questionText,
+    type: question.type,
+    required: question.isRequired,
+    active: question.isActive,
+  }));
+}
+
 function toClinicRecord(
   location: PracticeLocationResponse,
 ): ClinicRecord | null {
   if (location.lifecycleStatus === 'PERMANENTLY_DELETED') return null;
-  const editableSchedules = location.doctorScheduleDraft?.schedules?.length
-    ? location.doctorScheduleDraft.schedules
+
+  const effectiveDraft = basicInfoFromLocation(location);
+  const doctorDraft = location.doctorScheduleDraft ?? null;
+  const hasWholeDoctorDraft = Boolean(doctorDraft?.timeZone);
+  const editorSchedules = doctorDraft?.schedules?.length
+    ? doctorDraft.schedules
     : location.practiceSchedules;
+  const editorDraft =
+    hasWholeDoctorDraft && doctorDraft
+      ? basicInfoFromDoctorDraft(doctorDraft)
+      : effectiveDraft;
+  const editorServices =
+    hasWholeDoctorDraft && doctorDraft
+      ? servicesFromResponse(doctorDraft.services, true)
+      : servicesFromResponse(location.services, false);
+  const editorQuestions =
+    hasWholeDoctorDraft && doctorDraft
+      ? questionsFromResponse(doctorDraft.bookingQuestions, true)
+      : questionsFromResponse(location.bookingQuestions, false);
+
   return {
     id: location.id,
-    name: location.name ?? '',
-    shortCode: '',
-    address: location.addressLine1 ?? '',
-    country:
-      location.countryCode === 'PH' || !location.countryCode
-        ? 'Philippines'
-        : location.countryCode,
-    timeZone: location.timeZone ?? 'Asia/Manila',
-    contactNumber: location.contactNumber ?? '',
-    email: '',
-    description: '',
+    ...effectiveDraft,
     status: location.lifecycleStatus,
-    hours: hoursFromSchedules(editableSchedules),
-    cutoffLeadHours: cutoffLeadHoursFromSchedules(editableSchedules),
+    editor: {
+      draft: editorDraft,
+      hours: hoursFromSchedules(editorSchedules),
+      cutoffLeadHours: cutoffLeadHoursFromSchedules(editorSchedules),
+      services: editorServices,
+      questions: editorQuestions,
+    },
   };
 }
 
@@ -799,7 +907,7 @@ function ServicesEditor({
     setServices([
       ...services,
       {
-        id: Date.now(),
+        id: `new-service-${Date.now()}`,
         name: 'New Service',
         description: 'Clinic-specific service',
         minutes: 30,
@@ -808,7 +916,7 @@ function ServicesEditor({
     ]);
   }
 
-  function updateService(id: number, patch: Partial<ServiceRow>) {
+  function updateService(id: string | number, patch: Partial<ServiceRow>) {
     setServices(
       services.map((service) =>
         service.id === id ? { ...service, ...patch } : service,
@@ -906,11 +1014,12 @@ function QuestionsEditor({
     setQuestions([
       ...questions,
       {
-        id: Date.now(),
+        id: `new-question-${Date.now()}`,
         order: questions.length + 1,
         question: 'New booking question',
         type: 'TEXT',
         required: false,
+        active: true,
       },
     ]);
   }
@@ -1086,30 +1195,41 @@ function ClinicWizard({
   initialValue,
   initialSchedule,
   initialCutoffLeadHours,
+  initialServices: initialServiceRows,
+  initialQuestions: initialQuestionRows,
   editing,
   editingClinicId,
 }: {
   onExit: () => void;
   onSaved: (
+    clinicId: string | undefined,
     clinic: ClinicDraft,
-    status: ClinicStatus,
     hours: DayHours[],
     cutoffLeadHours: number,
-  ) => Promise<void>;
+    services: ServiceRow[],
+    questions: QuestionRow[],
+  ) => Promise<string>;
   initialValue?: ClinicDraft;
   initialSchedule?: DayHours[];
   initialCutoffLeadHours?: number;
+  initialServices?: ServiceRow[];
+  initialQuestions?: QuestionRow[];
   editing?: boolean;
   editingClinicId?: string;
 }) {
   const [step, setStep] = useState<Step>(1);
+  const [practiceLocationId, setPracticeLocationId] = useState(editingClinicId);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
   const [hours, setHours] = useState(initialSchedule ?? initialHours);
   const [cutoffLeadHours, setCutoffLeadHours] = useState(
     initialCutoffLeadHours ?? 2,
   );
-  const [services, setServices] = useState(initialServices);
-  const [questions, setQuestions] = useState(initialQuestions);
+  const [services, setServices] = useState(
+    initialServiceRows ?? initialServices,
+  );
+  const [questions, setQuestions] = useState(
+    initialQuestionRows ?? initialQuestions,
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const title =
@@ -1133,12 +1253,68 @@ function ClinicWizard({
       draft.timeZone,
     );
 
-  async function saveDraft() {
+  function requiredFieldError() {
+    const missing = [
+      !draft.name.trim() ? 'Clinic Name' : '',
+      !draft.address.trim() ? 'Address' : '',
+      !draft.country ? 'Country' : '',
+      !draft.timeZone ? 'Timezone' : '',
+    ].filter(Boolean);
+    return missing.length
+      ? `Complete the required fields before continuing: ${missing.join(', ')}.`
+      : '';
+  }
+
+  function scheduleInputError() {
+    const invalidFormatRow = hours.find(
+      (row) =>
+        row.open &&
+        (!isValidClock(row.opens) ||
+          !isValidClock(row.closes) ||
+          !isValidClock(row.maximumUntil)),
+    );
+    if (invalidFormatRow) {
+      return `${invalidFormatRow.day} contains an invalid time. Use a time such as 08:07 AM.`;
+    }
+    const invalidRow = hours.find(
+      (row) => row.open && parseClock(row.closes) <= parseClock(row.opens),
+    );
+    if (invalidRow) {
+      return `${invalidRow.day} closing time must be later than its opening time.`;
+    }
+    const invalidMaximumRow = hours.find(
+      (row) =>
+        row.open && parseClock(row.maximumUntil) < parseClock(row.closes),
+    );
+    if (invalidMaximumRow) {
+      return `${invalidMaximumRow.day} maximum operating time cannot be earlier than its closing time.`;
+    }
+    if (!hours.some((row) => row.open)) {
+      return 'Select at least one open clinic day before continuing.';
+    }
+    return '';
+  }
+
+  async function persistDraft() {
+    const savedId = await onSaved(
+      practiceLocationId,
+      draft,
+      hours,
+      cutoffLeadHours,
+      services,
+      questions,
+    );
+    setPracticeLocationId(savedId);
+    return savedId;
+  }
+
+  async function saveDraftAndExit() {
     if (saving) return;
     setSaveError('');
     setSaving(true);
     try {
-      await onSaved(draft, 'DRAFT', hours, cutoffLeadHours);
+      await persistDraft();
+      onExit();
     } catch (error) {
       setSaveError(
         error instanceof Error
@@ -1150,72 +1326,27 @@ function ClinicWizard({
     }
   }
 
-  function next() {
-    setSaveError('');
-    if (!canContinue) {
-      const missing = [
-        !draft.name.trim() ? 'Clinic Name' : '',
-        !draft.address.trim() ? 'Address' : '',
-        !draft.country ? 'Country' : '',
-        !draft.timeZone ? 'Timezone' : '',
-      ].filter(Boolean);
-      setSaveError(
-        `Complete the required fields before continuing: ${missing.join(', ')}.`,
-      );
-      return;
-    }
-    setStep(Math.min(5, step + 1) as Step);
-  }
-
-  async function validateHoursAndContinue() {
+  async function saveAndContinue() {
     if (saving) return;
     setSaveError('');
-
-    const invalidFormatRow = hours.find(
-      (row) =>
-        row.open &&
-        (!isValidClock(row.opens) ||
-          !isValidClock(row.closes) ||
-          !isValidClock(row.maximumUntil)),
-    );
-    if (invalidFormatRow) {
-      setSaveError(
-        `${invalidFormatRow.day} contains an invalid time. Use a time such as 08:07 AM.`,
-      );
+    const requiredError = requiredFieldError();
+    if (step === 1 && requiredError) {
+      setSaveError(requiredError);
       return;
     }
-    const invalidRow = hours.find(
-      (row) => row.open && parseClock(row.closes) <= parseClock(row.opens),
-    );
-    if (invalidRow) {
-      setSaveError(
-        `${invalidRow.day} closing time must be later than its opening time.`,
-      );
-      return;
-    }
-    const invalidMaximumRow = hours.find(
-      (row) =>
-        row.open && parseClock(row.maximumUntil) < parseClock(row.closes),
-    );
-    if (invalidMaximumRow) {
-      setSaveError(
-        `${invalidMaximumRow.day} maximum operating time cannot be earlier than its closing time.`,
-      );
-      return;
-    }
-    if (!hours.some((row) => row.open)) {
-      setSaveError('Select at least one open clinic day before continuing.');
+    const hoursError = scheduleInputError();
+    if (hoursError) {
+      setSaveError(hoursError);
       return;
     }
 
     setSaving(true);
     try {
-      await apiRequest<{ valid: true }>(
-        '/practice-location/schedule-preflight',
-        {
+      if (step === 2) {
+        await apiRequest<{ valid: true }>('/practice-location/schedule-preflight', {
           method: 'POST',
           body: {
-            practiceLocationId: editingClinicId,
+            practiceLocationId,
             timeZone: draft.timeZone,
             schedules: hours.map((row) => ({
               weekday: weekdayFor(row.day),
@@ -1224,16 +1355,33 @@ function ClinicWizard({
               closesAtLocal: row.open ? toApiLocalTime(row.closes) : undefined,
             })),
           },
-        },
-      );
-      setStep(3);
+        });
+      }
+      await persistDraft();
+      setStep(Math.min(5, step + 1) as Step);
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : 'Clinic hours could not be validated.';
+        error instanceof Error ? error.message : 'Unable to save this clinic.';
       setSaveError(
-        `Cannot continue with these clinic hours. ${message} Adjust the schedule so it does not overlap another active clinic.`,
+        step === 2
+          ? `Cannot continue with these clinic hours. ${message} Adjust the schedule so it does not overlap another active clinic.`
+          : message,
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveReviewDraft() {
+    if (saving) return;
+    setSaveError('');
+    setSaving(true);
+    try {
+      await persistDraft();
+      onExit();
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : 'Unable to save this clinic.',
       );
     } finally {
       setSaving(false);
@@ -1243,13 +1391,11 @@ function ClinicWizard({
   const primaryAction =
     step === 5
       ? () => {
-          void saveDraft();
+          void saveReviewDraft();
         }
-      : step === 2
-        ? () => {
-            void validateHoursAndContinue();
-          }
-        : next;
+      : () => {
+          void saveAndContinue();
+        };
 
   return (
     <section className="clinic-page">
@@ -1331,7 +1477,7 @@ function ClinicWizard({
             }
             onPrimary={primaryAction}
             onDraft={() => {
-              void saveDraft();
+              void saveDraftAndExit();
             }}
           />
         </div>
@@ -1667,6 +1813,7 @@ export function ClinicTabPage() {
       .map(toClinicRecord)
       .filter((clinic): clinic is ClinicRecord => clinic !== null);
     setClinics(mapped);
+    return mapped;
   }
 
   useEffect(() => {
@@ -1693,31 +1840,15 @@ export function ClinicTabPage() {
   }, []);
 
   async function saved(
+    clinicId: string | undefined,
     clinic: ClinicDraft,
-    _status: ClinicStatus,
     hours: DayHours[],
     cutoffLeadHours: number,
+    services: ServiceRow[],
+    questions: QuestionRow[],
   ) {
-    let practiceLocationId: string;
-    if (editingClinic) {
-      practiceLocationId = editingClinic.id;
-      await apiRequest<PracticeLocationResponse>(
-        `/practice-location/${editingClinic.id}`,
-        {
-          method: 'PATCH',
-          body: {
-            name: clinic.name.trim() || undefined,
-            addressLine1: clinic.address.trim() || undefined,
-            contactNumber: clinic.contactNumber.trim() || undefined,
-            countryCode:
-              clinic.country === 'Philippines'
-                ? 'PH'
-                : clinic.country.slice(0, 2).toUpperCase(),
-            timeZone: clinic.timeZone,
-          },
-        },
-      );
-    } else {
+    let practiceLocationId = clinicId;
+    if (!practiceLocationId) {
       const created = await apiRequest<PracticeLocationResponse>(
         '/practice-location',
         {
@@ -1730,25 +1861,26 @@ export function ClinicTabPage() {
         },
       );
       practiceLocationId = created.id;
-      await apiRequest<PracticeLocationResponse>(
-        `/practice-location/${practiceLocationId}`,
-        {
-          method: 'PATCH',
-          body: {
+    }
+
+    await apiRequest<PracticeLocationResponse>(
+      `/practice-location/${practiceLocationId}/configuration-draft`,
+      {
+        method: 'PUT',
+        body: {
+          basicInfo: {
+            name: clinic.name.trim() || undefined,
+            shortCode: clinic.shortCode.trim() || undefined,
+            addressLine1: clinic.address.trim() || undefined,
+            contactNumber: clinic.contactNumber.trim() || undefined,
+            clinicEmail: clinic.email.trim() || undefined,
+            clinicDescription: clinic.description.trim() || undefined,
             countryCode:
               clinic.country === 'Philippines'
                 ? 'PH'
                 : clinic.country.slice(0, 2).toUpperCase(),
             timeZone: clinic.timeZone,
           },
-        },
-      );
-    }
-    await apiRequest(
-      `/practice-location/${practiceLocationId}/draft-schedule`,
-      {
-        method: 'PUT',
-        body: {
           schedules: hours.map((row) => ({
             weekday: weekdayFor(row.day),
             isOpen: row.open,
@@ -1757,26 +1889,57 @@ export function ClinicTabPage() {
             maximumOnlineBookingUntilLocal: row.open
               ? toApiLocalTime(onlineCutoffFor(row, cutoffLeadHours))
               : undefined,
-            maximumOperatingUntilLocal: toApiLocalTime(row.maximumUntil),
+            maximumOperatingUntilLocal: row.open
+              ? toApiLocalTime(row.maximumUntil)
+              : undefined,
+          })),
+          services: services.map((service) => ({
+            effectiveServiceId: service.effectiveServiceId,
+            sourceDoctorServiceTemplateId:
+              service.sourceDoctorServiceTemplateId,
+            name: service.name,
+            description: service.description || undefined,
+            durationMinutes: service.minutes,
+            status: service.active ? 'ACTIVE' : 'INACTIVE',
+          })),
+          bookingQuestions: questions.map((question) => ({
+            effectiveBookingQuestionId: question.effectiveBookingQuestionId,
+            sourceDoctorBookingQuestionTemplateId:
+              question.sourceDoctorBookingQuestionTemplateId,
+            questionText: question.question,
+            type: question.type,
+            isRequired: question.required,
+            displayOrder: question.order,
+            isActive: question.active,
           })),
         },
       },
     );
+
     await loadClinics();
-    setEditingClinic(null);
-    setMode('list');
+    return practiceLocationId;
   }
 
   if (mode === 'create')
-    return <ClinicWizard onExit={() => setMode('list')} onSaved={saved} />;
+    return (
+      <ClinicWizard
+        onExit={() => {
+          setEditingClinic(null);
+          setMode('list');
+        }}
+        onSaved={saved}
+      />
+    );
   if (mode === 'edit' && editingClinic)
     return (
       <ClinicWizard
         editing
         editingClinicId={editingClinic.id}
-        initialValue={editingClinic}
-        initialSchedule={editingClinic.hours}
-        initialCutoffLeadHours={editingClinic.cutoffLeadHours}
+        initialValue={editingClinic.editor.draft}
+        initialSchedule={editingClinic.editor.hours}
+        initialCutoffLeadHours={editingClinic.editor.cutoffLeadHours}
+        initialServices={editingClinic.editor.services}
+        initialQuestions={editingClinic.editor.questions}
         onExit={() => {
           setEditingClinic(null);
           setMode('list');
