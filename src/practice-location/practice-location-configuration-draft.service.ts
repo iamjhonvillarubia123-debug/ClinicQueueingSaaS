@@ -102,8 +102,6 @@ export class PracticeLocationConfigurationDraftService {
             await transaction.bookingQuestion.createMany({
               data: dto.bookingQuestions.map((question) => ({
                 practiceLocationId,
-                sourceDoctorBookingQuestionTemplateId:
-                  question.sourceDoctorBookingQuestionTemplateId ?? null,
                 questionText: question.questionText.trim(),
                 type: question.type,
                 isRequired: question.isRequired,
@@ -191,15 +189,15 @@ export class PracticeLocationConfigurationDraftService {
       where: {
         doctorProfileId,
         id: { not: practiceLocationId },
-        lifecycleStatus: { not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED },
+        lifecycleStatus: {
+          not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
+        },
         shortCode: { equals: shortCode, mode: 'insensitive' },
       },
       select: { id: true },
     });
     if (duplicate) {
-      throw new ConflictException(
-        'Another clinic already uses this short code.',
-      );
+      throw new ConflictException('Another clinic already uses this short code.');
     }
   }
 
@@ -207,16 +205,19 @@ export class PracticeLocationConfigurationDraftService {
     const info = dto.basicInfo;
     return {
       name: this.normalizeOptionalText(info.name),
-      shortCode: this.normalizeOptionalText(info.shortCode)?.toUpperCase() ?? null,
+      shortCode:
+        this.normalizeOptionalText(info.shortCode)?.toUpperCase() ?? null,
       addressLine1: this.normalizeOptionalText(info.addressLine1),
       addressLine2: this.normalizeOptionalText(info.addressLine2),
       cityMunicipality: this.normalizeOptionalText(info.cityMunicipality),
       province: this.normalizeOptionalText(info.province),
       postalCode: this.normalizeOptionalText(info.postalCode),
       contactNumber: this.normalizeOptionalText(info.contactNumber),
-      clinicEmail: this.normalizeOptionalText(info.clinicEmail)?.toLowerCase() ?? null,
+      clinicEmail:
+        this.normalizeOptionalText(info.clinicEmail)?.toLowerCase() ?? null,
       clinicDescription: this.normalizeOptionalText(info.clinicDescription),
-      countryCode: this.normalizeOptionalText(info.countryCode)?.toUpperCase() ?? null,
+      countryCode:
+        this.normalizeOptionalText(info.countryCode)?.toUpperCase() ?? null,
       timeZone: this.normalizeOptionalText(info.timeZone),
     };
   }
@@ -288,7 +289,9 @@ export class PracticeLocationConfigurationDraftService {
       if (!name) throw new BadRequestException('Service name is required.');
       const key = name.toLocaleLowerCase();
       if (names.has(key)) {
-        throw new BadRequestException('Service names must be unique within a clinic.');
+        throw new BadRequestException(
+          'Service names must be unique within a clinic.',
+        );
       }
       names.add(key);
     }
@@ -331,7 +334,9 @@ export class PracticeLocationConfigurationDraftService {
         countryCode: true,
         timeZone: true,
         services: { orderBy: [{ name: 'asc' }, { id: 'asc' }] },
-        bookingQuestions: { orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }] },
+        bookingQuestions: {
+          orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+        },
         practiceSchedules: { orderBy: { weekday: 'asc' } },
         doctorScheduleDraft: {
           include: {
