@@ -50,7 +50,7 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     apiRequestMock.mockReset();
   });
 
-  it('recovers the last saved Service draft on reopen without replacing the effective clinic values', async () => {
+  it('recovers the last saved Service draft on a fresh reopen without replacing effective clinic values', async () => {
     let draftSaved = false;
     let savedServiceName = '';
     let savedServiceDescription = '';
@@ -109,7 +109,7 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     });
 
     const user = userEvent.setup();
-    render(<ClinicTabPage />);
+    const firstRender = render(<ClinicTabPage />);
 
     expect(await screen.findByText('Effective Clinic')).toBeInTheDocument();
 
@@ -141,6 +141,14 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
 
     expect(screen.getByText('Effective Clinic')).toBeInTheDocument();
     expect(screen.queryByText('Draft Consultation')).not.toBeInTheDocument();
+    expect(savedServiceName).toBe('Draft Consultation');
+    expect(savedServiceDescription).toBe('Unpublished draft wording');
+
+    firstRender.unmount();
+    render(<ClinicTabPage />);
+
+    expect(await screen.findByText('Effective Clinic')).toBeInTheDocument();
+    expect(screen.queryByText('Draft Consultation')).not.toBeInTheDocument();
 
     await user.click(
       screen.getByRole('button', { name: 'More actions for Effective Clinic' }),
@@ -154,8 +162,5 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     expect(
       screen.getByDisplayValue('Unpublished draft wording'),
     ).toBeInTheDocument();
-
-    expect(savedServiceName).toBe('Draft Consultation');
-    expect(savedServiceDescription).toBe('Unpublished draft wording');
   });
 });
