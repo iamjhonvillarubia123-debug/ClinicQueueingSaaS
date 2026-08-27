@@ -930,6 +930,10 @@ function ServicesEditor({
     );
   }
 
+  function deleteService(id: string | number) {
+    setServices(services.filter((service) => service.id !== id));
+  }
+
   return (
     <>
       <div className="clinic-section-toolbar">
@@ -993,9 +997,11 @@ function ServicesEditor({
             <button
               className="clinic-kebab"
               type="button"
-              aria-label={`Actions for ${service.name}`}
+              aria-label={`Delete service ${service.name}`}
+              title="Delete service"
+              onClick={() => deleteService(service.id)}
             >
-              ⋮
+              <ClinicActionIcon kind="delete" />
             </button>
           </div>
         ))}
