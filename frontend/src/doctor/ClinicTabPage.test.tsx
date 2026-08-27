@@ -194,8 +194,11 @@ describe('ClinicTabPage configuration draft persistence', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
 
-    expect(await screen.findByDisplayValue('General Consultation')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Regular check-up')).toBeInTheDocument();
+    expect(await screen.findByText('General Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Regular check-up')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Edit service General Consultation' }),
+    ).toBeInTheDocument();
 
     expect(apiRequestMock).toHaveBeenCalledWith(
       '/practice-location/location-1/configuration-draft',
@@ -233,11 +236,11 @@ describe('ClinicTabPage configuration draft persistence', () => {
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
 
-    expect(screen.getByDisplayValue('General Consultation')).toBeInTheDocument();
+    expect(screen.getByText('General Consultation')).toBeInTheDocument();
     await user.click(
       screen.getByRole('button', { name: 'Delete service General Consultation' }),
     );
-    expect(screen.queryByDisplayValue('General Consultation')).not.toBeInTheDocument();
+    expect(screen.queryByText('General Consultation')).not.toBeInTheDocument();
 
     apiRequestMock.mockClear();
     await user.click(
@@ -368,9 +371,10 @@ describe('ClinicTabPage configuration draft persistence', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
-    expect(screen.getByDisplayValue('Draft Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Draft Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Unpublished service wording')).toBeInTheDocument();
     expect(
-      screen.getByDisplayValue('Unpublished service wording'),
+      screen.getByRole('button', { name: 'Edit service Draft Consultation' }),
     ).toBeInTheDocument();
   });
 });
