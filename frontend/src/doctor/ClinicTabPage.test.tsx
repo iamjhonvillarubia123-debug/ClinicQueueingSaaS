@@ -98,6 +98,24 @@ describe('ClinicTabPage draft schedule persistence', () => {
     );
   });
 
+  it('changes the clinic main action when a dropdown action is selected without executing it', async () => {
+    const user = userEvent.setup();
+    render(<ClinicTabPage />);
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'More actions for Saved Clinic',
+      }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: /Activate Clinic/ }));
+
+    expect(screen.getByRole('button', { name: 'Activate Clinic' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Clinics' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Activate Clinic' }));
+    expect(screen.getByRole('heading', { name: 'Clinics' })).toBeInTheDocument();
+  });
+
   it('loads the saved doctor schedule draft instead of the live schedule for an ACTIVE clinic', async () => {
     apiRequestMock.mockImplementation(async (path, options) => {
       if (path === '/practice-location' && !options)
@@ -129,7 +147,10 @@ describe('ClinicTabPage draft schedule persistence', () => {
         name: 'More actions for Saved Clinic',
       }),
     );
-    await user.click(screen.getByRole('menuitem', { name: 'Edit Clinic' }));
+    await user.click(screen.getByRole('menuitem', { name: /Edit Clinic/ }));
+
+    expect(screen.getByRole('heading', { name: 'Clinics' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit Clinic' }));
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
 
     expect(screen.getByLabelText('Monday opening time')).toHaveValue(
