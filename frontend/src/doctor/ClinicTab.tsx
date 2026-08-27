@@ -1251,14 +1251,6 @@ function ClinicWizard({
           : step === 4
             ? 'Booking Questions'
             : 'Review Your Clinic';
-  const canContinue =
-    step !== 1 ||
-    Boolean(
-      draft.name.trim() &&
-      draft.address.trim() &&
-      draft.country &&
-      draft.timeZone,
-    );
 
   function requiredFieldError() {
     const missing = [
