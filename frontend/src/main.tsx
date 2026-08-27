@@ -3,13 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
-import './doctor/clinicTimeFieldEnhancer';
-import './doctor/clinicScheduleCopyEnhancer';
 import './styles/global.css';
 import './styles/patient.css';
 import './styles/doctor.css';
 import './styles/clinic.css';
-import './styles/clinic-time.css';
 import './styles/clinic-schedule-actions.css';
 
 createRoot(document.getElementById('root')!).render(

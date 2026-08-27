@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -23,10 +24,12 @@ import { UpdatePracticeLocationDto } from './dto/update-practice-location.dto';
 import { ValidatePracticeScheduleDto } from './dto/validate-practice-schedule.dto';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
+import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationService } from './practice-location.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
+import { SaveDraftPracticeScheduleDto } from './dto/save-draft-practice-schedule.dto';
 
 @Controller('practice-location')
 export class PracticeLocationController {
@@ -34,10 +37,25 @@ export class PracticeLocationController {
     private readonly practiceLocationService: PracticeLocationService,
     private readonly practiceLocationActivationService: PracticeLocationActivationService,
     private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
+    private readonly practiceLocationDraftScheduleService: PracticeLocationDraftScheduleService,
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
     private readonly practiceSchedulePreflightService: PracticeSchedulePreflightService,
   ) {}
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Put(':practiceLocationId/draft-schedule')
+  saveDraftSchedule(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Body() dto: SaveDraftPracticeScheduleDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationDraftScheduleService.replaceDraftSchedule(
+      request.user.userId,
+      practiceLocationId,
+      dto,
+    );
+  }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post()

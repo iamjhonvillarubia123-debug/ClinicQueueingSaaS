@@ -175,14 +175,22 @@ export class PracticeLocationService {
       },
     });
 
-    if (!existing || existing.lifecycleStatus === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED) {
+    if (
+      !existing ||
+      existing.lifecycleStatus ===
+        PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
+    ) {
       throw new NotFoundException('Practice location not found.');
     }
 
-    const name = dto.name === undefined ? existing.name : this.normalizeOptionalText(dto.name);
-    const addressLine1 = dto.addressLine1 === undefined
-      ? existing.addressLine1
-      : this.normalizeOptionalText(dto.addressLine1);
+    const name =
+      dto.name === undefined
+        ? existing.name
+        : this.normalizeOptionalText(dto.name);
+    const addressLine1 =
+      dto.addressLine1 === undefined
+        ? existing.addressLine1
+        : this.normalizeOptionalText(dto.addressLine1);
 
     if (
       existing.lifecycleStatus === PracticeLocationLifecycleStatus.ACTIVE &&
@@ -212,13 +220,34 @@ export class PracticeLocationService {
       data: {
         name,
         addressLine1,
-        addressLine2: dto.addressLine2 === undefined ? undefined : this.normalizeOptionalText(dto.addressLine2),
-        cityMunicipality: dto.cityMunicipality === undefined ? undefined : this.normalizeOptionalText(dto.cityMunicipality),
-        province: dto.province === undefined ? undefined : this.normalizeOptionalText(dto.province),
-        postalCode: dto.postalCode === undefined ? undefined : this.normalizeOptionalText(dto.postalCode),
-        contactNumber: dto.contactNumber === undefined ? undefined : this.normalizeOptionalText(dto.contactNumber),
-        countryCode: dto.countryCode === undefined ? undefined : this.normalizeOptionalText(dto.countryCode),
-        timeZone: dto.timeZone === undefined ? undefined : this.normalizeOptionalText(dto.timeZone),
+        addressLine2:
+          dto.addressLine2 === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.addressLine2),
+        cityMunicipality:
+          dto.cityMunicipality === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.cityMunicipality),
+        province:
+          dto.province === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.province),
+        postalCode:
+          dto.postalCode === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.postalCode),
+        contactNumber:
+          dto.contactNumber === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.contactNumber),
+        countryCode:
+          dto.countryCode === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.countryCode),
+        timeZone:
+          dto.timeZone === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.timeZone),
       },
       select: {
         id: true,
@@ -236,6 +265,32 @@ export class PracticeLocationService {
         isBookingEnabled: true,
         createdAt: true,
         updatedAt: true,
+        practiceSchedules: {
+          orderBy: { weekday: 'asc' },
+          select: {
+            weekday: true,
+            isOpen: true,
+            opensAtLocal: true,
+            closesAtLocal: true,
+            maximumOnlineBookingUntilLocal: true,
+            maximumOperatingUntilLocal: true,
+          },
+        },
+        doctorScheduleDraft: {
+          select: {
+            schedules: {
+              orderBy: { weekday: 'asc' },
+              select: {
+                weekday: true,
+                isOpen: true,
+                opensAtLocal: true,
+                closesAtLocal: true,
+                maximumOnlineBookingUntilLocal: true,
+                maximumOperatingUntilLocal: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -271,6 +326,32 @@ export class PracticeLocationService {
         currentRegularPracticeStaffId: true,
         createdAt: true,
         updatedAt: true,
+        practiceSchedules: {
+          orderBy: { weekday: 'asc' },
+          select: {
+            weekday: true,
+            isOpen: true,
+            opensAtLocal: true,
+            closesAtLocal: true,
+            maximumOnlineBookingUntilLocal: true,
+            maximumOperatingUntilLocal: true,
+          },
+        },
+        doctorScheduleDraft: {
+          select: {
+            schedules: {
+              orderBy: { weekday: 'asc' },
+              select: {
+                weekday: true,
+                isOpen: true,
+                opensAtLocal: true,
+                closesAtLocal: true,
+                maximumOnlineBookingUntilLocal: true,
+                maximumOperatingUntilLocal: true,
+              },
+            },
+          },
+        },
       },
     });
   }
