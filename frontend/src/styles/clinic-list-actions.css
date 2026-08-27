@@ -1,3 +1,19 @@
+.clinic-row-actions .clinic-row-action-main,
+.clinic-row-actions .clinic-row-action-toggle {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+
+.clinic-row-actions .clinic-row-action-toggle {
+  border-left: 1px solid #4a4a4a;
+}
+
+.clinic-row-actions .clinic-row-action-main:hover,
+.clinic-row-actions .clinic-row-action-toggle:hover {
+  background: #242424;
+}
+
 .clinic-row-action-menu {
   width: 100%;
   box-sizing: border-box;
