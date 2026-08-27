@@ -43,13 +43,22 @@ jobs:
           src/patient-access/public-booking-recovery.controller.ts
           src/patient-access/public-booking-recovery.service.ts
           src/patient-access/patient-access.module.ts
+          src/practice-location/practice-location.controller.ts
+          src/practice-location/practice-location.controller.spec.ts
+          src/practice-location/practice-location.service.ts
+          src/practice-location/practice-location.service.spec.ts
+          src/practice-location/practice-location-configuration-draft.service.ts
+          src/practice-location/practice-location-configuration-draft.service.spec.ts
+          src/practice-location/practice-location.module.ts
+          src/practice-location/dto/create-practice-location.dto.ts
+          src/practice-location/dto/save-doctor-clinic-configuration-draft.dto.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
           node --check scripts/show-dev-latest-booking-otp.cjs
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
-      - name: Test public booking and patient recovery controls
+      - name: Test public booking, patient recovery, and clinic configuration controls
         run: >-
           npm test -- --runInBand
           public-booking-entry.service.spec.ts
@@ -57,4 +66,7 @@ jobs:
           public-booking-duplicate-use-existing.service.spec.ts
           appointment-recovery.service.spec.ts
           booking-group-recovery.service.spec.ts
+          practice-location.service.spec.ts
+          practice-location.controller.spec.ts
+          practice-location-configuration-draft.service.spec.ts
       - run: npm run build
