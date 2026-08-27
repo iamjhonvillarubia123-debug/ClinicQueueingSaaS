@@ -8,6 +8,7 @@ import './styles/patient.css';
 import './styles/doctor.css';
 import './styles/clinic.css';
 import './styles/clinic-schedule-actions.css';
+import './styles/clinic-list-actions.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
