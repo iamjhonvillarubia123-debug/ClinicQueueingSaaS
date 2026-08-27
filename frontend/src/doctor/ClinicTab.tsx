@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api/client';
+import { ServiceManagementEditor } from './ServiceManagementEditor';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type ClinicStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
@@ -909,108 +910,8 @@ function ServicesEditor({
   services: ServiceRow[];
   setServices: (value: ServiceRow[]) => void;
 }) {
-  function addService() {
-    setServices([
-      ...services,
-      {
-        id: `new-service-${Date.now()}`,
-        name: 'New Service',
-        description: 'Clinic-specific service',
-        minutes: 30,
-        active: true,
-      },
-    ]);
-  }
-
-  function updateService(id: string | number, patch: Partial<ServiceRow>) {
-    setServices(
-      services.map((service) =>
-        service.id === id ? { ...service, ...patch } : service,
-      ),
-    );
-  }
-
-  function deleteService(id: string | number) {
-    setServices(services.filter((service) => service.id !== id));
-  }
-
   return (
-    <>
-      <div className="clinic-section-toolbar">
-        <p>Add or manage the services offered in this clinic.</p>
-        <div>
-          <button className="clinic-secondary" type="button">
-            Apply Doctor Defaults
-          </button>
-          <button className="clinic-primary" type="button" onClick={addService}>
-            + Add Service
-          </button>
-        </div>
-      </div>
-      <div className="clinic-card-list">
-        {services.map((service) => (
-          <div className="clinic-list-row" key={service.id}>
-            <div className="clinic-service-copy">
-              <input
-                className="clinic-service-name-input"
-                aria-label={`Service name for ${service.name}`}
-                value={service.name}
-                onChange={(event) =>
-                  updateService(service.id, { name: event.target.value })
-                }
-                placeholder="Service name"
-              />
-              <input
-                className="clinic-service-description-input"
-                aria-label={`Service description for ${service.name}`}
-                value={service.description}
-                onChange={(event) =>
-                  updateService(service.id, { description: event.target.value })
-                }
-                placeholder="Short service description"
-              />
-            </div>
-            <label className="clinic-inline-field">
-              <span>Duration</span>
-              <input
-                type="number"
-                min={1}
-                max={1440}
-                value={service.minutes}
-                onChange={(event) =>
-                  updateService(service.id, {
-                    minutes: Number(event.target.value),
-                  })
-                }
-              />{' '}
-              min
-            </label>
-            <button
-              className={`clinic-status-pill${service.active ? ' is-active' : ''}`}
-              type="button"
-              onClick={() =>
-                updateService(service.id, { active: !service.active })
-              }
-            >
-              {service.active ? 'Active' : 'Inactive'}
-            </button>
-            <button
-              className="clinic-kebab"
-              type="button"
-              aria-label={`Delete service ${service.name}`}
-              title="Delete service"
-              onClick={() => deleteService(service.id)}
-            >
-              <ClinicActionIcon kind="delete" />
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="clinic-info-strip">
-        ⓘ Service duration must be greater than 0 minutes and up to 24 hours
-        (1,440 minutes).
-      </div>
-    </>
+    <ServiceManagementEditor services={services} setServices={setServices} />
   );
 }
 
