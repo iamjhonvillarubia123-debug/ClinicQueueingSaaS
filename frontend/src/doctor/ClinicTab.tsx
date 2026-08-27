@@ -1381,6 +1381,59 @@ function ClinicActionIcon({
   );
 }
 
+type ClinicListAction =
+  | 'OPEN'
+  | 'EDIT'
+  | 'ACTIVATE'
+  | 'ASSIGN_SECRETARY'
+  | 'DISABLE'
+  | 'DELETE';
+
+function defaultClinicListAction(clinic: ClinicRecord): ClinicListAction {
+  return clinic.status === 'ACTIVE' ? 'OPEN' : 'EDIT';
+}
+
+function clinicListActionLabel(action: ClinicListAction) {
+  switch (action) {
+    case 'OPEN':
+      return 'Open Clinic';
+    case 'EDIT':
+      return 'Edit Clinic';
+    case 'ACTIVATE':
+      return 'Activate Clinic';
+    case 'ASSIGN_SECRETARY':
+      return 'Assign Secretary';
+    case 'DISABLE':
+      return 'Disable Clinic';
+    case 'DELETE':
+      return 'Permanently Delete';
+  }
+}
+
+function clinicListActionIcon(
+  action: ClinicListAction,
+): 'edit' | 'activate' | 'secretary' | 'disable' | 'delete' {
+  switch (action) {
+    case 'EDIT':
+      return 'edit';
+    case 'OPEN':
+    case 'ACTIVATE':
+      return 'activate';
+    case 'ASSIGN_SECRETARY':
+      return 'secretary';
+    case 'DISABLE':
+      return 'disable';
+    case 'DELETE':
+      return 'delete';
+  }
+}
+
+function availableClinicListActions(clinic: ClinicRecord): ClinicListAction[] {
+  return clinic.status === 'ACTIVE'
+    ? ['OPEN', 'EDIT', 'ASSIGN_SECRETARY', 'DISABLE', 'DELETE']
+    : ['EDIT', 'ACTIVATE', 'ASSIGN_SECRETARY', 'DELETE'];
+}
+
 function ClinicList({
   clinics,
   onAdd,
@@ -1393,6 +1446,10 @@ function ClinicList({
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [selectedActionByClinic, setSelectedActionByClinic] = useState<
+    Record<string, ClinicListAction>
+  >({});
+
   useEffect(() => {
     function closeMenu(event: MouseEvent) {
       if (!(event.target as Element).closest('.clinic-row-actions')) {
@@ -1409,6 +1466,7 @@ function ClinicList({
       document.removeEventListener('keydown', closeMenuWithEscape);
     };
   }, []);
+
   const filtered = useMemo(
     () =>
       clinics.filter(
@@ -1418,6 +1476,24 @@ function ClinicList({
       ),
     [clinics, filter, search],
   );
+
+  function selectedActionFor(clinic: ClinicRecord) {
+    return selectedActionByClinic[clinic.id] ?? defaultClinicListAction(clinic);
+  }
+
+  function selectAction(clinic: ClinicRecord, action: ClinicListAction) {
+    setSelectedActionByClinic((current) => ({
+      ...current,
+      [clinic.id]: action,
+    }));
+    setOpenActionMenuId(null);
+  }
+
+  function executeSelectedAction(clinic: ClinicRecord) {
+    const action = selectedActionFor(clinic);
+    if (action === 'EDIT') onEdit(clinic);
+  }
+
   return (
     <section className="clinic-page">
       <div className="clinic-list-heading">
@@ -1470,137 +1546,94 @@ function ClinicList({
             </button>
           </div>
         ) : (
-          filtered.map((clinic) => (
-            <article className="clinic-clinic-row" key={clinic.id}>
-              <div className="clinic-building-icon">+</div>
-              <div className="clinic-clinic-copy">
-                <strong>
-                  {clinic.name || 'Untitled Clinic'}{' '}
-                  <span>{clinic.status}</span>
-                </strong>
-                <p>{clinic.address || 'Address not entered'}</p>
-                <small>
-                  {clinic.country} · {clinic.timeZone}
-                </small>
-              </div>
-              <div>
-                <span
-                  className={`clinic-status-pill${clinic.status === 'ACTIVE' ? ' is-active' : ''}`}
-                >
-                  {clinic.status}
-                </span>
-                <small className="clinic-readiness">
-                  {clinic.status === 'DRAFT' ? 'Ready to continue setup' : ''}
-                </small>
-              </div>
-              <div className="clinic-secretary">
-                <strong>Secretary</strong>
-                <span>Not assigned</span>
-              </div>
-              <div className="clinic-row-actions">
-                <button
-                  className="clinic-row-action-main"
-                  type="button"
-                  aria-disabled={clinic.status === 'ACTIVE' ? true : undefined}
-                  title={
-                    clinic.status === 'ACTIVE'
-                      ? 'Operational workspace will be connected in a later phase.'
-                      : undefined
-                  }
-                  onClick={
-                    clinic.status === 'ACTIVE'
-                      ? undefined
-                      : () => onEdit(clinic)
-                  }
-                >
-                  {clinic.status === 'ACTIVE' ? 'Open Clinic' : 'Edit Clinic'}
-                </button>
-                <button
-                  className="clinic-row-action-toggle"
-                  type="button"
-                  aria-label={`More actions for ${clinic.name}`}
-                  aria-expanded={openActionMenuId === clinic.id}
-                  onClick={() =>
-                    setOpenActionMenuId((current) =>
-                      current === clinic.id ? null : clinic.id,
-                    )
-                  }
-                >
-                  <svg viewBox="0 0 20 20" aria-hidden="true">
-                    <path d="m5 7.5 5 5 5-5" />
-                  </svg>
-                </button>
-                {openActionMenuId === clinic.id ? (
-                  <div className="clinic-row-action-menu" role="menu">
-                    {clinic.status === 'ACTIVE' ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setOpenActionMenuId(null);
-                          onEdit(clinic);
-                        }}
-                      >
-                        <ClinicActionIcon kind="edit" />
-                        <span>Edit Clinic</span>
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      aria-disabled="true"
-                      title="Available in a later phase"
-                    >
-                      <ClinicActionIcon
-                        kind={
-                          clinic.status === 'ACTIVE' ? 'secretary' : 'activate'
-                        }
-                      />
-                      <span>
-                        {clinic.status === 'DRAFT'
-                          ? 'Activate Clinic'
-                          : clinic.status === 'ACTIVE'
-                            ? 'Assign Secretary'
-                            : 'Activate Clinic'}
-                      </span>
-                    </button>
-                    {clinic.status !== 'ACTIVE' ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        aria-disabled="true"
-                        title="Available in a later phase"
-                      >
-                        <ClinicActionIcon kind="secretary" />
-                        <span>Assign Secretary</span>
-                      </button>
-                    ) : null}
-                    {clinic.status === 'ACTIVE' ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        aria-disabled="true"
-                        title="Available in a later phase"
-                      >
-                        <ClinicActionIcon kind="disable" />
-                        <span>Disable Clinic</span>
-                      </button>
-                    ) : null}
-                    <button
-                      className="is-danger"
-                      type="button"
-                      role="menuitem"
-                      aria-disabled="true"
-                      title="Available in a later phase"
-                    >
-                      <ClinicActionIcon kind="delete" />
-                      <span>Permanently Delete</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </article>
-          ))
+          filtered.map((clinic) => {
+            const selectedAction = selectedActionFor(clinic);
+            const selectedLabel = clinicListActionLabel(selectedAction);
+            const executableNow = selectedAction === 'EDIT';
+            return (
+              <article className="clinic-clinic-row" key={clinic.id}>
+                <div className="clinic-building-icon">+</div>
+                <div className="clinic-clinic-copy">
+                  <strong>
+                    {clinic.name || 'Untitled Clinic'}{' '}
+                    <span>{clinic.status}</span>
+                  </strong>
+                  <p>{clinic.address || 'Address not entered'}</p>
+                  <small>
+                    {clinic.country} · {clinic.timeZone}
+                  </small>
+                </div>
+                <div>
+                  <span
+                    className={`clinic-status-pill${clinic.status === 'ACTIVE' ? ' is-active' : ''}`}
+                  >
+                    {clinic.status}
+                  </span>
+                  <small className="clinic-readiness">
+                    {clinic.status === 'DRAFT' ? 'Ready to continue setup' : ''}
+                  </small>
+                </div>
+                <div className="clinic-secretary">
+                  <strong>Secretary</strong>
+                  <span>Not assigned</span>
+                </div>
+                <div className="clinic-row-actions">
+                  <button
+                    className="clinic-row-action-main"
+                    type="button"
+                    aria-disabled={executableNow ? undefined : true}
+                    title={
+                      executableNow
+                        ? undefined
+                        : 'Available in a later implementation phase.'
+                    }
+                    onClick={() => executeSelectedAction(clinic)}
+                  >
+                    {selectedLabel}
+                  </button>
+                  <button
+                    className="clinic-row-action-toggle"
+                    type="button"
+                    aria-label={`More actions for ${clinic.name}`}
+                    aria-expanded={openActionMenuId === clinic.id}
+                    onClick={() =>
+                      setOpenActionMenuId((current) =>
+                        current === clinic.id ? null : clinic.id,
+                      )
+                    }
+                  >
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="m5 7.5 5 5 5-5" />
+                    </svg>
+                  </button>
+                  {openActionMenuId === clinic.id ? (
+                    <div className="clinic-row-action-menu" role="menu">
+                      {availableClinicListActions(clinic).map((action) => (
+                        <button
+                          className={`${action === selectedAction ? 'is-selected' : ''}${action === 'DELETE' ? ' is-danger' : ''}`.trim()}
+                          type="button"
+                          role="menuitem"
+                          key={action}
+                          title={
+                            action === 'EDIT'
+                              ? undefined
+                              : 'Available in a later implementation phase.'
+                          }
+                          onClick={() => selectAction(clinic, action)}
+                        >
+                          <ClinicActionIcon kind={clinicListActionIcon(action)} />
+                          <span>{clinicListActionLabel(action)}</span>
+                          {action === selectedAction ? (
+                            <span className="clinic-action-check">✓</span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })
         )}
       </div>
     </section>
