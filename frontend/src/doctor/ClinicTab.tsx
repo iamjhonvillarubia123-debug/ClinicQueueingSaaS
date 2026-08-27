@@ -60,6 +60,12 @@ type ClinicEditorState = {
   questions: QuestionRow[];
 };
 
+type SavedClinicDraftState = {
+  id: string;
+  services: ServiceRow[];
+  questions: QuestionRow[];
+};
+
 type ClinicRecord = ClinicDraft & {
   id: string;
   status: ClinicStatus;
@@ -1208,7 +1214,7 @@ function ClinicWizard({
     cutoffLeadHours: number,
     services: ServiceRow[],
     questions: QuestionRow[],
-  ) => Promise<string>;
+  ) => Promise<SavedClinicDraftState>;
   initialValue?: ClinicDraft;
   initialSchedule?: DayHours[];
   initialCutoffLeadHours?: number;
@@ -1296,7 +1302,7 @@ function ClinicWizard({
   }
 
   async function persistDraft() {
-    const savedId = await onSaved(
+    const saved = await onSaved(
       practiceLocationId,
       draft,
       hours,
@@ -1304,8 +1310,10 @@ function ClinicWizard({
       services,
       questions,
     );
-    setPracticeLocationId(savedId);
-    return savedId;
+    setPracticeLocationId(saved.id);
+    setServices(saved.services);
+    setQuestions(saved.questions);
+    return saved.id;
   }
 
   async function saveDraftAndExit() {
@@ -1846,25 +1854,37 @@ export function ClinicTabPage() {
     cutoffLeadHours: number,
     services: ServiceRow[],
     questions: QuestionRow[],
-  ) {
-    let practiceLocationId = clinicId;
-    if (!practiceLocationId) {
+  ): Promise<SavedClinicDraftState> {
+    if (!clinicId) {
       const created = await apiRequest<PracticeLocationResponse>(
         '/practice-location',
         {
           method: 'POST',
           body: {
             name: clinic.name.trim() || undefined,
+            shortCode: clinic.shortCode.trim() || undefined,
             addressLine1: clinic.address.trim() || undefined,
             contactNumber: clinic.contactNumber.trim() || undefined,
+            clinicEmail: clinic.email.trim() || undefined,
+            clinicDescription: clinic.description.trim() || undefined,
+            countryCode:
+              clinic.country === 'Philippines'
+                ? 'PH'
+                : clinic.country.slice(0, 2).toUpperCase(),
+            timeZone: clinic.timeZone,
           },
         },
       );
-      practiceLocationId = created.id;
+      await loadClinics();
+      return {
+        id: created.id,
+        services: servicesFromResponse(created.services, false),
+        questions: questionsFromResponse(created.bookingQuestions, false),
+      };
     }
 
-    await apiRequest<PracticeLocationResponse>(
-      `/practice-location/${practiceLocationId}/configuration-draft`,
+    const savedConfiguration = await apiRequest<PracticeLocationResponse>(
+      `/practice-location/${clinicId}/configuration-draft`,
       {
         method: 'PUT',
         body: {
@@ -1917,7 +1937,19 @@ export function ClinicTabPage() {
     );
 
     await loadClinics();
-    return practiceLocationId;
+    const doctorDraft = savedConfiguration.doctorScheduleDraft;
+    const wholeDraftSaved = Boolean(doctorDraft?.timeZone);
+    return {
+      id: clinicId,
+      services:
+        wholeDraftSaved && doctorDraft
+          ? servicesFromResponse(doctorDraft.services, true)
+          : servicesFromResponse(savedConfiguration.services, false),
+      questions:
+        wholeDraftSaved && doctorDraft
+          ? questionsFromResponse(doctorDraft.bookingQuestions, true)
+          : questionsFromResponse(savedConfiguration.bookingQuestions, false),
+    };
   }
 
   if (mode === 'create')
