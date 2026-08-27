@@ -28,3 +28,12 @@
   justify-self: start;
   text-align: left;
 }
+
+.clinic-row-action-menu button.is-danger span:last-child {
+  font-size: 0;
+}
+
+.clinic-row-action-menu button.is-danger span:last-child::after {
+  content: 'Delete Clinic';
+  font-size: 13px;
+}
