@@ -43,15 +43,6 @@ jobs:
           src/patient-access/public-booking-recovery.controller.ts
           src/patient-access/public-booking-recovery.service.ts
           src/patient-access/patient-access.module.ts
-          src/practice-location/practice-location.controller.ts
-          src/practice-location/practice-location.controller.spec.ts
-          src/practice-location/practice-location.service.ts
-          src/practice-location/practice-location.service.spec.ts
-          src/practice-location/practice-location-configuration-draft.service.ts
-          src/practice-location/practice-location-configuration-draft.service.spec.ts
-          src/practice-location/practice-location.module.ts
-          src/practice-location/dto/create-practice-location.dto.ts
-          src/practice-location/dto/save-doctor-clinic-configuration-draft.dto.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
