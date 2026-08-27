@@ -223,6 +223,40 @@ describe('ClinicTabPage configuration draft persistence', () => {
     );
   });
 
+  it('removes a Service from the working draft and persists the omission', async () => {
+    const user = userEvent.setup();
+    render(<ClinicTabPage />);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit Clinic' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
+
+    expect(screen.getByDisplayValue('General Consultation')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Delete service General Consultation' }),
+    );
+    expect(screen.queryByDisplayValue('General Consultation')).not.toBeInTheDocument();
+
+    apiRequestMock.mockClear();
+    await user.click(
+      screen.getByRole('button', { name: 'Choose save action' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: /Save as Draft/ }));
+    await user.click(screen.getByRole('button', { name: 'Save as Draft' }));
+
+    await waitFor(() =>
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        '/practice-location/location-1/configuration-draft',
+        expect.objectContaining({
+          method: 'PUT',
+          body: expect.objectContaining({ services: [] }),
+        }),
+      ),
+    );
+  });
+
   it('changes the clinic main action when a dropdown action is selected without executing it', async () => {
     const user = userEvent.setup();
     render(<ClinicTabPage />);
