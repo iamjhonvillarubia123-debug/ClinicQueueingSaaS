@@ -32,6 +32,9 @@ export class PracticeLocationService {
     }
 
     const name = this.normalizeOptionalText(createPracticeLocationDto.name);
+    const shortCode =
+      this.normalizeOptionalText(createPracticeLocationDto.shortCode)?.toUpperCase() ??
+      null;
     const addressLine1 = this.normalizeOptionalText(
       createPracticeLocationDto.addressLine1,
     );
@@ -55,6 +58,24 @@ export class PracticeLocationService {
         }
       }
 
+      if (shortCode) {
+        const existingShortCode = await transaction.practiceLocation.findFirst({
+          where: {
+            doctorProfileId: doctorProfile.id,
+            lifecycleStatus: {
+              not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
+            },
+            shortCode: { equals: shortCode, mode: 'insensitive' },
+          },
+          select: { id: true },
+        });
+        if (existingShortCode) {
+          throw new ConflictException(
+            'Another clinic already uses this short code.',
+          );
+        }
+      }
+
       const [serviceTemplates, bookingQuestionTemplates] = await Promise.all([
         transaction.doctorServiceTemplate.findMany({
           where: { doctorProfileId: doctorProfile.id },
@@ -71,6 +92,7 @@ export class PracticeLocationService {
           doctorProfileId: doctorProfile.id,
           lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
           name,
+          shortCode,
           addressLine1,
           addressLine2: this.normalizeOptionalText(
             createPracticeLocationDto.addressLine2,
@@ -86,6 +108,18 @@ export class PracticeLocationService {
           ),
           contactNumber: this.normalizeOptionalText(
             createPracticeLocationDto.contactNumber,
+          ),
+          clinicEmail:
+            this.normalizeOptionalText(createPracticeLocationDto.clinicEmail)?.toLowerCase() ??
+            null,
+          clinicDescription: this.normalizeOptionalText(
+            createPracticeLocationDto.clinicDescription,
+          ),
+          countryCode:
+            this.normalizeOptionalText(createPracticeLocationDto.countryCode)?.toUpperCase() ??
+            null,
+          timeZone: this.normalizeOptionalText(
+            createPracticeLocationDto.timeZone,
           ),
           services: {
             create: serviceTemplates.map((template) => ({
