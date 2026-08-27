@@ -133,8 +133,7 @@ export class DoctorClinicDraftQuestionDto {
   isRequired!: boolean;
 
   @IsInt()
-  @Min(1)
-  @Max(5)
+  @Min(0)
   displayOrder!: number;
 
   @IsBoolean()
@@ -159,7 +158,6 @@ export class SaveDoctorClinicConfigurationDraftDto {
   services!: DoctorClinicDraftServiceDto[];
 
   @IsArray()
-  @ArrayMaxSize(5)
   @ValidateNested({ each: true })
   @Type(() => DoctorClinicDraftQuestionDto)
   bookingQuestions!: DoctorClinicDraftQuestionDto[];
