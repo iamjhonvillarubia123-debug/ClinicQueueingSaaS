@@ -1,0 +1,363 @@
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  PracticeLocationLifecycleStatus,
+  Prisma,
+  Weekday,
+} from '../../generated/prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { SaveDoctorClinicConfigurationDraftDto } from './dto/save-doctor-clinic-configuration-draft.dto';
+
+@Injectable()
+export class PracticeLocationConfigurationDraftService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async save(
+    userId: string,
+    practiceLocationId: string,
+    dto: SaveDoctorClinicConfigurationDraftDto,
+  ) {
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!doctorProfile) {
+      throw new ForbiddenException(
+        'Only a doctor may save a clinic configuration draft.',
+      );
+    }
+
+    this.validateSchedules(dto);
+    this.validateServices(dto);
+    this.validateQuestions(dto);
+
+    return this.prisma.$transaction(
+      async (transaction) => {
+        const location = await transaction.practiceLocation.findFirst({
+          where: {
+            id: practiceLocationId,
+            doctorProfileId: doctorProfile.id,
+          },
+          select: { id: true, lifecycleStatus: true },
+        });
+        if (
+          !location ||
+          location.lifecycleStatus ===
+            PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
+        ) {
+          throw new NotFoundException('Practice location not found.');
+        }
+
+        const basicInfo = this.normalizeBasicInfo(dto);
+        await this.assertShortCodeAvailable(
+          transaction,
+          doctorProfile.id,
+          practiceLocationId,
+          basicInfo.shortCode,
+        );
+
+        if (location.lifecycleStatus === PracticeLocationLifecycleStatus.DRAFT) {
+          await transaction.practiceLocation.update({
+            where: { id: practiceLocationId },
+            data: basicInfo,
+          });
+
+          for (const row of this.scheduleRows(dto)) {
+            const { weekday, ...data } = row;
+            await transaction.practiceSchedule.upsert({
+              where: {
+                practiceLocationId_weekday: { practiceLocationId, weekday },
+              },
+              create: { practiceLocationId, weekday, ...data },
+              update: data,
+            });
+          }
+
+          await transaction.practiceLocationService.deleteMany({
+            where: { practiceLocationId },
+          });
+          if (dto.services.length) {
+            await transaction.practiceLocationService.createMany({
+              data: dto.services.map((service) => ({
+                practiceLocationId,
+                sourceDoctorServiceTemplateId:
+                  service.sourceDoctorServiceTemplateId ?? null,
+                name: service.name.trim(),
+                description: this.normalizeOptionalText(service.description),
+                durationMinutes: service.durationMinutes,
+                status: service.status,
+              })),
+            });
+          }
+
+          await transaction.bookingQuestion.deleteMany({
+            where: { practiceLocationId },
+          });
+          if (dto.bookingQuestions.length) {
+            await transaction.bookingQuestion.createMany({
+              data: dto.bookingQuestions.map((question) => ({
+                practiceLocationId,
+                sourceDoctorBookingQuestionTemplateId:
+                  question.sourceDoctorBookingQuestionTemplateId ?? null,
+                questionText: question.questionText.trim(),
+                type: question.type,
+                isRequired: question.isRequired,
+                displayOrder: question.displayOrder,
+                isActive: question.isActive,
+              })),
+            });
+          }
+
+          return this.loadConfiguration(transaction, practiceLocationId);
+        }
+
+        const draft = await transaction.doctorPracticeScheduleDraft.upsert({
+          where: { practiceLocationId },
+          create: { practiceLocationId, ...basicInfo },
+          update: basicInfo,
+          select: { id: true },
+        });
+
+        await Promise.all([
+          transaction.doctorPracticeScheduleDraftRow.deleteMany({
+            where: { doctorPracticeScheduleDraftId: draft.id },
+          }),
+          transaction.doctorPracticeConfigurationDraftService.deleteMany({
+            where: { doctorPracticeScheduleDraftId: draft.id },
+          }),
+          transaction.doctorPracticeConfigurationDraftBookingQuestion.deleteMany(
+            { where: { doctorPracticeScheduleDraftId: draft.id } },
+          ),
+        ]);
+
+        await transaction.doctorPracticeScheduleDraftRow.createMany({
+          data: this.scheduleRows(dto).map((row) => ({
+            doctorPracticeScheduleDraftId: draft.id,
+            ...row,
+          })),
+        });
+        if (dto.services.length) {
+          await transaction.doctorPracticeConfigurationDraftService.createMany({
+            data: dto.services.map((service) => ({
+              doctorPracticeScheduleDraftId: draft.id,
+              effectiveServiceId: service.effectiveServiceId ?? null,
+              sourceDoctorServiceTemplateId:
+                service.sourceDoctorServiceTemplateId ?? null,
+              name: service.name.trim(),
+              description: this.normalizeOptionalText(service.description),
+              durationMinutes: service.durationMinutes,
+              status: service.status,
+            })),
+          });
+        }
+        if (dto.bookingQuestions.length) {
+          await transaction.doctorPracticeConfigurationDraftBookingQuestion.createMany(
+            {
+              data: dto.bookingQuestions.map((question) => ({
+                doctorPracticeScheduleDraftId: draft.id,
+                effectiveBookingQuestionId:
+                  question.effectiveBookingQuestionId ?? null,
+                sourceDoctorBookingQuestionTemplateId:
+                  question.sourceDoctorBookingQuestionTemplateId ?? null,
+                questionText: question.questionText.trim(),
+                type: question.type,
+                isRequired: question.isRequired,
+                displayOrder: question.displayOrder,
+                isActive: question.isActive,
+              })),
+            },
+          );
+        }
+
+        return this.loadConfiguration(transaction, practiceLocationId);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  private async assertShortCodeAvailable(
+    transaction: Prisma.TransactionClient,
+    doctorProfileId: string,
+    practiceLocationId: string,
+    shortCode: string | null,
+  ) {
+    if (!shortCode) return;
+    const duplicate = await transaction.practiceLocation.findFirst({
+      where: {
+        doctorProfileId,
+        id: { not: practiceLocationId },
+        lifecycleStatus: { not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED },
+        shortCode: { equals: shortCode, mode: 'insensitive' },
+      },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new ConflictException(
+        'Another clinic already uses this short code.',
+      );
+    }
+  }
+
+  private normalizeBasicInfo(dto: SaveDoctorClinicConfigurationDraftDto) {
+    const info = dto.basicInfo;
+    return {
+      name: this.normalizeOptionalText(info.name),
+      shortCode: this.normalizeOptionalText(info.shortCode)?.toUpperCase() ?? null,
+      addressLine1: this.normalizeOptionalText(info.addressLine1),
+      addressLine2: this.normalizeOptionalText(info.addressLine2),
+      cityMunicipality: this.normalizeOptionalText(info.cityMunicipality),
+      province: this.normalizeOptionalText(info.province),
+      postalCode: this.normalizeOptionalText(info.postalCode),
+      contactNumber: this.normalizeOptionalText(info.contactNumber),
+      clinicEmail: this.normalizeOptionalText(info.clinicEmail)?.toLowerCase() ?? null,
+      clinicDescription: this.normalizeOptionalText(info.clinicDescription),
+      countryCode: this.normalizeOptionalText(info.countryCode)?.toUpperCase() ?? null,
+      timeZone: this.normalizeOptionalText(info.timeZone),
+    };
+  }
+
+  private scheduleRows(dto: SaveDoctorClinicConfigurationDraftDto) {
+    return dto.schedules.map((row) => ({
+      weekday: row.weekday,
+      isOpen: row.isOpen,
+      opensAtLocal: row.isOpen ? this.localTime(row.opensAtLocal!) : null,
+      closesAtLocal: row.isOpen ? this.localTime(row.closesAtLocal!) : null,
+      maximumOnlineBookingUntilLocal:
+        row.isOpen && row.maximumOnlineBookingUntilLocal
+          ? this.localTime(row.maximumOnlineBookingUntilLocal)
+          : null,
+      maximumOperatingUntilLocal:
+        row.isOpen && row.maximumOperatingUntilLocal
+          ? this.localTime(row.maximumOperatingUntilLocal)
+          : null,
+    }));
+  }
+
+  private validateSchedules(dto: SaveDoctorClinicConfigurationDraftDto) {
+    const weekdays = new Set(dto.schedules.map((row) => row.weekday));
+    if (
+      weekdays.size !== Object.values(Weekday).length ||
+      Object.values(Weekday).some((weekday) => !weekdays.has(weekday))
+    ) {
+      throw new BadRequestException(
+        'Clinic hours must contain each weekday exactly once.',
+      );
+    }
+    for (const row of dto.schedules) {
+      if (!row.isOpen) continue;
+      if (!row.opensAtLocal || !row.closesAtLocal) {
+        throw new BadRequestException(
+          `Opening and closing times are required for ${row.weekday.toLowerCase()}.`,
+        );
+      }
+      const opens = this.minutes(row.opensAtLocal);
+      const closes = this.minutes(row.closesAtLocal);
+      if (opens >= closes) {
+        throw new BadRequestException(
+          `Closing time must be later than opening time for ${row.weekday.toLowerCase()}.`,
+        );
+      }
+      if (row.maximumOnlineBookingUntilLocal) {
+        const cutoff = this.minutes(row.maximumOnlineBookingUntilLocal);
+        if (cutoff < opens || cutoff > closes) {
+          throw new BadRequestException(
+            `Online booking cutoff must fall within clinic hours for ${row.weekday.toLowerCase()}.`,
+          );
+        }
+      }
+      if (
+        row.maximumOperatingUntilLocal &&
+        this.minutes(row.maximumOperatingUntilLocal) < closes
+      ) {
+        throw new BadRequestException(
+          `Maximum operating time cannot be earlier than closing time for ${row.weekday.toLowerCase()}.`,
+        );
+      }
+    }
+  }
+
+  private validateServices(dto: SaveDoctorClinicConfigurationDraftDto) {
+    const names = new Set<string>();
+    for (const service of dto.services) {
+      const name = service.name.trim();
+      if (!name) throw new BadRequestException('Service name is required.');
+      const key = name.toLocaleLowerCase();
+      if (names.has(key)) {
+        throw new BadRequestException('Service names must be unique within a clinic.');
+      }
+      names.add(key);
+    }
+  }
+
+  private validateQuestions(dto: SaveDoctorClinicConfigurationDraftDto) {
+    const orders = new Set<number>();
+    for (const question of dto.bookingQuestions) {
+      if (!question.questionText.trim()) {
+        throw new BadRequestException('Booking question text is required.');
+      }
+      if (orders.has(question.displayOrder)) {
+        throw new BadRequestException(
+          'Booking question display order must be unique within a clinic.',
+        );
+      }
+      orders.add(question.displayOrder);
+    }
+  }
+
+  private loadConfiguration(
+    transaction: Prisma.TransactionClient,
+    practiceLocationId: string,
+  ) {
+    return transaction.practiceLocation.findUniqueOrThrow({
+      where: { id: practiceLocationId },
+      select: {
+        id: true,
+        lifecycleStatus: true,
+        name: true,
+        shortCode: true,
+        addressLine1: true,
+        addressLine2: true,
+        cityMunicipality: true,
+        province: true,
+        postalCode: true,
+        contactNumber: true,
+        clinicEmail: true,
+        clinicDescription: true,
+        countryCode: true,
+        timeZone: true,
+        services: { orderBy: [{ name: 'asc' }, { id: 'asc' }] },
+        bookingQuestions: { orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }] },
+        practiceSchedules: { orderBy: { weekday: 'asc' } },
+        doctorScheduleDraft: {
+          include: {
+            schedules: { orderBy: { weekday: 'asc' } },
+            services: { orderBy: [{ name: 'asc' }, { id: 'asc' }] },
+            bookingQuestions: {
+              orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+            },
+          },
+        },
+      },
+    });
+  }
+
+  private normalizeOptionalText(value: string | undefined): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private minutes(value: string): number {
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours * 60 + minutes;
+  }
+
+  private localTime(value: string): Date {
+    const [hours, minutes] = value.split(':').map(Number);
+    return new Date(Date.UTC(1970, 0, 1, hours, minutes, 0, 0));
+  }
+}
