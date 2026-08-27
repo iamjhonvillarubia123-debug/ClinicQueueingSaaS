@@ -1,0 +1,8 @@
+.clinic-row-action-menu {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.clinic-row-action-menu::before {
+  right: 18px;
+}
