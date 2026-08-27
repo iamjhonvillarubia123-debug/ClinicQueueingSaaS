@@ -16,9 +16,19 @@ type Props = {
   setServices: (value: ServiceRow[]) => void;
 };
 
+const iconProps = {
+  width: 18,
+  height: 18,
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
+
 function PencilIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
+    <svg aria-hidden="true" viewBox="0 0 24 24" {...iconProps}>
       <path d="M4 20h4l11-11-4-4L4 16v4Z" />
       <path d="m13.5 6.5 4 4" />
     </svg>
@@ -27,7 +37,7 @@ function PencilIcon() {
 
 function TrashIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
+    <svg aria-hidden="true" viewBox="0 0 24 24" {...iconProps}>
       <path d="M4 7h16" />
       <path d="m9 7 1-3h4l1 3" />
       <path d="m7 7 1 13h8l1-13" />
@@ -38,7 +48,7 @@ function TrashIcon() {
 
 function CheckIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
+    <svg aria-hidden="true" viewBox="0 0 24 24" {...iconProps}>
       <path d="m5 12 4 4L19 6" />
     </svg>
   );
@@ -46,7 +56,7 @@ function CheckIcon() {
 
 function CloseIcon() {
   return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
+    <svg aria-hidden="true" viewBox="0 0 24 24" {...iconProps}>
       <path d="M6 6l12 12M18 6 6 18" />
     </svg>
   );
