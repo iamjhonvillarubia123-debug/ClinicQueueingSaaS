@@ -1,10 +1,20 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreatePracticeLocationDto {
   @IsOptional()
   @IsString()
   @MaxLength(200)
   name?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  shortCode?: string;
 
   @IsOptional()
   @IsString()
@@ -35,4 +45,24 @@ export class CreatePracticeLocationDto {
   @IsString()
   @MaxLength(30)
   contactNumber?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(255)
+  clinicEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(250)
+  clinicDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  timeZone?: string;
 }
