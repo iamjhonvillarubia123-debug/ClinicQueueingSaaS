@@ -16,6 +16,7 @@ ADD COLUMN "description" VARCHAR(250);
 -- working-draft header. The physical table name is retained to preserve the
 -- already deployed schedule-draft data without a destructive rename.
 ALTER TABLE "DoctorPracticeScheduleDraft"
+ADD COLUMN "configurationSavedAt" TIMESTAMPTZ(3),
 ADD COLUMN "name" VARCHAR(200),
 ADD COLUMN "shortCode" VARCHAR(40),
 ADD COLUMN "addressLine1" VARCHAR(255),
