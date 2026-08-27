@@ -140,6 +140,89 @@ describe('ClinicTabPage configuration draft persistence', () => {
     );
   });
 
+  it('hydrates Doctor defaults in the same new-clinic session before the first whole-draft save', async () => {
+    let created = false;
+    apiRequestMock.mockImplementation(async (path, options) => {
+      if (path === '/practice-location' && !options)
+        return (created ? [location] : []) as never;
+      if (path === '/practice-location' && options?.method === 'POST') {
+        created = true;
+        return location as never;
+      }
+      if (path === '/practice-location/schedule-preflight')
+        return { valid: true } as never;
+      if (
+        path === '/practice-location/location-1/configuration-draft' &&
+        options?.method === 'PUT'
+      )
+        return location as never;
+      throw new Error(`Unexpected API request: ${path}`);
+    });
+
+    const user = userEvent.setup();
+    render(<ClinicTabPage />);
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Add New Clinic' }),
+    );
+    await user.type(screen.getByPlaceholderText('Enter clinic name'), 'Saved Clinic');
+    await user.type(
+      screen.getByPlaceholderText('Enter complete address'),
+      'Main Street',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
+
+    await waitFor(() =>
+      expect(apiRequestMock).toHaveBeenCalledWith(
+        '/practice-location',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining({
+            name: 'Saved Clinic',
+            addressLine1: 'Main Street',
+            countryCode: 'PH',
+            timeZone: 'Asia/Manila',
+          }),
+        }),
+      ),
+    );
+    expect(
+      apiRequestMock.mock.calls.some(
+        ([path]) => path === '/practice-location/location-1/configuration-draft',
+      ),
+    ).toBe(false);
+
+    await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
+
+    expect(await screen.findByDisplayValue('General Consultation')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Regular check-up')).toBeInTheDocument();
+
+    expect(apiRequestMock).toHaveBeenCalledWith(
+      '/practice-location/location-1/configuration-draft',
+      expect.objectContaining({
+        method: 'PUT',
+        body: expect.objectContaining({
+          services: expect.arrayContaining([
+            expect.objectContaining({
+              effectiveServiceId: 'service-1',
+              name: 'General Consultation',
+              durationMinutes: 30,
+              status: 'ACTIVE',
+            }),
+          ]),
+          bookingQuestions: expect.arrayContaining([
+            expect.objectContaining({
+              effectiveBookingQuestionId: 'question-1',
+              questionText: 'What is the reason for your visit?',
+              displayOrder: 1,
+              isActive: true,
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
   it('changes the clinic main action when a dropdown action is selected without executing it', async () => {
     const user = userEvent.setup();
     render(<ClinicTabPage />);
