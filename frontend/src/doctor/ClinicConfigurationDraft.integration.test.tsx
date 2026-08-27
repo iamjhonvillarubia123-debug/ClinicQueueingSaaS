@@ -55,37 +55,36 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     let savedServiceName = '';
     let savedServiceDescription = '';
 
+    const locationWithDraft = () => ({
+      ...effectiveLocation,
+      doctorScheduleDraft: {
+        name: effectiveLocation.name,
+        shortCode: effectiveLocation.shortCode,
+        addressLine1: effectiveLocation.addressLine1,
+        contactNumber: null,
+        clinicEmail: null,
+        clinicDescription: null,
+        countryCode: 'PH',
+        timeZone: 'Asia/Manila',
+        schedules: effectiveLocation.practiceSchedules,
+        services: [
+          {
+            id: 'draft-service-1',
+            effectiveServiceId: 'service-effective-1',
+            sourceDoctorServiceTemplateId: null,
+            name: savedServiceName,
+            description: savedServiceDescription,
+            durationMinutes: 30,
+            status: 'ACTIVE',
+          },
+        ],
+        bookingQuestions: [],
+      },
+    });
+
     apiRequestMock.mockImplementation(async (path, options) => {
       if (path === '/practice-location' && !options) {
-        if (!draftSaved) return [effectiveLocation] as never;
-        return [
-          {
-            ...effectiveLocation,
-            doctorScheduleDraft: {
-              name: effectiveLocation.name,
-              shortCode: effectiveLocation.shortCode,
-              addressLine1: effectiveLocation.addressLine1,
-              contactNumber: null,
-              clinicEmail: null,
-              clinicDescription: null,
-              countryCode: 'PH',
-              timeZone: 'Asia/Manila',
-              schedules: effectiveLocation.practiceSchedules,
-              services: [
-                {
-                  id: 'draft-service-1',
-                  effectiveServiceId: 'service-effective-1',
-                  sourceDoctorServiceTemplateId: null,
-                  name: savedServiceName,
-                  description: savedServiceDescription,
-                  durationMinutes: 30,
-                  status: 'ACTIVE',
-                },
-              ],
-              bookingQuestions: [],
-            },
-          },
-        ] as never;
+        return [draftSaved ? locationWithDraft() : effectiveLocation] as never;
       }
 
       if (path === '/practice-location/schedule-preflight') {
@@ -102,7 +101,7 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
         savedServiceName = body.services[0].name;
         savedServiceDescription = body.services[0].description ?? '';
         draftSaved = true;
-        return effectiveLocation as never;
+        return locationWithDraft() as never;
       }
 
       throw new Error(`Unexpected API request: ${path}`);
