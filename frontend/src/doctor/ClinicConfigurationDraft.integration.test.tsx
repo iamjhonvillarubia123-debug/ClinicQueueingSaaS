@@ -121,12 +121,25 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
 
-    const serviceName = screen.getByDisplayValue('General Consultation');
-    const serviceDescription = screen.getByDisplayValue('Effective wording');
+    expect(screen.getByText('General Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Effective wording')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Edit service General Consultation' }),
+    );
+
+    const serviceName = screen.getByLabelText(
+      'Service name for General Consultation',
+    );
+    const serviceDescription = screen.getByLabelText(
+      'Service description for General Consultation',
+    );
     await user.clear(serviceName);
     await user.type(serviceName, 'Draft Consultation');
     await user.clear(serviceDescription);
     await user.type(serviceDescription, 'Unpublished draft wording');
+    await user.click(
+      screen.getByRole('button', { name: 'Save changes for Draft Consultation' }),
+    );
 
     await user.click(
       screen.getByRole('button', { name: 'Choose save action' }),
@@ -157,9 +170,10 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
     await user.click(screen.getByRole('button', { name: 'Save and Continue' }));
 
-    expect(screen.getByDisplayValue('Draft Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Draft Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Unpublished draft wording')).toBeInTheDocument();
     expect(
-      screen.getByDisplayValue('Unpublished draft wording'),
+      screen.getByRole('button', { name: 'Edit service Draft Consultation' }),
     ).toBeInTheDocument();
   });
 });
