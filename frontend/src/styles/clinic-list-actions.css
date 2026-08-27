@@ -65,3 +65,28 @@
   content: 'Delete Clinic';
   font-size: 13px;
 }
+
+/* Keep required and optional markers on the same line as their field label. */
+.clinic-form-grid > label {
+  grid-template-columns: max-content max-content;
+  justify-content: start;
+  column-gap: 5px;
+  row-gap: 8px;
+}
+
+.clinic-form-grid > label > input,
+.clinic-form-grid > label > textarea,
+.clinic-form-grid > label > select,
+.clinic-form-grid > label > .clinic-count {
+  grid-column: 1 / -1;
+}
+
+.clinic-form-grid > label > b,
+.clinic-form-grid > label > small {
+  align-self: start;
+}
+
+.clinic-form-grid > label > b {
+  position: relative;
+  top: -1px;
+}
