@@ -89,10 +89,13 @@
 .service-management-icon-action {
   display: inline-flex;
   width: 34px;
+  min-width: 34px;
   height: 34px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
   border-radius: 7px;
+  opacity: 1;
 }
 
 .service-management-icon-action:hover {
@@ -100,16 +103,39 @@
   color: #111;
 }
 
-.service-management-icon-action svg,
-.service-management-confirm svg,
-.service-management-cancel svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.service-management-icon-action > svg,
+.service-management-confirm > svg,
+.service-management-cancel > svg {
+  display: block !important;
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  color: #4b5563 !important;
+  fill: none !important;
+  stroke: #4b5563 !important;
+  stroke-width: 1.9 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+.service-management-icon-action > svg > path,
+.service-management-confirm > svg > path,
+.service-management-cancel > svg > path {
+  fill: none !important;
+  stroke: #4b5563 !important;
+  stroke-width: 1.9 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  opacity: 1 !important;
+}
+
+.service-management-icon-action:hover > svg,
+.service-management-icon-action:hover > svg > path {
+  color: #111 !important;
+  stroke: #111 !important;
 }
 
 .service-management-row.is-editing {
