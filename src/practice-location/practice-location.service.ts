@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   PracticeLocationLifecycleStatus,
@@ -9,6 +10,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
+import { UpdatePracticeLocationDto } from './dto/update-practice-location.dto';
 
 @Injectable()
 export class PracticeLocationService {
@@ -144,6 +146,155 @@ export class PracticeLocationService {
     });
   }
 
+  async updateOwned(
+    userId: string,
+    practiceLocationId: string,
+    dto: UpdatePracticeLocationDto,
+  ) {
+    const doctorProfile = await this.prisma.doctorProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!doctorProfile) {
+      throw new ForbiddenException(
+        'Only a doctor may update a practice location.',
+      );
+    }
+
+    const existing = await this.prisma.practiceLocation.findFirst({
+      where: {
+        id: practiceLocationId,
+        doctorProfileId: doctorProfile.id,
+      },
+      select: {
+        id: true,
+        lifecycleStatus: true,
+        name: true,
+        addressLine1: true,
+      },
+    });
+
+    if (
+      !existing ||
+      existing.lifecycleStatus ===
+        PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
+    ) {
+      throw new NotFoundException('Practice location not found.');
+    }
+
+    const name =
+      dto.name === undefined
+        ? existing.name
+        : this.normalizeOptionalText(dto.name);
+    const addressLine1 =
+      dto.addressLine1 === undefined
+        ? existing.addressLine1
+        : this.normalizeOptionalText(dto.addressLine1);
+
+    if (
+      existing.lifecycleStatus === PracticeLocationLifecycleStatus.ACTIVE &&
+      name &&
+      addressLine1
+    ) {
+      const duplicate = await this.prisma.practiceLocation.findFirst({
+        where: {
+          doctorProfileId: doctorProfile.id,
+          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+          id: { not: practiceLocationId },
+          name: { equals: name, mode: 'insensitive' },
+          addressLine1: { equals: addressLine1, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+
+      if (duplicate) {
+        throw new ConflictException(
+          'An active practice location with this name and address already exists.',
+        );
+      }
+    }
+
+    return this.prisma.practiceLocation.update({
+      where: { id: practiceLocationId },
+      data: {
+        name,
+        addressLine1,
+        addressLine2:
+          dto.addressLine2 === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.addressLine2),
+        cityMunicipality:
+          dto.cityMunicipality === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.cityMunicipality),
+        province:
+          dto.province === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.province),
+        postalCode:
+          dto.postalCode === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.postalCode),
+        contactNumber:
+          dto.contactNumber === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.contactNumber),
+        countryCode:
+          dto.countryCode === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.countryCode),
+        timeZone:
+          dto.timeZone === undefined
+            ? undefined
+            : this.normalizeOptionalText(dto.timeZone),
+      },
+      select: {
+        id: true,
+        publicIdentifier: true,
+        lifecycleStatus: true,
+        name: true,
+        addressLine1: true,
+        addressLine2: true,
+        cityMunicipality: true,
+        province: true,
+        postalCode: true,
+        contactNumber: true,
+        countryCode: true,
+        timeZone: true,
+        isBookingEnabled: true,
+        createdAt: true,
+        updatedAt: true,
+        practiceSchedules: {
+          orderBy: { weekday: 'asc' },
+          select: {
+            weekday: true,
+            isOpen: true,
+            opensAtLocal: true,
+            closesAtLocal: true,
+            maximumOnlineBookingUntilLocal: true,
+            maximumOperatingUntilLocal: true,
+          },
+        },
+        doctorScheduleDraft: {
+          select: {
+            schedules: {
+              orderBy: { weekday: 'asc' },
+              select: {
+                weekday: true,
+                isOpen: true,
+                opensAtLocal: true,
+                closesAtLocal: true,
+                maximumOnlineBookingUntilLocal: true,
+                maximumOperatingUntilLocal: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async findAllForDoctor(userId: string) {
     const doctorProfile = await this.prisma.doctorProfile.findUnique({
       where: { userId },
@@ -175,6 +326,32 @@ export class PracticeLocationService {
         currentRegularPracticeStaffId: true,
         createdAt: true,
         updatedAt: true,
+        practiceSchedules: {
+          orderBy: { weekday: 'asc' },
+          select: {
+            weekday: true,
+            isOpen: true,
+            opensAtLocal: true,
+            closesAtLocal: true,
+            maximumOnlineBookingUntilLocal: true,
+            maximumOperatingUntilLocal: true,
+          },
+        },
+        doctorScheduleDraft: {
+          select: {
+            schedules: {
+              orderBy: { weekday: 'asc' },
+              select: {
+                weekday: true,
+                isOpen: true,
+                opensAtLocal: true,
+                closesAtLocal: true,
+                maximumOnlineBookingUntilLocal: true,
+                maximumOperatingUntilLocal: true,
+              },
+            },
+          },
+        },
       },
     });
   }

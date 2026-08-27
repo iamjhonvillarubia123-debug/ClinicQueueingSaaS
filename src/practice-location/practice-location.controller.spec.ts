@@ -3,10 +3,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
+import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationController } from './practice-location.controller';
 import { PracticeLocationService } from './practice-location.service';
+import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 
 describe('PracticeLocationController', () => {
   let controller: PracticeLocationController;
@@ -19,8 +21,10 @@ describe('PracticeLocationController', () => {
   const practiceLocationDataRetentionGateServiceMock = {
     assertCurrentAcknowledgement: jest.fn(),
   };
+  const practiceLocationDraftScheduleServiceMock = {};
   const practiceLocationLifecycleServiceMock = {};
   const practiceLocationPermanentDeleteServiceMock = {};
+  const practiceSchedulePreflightServiceMock = {};
   const authenticationServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
@@ -56,12 +60,20 @@ describe('PracticeLocationController', () => {
           useValue: practiceLocationDataRetentionGateServiceMock,
         },
         {
+          provide: PracticeLocationDraftScheduleService,
+          useValue: practiceLocationDraftScheduleServiceMock,
+        },
+        {
           provide: PracticeLocationLifecycleService,
           useValue: practiceLocationLifecycleServiceMock,
         },
         {
           provide: PracticeLocationPermanentDeleteService,
           useValue: practiceLocationPermanentDeleteServiceMock,
+        },
+        {
+          provide: PracticeSchedulePreflightService,
+          useValue: practiceSchedulePreflightServiceMock,
         },
         {
           provide: AuthenticationService,

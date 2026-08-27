@@ -209,7 +209,7 @@ describe('NotificationDeliveryWorkerService', () => {
     );
   });
 
-  it('records invalid provider output as uncertain instead of trusting it', async () => {
+  it('rejects invalid provider output instead of disguising a contract violation as delivery uncertainty', async () => {
     const fixture = createService();
     const submit = jest.fn<
       ReturnType<NotificationProviderAdapter['submit']>,
@@ -224,19 +224,14 @@ describe('NotificationDeliveryWorkerService', () => {
       }),
     );
 
-    await fixture.service.deliverClaimed(claimed, createAdapter(submit), now);
+    await expect(
+      fixture.service.deliverClaimed(claimed, createAdapter(submit), now),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(fixture.attemptService.finalizeReservedAttempt).toHaveBeenCalledWith(
-      claimed.id,
-      claimed.processingWorkerId,
-      1,
-      expect.objectContaining({
-        outcome: NotificationAttemptOutcome.UNCERTAIN,
-        providerName: 'provider-a',
-        providerStatus: 'submission-result-unavailable',
-      }),
-      now,
-    );
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(
+      fixture.attemptService.finalizeReservedAttempt,
+    ).not.toHaveBeenCalled();
   });
 
   it('does not call the provider when attempt reservation fails', async () => {

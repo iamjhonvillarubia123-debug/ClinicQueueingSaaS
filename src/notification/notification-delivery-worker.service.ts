@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import {
   NotificationAttemptOutcome,
   NotificationChannel,
@@ -10,9 +10,13 @@ import {
   NotificationDeliveryAttemptService,
   ProviderAttemptResult,
 } from './notification-delivery-attempt.service';
+import { NotificationDeliveryPayloadResolverService } from './notification-delivery-payload-resolver.service';
 import { ClaimedOutboxRow } from './notification-outbox-claim.service';
 import { NotificationPayloadService } from './notification-payload.service';
-import { NotificationProviderAdapter } from './notification-provider-adapter';
+import {
+  NotificationProviderAdapter,
+  NotificationProviderSubmissionResult,
+} from './notification-provider-adapter';
 import { NotificationProviderContractService } from './notification-provider-contract.service';
 import { NotificationSubmissionBoundaryService } from './notification-submission-boundary.service';
 
@@ -32,6 +36,8 @@ export class NotificationDeliveryWorkerService {
     private readonly attemptService: NotificationDeliveryAttemptService,
     private readonly submissionBoundaryService: NotificationSubmissionBoundaryService,
     private readonly providerContractService: NotificationProviderContractService,
+    @Optional()
+    private readonly payloadResolver?: NotificationDeliveryPayloadResolverService,
   ) {}
 
   async deliverClaimed(
@@ -40,12 +46,6 @@ export class NotificationDeliveryWorkerService {
     now?: Date,
   ): Promise<NotificationDeliveryResult> {
     this.providerContractService.assertAdapter(adapter, claimed.channel);
-
-    if (claimed.channel !== NotificationChannel.SMS) {
-      throw new BadRequestException(
-        'Notification delivery orchestration currently supports SMS only.',
-      );
-    }
 
     const submittedAt = now ?? new Date();
     const reservation = await this.submissionBoundaryService.reserveAttempt(
@@ -62,22 +62,11 @@ export class NotificationDeliveryWorkerService {
       };
     }
 
-    if (!claimed.recipientMobileEncrypted || !claimed.messageBodyEncrypted) {
-      throw new BadRequestException(
-        'Notification protected delivery payload is unavailable.',
-      );
-    }
+    const { recipient, messageBody } = this.resolvePayload(claimed);
 
-    const recipient = this.mobileNumberService.decrypt(
-      claimed.recipientMobileEncrypted,
-    );
-    const messageBody = this.payloadService.decryptMessage(
-      claimed.messageBodyEncrypted,
-    );
-
-    let result: ProviderAttemptResult;
+    let providerResult: NotificationProviderSubmissionResult;
     try {
-      const providerResult = await adapter.submit({
+      providerResult = await adapter.submit({
         notificationOutboxId: claimed.id,
         notificationType: claimed.notificationType,
         channel: claimed.channel,
@@ -85,14 +74,8 @@ export class NotificationDeliveryWorkerService {
         recipient,
         messageBody,
       });
-      this.providerContractService.assertSubmissionResult(
-        adapter,
-        providerResult,
-        [recipient, messageBody],
-      );
-      result = providerResult;
     } catch {
-      result = {
+      providerResult = {
         outcome: NotificationAttemptOutcome.UNCERTAIN,
         providerName: adapter.providerName,
         providerStatus: 'submission-result-unavailable',
@@ -103,6 +86,13 @@ export class NotificationDeliveryWorkerService {
       };
     }
 
+    this.providerContractService.assertSubmissionResult(
+      adapter,
+      providerResult,
+      [recipient, messageBody],
+    );
+    const result: ProviderAttemptResult = providerResult;
+
     const finalizedAt = now ?? new Date();
     return this.attemptService.finalizeReservedAttempt(
       claimed.id,
@@ -111,5 +101,33 @@ export class NotificationDeliveryWorkerService {
       result,
       finalizedAt,
     );
+  }
+
+  private resolvePayload(claimed: ClaimedOutboxRow): {
+    recipient: string;
+    messageBody: string;
+  } {
+    if (this.payloadResolver) {
+      return this.payloadResolver.resolve(claimed);
+    }
+
+    if (
+      claimed.channel !== NotificationChannel.SMS ||
+      !claimed.recipientMobileEncrypted ||
+      !claimed.messageBodyEncrypted
+    ) {
+      throw new BadRequestException(
+        'Notification protected delivery payload is unavailable.',
+      );
+    }
+
+    return {
+      recipient: this.mobileNumberService.decrypt(
+        claimed.recipientMobileEncrypted,
+      ),
+      messageBody: this.payloadService.decryptMessage(
+        claimed.messageBodyEncrypted,
+      ),
+    };
   }
 }

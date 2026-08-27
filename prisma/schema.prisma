@@ -520,16 +520,16 @@ model DoctorProfile {
 }
 
 model DoctorAccountSettings {
-  id                         String   @id @default(uuid())
-  doctorProfileId            String   @unique
-  defaultTimeZone            String   @default("Asia/Manila") @db.VarChar(100)
-  defaultConsultationMinutes Int      @default(30)
+  id                                       String   @id @default(uuid())
+  doctorProfileId                          String   @unique
+  defaultTimeZone                          String   @default("Asia/Manila") @db.VarChar(100)
+  defaultConsultationMinutes               Int      @default(30)
   maximumEstimatedServiceMinutesPerPatient Int?
-  maximumAdvanceBookingDays  Int      @default(30)
-  allowOnlineBooking         Boolean  @default(true)
-  noClinicOnRegularHolidays  Boolean  @default(false)
-  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime @updatedAt @db.Timestamptz(3)
+  maximumAdvanceBookingDays                Int      @default(30)
+  allowOnlineBooking                       Boolean  @default(true)
+  noClinicOnRegularHolidays                Boolean  @default(false)
+  createdAt                                DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                                DateTime @updatedAt @db.Timestamptz(3)
 
   doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
 }
@@ -564,7 +564,7 @@ model EmailVerification {
 
   status EmailVerificationStatus @default(PENDING)
 
-  expiresAt DateTime @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
   verifiedAt DateTime? @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
 
@@ -590,9 +590,9 @@ model PasswordReset {
 
   status PasswordResetStatus @default(PENDING)
 
-  expiresAt DateTime @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
   consumedAt DateTime? @db.Timestamptz(3)
-  revokedAt DateTime? @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -605,7 +605,6 @@ model PasswordReset {
   @@index([status, expiresAt])
   @@index([userId, createdAt])
 }
-
 
 model DoctorDataRetentionAcknowledgement {
   id String @id @default(uuid())
@@ -758,20 +757,21 @@ model PracticeLocation {
   secretarySettingsDrafts SecretarySettingsDraft[]
   services                PracticeLocationService[]
   practiceSchedules       PracticeSchedule[]
+  doctorScheduleDraft     DoctorPracticeScheduleDraft?
   scheduleExceptions      ScheduleException[]
 
-  bookingDrafts                BookingDraft[]
-  appointments                 Appointment[]
-  bookingGroups                BookingGroup[]
-  clinicDays                   ClinicDay[]
+  bookingDrafts                 BookingDraft[]
+  appointments                  Appointment[]
+  bookingGroups                 BookingGroup[]
+  clinicDays                    ClinicDay[]
   clinicDayOperatingStaffAudits ClinicDayOperatingStaffAudit[]
-  queueCounters                QueueCounter[]
-  queueEvents                  QueueEvent[]
-  bookingQuestions             BookingQuestion[]
-  bookingRecoveryAttempts      BookingRecoveryAttempt[]
-  bookingGroupRecoveryAttempts BookingGroupRecoveryAttempt[]
-  scheduledReminders           ScheduledReminder[]
-  notificationOutboxes         NotificationOutbox[]
+  queueCounters                 QueueCounter[]
+  queueEvents                   QueueEvent[]
+  bookingQuestions              BookingQuestion[]
+  bookingRecoveryAttempts       BookingRecoveryAttempt[]
+  bookingGroupRecoveryAttempts  BookingGroupRecoveryAttempt[]
+  scheduledReminders            ScheduledReminder[]
+  notificationOutboxes          NotificationOutbox[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -991,6 +991,42 @@ model PracticeSchedule {
   @@index([practiceLocationId])
 }
 
+// Doctor-authored working copy for schedule edits on an already effective
+// clinic. It remains separate from PracticeSchedule until a protected apply
+// workflow is completed.
+model DoctorPracticeScheduleDraft {
+  id String @id @default(uuid())
+
+  practiceLocationId String @unique
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  practiceLocation PracticeLocation                 @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  schedules        DoctorPracticeScheduleDraftRow[]
+}
+
+model DoctorPracticeScheduleDraftRow {
+  id String @id @default(uuid())
+
+  doctorPracticeScheduleDraftId String
+  weekday                       Weekday
+
+  isOpen                         Boolean
+  opensAtLocal                   DateTime? @db.Time(0)
+  closesAtLocal                  DateTime? @db.Time(0)
+  maximumOnlineBookingUntilLocal DateTime? @db.Time(0)
+  maximumOperatingUntilLocal     DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  doctorPracticeScheduleDraft DoctorPracticeScheduleDraft @relation(fields: [doctorPracticeScheduleDraftId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorPracticeScheduleDraftId, weekday])
+  @@index([doctorPracticeScheduleDraftId])
+}
+
 model ScheduleException {
   id String @id @default(uuid())
 
@@ -1203,7 +1239,7 @@ model BookingGroup {
 
   practiceLocation             PracticeLocation              @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointments                 Appointment[]
-  notificationOutboxes          NotificationOutbox[]
+  notificationOutboxes         NotificationOutbox[]
   accessTokens                 BookingGroupAccessToken[]
   recoveryAttempts             BookingGroupRecoveryAttempt[]
   commandIdempotenciesAsScope  CommandIdempotency[]          @relation("CommandIdempotencyBookingGroupScope")
@@ -1959,7 +1995,7 @@ model CommandIdempotency {
 
 model BookingDraft {
   id               String             @id @default(uuid())
-  bookingReference String? @unique @db.VarChar(20)
+  bookingReference String?            @unique @db.VarChar(20)
   mode             BookingDraftMode   @default(INDIVIDUAL)
   status           BookingDraftStatus @default(PENDING_OTP)
 
@@ -1981,7 +2017,7 @@ model BookingDraft {
   draftControlTokenHash String? @db.VarChar(64)
 
   privacyNoticeAcknowledgedAt DateTime? @db.Timestamptz(3)
-  privacyNoticeVersion String? @db.VarChar(50)
+  privacyNoticeVersion        String?   @db.VarChar(50)
   scheduledReminderOptIn      Boolean   @default(false)
 
   serviceDate DateTime @db.Date
