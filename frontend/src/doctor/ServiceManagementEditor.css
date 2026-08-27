@@ -1,0 +1,231 @@
+.service-management-table {
+  margin-top: 18px;
+  border: 1px solid #dfe4ea;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.service-management-head,
+.service-management-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.25fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) minmax(150px, 0.72fr);
+  column-gap: 24px;
+  align-items: center;
+}
+
+.service-management-head {
+  min-height: 42px;
+  padding: 0 16px;
+  border-bottom: 1px solid #e5e9ee;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.service-management-row {
+  min-height: 72px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e8ebef;
+}
+
+.service-management-row:last-child {
+  border-bottom: 0;
+}
+
+.service-management-service {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.service-management-service > strong {
+  color: #151515;
+  font-size: 14px;
+}
+
+.service-management-service > span {
+  overflow: hidden;
+  color: #667085;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-management-duration,
+.service-management-status,
+.service-management-actions {
+  min-width: 0;
+}
+
+.service-management-duration > span {
+  color: #242424;
+  font-size: 13px;
+}
+
+.service-management-status {
+  display: flex;
+  align-items: center;
+}
+
+.service-management-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.service-management-icon-action,
+.service-management-confirm,
+.service-management-cancel {
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.service-management-icon-action {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.service-management-icon-action:hover {
+  background: #f5f6f7;
+  color: #111;
+}
+
+.service-management-icon-action svg,
+.service-management-confirm svg,
+.service-management-cancel svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.service-management-row.is-editing {
+  min-height: 108px;
+  background: #fcfdfc;
+}
+
+.service-management-row.is-editing label {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.service-management-row.is-editing label > span {
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.service-management-row.is-editing input,
+.service-management-row.is-editing select {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid #aeb7c2;
+  border-radius: 0;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  padding: 5px 0 6px;
+  outline: none;
+}
+
+.service-management-row.is-editing input:focus,
+.service-management-row.is-editing select:focus {
+  border-bottom-color: #111;
+}
+
+.service-management-duration label > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.service-management-duration label > div input {
+  max-width: 90px;
+}
+
+.service-management-duration label > div > span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.service-management-confirm,
+.service-management-cancel {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.service-management-confirm {
+  color: #111;
+}
+
+.service-management-confirm:hover,
+.service-management-cancel:hover {
+  background: #f4f5f6;
+}
+
+.service-management-cancel {
+  color: #4b5563;
+}
+
+@media (max-width: 900px) {
+  .service-management-head {
+    display: none;
+  }
+
+  .service-management-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
+  }
+
+  .service-management-service {
+    grid-column: 1 / 2;
+  }
+
+  .service-management-actions {
+    grid-column: 2 / 3;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+
+  .service-management-duration,
+  .service-management-status {
+    grid-row: 2;
+  }
+
+  .service-management-row.is-editing {
+    grid-template-columns: 1fr;
+  }
+
+  .service-management-row.is-editing .service-management-service,
+  .service-management-row.is-editing .service-management-duration,
+  .service-management-row.is-editing .service-management-status,
+  .service-management-row.is-editing .service-management-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .service-management-row.is-editing .service-management-actions {
+    justify-content: flex-start;
+  }
+}
