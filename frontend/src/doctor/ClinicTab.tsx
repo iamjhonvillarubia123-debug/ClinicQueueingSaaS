@@ -1091,6 +1091,7 @@ function QuestionsEditor({
                         : row,
                   ),
                 )
+              }
               />{' '}
               Required
             </label>
