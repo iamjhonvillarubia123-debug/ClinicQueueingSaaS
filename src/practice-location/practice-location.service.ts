@@ -134,6 +134,28 @@ export class PracticeLocationService {
           timeZone: true,
           isBookingEnabled: true,
           createdAt: true,
+          services: {
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+            select: {
+              id: true,
+              sourceDoctorServiceTemplateId: true,
+              name: true,
+              description: true,
+              durationMinutes: true,
+              status: true,
+            },
+          },
+          bookingQuestions: {
+            orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+            select: {
+              id: true,
+              questionText: true,
+              type: true,
+              isRequired: true,
+              displayOrder: true,
+              isActive: true,
+            },
+          },
         },
       });
 
