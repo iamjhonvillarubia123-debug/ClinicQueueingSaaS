@@ -62,6 +62,33 @@ export class PracticeLocationConfigurationDraftService {
         );
 
         if (location.lifecycleStatus === PracticeLocationLifecycleStatus.DRAFT) {
+          const existingQuestions = await transaction.bookingQuestion.findMany({
+            where: { practiceLocationId },
+            select: {
+              id: true,
+              helpText: true,
+              estimatedMinutesAdjustment: true,
+              textMaximumLength: true,
+              numberMinimum: true,
+              numberMaximum: true,
+              selectOptions: true,
+            },
+          });
+          const existingQuestionsById = new Map(
+            existingQuestions.map((question) => [question.id, question]),
+          );
+
+          for (const question of dto.bookingQuestions) {
+            if (
+              question.effectiveBookingQuestionId &&
+              !existingQuestionsById.has(question.effectiveBookingQuestionId)
+            ) {
+              throw new BadRequestException(
+                'A BookingQuestion draft reference does not belong to this clinic.',
+              );
+            }
+          }
+
           await transaction.practiceLocation.update({
             where: { id: practiceLocationId },
             data: basicInfo,
@@ -100,14 +127,32 @@ export class PracticeLocationConfigurationDraftService {
           });
           if (dto.bookingQuestions.length) {
             await transaction.bookingQuestion.createMany({
-              data: dto.bookingQuestions.map((question) => ({
-                practiceLocationId,
-                questionText: question.questionText.trim(),
-                type: question.type,
-                isRequired: question.isRequired,
-                displayOrder: question.displayOrder,
-                isActive: question.isActive,
-              })),
+              data: dto.bookingQuestions.map((question) => {
+                const existing = question.effectiveBookingQuestionId
+                  ? existingQuestionsById.get(
+                      question.effectiveBookingQuestionId,
+                    )
+                  : undefined;
+                return {
+                  practiceLocationId,
+                  questionText: question.questionText.trim(),
+                  helpText: existing?.helpText ?? null,
+                  type: question.type,
+                  isRequired: question.isRequired,
+                  displayOrder: question.displayOrder,
+                  isActive: question.isActive,
+                  estimatedMinutesAdjustment:
+                    existing?.estimatedMinutesAdjustment ?? 0,
+                  textMaximumLength: existing?.textMaximumLength ?? null,
+                  numberMinimum: existing?.numberMinimum ?? null,
+                  numberMaximum: existing?.numberMaximum ?? null,
+                  selectOptions:
+                    existing?.selectOptions === null ||
+                    existing?.selectOptions === undefined
+                      ? Prisma.JsonNull
+                      : existing.selectOptions,
+                };
+              }),
             });
           }
 
@@ -284,6 +329,7 @@ export class PracticeLocationConfigurationDraftService {
 
   private validateServices(dto: SaveDoctorClinicConfigurationDraftDto) {
     const names = new Set<string>();
+    const effectiveIds = new Set<string>();
     for (const service of dto.services) {
       const name = service.name.trim();
       if (!name) throw new BadRequestException('Service name is required.');
@@ -294,11 +340,29 @@ export class PracticeLocationConfigurationDraftService {
         );
       }
       names.add(key);
+      if (service.effectiveServiceId) {
+        if (effectiveIds.has(service.effectiveServiceId)) {
+          throw new BadRequestException(
+            'The same effective Service cannot appear twice in one clinic draft.',
+          );
+        }
+        effectiveIds.add(service.effectiveServiceId);
+      }
     }
   }
 
   private validateQuestions(dto: SaveDoctorClinicConfigurationDraftDto) {
     const orders = new Set<number>();
+    const effectiveIds = new Set<string>();
+    const activeCount = dto.bookingQuestions.filter(
+      (question) => question.isActive,
+    ).length;
+    if (activeCount > 5) {
+      throw new BadRequestException(
+        'A clinic may have no more than 5 active BookingQuestions.',
+      );
+    }
+
     for (const question of dto.bookingQuestions) {
       if (!question.questionText.trim()) {
         throw new BadRequestException('Booking question text is required.');
@@ -309,6 +373,14 @@ export class PracticeLocationConfigurationDraftService {
         );
       }
       orders.add(question.displayOrder);
+      if (question.effectiveBookingQuestionId) {
+        if (effectiveIds.has(question.effectiveBookingQuestionId)) {
+          throw new BadRequestException(
+            'The same effective BookingQuestion cannot appear twice in one clinic draft.',
+          );
+        }
+        effectiveIds.add(question.effectiveBookingQuestionId);
+      }
     }
   }
 
