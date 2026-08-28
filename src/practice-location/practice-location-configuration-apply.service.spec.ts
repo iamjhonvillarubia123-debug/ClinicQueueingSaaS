@@ -9,7 +9,9 @@ import { PracticeLocationConfigurationApplyService } from './practice-location-c
 
 describe('PracticeLocationConfigurationApplyService', () => {
   const passwordSecurity = { verify: jest.fn() };
-  const recurringScheduleConflict = { assertNoConflictForLocation: jest.fn() };
+  const recurringScheduleConflict = {
+    assertNoConflictForLocation: jest.fn(),
+  };
   const scheduleTime = { assertValidTimeZone: jest.fn() };
 
   function buildTransaction(status = PracticeLocationLifecycleStatus.ACTIVE) {
@@ -46,8 +48,8 @@ describe('PracticeLocationConfigurationApplyService', () => {
 
   function buildService(transaction: ReturnType<typeof buildTransaction>) {
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
-        callback(transaction),
+      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
+        Promise.resolve(callback(transaction)),
       ),
     };
     return new PracticeLocationConfigurationApplyService(
@@ -83,7 +85,9 @@ describe('PracticeLocationConfigurationApplyService', () => {
       'wrong-password',
       'stored-hash',
     );
-    expect(transaction.doctorPracticeScheduleDraft.findUnique).not.toHaveBeenCalled();
+    expect(
+      transaction.doctorPracticeScheduleDraft.findUnique,
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects Apply Changes when the clinic lifecycle is not active or disabled', async () => {
@@ -104,7 +108,9 @@ describe('PracticeLocationConfigurationApplyService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(passwordSecurity.verify).not.toHaveBeenCalled();
-    expect(transaction.doctorPracticeScheduleDraft.findUnique).not.toHaveBeenCalled();
+    expect(
+      transaction.doctorPracticeScheduleDraft.findUnique,
+    ).not.toHaveBeenCalled();
   });
 
   it('preserves effective configuration when there is no proposed draft to apply', async () => {
@@ -125,7 +131,11 @@ describe('PracticeLocationConfigurationApplyService', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
 
-    expect(transaction.doctorPracticeScheduleDraft.findUnique).toHaveBeenCalledTimes(1);
-    expect(recurringScheduleConflict.assertNoConflictForLocation).not.toHaveBeenCalled();
+    expect(
+      transaction.doctorPracticeScheduleDraft.findUnique,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      recurringScheduleConflict.assertNoConflictForLocation,
+    ).not.toHaveBeenCalled();
   });
 });
