@@ -476,13 +476,22 @@ export class PracticeLocationService {
         ? {
             ...location.doctorScheduleDraft,
             bookingQuestions: location.doctorScheduleDraft.bookingQuestions.map(
-              (question) => ({
-                ...question,
-                selectOptions:
-                  question.type === BookingQuestionType.SINGLE_SELECT
-                    ? optionsByQuestionId.get(question.id) ?? []
-                    : null,
-              }),
+              (question) => {
+                const draftOptions = optionsByQuestionId.get(question.id);
+                const effectiveOptions = question.effectiveBookingQuestionId
+                  ? location.bookingQuestions.find(
+                      (effectiveQuestion) =>
+                        effectiveQuestion.id === question.effectiveBookingQuestionId,
+                    )?.selectOptions
+                  : undefined;
+                return {
+                  ...question,
+                  selectOptions:
+                    question.type === BookingQuestionType.SINGLE_SELECT
+                      ? draftOptions ?? effectiveOptions ?? []
+                      : null,
+                };
+              },
             ),
           }
         : null,
