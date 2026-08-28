@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import './QuestionManagementEditor.css';
 
 type QuestionType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
+
+type QuestionOption = {
+  value: string;
+  label: string;
+};
 
 type QuestionRow = {
   id: string | number;
@@ -12,6 +17,7 @@ type QuestionRow = {
   type: QuestionType;
   required: boolean;
   active: boolean;
+  options: QuestionOption[];
 };
 
 type Props = {
@@ -76,11 +82,22 @@ function normalizeOrders(rows: QuestionRow[]) {
   return rows.map((row, index) => ({ ...row, order: index }));
 }
 
+function createOptionValue() {
+  return `OPTION_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
+}
+
+function blankOption(): QuestionOption {
+  return { value: createOptionValue(), label: '' };
+}
+
 export function QuestionManagementEditor({ questions, setQuestions }: Props) {
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editSnapshot, setEditSnapshot] = useState<QuestionRow | null>(null);
   const [draggingId, setDraggingId] = useState<string | number | null>(null);
   const [dragOverId, setDragOverId] = useState<string | number | null>(null);
+  const [draggingOptionValue, setDraggingOptionValue] = useState<string | null>(null);
+  const [dragOverOptionValue, setDragOverOptionValue] = useState<string | null>(null);
+  const [optionError, setOptionError] = useState('');
   const questionInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeCount = questions.filter((question) => question.active).length;
@@ -105,10 +122,12 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
       type: 'TEXT',
       required: false,
       active: activeCount < 5,
+      options: [],
     };
     setRows([...questions, question]);
-    setEditSnapshot({ ...question });
+    setEditSnapshot({ ...question, options: [] });
     setEditingId(id);
+    setOptionError('');
   }
 
   function updateQuestion(id: string | number, patch: Partial<QuestionRow>) {
@@ -120,29 +139,66 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
   }
 
   function startEditing(question: QuestionRow) {
-    setEditSnapshot({ ...question });
+    setEditSnapshot({
+      ...question,
+      options: question.options.map((option) => ({ ...option })),
+    });
     setEditingId(question.id);
+    setOptionError('');
   }
 
-  function finishEditing() {
+  function validateSingleChoiceOptions(question: QuestionRow) {
+    if (question.type !== 'SINGLE_SELECT') return '';
+    const populated = question.options.filter((option) => option.label.trim());
+    if (populated.length < 2) {
+      return 'Single Choice questions require at least 2 options.';
+    }
+    return '';
+  }
+
+  function finishEditing(question: QuestionRow) {
+    const error = validateSingleChoiceOptions(question);
+    if (error) {
+      setOptionError(error);
+      return;
+    }
+    if (question.type === 'SINGLE_SELECT') {
+      updateQuestion(question.id, {
+        options: question.options
+          .filter((option) => option.label.trim())
+          .map((option) => ({ ...option, label: option.label.trim() })),
+      });
+    }
     setEditSnapshot(null);
     setEditingId(null);
+    setOptionError('');
   }
 
   function cancelEditing() {
     if (editSnapshot) {
       setQuestions(
         questions.map((question) =>
-          question.id === editSnapshot.id ? { ...editSnapshot } : question,
+          question.id === editSnapshot.id
+            ? {
+                ...editSnapshot,
+                options: editSnapshot.options.map((option) => ({ ...option })),
+              }
+            : question,
         ),
       );
     }
-    finishEditing();
+    setEditSnapshot(null);
+    setEditingId(null);
+    setOptionError('');
   }
 
   function deleteQuestion(id: string | number) {
     setRows(questions.filter((question) => question.id !== id));
-    if (editingId === id) finishEditing();
+    if (editingId === id) {
+      setEditSnapshot(null);
+      setEditingId(null);
+      setOptionError('');
+    }
   }
 
   function reorderQuestions(sourceId: string | number, targetId: string | number) {
@@ -162,15 +218,60 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
     setDragOverId(null);
   }
 
+  function changeQuestionType(question: QuestionRow, type: QuestionType) {
+    if (type === 'SINGLE_SELECT') {
+      const options = question.options.length >= 2
+        ? question.options
+        : [...question.options, ...Array.from({ length: 2 - question.options.length }, blankOption)];
+      updateQuestion(question.id, { type, options });
+    } else {
+      updateQuestion(question.id, { type, options: [] });
+    }
+    setOptionError('');
+  }
+
+  function addOption(question: QuestionRow) {
+    updateQuestion(question.id, { options: [...question.options, blankOption()] });
+    setOptionError('');
+  }
+
+  function updateOption(question: QuestionRow, value: string, label: string) {
+    updateQuestion(question.id, {
+      options: question.options.map((option) =>
+        option.value === value ? { ...option, label } : option,
+      ),
+    });
+    setOptionError('');
+  }
+
+  function deleteOption(question: QuestionRow, value: string) {
+    updateQuestion(question.id, {
+      options: question.options.filter((option) => option.value !== value),
+    });
+    setOptionError('');
+  }
+
+  function reorderOptions(question: QuestionRow, sourceValue: string, targetValue: string) {
+    if (sourceValue === targetValue) return;
+    const sourceIndex = question.options.findIndex((option) => option.value === sourceValue);
+    const targetIndex = question.options.findIndex((option) => option.value === targetValue);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+    const reordered = [...question.options];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    updateQuestion(question.id, { options: reordered });
+  }
+
+  function finishOptionDragging() {
+    setDraggingOptionValue(null);
+    setDragOverOptionValue(null);
+  }
+
   return (
     <>
       <div className="clinic-section-toolbar">
         <p>Add questions to ask patients during booking. Maximum 5 active questions.</p>
-        <button
-          className="clinic-secondary"
-          type="button"
-          onClick={addQuestion}
-        >
+        <button className="clinic-secondary" type="button" onClick={addQuestion}>
           + Add Question
         </button>
       </div>
@@ -191,174 +292,248 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
           const activatingWouldExceedLimit = !question.active && activeCount >= 5;
 
           return (
-            <div
-              className={`question-management-row${editing ? ' is-editing' : ''}${dragging ? ' is-dragging' : ''}${dragOver ? ' is-drag-over' : ''}`}
-              key={question.id}
-              draggable={!editing}
-              title={!editing ? 'Drag to reorder question' : undefined}
-              onDragStart={(event) => {
-                if (editing) {
+            <Fragment key={question.id}>
+              <div
+                className={`question-management-row${editing ? ' is-editing' : ''}${dragging ? ' is-dragging' : ''}${dragOver ? ' is-drag-over' : ''}`}
+                draggable={!editing}
+                title={!editing ? 'Drag to reorder question' : undefined}
+                onDragStart={(event) => {
+                  if (editing) {
+                    event.preventDefault();
+                    return;
+                  }
+                  setDraggingId(question.id);
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', String(question.id));
+                }}
+                onDragOver={(event) => {
+                  if (editing || draggingId === null) return;
                   event.preventDefault();
-                  return;
-                }
-                setDraggingId(question.id);
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', String(question.id));
-              }}
-              onDragOver={(event) => {
-                if (editing || draggingId === null) return;
-                event.preventDefault();
-                setDragOverId(question.id);
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                if (draggingId !== null && !editing) {
-                  reorderQuestions(draggingId, question.id);
-                }
-                finishDragging();
-              }}
-              onDragEnd={finishDragging}
-            >
-              <div className="question-management-question">
-                {editing ? (
-                  <label>
-                    <span>Question</span>
-                    <input
-                      ref={questionInputRef}
-                      aria-label={`Question text for ${question.question}`}
-                      value={question.question}
-                      onChange={(event) =>
-                        updateQuestion(question.id, { question: event.target.value })
-                      }
-                      placeholder="Enter booking question"
-                    />
-                  </label>
-                ) : (
-                  <strong>{question.question}</strong>
-                )}
-              </div>
+                  setDragOverId(question.id);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (draggingId !== null && !editing) {
+                    reorderQuestions(draggingId, question.id);
+                  }
+                  finishDragging();
+                }}
+                onDragEnd={finishDragging}
+              >
+                <div className="question-management-question">
+                  {editing ? (
+                    <label>
+                      <span>Question</span>
+                      <input
+                        ref={questionInputRef}
+                        aria-label={`Question text for ${question.question}`}
+                        value={question.question}
+                        onChange={(event) =>
+                          updateQuestion(question.id, { question: event.target.value })
+                        }
+                        placeholder="Enter booking question"
+                      />
+                    </label>
+                  ) : (
+                    <strong>{question.question}</strong>
+                  )}
+                </div>
 
-              <div className="question-management-type">
-                {editing ? (
-                  <label>
-                    <span>Type</span>
-                    <select
-                      aria-label={`Question type for ${question.question}`}
-                      value={question.type}
-                      onChange={(event) =>
-                        updateQuestion(question.id, {
-                          type: event.target.value as QuestionType,
-                        })
-                      }
-                    >
-                      <option value="TEXT">Text</option>
-                      <option value="NUMBER">Number</option>
-                      <option value="BOOLEAN">Yes / No</option>
-                      <option value="SINGLE_SELECT">Single Choice</option>
-                    </select>
-                  </label>
-                ) : (
-                  <span>{typeLabel(question.type)}</span>
-                )}
-              </div>
+                <div className="question-management-type">
+                  {editing ? (
+                    <label>
+                      <span>Type</span>
+                      <select
+                        aria-label={`Question type for ${question.question}`}
+                        value={question.type}
+                        onChange={(event) =>
+                          changeQuestionType(question, event.target.value as QuestionType)
+                        }
+                      >
+                        <option value="TEXT">Text</option>
+                        <option value="NUMBER">Number</option>
+                        <option value="BOOLEAN">Yes / No</option>
+                        <option value="SINGLE_SELECT">Single Choice</option>
+                      </select>
+                    </label>
+                  ) : (
+                    <span>{typeLabel(question.type)}</span>
+                  )}
+                </div>
 
-              <div className="question-management-status">
-                {editing ? (
-                  <label>
-                    <span>Status</span>
-                    <select
-                      aria-label={`Status for ${question.question}`}
-                      value={question.active ? 'ACTIVE' : 'INACTIVE'}
-                      onChange={(event) => {
-                        const active = event.target.value === 'ACTIVE';
-                        if (active && activatingWouldExceedLimit) return;
-                        updateQuestion(question.id, { active });
-                      }}
-                    >
-                      <option value="ACTIVE" disabled={activatingWouldExceedLimit}>Active</option>
-                      <option value="INACTIVE">Inactive</option>
-                    </select>
-                  </label>
-                ) : (
-                  <span className={`clinic-status-pill${question.active ? ' is-active' : ''}`}>
-                    {question.active ? 'Active' : 'Inactive'}
-                  </span>
-                )}
-              </div>
+                <div className="question-management-status">
+                  {editing ? (
+                    <label>
+                      <span>Status</span>
+                      <select
+                        aria-label={`Status for ${question.question}`}
+                        value={question.active ? 'ACTIVE' : 'INACTIVE'}
+                        onChange={(event) => {
+                          const active = event.target.value === 'ACTIVE';
+                          if (active && activatingWouldExceedLimit) return;
+                          updateQuestion(question.id, { active });
+                        }}
+                      >
+                        <option value="ACTIVE" disabled={activatingWouldExceedLimit}>Active</option>
+                        <option value="INACTIVE">Inactive</option>
+                      </select>
+                    </label>
+                  ) : (
+                    <span className={`clinic-status-pill${question.active ? ' is-active' : ''}`}>
+                      {question.active ? 'Active' : 'Inactive'}
+                    </span>
+                  )}
+                </div>
 
-              <div className="question-management-required">
-                {editing ? (
+                <div className="question-management-required">
                   <label className="question-management-required-control">
                     <input
                       aria-label={`Required for ${question.question}`}
                       type="checkbox"
                       checked={question.required}
-                      onChange={(event) =>
-                        updateQuestion(question.id, { required: event.target.checked })
-                      }
+                      readOnly={!editing}
+                      tabIndex={editing ? 0 : -1}
+                      onChange={(event) => {
+                        if (editing) {
+                          updateQuestion(question.id, { required: event.target.checked });
+                        }
+                      }}
                     />
-                    <span>{question.required ? 'Required' : 'Optional'}</span>
                   </label>
-                ) : (
-                  <span className="question-management-required-display">
-                    <input type="checkbox" checked={question.required} readOnly tabIndex={-1} aria-hidden="true" />
-                    <span>{question.required ? 'Required' : 'Optional'}</span>
-                  </span>
-                )}
+                </div>
+
+                <div
+                  className="question-management-actions"
+                  onDragStart={(event) => event.stopPropagation()}
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  {editing ? (
+                    <>
+                      <button
+                        className="question-management-confirm"
+                        type="button"
+                        title="Save question changes"
+                        aria-label={`Save changes for ${question.question}`}
+                        onClick={() => finishEditing(question)}
+                      >
+                        <CheckIcon />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        className="question-management-cancel"
+                        type="button"
+                        title="Cancel question editing"
+                        aria-label={`Cancel editing ${question.question}`}
+                        onClick={cancelEditing}
+                      >
+                        <CloseIcon />
+                        <span>Cancel</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="question-management-icon-action"
+                        type="button"
+                        title="Edit question"
+                        aria-label={`Edit question ${question.question}`}
+                        onClick={() => startEditing(question)}
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        className="question-management-icon-action"
+                        type="button"
+                        title="Delete question"
+                        aria-label={`Delete question ${question.question}`}
+                        onClick={() => deleteQuestion(question.id)}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div
-                className="question-management-actions"
-                onDragStart={(event) => event.stopPropagation()}
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                {editing ? (
-                  <>
-                    <button
-                      className="question-management-confirm"
-                      type="button"
-                      title="Save question changes"
-                      aria-label={`Save changes for ${question.question}`}
-                      onClick={finishEditing}
-                    >
-                      <CheckIcon />
-                      <span>Save</span>
-                    </button>
-                    <button
-                      className="question-management-cancel"
-                      type="button"
-                      title="Cancel question editing"
-                      aria-label={`Cancel editing ${question.question}`}
-                      onClick={cancelEditing}
-                    >
-                      <CloseIcon />
-                      <span>Cancel</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className="question-management-icon-action"
-                      type="button"
-                      title="Edit question"
-                      aria-label={`Edit question ${question.question}`}
-                      onClick={() => startEditing(question)}
-                    >
-                      <PencilIcon />
-                    </button>
-                    <button
-                      className="question-management-icon-action"
-                      type="button"
-                      title="Delete question"
-                      aria-label={`Delete question ${question.question}`}
-                      onClick={() => deleteQuestion(question.id)}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+              {editing && question.type === 'SINGLE_SELECT' ? (
+                <div className="question-management-options" onMouseDown={(event) => event.stopPropagation()}>
+                  <div className="question-management-options-heading">
+                    <strong>Options patients can choose</strong>
+                    <span>Patients can select one option only.</span>
+                  </div>
+
+                  <div className="question-management-option-list">
+                    {question.options.map((option, optionIndex) => {
+                      const optionDragging = draggingOptionValue === option.value;
+                      const optionDragOver = dragOverOptionValue === option.value && !optionDragging;
+                      return (
+                        <div
+                          className={`question-management-option-row${optionDragging ? ' is-dragging' : ''}${optionDragOver ? ' is-drag-over' : ''}`}
+                          key={option.value}
+                          draggable
+                          onDragStart={(event) => {
+                            event.stopPropagation();
+                            setDraggingOptionValue(option.value);
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData('text/plain', option.value);
+                          }}
+                          onDragOver={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (draggingOptionValue !== null) {
+                              setDragOverOptionValue(option.value);
+                            }
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (draggingOptionValue !== null) {
+                              reorderOptions(question, draggingOptionValue, option.value);
+                            }
+                            finishOptionDragging();
+                          }}
+                          onDragEnd={finishOptionDragging}
+                        >
+                          <span className="question-management-option-handle" aria-hidden="true">⋮⋮</span>
+                          <input
+                            aria-label={`Option ${optionIndex + 1} for ${question.question}`}
+                            value={option.label}
+                            maxLength={200}
+                            placeholder={`Option ${optionIndex + 1}`}
+                            onChange={(event) => updateOption(question, option.value, event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                addOption(question);
+                              }
+                            }}
+                          />
+                          <button
+                            className="question-management-option-delete"
+                            type="button"
+                            title="Delete option"
+                            aria-label={`Delete option ${option.label || optionIndex + 1}`}
+                            onClick={() => deleteOption(question, option.value)}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    className="clinic-secondary question-management-add-option"
+                    type="button"
+                    onClick={() => addOption(question)}
+                  >
+                    + Add Option
+                  </button>
+                  <small>Minimum 2 options are required.</small>
+                  {optionError ? <div className="question-management-option-error" role="alert">{optionError}</div> : null}
+                </div>
+              ) : null}
+            </Fragment>
           );
         })}
       </div>
