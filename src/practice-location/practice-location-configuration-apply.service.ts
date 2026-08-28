@@ -384,9 +384,9 @@ export class PracticeLocationConfigurationApplyService {
             "changedSections",
             "occurredAt"
           ) VALUES (
-            ${location.id}::uuid,
-            ${authenticatedUserId}::uuid,
-            ${command.id}::uuid,
+            ${location.id}::text,
+            ${authenticatedUserId}::text,
+            ${command.id}::text,
             'UPDATE_SETTINGS',
             ${JSON.stringify([
               'BASIC_INFORMATION',
