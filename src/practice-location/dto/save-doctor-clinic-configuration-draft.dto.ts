@@ -114,6 +114,16 @@ export class DoctorClinicDraftServiceDto {
   status!: ServiceAvailabilityStatus;
 }
 
+export class DoctorClinicDraftQuestionOptionDto {
+  @IsString()
+  @MaxLength(100)
+  value!: string;
+
+  @IsString()
+  @MaxLength(200)
+  label!: string;
+}
+
 export class DoctorClinicDraftQuestionDto {
   @IsOptional()
   @IsString()
@@ -139,6 +149,12 @@ export class DoctorClinicDraftQuestionDto {
 
   @IsBoolean()
   isActive!: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => DoctorClinicDraftQuestionOptionDto)
+  selectOptions?: DoctorClinicDraftQuestionOptionDto[];
 }
 
 export class SaveDoctorClinicConfigurationDraftDto {
