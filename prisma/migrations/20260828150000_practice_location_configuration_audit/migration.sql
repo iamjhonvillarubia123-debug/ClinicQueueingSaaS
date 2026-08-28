@@ -1,8 +1,10 @@
+DROP TABLE IF EXISTS "PracticeLocationConfigurationAudit";
+
 CREATE TABLE "PracticeLocationConfigurationAudit" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "practiceLocationId" UUID NOT NULL,
-    "actorUserId" UUID NOT NULL,
-    "commandIdempotencyId" UUID,
+    "practiceLocationId" TEXT NOT NULL,
+    "actorUserId" TEXT NOT NULL,
+    "commandIdempotencyId" TEXT,
     "actionType" VARCHAR(50) NOT NULL,
     "changedSections" JSONB NOT NULL,
     "occurredAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
