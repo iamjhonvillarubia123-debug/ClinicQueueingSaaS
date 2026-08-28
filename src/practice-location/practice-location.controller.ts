@@ -16,6 +16,7 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
 import { ActivatePracticeLocationDto } from './dto/activate-practice-location.dto';
+import { ApplyPracticeLocationConfigurationDraftDto } from './dto/apply-practice-location-configuration-draft.dto';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 import { DisablePracticeLocationDto } from './dto/disable-practice-location.dto';
 import { PermanentlyDeletePracticeLocationDto } from './dto/permanently-delete-practice-location.dto';
@@ -25,6 +26,7 @@ import { SaveDraftPracticeScheduleDto } from './dto/save-draft-practice-schedule
 import { UpdatePracticeLocationDto } from './dto/update-practice-location.dto';
 import { ValidatePracticeScheduleDto } from './dto/validate-practice-schedule.dto';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
+import { PracticeLocationConfigurationApplyService } from './practice-location-configuration-apply.service';
 import { PracticeLocationConfigurationDraftService } from './practice-location-configuration-draft.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
@@ -38,6 +40,7 @@ export class PracticeLocationController {
   constructor(
     private readonly practiceLocationService: PracticeLocationService,
     private readonly practiceLocationActivationService: PracticeLocationActivationService,
+    private readonly practiceLocationConfigurationApplyService: PracticeLocationConfigurationApplyService,
     private readonly practiceLocationConfigurationDraftService: PracticeLocationConfigurationDraftService,
     private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
     private readonly practiceLocationDraftScheduleService: PracticeLocationDraftScheduleService,
@@ -57,6 +60,20 @@ export class PracticeLocationController {
       request.user.userId,
       practiceLocationId,
       dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('apply-configuration-draft')
+  applyConfigurationDraft(
+    @Body() dto: ApplyPracticeLocationConfigurationDraftDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationConfigurationApplyService.apply(
+      request.user.userId,
+      dto,
+      idempotencyKey,
     );
   }
 
