@@ -25,19 +25,26 @@
   text-transform: uppercase;
 }
 
-.service-management-head > span:first-child {
-  padding-left: 28px;
-}
-
 .service-management-row {
   min-height: 72px;
   padding: 12px 16px;
   border-bottom: 1px solid #e8ebef;
+  cursor: grab;
+  user-select: none;
   transition: background 120ms ease, opacity 120ms ease, box-shadow 120ms ease;
 }
 
 .service-management-row:last-child {
   border-bottom: 0;
+}
+
+.service-management-row:hover:not(.is-editing) {
+  background: #fbfcfd;
+}
+
+.service-management-row:active:not(.is-editing),
+.service-management-row.is-dragging {
+  cursor: grabbing;
 }
 
 .service-management-row.is-dragging {
@@ -49,42 +56,11 @@
   box-shadow: inset 0 2px 0 #111;
 }
 
-.service-management-service-cell {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-}
-
-.service-management-drag-handle {
-  display: inline-flex;
-  width: 20px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 5px;
-  color: #98a2b3;
-  font-size: 15px;
-  line-height: 1;
-  letter-spacing: -4px;
-  cursor: grab;
-  user-select: none;
-}
-
-.service-management-drag-handle:hover,
-.service-management-drag-handle:focus-visible {
-  background: #f3f4f6;
-  color: #475467;
-  outline: none;
-}
-
-.service-management-drag-handle:active {
-  cursor: grabbing;
-}
-
-.service-management-row.is-editing .service-management-drag-handle {
-  visibility: hidden;
+.service-management-row.is-editing {
+  min-height: 108px;
+  background: #fcfdfc;
+  cursor: default;
+  user-select: auto;
 }
 
 .service-management-service {
@@ -127,6 +103,10 @@
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
+}
+
+.service-management-actions button {
+  cursor: pointer;
 }
 
 .service-management-icon-action,
@@ -188,11 +168,6 @@
 .service-management-icon-action:hover > svg > path {
   color: #111 !important;
   stroke: #111 !important;
-}
-
-.service-management-row.is-editing {
-  min-height: 108px;
-  background: #fcfdfc;
 }
 
 .service-management-row.is-editing label {
@@ -276,7 +251,7 @@
     gap: 12px 16px;
   }
 
-  .service-management-service-cell {
+  .service-management-service {
     grid-column: 1 / 2;
   }
 
@@ -295,7 +270,7 @@
     grid-template-columns: 1fr;
   }
 
-  .service-management-row.is-editing .service-management-service-cell,
+  .service-management-row.is-editing .service-management-service,
   .service-management-row.is-editing .service-management-duration,
   .service-management-row.is-editing .service-management-status,
   .service-management-row.is-editing .service-management-actions {
