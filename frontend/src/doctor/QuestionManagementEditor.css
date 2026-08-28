@@ -1,3 +1,5 @@
+@import './QuestionManagementOptions.css';
+
 .question-management-table {
   margin-top: 18px;
   border: 1px solid #dfe4ea;
