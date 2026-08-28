@@ -65,6 +65,8 @@ function CloseIcon() {
 export function ServiceManagementEditor({ services, setServices }: Props) {
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editSnapshot, setEditSnapshot] = useState<ServiceRow | null>(null);
+  const [draggingId, setDraggingId] = useState<string | number | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | number | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -122,6 +124,23 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
     if (editingId === id) finishEditing();
   }
 
+  function reorderServices(sourceId: string | number, targetId: string | number) {
+    if (sourceId === targetId) return;
+    const sourceIndex = services.findIndex((service) => service.id === sourceId);
+    const targetIndex = services.findIndex((service) => service.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const reordered = [...services];
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setServices(reordered);
+  }
+
+  function finishDragging() {
+    setDraggingId(null);
+    setDragOverId(null);
+  }
+
   return (
     <>
       <div className="clinic-section-toolbar">
@@ -146,46 +165,83 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
 
         {services.map((service) => {
           const editing = editingId === service.id;
+          const dragging = draggingId === service.id;
+          const dragOver = dragOverId === service.id && !dragging;
           return (
             <div
-              className={`service-management-row${editing ? ' is-editing' : ''}`}
+              className={`service-management-row${editing ? ' is-editing' : ''}${dragging ? ' is-dragging' : ''}${dragOver ? ' is-drag-over' : ''}`}
               key={service.id}
+              onDragOver={(event) => {
+                if (editing || draggingId === null) return;
+                event.preventDefault();
+                setDragOverId(service.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (draggingId !== null && !editing) {
+                  reorderServices(draggingId, service.id);
+                }
+                finishDragging();
+              }}
             >
-              <div className="service-management-service">
-                {editing ? (
-                  <>
-                    <label>
-                      <span>Service Name</span>
-                      <input
-                        ref={nameInputRef}
-                        aria-label={`Service name for ${service.name}`}
-                        value={service.name}
-                        onChange={(event) =>
-                          updateService(service.id, { name: event.target.value })
-                        }
-                        placeholder="Service name"
-                      />
-                    </label>
-                    <label>
-                      <span>Description</span>
-                      <input
-                        aria-label={`Service description for ${service.name}`}
-                        value={service.description}
-                        onChange={(event) =>
-                          updateService(service.id, {
-                            description: event.target.value,
-                          })
-                        }
-                        placeholder="Short service description"
-                      />
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <strong>{service.name}</strong>
-                    <span>{service.description || 'No description'}</span>
-                  </>
-                )}
+              <div className="service-management-service-cell">
+                <span
+                  className="service-management-drag-handle"
+                  draggable={!editing}
+                  title={editing ? undefined : 'Drag to reorder service'}
+                  aria-label={`Drag ${service.name} to reorder`}
+                  role="button"
+                  tabIndex={editing ? -1 : 0}
+                  onDragStart={(event) => {
+                    if (editing) {
+                      event.preventDefault();
+                      return;
+                    }
+                    setDraggingId(service.id);
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', String(service.id));
+                  }}
+                  onDragEnd={finishDragging}
+                >
+                  <span aria-hidden="true">⋮⋮</span>
+                </span>
+
+                <div className="service-management-service">
+                  {editing ? (
+                    <>
+                      <label>
+                        <span>Service Name</span>
+                        <input
+                          ref={nameInputRef}
+                          aria-label={`Service name for ${service.name}`}
+                          value={service.name}
+                          onChange={(event) =>
+                            updateService(service.id, { name: event.target.value })
+                          }
+                          placeholder="Service name"
+                        />
+                      </label>
+                      <label>
+                        <span>Description</span>
+                        <input
+                          aria-label={`Service description for ${service.name}`}
+                          value={service.description}
+                          onChange={(event) =>
+                            updateService(service.id, {
+                              description: event.target.value,
+                            })
+                          }
+                          placeholder="Short service description"
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <strong>{service.name}</strong>
+                      <span>{service.description || 'No description'}</span>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div className="service-management-duration">
