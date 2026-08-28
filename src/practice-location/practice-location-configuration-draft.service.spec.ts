@@ -39,7 +39,11 @@ describe('PracticeLocationConfigurationDraftService', () => {
     },
     doctorPracticeConfigurationDraftBookingQuestion: {
       deleteMany: jest.fn(),
+      create: jest.fn(),
+    },
+    doctorPracticeConfigurationDraftBookingQuestionOption: {
       createMany: jest.fn(),
+      findMany: jest.fn(),
     },
   };
 
@@ -112,6 +116,12 @@ describe('PracticeLocationConfigurationDraftService', () => {
     transactionMock.doctorPracticeScheduleDraft.upsert.mockResolvedValue({
       id: 'doctor-draft-1',
     });
+    transactionMock.doctorPracticeConfigurationDraftBookingQuestion.create.mockResolvedValue(
+      { id: 'draft-question-1' },
+    );
+    transactionMock.doctorPracticeConfigurationDraftBookingQuestionOption.findMany.mockResolvedValue(
+      [],
+    );
     transactionMock.practiceLocation.findUniqueOrThrow.mockResolvedValue({
       id: 'location-1',
     });
@@ -149,18 +159,55 @@ describe('PracticeLocationConfigurationDraftService', () => {
       }),
     );
     expect(
-      transactionMock.doctorPracticeConfigurationDraftBookingQuestion.createMany,
+      transactionMock.doctorPracticeConfigurationDraftBookingQuestion.create,
     ).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: [
-          expect.objectContaining({
-            effectiveBookingQuestionId: 'question-1',
-            questionText: 'Draft question?',
-            displayOrder: 0,
-          }),
-        ],
+        data: expect.objectContaining({
+          effectiveBookingQuestionId: 'question-1',
+          questionText: 'Draft question?',
+          displayOrder: 0,
+        }),
       }),
     );
+  });
+
+  it('stores Single Choice options in an ACTIVE clinic draft with stable values and labels', async () => {
+    await service.save('user-1', 'location-1', {
+      ...dto,
+      bookingQuestions: [
+        {
+          effectiveBookingQuestionId: 'question-1',
+          questionText: 'Preferred consultation type?',
+          type: BookingQuestionType.SINGLE_SELECT,
+          isRequired: true,
+          displayOrder: 0,
+          isActive: true,
+          selectOptions: [
+            { value: 'GENERAL', label: 'General Consultation' },
+            { value: 'FOLLOW_UP', label: 'Follow-up Consultation' },
+          ],
+        },
+      ],
+    });
+
+    expect(
+      transactionMock.doctorPracticeConfigurationDraftBookingQuestionOption.createMany,
+    ).toHaveBeenCalledWith({
+      data: [
+        {
+          bookingQuestionDraftId: 'draft-question-1',
+          optionValue: 'GENERAL',
+          optionLabel: 'General Consultation',
+          displayOrder: 0,
+        },
+        {
+          bookingQuestionDraftId: 'draft-question-1',
+          optionValue: 'FOLLOW_UP',
+          optionLabel: 'Follow-up Consultation',
+          displayOrder: 1,
+        },
+      ],
+    });
   });
 
   it('stores DRAFT setup while preserving hidden BookingQuestion operational meaning', async () => {
@@ -211,6 +258,43 @@ describe('PracticeLocationConfigurationDraftService', () => {
     expect(transactionMock.doctorPracticeScheduleDraft.upsert).not.toHaveBeenCalled();
   });
 
+  it('stores Single Choice options directly for a DRAFT clinic setup', async () => {
+    transactionMock.practiceLocation.findFirst.mockReset();
+    transactionMock.practiceLocation.findFirst.mockResolvedValueOnce({
+      id: 'location-1',
+      lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
+    });
+    transactionMock.bookingQuestion.findMany.mockResolvedValue([]);
+
+    await service.save('user-1', 'location-1', {
+      ...dto,
+      bookingQuestions: [
+        {
+          questionText: 'Preferred consultation type?',
+          type: BookingQuestionType.SINGLE_SELECT,
+          isRequired: false,
+          displayOrder: 0,
+          isActive: true,
+          selectOptions: [
+            { value: 'GENERAL', label: 'General Consultation' },
+            { value: 'FOLLOW_UP', label: 'Follow-up Consultation' },
+          ],
+        },
+      ],
+    });
+
+    expect(transactionMock.bookingQuestion.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          selectOptions: [
+            { value: 'GENERAL', label: 'General Consultation' },
+            { value: 'FOLLOW_UP', label: 'Follow-up Consultation' },
+          ],
+        }),
+      ],
+    });
+  });
+
   it('rejects a cross-clinic BookingQuestion reference in DRAFT setup', async () => {
     transactionMock.practiceLocation.findFirst.mockReset();
     transactionMock.practiceLocation.findFirst
@@ -242,6 +326,47 @@ describe('PracticeLocationConfigurationDraftService', () => {
         bookingQuestions: sixActiveQuestions,
       }),
     ).rejects.toThrow('no more than 5 active BookingQuestions');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a Single Choice question with fewer than two options', async () => {
+    await expect(
+      service.save('user-1', 'location-1', {
+        ...dto,
+        bookingQuestions: [
+          {
+            questionText: 'Preferred consultation type?',
+            type: BookingQuestionType.SINGLE_SELECT,
+            isRequired: false,
+            displayOrder: 0,
+            isActive: true,
+            selectOptions: [{ value: 'GENERAL', label: 'General Consultation' }],
+          },
+        ],
+      }),
+    ).rejects.toThrow('require at least 2 options');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate Single Choice option values', async () => {
+    await expect(
+      service.save('user-1', 'location-1', {
+        ...dto,
+        bookingQuestions: [
+          {
+            questionText: 'Preferred consultation type?',
+            type: BookingQuestionType.SINGLE_SELECT,
+            isRequired: false,
+            displayOrder: 0,
+            isActive: true,
+            selectOptions: [
+              { value: 'GENERAL', label: 'General Consultation' },
+              { value: 'GENERAL', label: 'Another General Label' },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toThrow('option values must be unique');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });
