@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
+import { PracticeLocationConfigurationApplyService } from './practice-location-configuration-apply.service';
 import { PracticeLocationConfigurationDraftService } from './practice-location-configuration-draft.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
@@ -18,6 +19,9 @@ describe('PracticeLocationController', () => {
   const practiceLocationActivationServiceMock = {
     activate: jest.fn(),
     reactivate: jest.fn(),
+  };
+  const practiceLocationConfigurationApplyServiceMock = {
+    apply: jest.fn(),
   };
   const practiceLocationConfigurationDraftServiceMock = {
     save: jest.fn(),
@@ -47,6 +51,10 @@ describe('PracticeLocationController', () => {
       reactivated: true,
       replayed: false,
     });
+    practiceLocationConfigurationApplyServiceMock.apply.mockResolvedValue({
+      applied: true,
+      replayed: false,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PracticeLocationController],
@@ -58,6 +66,10 @@ describe('PracticeLocationController', () => {
         {
           provide: PracticeLocationActivationService,
           useValue: practiceLocationActivationServiceMock,
+        },
+        {
+          provide: PracticeLocationConfigurationApplyService,
+          useValue: practiceLocationConfigurationApplyServiceMock,
         },
         {
           provide: PracticeLocationConfigurationDraftService,
@@ -125,6 +137,27 @@ describe('PracticeLocationController', () => {
       'doctor-1',
       'location-1',
       dto,
+    );
+  });
+
+  it('delegates protected configuration apply with idempotency', async () => {
+    const request = { user: { userId: 'doctor-1' } };
+    const dto = {
+      practiceLocationId: 'location-1',
+      password: 'secret',
+      confirmApply: true,
+    };
+
+    await controller.applyConfigurationDraft(
+      dto,
+      'settings-key',
+      request as never,
+    );
+
+    expect(practiceLocationConfigurationApplyServiceMock.apply).toHaveBeenCalledWith(
+      'doctor-1',
+      dto,
+      'settings-key',
     );
   });
 
