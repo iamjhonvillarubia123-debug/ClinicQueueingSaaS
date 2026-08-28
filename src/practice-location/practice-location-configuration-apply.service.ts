@@ -271,6 +271,7 @@ export class PracticeLocationConfigurationApplyService {
           where: { practiceLocationId: location.id },
           select: {
             id: true,
+            displayOrder: true,
             helpText: true,
             estimatedMinutesAdjustment: true,
             textMaximumLength: true,
@@ -281,6 +282,29 @@ export class PracticeLocationConfigurationApplyService {
         const effectiveQuestionsById = new Map(
           effectiveQuestions.map((question) => [question.id, question]),
         );
+
+        // The database requires displayOrder to be unique across every question
+        // for the clinic, including inactive historical rows. Move existing rows
+        // into a collision-free temporary range before applying the proposed order.
+        const maximumExistingOrder = effectiveQuestions.reduce(
+          (maximum, question) => Math.max(maximum, question.displayOrder),
+          -1,
+        );
+        const maximumDraftOrder = draft.bookingQuestions.reduce(
+          (maximum, question) => Math.max(maximum, question.displayOrder),
+          -1,
+        );
+        const temporaryOrderBase =
+          Math.max(maximumExistingOrder, maximumDraftOrder) +
+          effectiveQuestions.length +
+          1;
+        for (const [index, question] of effectiveQuestions.entries()) {
+          await transaction.bookingQuestion.update({
+            where: { id: question.id },
+            data: { displayOrder: temporaryOrderBase + index },
+          });
+        }
+
         const retainedQuestionIds = new Set<string>();
         for (const question of draft.bookingQuestions) {
           const options = optionsByQuestion.get(question.id) ?? [];
@@ -331,13 +355,17 @@ export class PracticeLocationConfigurationApplyService {
             });
           }
         }
-        const removedQuestionIds = effectiveQuestions
-          .map((question) => question.id)
-          .filter((id) => !retainedQuestionIds.has(id));
-        if (removedQuestionIds.length) {
-          await transaction.bookingQuestion.updateMany({
-            where: { id: { in: removedQuestionIds } },
-            data: { isActive: false },
+        const removedQuestions = effectiveQuestions.filter(
+          (question) => !retainedQuestionIds.has(question.id),
+        );
+        const archivedOrderBase = maximumDraftOrder + 1;
+        for (const [index, question] of removedQuestions.entries()) {
+          await transaction.bookingQuestion.update({
+            where: { id: question.id },
+            data: {
+              isActive: false,
+              displayOrder: archivedOrderBase + index,
+            },
           });
         }
 
@@ -591,11 +619,7 @@ export class PracticeLocationConfigurationApplyService {
           : [];
       const existingValues = Array.isArray(existing.selectOptions)
         ? existing.selectOptions.flatMap((option) => {
-            if (
-              !option ||
-              typeof option !== 'object' ||
-              Array.isArray(option)
-            ) {
+            if (!option || typeof option !== 'object' || Array.isArray(option)) {
               return [];
             }
             const value = (option as { value?: unknown }).value;
