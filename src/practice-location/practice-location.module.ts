@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
+import { PracticeLocationConfigurationApplyService } from './practice-location-configuration-apply.service';
 import { PracticeLocationConfigurationDraftService } from './practice-location-configuration-draft.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
@@ -17,6 +18,7 @@ import { PracticeLocationController } from './practice-location.controller';
   providers: [
     PracticeLocationService,
     PracticeLocationActivationService,
+    PracticeLocationConfigurationApplyService,
     PracticeLocationConfigurationDraftService,
     PracticeLocationDataRetentionGateService,
     PracticeLocationDraftScheduleService,
