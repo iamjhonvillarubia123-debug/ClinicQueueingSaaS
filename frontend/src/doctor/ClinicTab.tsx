@@ -1191,6 +1191,7 @@ function ClinicWizard({
   initialCutoffLeadHours,
   initialServices: initialServiceRows,
   initialQuestions: initialQuestionRows,
+  initialStatus = 'DRAFT',
   editing,
   editingClinicId,
 }: {
@@ -1208,6 +1209,7 @@ function ClinicWizard({
   initialCutoffLeadHours?: number;
   initialServices?: ServiceRow[];
   initialQuestions?: QuestionRow[];
+  initialStatus?: ClinicStatus;
   editing?: boolean;
   editingClinicId?: string;
 }) {
@@ -1388,11 +1390,38 @@ function ClinicWizard({
     setStep(targetStep);
   }
 
+  function unavailableReviewPrimaryAction() {
+    setSaveError('');
+    if (initialStatus === 'DRAFT') {
+      const hoursError = scheduleInputError();
+      if (hoursError) {
+        setSaveError(hoursError);
+        return;
+      }
+      setSaveError(
+        'Activate Clinic is not connected yet. Use Save as Draft until the protected activation workflow is implemented.',
+      );
+      return;
+    }
+    if (initialStatus === 'ACTIVE') {
+      setSaveError(
+        'Apply Changes is not connected yet. Use Save as Draft to keep the proposed configuration without changing the live clinic.',
+      );
+      return;
+    }
+    void saveReviewDraft();
+  }
+
+  const reviewPrimaryLabel =
+    initialStatus === 'ACTIVE'
+      ? 'Apply Changes'
+      : initialStatus === 'DRAFT'
+        ? 'Activate Clinic'
+        : 'Save Clinic';
+
   const primaryAction =
     step === 5
-      ? () => {
-          void saveReviewDraft();
-        }
+      ? unavailableReviewPrimaryAction
       : () => {
           void saveAndContinue();
         };
@@ -1484,9 +1513,7 @@ function ClinicWizard({
           <SplitAction
             primaryLabel={
               step === 5
-                ? editing
-                  ? 'Save Clinic'
-                  : 'Create Clinic'
+                ? reviewPrimaryLabel
                 : returnToReview
                   ? 'Save and Return to Review'
                   : 'Save and Continue'
@@ -1965,6 +1992,7 @@ export function ClinicTabPage() {
   if (mode === 'create')
     return (
       <ClinicWizard
+        initialStatus="DRAFT"
         onExit={() => {
           setEditingClinic(null);
           setMode('list');
@@ -1977,6 +2005,7 @@ export function ClinicTabPage() {
       <ClinicWizard
         editing
         editingClinicId={editingClinic.id}
+        initialStatus={editingClinic.status}
         initialValue={editingClinic.editor.draft}
         initialSchedule={editingClinic.editor.hours}
         initialCutoffLeadHours={editingClinic.editor.cutoffLeadHours}
