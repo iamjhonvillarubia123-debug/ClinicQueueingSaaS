@@ -1,0 +1,13 @@
+model DoctorPracticeConfigurationDraftBookingQuestionOption {
+  id                     String   @id @default(uuid())
+  bookingQuestionDraftId String
+  optionValue            String   @db.VarChar(100)
+  optionLabel            String   @db.VarChar(200)
+  displayOrder           Int
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([bookingQuestionDraftId, optionValue])
+  @@unique([bookingQuestionDraftId, displayOrder])
+  @@index([bookingQuestionDraftId])
+}
