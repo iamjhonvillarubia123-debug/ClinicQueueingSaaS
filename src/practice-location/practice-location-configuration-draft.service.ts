@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BookingQuestionType,
   PracticeLocationLifecycleStatus,
   Prisma,
   Weekday,
@@ -146,11 +147,7 @@ export class PracticeLocationConfigurationDraftService {
                   textMaximumLength: existing?.textMaximumLength ?? null,
                   numberMinimum: existing?.numberMinimum ?? null,
                   numberMaximum: existing?.numberMaximum ?? null,
-                  selectOptions:
-                    existing?.selectOptions === null ||
-                    existing?.selectOptions === undefined
-                      ? Prisma.JsonNull
-                      : existing.selectOptions,
+                  selectOptions: this.selectOptionsJson(question),
                 };
               }),
             });
@@ -198,23 +195,38 @@ export class PracticeLocationConfigurationDraftService {
             })),
           });
         }
-        if (dto.bookingQuestions.length) {
-          await transaction.doctorPracticeConfigurationDraftBookingQuestion.createMany(
-            {
-              data: dto.bookingQuestions.map((question) => ({
-                doctorPracticeScheduleDraftId: draft.id,
-                effectiveBookingQuestionId:
-                  question.effectiveBookingQuestionId ?? null,
-                sourceDoctorBookingQuestionTemplateId:
-                  question.sourceDoctorBookingQuestionTemplateId ?? null,
-                questionText: question.questionText.trim(),
-                type: question.type,
-                isRequired: question.isRequired,
-                displayOrder: question.displayOrder,
-                isActive: question.isActive,
-              })),
-            },
-          );
+        for (const question of dto.bookingQuestions) {
+          const createdQuestion =
+            await transaction.doctorPracticeConfigurationDraftBookingQuestion.create(
+              {
+                data: {
+                  doctorPracticeScheduleDraftId: draft.id,
+                  effectiveBookingQuestionId:
+                    question.effectiveBookingQuestionId ?? null,
+                  sourceDoctorBookingQuestionTemplateId:
+                    question.sourceDoctorBookingQuestionTemplateId ?? null,
+                  questionText: question.questionText.trim(),
+                  type: question.type,
+                  isRequired: question.isRequired,
+                  displayOrder: question.displayOrder,
+                  isActive: question.isActive,
+                },
+                select: { id: true },
+              },
+            );
+          const options = this.normalizedSelectOptions(question);
+          if (options.length) {
+            await transaction.doctorPracticeConfigurationDraftBookingQuestionOption.createMany(
+              {
+                data: options.map((option, displayOrder) => ({
+                  bookingQuestionDraftId: createdQuestion.id,
+                  optionValue: option.value,
+                  optionLabel: option.label,
+                  displayOrder,
+                })),
+              },
+            );
+          }
         }
 
         return this.loadConfiguration(transaction, practiceLocationId);
@@ -381,14 +393,60 @@ export class PracticeLocationConfigurationDraftService {
         }
         effectiveIds.add(question.effectiveBookingQuestionId);
       }
+
+      if (question.type === BookingQuestionType.SINGLE_SELECT) {
+        const options = question.selectOptions ?? [];
+        if (options.length < 2) {
+          throw new BadRequestException(
+            'Single Choice BookingQuestions require at least 2 options.',
+          );
+        }
+        const values = new Set<string>();
+        for (const option of options) {
+          const value = option.value.trim();
+          const label = option.label.trim();
+          if (!value || !label) {
+            throw new BadRequestException(
+              'Single Choice option values and labels must not be blank.',
+            );
+          }
+          if (values.has(value)) {
+            throw new BadRequestException(
+              'Single Choice option values must be unique within the question.',
+            );
+          }
+          values.add(value);
+        }
+      } else if (question.selectOptions?.length) {
+        throw new BadRequestException(
+          'Select options are allowed only for Single Choice BookingQuestions.',
+        );
+      }
     }
   }
 
-  private loadConfiguration(
+  private normalizedSelectOptions(
+    question: SaveDoctorClinicConfigurationDraftDto['bookingQuestions'][number],
+  ) {
+    if (question.type !== BookingQuestionType.SINGLE_SELECT) return [];
+    return (question.selectOptions ?? []).map((option) => ({
+      value: option.value.trim(),
+      label: option.label.trim(),
+    }));
+  }
+
+  private selectOptionsJson(
+    question: SaveDoctorClinicConfigurationDraftDto['bookingQuestions'][number],
+  ): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+    const options = this.normalizedSelectOptions(question);
+    return options.length ? options : Prisma.JsonNull;
+  }
+
+  private async loadConfiguration(
     transaction: Prisma.TransactionClient,
     practiceLocationId: string,
   ) {
-    return transaction.practiceLocation.findUniqueOrThrow({
+    const configuration = await transaction.practiceLocation.findUniqueOrThrow({
       where: { id: practiceLocationId },
       select: {
         id: true,
@@ -421,6 +479,44 @@ export class PracticeLocationConfigurationDraftService {
         },
       },
     });
+
+    const draftQuestions = configuration.doctorScheduleDraft?.bookingQuestions;
+    if (!draftQuestions?.length) return configuration;
+
+    const optionRows =
+      await transaction.doctorPracticeConfigurationDraftBookingQuestionOption.findMany(
+        {
+          where: {
+            bookingQuestionDraftId: {
+              in: draftQuestions.map((question) => question.id),
+            },
+          },
+          orderBy: [
+            { bookingQuestionDraftId: 'asc' },
+            { displayOrder: 'asc' },
+          ],
+        },
+      );
+    const optionsByQuestionId = new Map<string, Array<{ value: string; label: string }>>();
+    for (const option of optionRows) {
+      const current = optionsByQuestionId.get(option.bookingQuestionDraftId) ?? [];
+      current.push({ value: option.optionValue, label: option.optionLabel });
+      optionsByQuestionId.set(option.bookingQuestionDraftId, current);
+    }
+
+    return {
+      ...configuration,
+      doctorScheduleDraft: {
+        ...configuration.doctorScheduleDraft,
+        bookingQuestions: draftQuestions.map((question) => ({
+          ...question,
+          selectOptions:
+            question.type === BookingQuestionType.SINGLE_SELECT
+              ? optionsByQuestionId.get(question.id) ?? []
+              : null,
+        })),
+      },
+    };
   }
 
   private normalizeOptionalText(value: string | undefined): string | null {
