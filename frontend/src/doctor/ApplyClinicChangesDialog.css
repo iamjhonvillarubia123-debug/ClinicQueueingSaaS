@@ -1,0 +1,66 @@
+.clinic-confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 35%);
+}
+
+.clinic-confirmation-dialog {
+  width: min(100%, 460px);
+  border: 1px solid #d4d4d4;
+  border-radius: 12px;
+  background: #fff;
+  padding: 24px;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 18%);
+}
+
+.clinic-confirmation-dialog h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+}
+
+.clinic-confirmation-dialog p {
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.clinic-confirmation-dialog label {
+  display: grid;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.clinic-confirmation-dialog input {
+  min-height: 46px;
+  border: 1px solid #b8b8b8;
+  border-radius: 8px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+.clinic-confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@media (max-width: 520px) {
+  .clinic-confirmation-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .clinic-confirmation-dialog {
+    width: 100%;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .clinic-confirmation-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
