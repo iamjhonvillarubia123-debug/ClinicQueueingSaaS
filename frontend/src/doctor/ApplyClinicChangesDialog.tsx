@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { apiRequest } from '../api/client';
+import './ApplyClinicChangesDialog.css';
 
 export function ApplyClinicChangesDialog({
   practiceLocationId,
