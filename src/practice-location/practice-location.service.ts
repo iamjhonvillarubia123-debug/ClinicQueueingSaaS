@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  BookingQuestionType,
   PracticeLocationLifecycleStatus,
   Prisma,
 } from '../../generated/prisma/client';
@@ -188,6 +189,7 @@ export class PracticeLocationService {
               isRequired: true,
               displayOrder: true,
               isActive: true,
+              selectOptions: true,
             },
           },
         },
@@ -327,7 +329,7 @@ export class PracticeLocationService {
       );
     }
 
-    return this.prisma.practiceLocation.findMany({
+    const locations = await this.prisma.practiceLocation.findMany({
       where: { doctorProfileId: doctorProfile.id },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -370,6 +372,7 @@ export class PracticeLocationService {
             isRequired: true,
             displayOrder: true,
             isActive: true,
+            selectOptions: true,
           },
         },
         practiceSchedules: {
@@ -437,6 +440,53 @@ export class PracticeLocationService {
         },
       },
     });
+
+    const draftQuestions = locations.flatMap(
+      (location) => location.doctorScheduleDraft?.bookingQuestions ?? [],
+    );
+    if (!draftQuestions.length) return locations;
+
+    const optionRows =
+      await this.prisma.doctorPracticeConfigurationDraftBookingQuestionOption.findMany(
+        {
+          where: {
+            bookingQuestionDraftId: {
+              in: draftQuestions.map((question) => question.id),
+            },
+          },
+          orderBy: [
+            { bookingQuestionDraftId: 'asc' },
+            { displayOrder: 'asc' },
+          ],
+        },
+      );
+    const optionsByQuestionId = new Map<
+      string,
+      Array<{ value: string; label: string }>
+    >();
+    for (const option of optionRows) {
+      const current = optionsByQuestionId.get(option.bookingQuestionDraftId) ?? [];
+      current.push({ value: option.optionValue, label: option.optionLabel });
+      optionsByQuestionId.set(option.bookingQuestionDraftId, current);
+    }
+
+    return locations.map((location) => ({
+      ...location,
+      doctorScheduleDraft: location.doctorScheduleDraft
+        ? {
+            ...location.doctorScheduleDraft,
+            bookingQuestions: location.doctorScheduleDraft.bookingQuestions.map(
+              (question) => ({
+                ...question,
+                selectOptions:
+                  question.type === BookingQuestionType.SINGLE_SELECT
+                    ? optionsByQuestionId.get(question.id) ?? []
+                    : null,
+              }),
+            ),
+          }
+        : null,
+    }));
   }
 
   private normalizeOptionalText(value: string | undefined): string | null {
