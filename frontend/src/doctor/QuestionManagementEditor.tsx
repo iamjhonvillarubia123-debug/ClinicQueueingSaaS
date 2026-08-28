@@ -290,9 +290,14 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
           Add questions to ask patients during booking. Maximum 5 active
           questions.
         </p>
-        <button className="clinic-secondary" type="button" onClick={addQuestion}>
-          + Add Question
-        </button>
+        <div>
+          <button className="clinic-secondary" type="button">
+            Apply Doctors Default
+          </button>
+          <button className="clinic-primary" type="button" onClick={addQuestion}>
+            + Add Question
+          </button>
+        </div>
       </div>
 
       <div className="question-management-table">
