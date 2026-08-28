@@ -97,7 +97,6 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
   }
 
   function addQuestion() {
-    if (activeCount >= 5) return;
     const id = `new-question-${Date.now()}`;
     const question: QuestionRow = {
       id,
@@ -105,7 +104,7 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
       question: 'New booking question',
       type: 'TEXT',
       required: false,
-      active: true,
+      active: activeCount < 5,
     };
     setRows([...questions, question]);
     setEditSnapshot({ ...question });
@@ -169,10 +168,8 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
         <p>Add questions to ask patients during booking. Maximum 5 active questions.</p>
         <button
           className="clinic-secondary"
-          disabled={activeCount >= 5}
           type="button"
           onClick={addQuestion}
-          title={activeCount >= 5 ? 'Deactivate a question before adding another active question.' : undefined}
         >
           + Add Question
         </button>
