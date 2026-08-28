@@ -970,12 +970,14 @@ function Review({
   services,
   questions,
   cutoffLeadHours,
+  onEdit,
 }: {
   draft: ClinicDraft;
   hours: DayHours[];
   services: ServiceRow[];
   questions: QuestionRow[];
   cutoffLeadHours: number;
+  onEdit: (step: Step) => void;
 }) {
   const openHours = hours.filter((row) => row.open);
   const clinicHoursReady =
@@ -998,45 +1000,98 @@ function Review({
 
   function readinessMark(complete: boolean) {
     return (
-      <span className={complete ? 'clinic-readiness-check is-complete' : 'clinic-readiness-check'}>
+      <span
+        className={
+          complete
+            ? 'clinic-readiness-check is-complete'
+            : 'clinic-readiness-check'
+        }
+      >
         {complete ? '✓' : '○'}
       </span>
     );
   }
 
+  function reviewHeader(title: string, step: Step) {
+    return (
+      <div className="clinic-review-card-heading">
+        <h3>{title}</h3>
+        <button
+          className="clinic-review-edit"
+          type="button"
+          onClick={() => onEdit(step)}
+        >
+          Edit
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="clinic-review-layout">
+      <section className="clinic-readiness-card" aria-label="Activation readiness">
+        <div className="clinic-readiness-heading">
+          <div>
+            <h3>Activation Readiness</h3>
+            <p>
+              Clinic Hours are required for activation. Other items are optional
+              configuration.
+            </p>
+          </div>
+          <span className={`clinic-ready-icon${clinicHoursReady ? ' is-ready' : ''}`}>
+            {clinicHoursReady ? '✓' : '○'}
+          </span>
+        </div>
+        <div className="clinic-readiness-grid">
+          <div className="clinic-readiness-item">
+            {readinessMark(clinicHoursReady)}
+            <div><strong>Clinic Hours</strong><small>{clinicHoursReady ? 'Configured' : 'Required'}</small></div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(servicesConfigured)}
+            <div><strong>Services</strong><small>{servicesConfigured ? 'Configured' : 'Optional'}</small></div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(questionsConfigured)}
+            <div><strong>Booking Questions</strong><small>{questionsConfigured ? 'Configured' : 'Optional'}</small></div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(false)}
+            <div><strong>Secretaries</strong><small>Optional · not connected here</small></div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(publicInformationConfigured)}
+            <div><strong>Public Information</strong><small>{publicInformationConfigured ? 'Configured' : 'Optional'}</small></div>
+          </div>
+        </div>
+        <div className={`clinic-readiness-summary${clinicHoursReady ? ' is-ready' : ''}`}>
+          <strong>{clinicHoursReady ? 'Ready for activation' : 'Clinic Hours still required'}</strong>
+          <span>
+            {clinicHoursReady
+              ? 'Optional configuration can be completed now or later.'
+              : 'Add at least one valid clinic-hours schedule before activation.'}
+          </span>
+        </div>
+      </section>
+
       <div className="clinic-review-stack">
         <div className="clinic-review-card">
-          <h3>Basic Information</h3>
-          <dl>
-            <dt>Clinic Name</dt>
-            <dd>{draft.name || 'Not entered'}</dd>
-            <dt>Short Code</dt>
-            <dd>{draft.shortCode || 'Not entered'}</dd>
-            <dt>Address</dt>
-            <dd>{draft.address || 'Not entered'}</dd>
-            <dt>Country</dt>
-            <dd>{draft.country}</dd>
-            <dt>Timezone</dt>
-            <dd>{draft.timeZone}</dd>
-            <dt>Contact Number</dt>
-            <dd>{draft.contactNumber || 'Not entered'}</dd>
-            <dt>Email</dt>
-            <dd>{draft.email || 'Not entered'}</dd>
-            <dt>Description</dt>
-            <dd>{draft.description || 'Not entered'}</dd>
+          {reviewHeader('Basic Information', 1)}
+          <dl className="clinic-review-basic-grid">
+            <dt>Clinic Name</dt><dd>{draft.name || 'Not entered'}</dd>
+            <dt>Short Code</dt><dd>{draft.shortCode || 'Not entered'}</dd>
+            <dt>Address</dt><dd>{draft.address || 'Not entered'}</dd>
+            <dt>Country</dt><dd>{draft.country}</dd>
+            <dt>Timezone</dt><dd>{draft.timeZone}</dd>
           </dl>
         </div>
+
         <div className="clinic-review-card">
-          <h3>Clinic Hours</h3>
+          {reviewHeader('Clinic Hours', 2)}
           {openHours.length ? (
             <div className="clinic-review-hours" role="table" aria-label="Clinic hours summary">
               <div className="clinic-review-hours-head" role="row">
-                <span>Day</span>
-                <span>Clinic Hours</span>
-                <span>Online Cutoff</span>
-                <span>Maximum Until</span>
+                <span>Day</span><span>Clinic Hours</span><span>Online Cutoff</span><span>Maximum Until</span>
               </div>
               {openHours.map((row) => (
                 <div className="clinic-review-hours-row" role="row" key={row.day}>
@@ -1051,10 +1106,14 @@ function Review({
             <p>No clinic hours configured.</p>
           )}
         </div>
+
         <div className="clinic-review-card">
-          <h3>Services ({services.length})</h3>
+          {reviewHeader(`Services (${services.length})`, 3)}
           {services.length ? (
             <div className="clinic-review-detail-list">
+              <div className="clinic-review-service-head">
+                <span>Service</span><span>Duration</span><span>Status</span>
+              </div>
               {services.map((service) => (
                 <div className="clinic-review-detail-row" key={service.id}>
                   <div>
@@ -1075,10 +1134,14 @@ function Review({
             <p>No services configured.</p>
           )}
         </div>
+
         <div className="clinic-review-card">
-          <h3>Booking Questions ({questions.length})</h3>
+          {reviewHeader(`Booking Questions (${questions.length})`, 4)}
           {questions.length ? (
             <div className="clinic-review-detail-list">
+              <div className="clinic-review-question-head">
+                <span>Question</span><span>Type</span><span>Required</span><span>Status</span>
+              </div>
               {[...questions]
                 .sort((a, b) => a.order - b.order)
                 .map((question) => (
@@ -1106,31 +1169,16 @@ function Review({
             <p>No booking questions configured.</p>
           )}
         </div>
+
+        <div className="clinic-review-card">
+          {reviewHeader('Public Information', 1)}
+          <dl className="clinic-review-public-grid">
+            <dt>Contact Number</dt><dd>{draft.contactNumber || 'Not entered'}</dd>
+            <dt>Email</dt><dd>{draft.email || 'Not entered'}</dd>
+            <dt>Description</dt><dd>{draft.description || 'Not entered'}</dd>
+          </dl>
+        </div>
       </div>
-      <aside className="clinic-readiness-card">
-        <span className={`clinic-ready-icon${clinicHoursReady ? ' is-ready' : ''}`}>
-          {clinicHoursReady ? '✓' : '○'}
-        </span>
-        <h3>Activation Readiness</h3>
-        <p>Your clinic can be activated once required items are complete.</p>
-        <h4>Required for Activation</h4>
-        <p className="clinic-ready-line">
-          Clinic Hours {readinessMark(clinicHoursReady)}
-        </p>
-        <h4>Optional Configuration</h4>
-        <p className="clinic-ready-line">
-          Services {readinessMark(servicesConfigured)}
-        </p>
-        <p className="clinic-ready-line">
-          Booking Questions {readinessMark(questionsConfigured)}
-        </p>
-        <p className="clinic-ready-line">
-          Secretaries {readinessMark(false)}
-        </p>
-        <p className="clinic-ready-line">
-          Public Information {readinessMark(publicInformationConfigured)}
-        </p>
-      </aside>
     </div>
   );
 }
@@ -1164,6 +1212,7 @@ function ClinicWizard({
   editingClinicId?: string;
 }) {
   const [step, setStep] = useState<Step>(1);
+  const [returnToReview, setReturnToReview] = useState(false);
   const [practiceLocationId, setPracticeLocationId] = useState(editingClinicId);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
   const [hours, setHours] = useState(initialSchedule ?? initialHours);
@@ -1298,7 +1347,12 @@ function ClinicWizard({
         });
       }
       await persistDraft();
-      setStep(Math.min(5, step + 1) as Step);
+      if (returnToReview) {
+        setReturnToReview(false);
+        setStep(5);
+      } else {
+        setStep(Math.min(5, step + 1) as Step);
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to save this clinic.';
@@ -1328,6 +1382,12 @@ function ClinicWizard({
     }
   }
 
+  function editFromReview(targetStep: Step) {
+    setSaveError('');
+    setReturnToReview(true);
+    setStep(targetStep);
+  }
+
   const primaryAction =
     step === 5
       ? () => {
@@ -1351,7 +1411,9 @@ function ClinicWizard({
               : 'Enter the basic details of your clinic.'
             : step === 5
               ? 'Please review all information before creating your clinic.'
-              : 'Configure this clinic now or save it as a draft and continue later.'}
+              : returnToReview
+                ? 'Make the change, then save and return directly to Review.'
+                : 'Configure this clinic now or save it as a draft and continue later.'}
         </p>
       </div>
       <Stepper step={step} />
@@ -1386,6 +1448,7 @@ function ClinicWizard({
             services={services}
             questions={questions}
             cutoffLeadHours={cutoffLeadHours}
+            onEdit={editFromReview}
           />
         ) : null}
         {saveError ? (
@@ -1394,9 +1457,20 @@ function ClinicWizard({
           </div>
         ) : null}
         <div className="clinic-footer-actions">
-          {step === 1 ? (
+          {step === 1 && !returnToReview ? (
             <button className="clinic-secondary" type="button" onClick={onExit}>
               Cancel
+            </button>
+          ) : returnToReview ? (
+            <button
+              className="clinic-secondary"
+              type="button"
+              onClick={() => {
+                setReturnToReview(false);
+                setStep(5);
+              }}
+            >
+              Back to Review
             </button>
           ) : (
             <button
@@ -1413,7 +1487,9 @@ function ClinicWizard({
                 ? editing
                   ? 'Save Clinic'
                   : 'Create Clinic'
-                : 'Save and Continue'
+                : returnToReview
+                  ? 'Save and Return to Review'
+                  : 'Save and Continue'
             }
             onPrimary={primaryAction}
             onDraft={() => {
