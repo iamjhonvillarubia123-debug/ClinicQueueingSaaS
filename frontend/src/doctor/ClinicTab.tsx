@@ -43,6 +43,11 @@ type ServiceRow = {
   active: boolean;
 };
 
+type QuestionOption = {
+  value: string;
+  label: string;
+};
+
 type QuestionRow = {
   id: string | number;
   effectiveBookingQuestionId?: string;
@@ -52,6 +57,7 @@ type QuestionRow = {
   type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
   required: boolean;
   active: boolean;
+  options?: QuestionOption[];
 };
 
 type ClinicEditorState = {
@@ -102,6 +108,7 @@ type BookingQuestionResponse = {
   isRequired: boolean;
   displayOrder: number;
   isActive: boolean;
+  selectOptions?: unknown;
 };
 
 type DoctorConfigurationDraftResponse = {
@@ -327,6 +334,21 @@ function servicesFromResponse(
   }));
 }
 
+function selectOptionsFromResponse(value: unknown): QuestionOption[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((option) => {
+    if (!option || typeof option !== 'object') return [];
+    const candidate = option as { value?: unknown; label?: unknown };
+    if (
+      typeof candidate.value !== 'string' ||
+      typeof candidate.label !== 'string'
+    ) {
+      return [];
+    }
+    return [{ value: candidate.value, label: candidate.label }];
+  });
+}
+
 function questionsFromResponse(
   questions: BookingQuestionResponse[] | undefined,
   fromDraft: boolean,
@@ -343,6 +365,10 @@ function questionsFromResponse(
     type: question.type,
     required: question.isRequired,
     active: question.isActive,
+    options:
+      question.type === 'SINGLE_SELECT'
+        ? selectOptionsFromResponse(question.selectOptions)
+        : [],
   }));
 }
 
@@ -1743,6 +1769,8 @@ export function ClinicTabPage() {
             isRequired: question.required,
             displayOrder: question.order,
             isActive: question.active,
+            selectOptions:
+              question.type === 'SINGLE_SELECT' ? question.options ?? [] : undefined,
           })),
         },
       },
