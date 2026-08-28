@@ -171,9 +171,21 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
             <div
               className={`service-management-row${editing ? ' is-editing' : ''}${dragging ? ' is-dragging' : ''}${dragOver ? ' is-drag-over' : ''}`}
               key={service.id}
+              draggable={!editing}
+              title={editing ? undefined : 'Drag to reorder service'}
+              onDragStart={(event) => {
+                if (editing) {
+                  event.preventDefault();
+                  return;
+                }
+                setDraggingId(service.id);
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', String(service.id));
+              }}
               onDragOver={(event) => {
                 if (editing || draggingId === null) return;
                 event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
                 setDragOverId(service.id);
               }}
               onDrop={(event) => {
@@ -183,65 +195,43 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
                 }
                 finishDragging();
               }}
+              onDragEnd={finishDragging}
             >
-              <div className="service-management-service-cell">
-                <span
-                  className="service-management-drag-handle"
-                  draggable={!editing}
-                  title={editing ? undefined : 'Drag to reorder service'}
-                  aria-label={`Drag ${service.name} to reorder`}
-                  role="button"
-                  tabIndex={editing ? -1 : 0}
-                  onDragStart={(event) => {
-                    if (editing) {
-                      event.preventDefault();
-                      return;
-                    }
-                    setDraggingId(service.id);
-                    event.dataTransfer.effectAllowed = 'move';
-                    event.dataTransfer.setData('text/plain', String(service.id));
-                  }}
-                  onDragEnd={finishDragging}
-                >
-                  <span aria-hidden="true">⋮⋮</span>
-                </span>
-
-                <div className="service-management-service">
-                  {editing ? (
-                    <>
-                      <label>
-                        <span>Service Name</span>
-                        <input
-                          ref={nameInputRef}
-                          aria-label={`Service name for ${service.name}`}
-                          value={service.name}
-                          onChange={(event) =>
-                            updateService(service.id, { name: event.target.value })
-                          }
-                          placeholder="Service name"
-                        />
-                      </label>
-                      <label>
-                        <span>Description</span>
-                        <input
-                          aria-label={`Service description for ${service.name}`}
-                          value={service.description}
-                          onChange={(event) =>
-                            updateService(service.id, {
-                              description: event.target.value,
-                            })
-                          }
-                          placeholder="Short service description"
-                        />
-                      </label>
-                    </>
-                  ) : (
-                    <>
-                      <strong>{service.name}</strong>
-                      <span>{service.description || 'No description'}</span>
-                    </>
-                  )}
-                </div>
+              <div className="service-management-service">
+                {editing ? (
+                  <>
+                    <label>
+                      <span>Service Name</span>
+                      <input
+                        ref={nameInputRef}
+                        aria-label={`Service name for ${service.name}`}
+                        value={service.name}
+                        onChange={(event) =>
+                          updateService(service.id, { name: event.target.value })
+                        }
+                        placeholder="Service name"
+                      />
+                    </label>
+                    <label>
+                      <span>Description</span>
+                      <input
+                        aria-label={`Service description for ${service.name}`}
+                        value={service.description}
+                        onChange={(event) =>
+                          updateService(service.id, {
+                            description: event.target.value,
+                          })
+                        }
+                        placeholder="Short service description"
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <strong>{service.name}</strong>
+                    <span>{service.description || 'No description'}</span>
+                  </>
+                )}
               </div>
 
               <div className="service-management-duration">
@@ -304,6 +294,7 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
                       title="Save service changes"
                       aria-label={`Save changes for ${service.name}`}
                       onClick={finishEditing}
+                      onDragStart={(event) => event.preventDefault()}
                     >
                       <CheckIcon />
                       <span>Save</span>
@@ -314,6 +305,7 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
                       title="Cancel service editing"
                       aria-label={`Cancel editing ${service.name}`}
                       onClick={cancelEditing}
+                      onDragStart={(event) => event.preventDefault()}
                     >
                       <CloseIcon />
                       <span>Cancel</span>
@@ -327,6 +319,7 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
                       title="Edit service"
                       aria-label={`Edit service ${service.name}`}
                       onClick={() => startEditing(service)}
+                      onDragStart={(event) => event.preventDefault()}
                     >
                       <PencilIcon />
                     </button>
@@ -336,6 +329,7 @@ export function ServiceManagementEditor({ services, setServices }: Props) {
                       title="Delete service"
                       aria-label={`Delete service ${service.name}`}
                       onClick={() => deleteService(service.id)}
+                      onDragStart={(event) => event.preventDefault()}
                     >
                       <TrashIcon />
                     </button>
