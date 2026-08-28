@@ -43,6 +43,9 @@ jobs:
           src/patient-access/public-booking-recovery.controller.ts
           src/patient-access/public-booking-recovery.service.ts
           src/patient-access/patient-access.module.ts
+          src/practice-location/practice-location-configuration-apply.service.ts
+          src/practice-location/practice-location-configuration-apply.service.spec.ts
+          src/practice-location/dto/apply-practice-location-configuration-draft.dto.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
@@ -60,4 +63,5 @@ jobs:
           practice-location.service.spec.ts
           practice-location.controller.spec.ts
           practice-location-configuration-draft.service.spec.ts
+          practice-location-configuration-apply.service.spec.ts
       - run: npm run build
