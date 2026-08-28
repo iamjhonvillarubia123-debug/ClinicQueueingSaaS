@@ -7,7 +7,7 @@ model DoctorPracticeConfigurationDraftBookingQuestionOption {
   createdAt              DateTime @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime @updatedAt @db.Timestamptz(3)
 
-  @@unique([bookingQuestionDraftId, optionValue])
-  @@unique([bookingQuestionDraftId, displayOrder])
-  @@index([bookingQuestionDraftId])
+  @@unique([bookingQuestionDraftId, optionValue], map: "DPConfigDraftQuestionOption_question_value_key")
+  @@unique([bookingQuestionDraftId, displayOrder], map: "DPConfigDraftQuestionOption_question_order_key")
+  @@index([bookingQuestionDraftId], map: "DPConfigDraftQuestionOption_question_idx")
 }
