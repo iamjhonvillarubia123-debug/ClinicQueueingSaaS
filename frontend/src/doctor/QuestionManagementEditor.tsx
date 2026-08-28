@@ -3,7 +3,7 @@ import './QuestionManagementEditor.css';
 
 type QuestionType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
 
-type QuestionOption = {
+export type QuestionOption = {
   value: string;
   label: string;
 };
@@ -17,7 +17,7 @@ type QuestionRow = {
   type: QuestionType;
   required: boolean;
   active: boolean;
-  options: QuestionOption[];
+  options?: QuestionOption[];
 };
 
 type Props = {
@@ -82,6 +82,10 @@ function normalizeOrders(rows: QuestionRow[]) {
   return rows.map((row, index) => ({ ...row, order: index }));
 }
 
+function optionsFor(question: QuestionRow): QuestionOption[] {
+  return question.options ?? [];
+}
+
 function createOptionValue() {
   return `OPTION_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`.toUpperCase();
 }
@@ -141,7 +145,7 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
   function startEditing(question: QuestionRow) {
     setEditSnapshot({
       ...question,
-      options: question.options.map((option) => ({ ...option })),
+      options: optionsFor(question).map((option) => ({ ...option })),
     });
     setEditingId(question.id);
     setOptionError('');
@@ -149,7 +153,7 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
 
   function validateSingleChoiceOptions(question: QuestionRow) {
     if (question.type !== 'SINGLE_SELECT') return '';
-    const populated = question.options.filter((option) => option.label.trim());
+    const populated = optionsFor(question).filter((option) => option.label.trim());
     if (populated.length < 2) {
       return 'Single Choice questions require at least 2 options.';
     }
@@ -164,7 +168,7 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
     }
     if (question.type === 'SINGLE_SELECT') {
       updateQuestion(question.id, {
-        options: question.options
+        options: optionsFor(question)
           .filter((option) => option.label.trim())
           .map((option) => ({ ...option, label: option.label.trim() })),
       });
@@ -181,7 +185,7 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
           question.id === editSnapshot.id
             ? {
                 ...editSnapshot,
-                options: editSnapshot.options.map((option) => ({ ...option })),
+                options: optionsFor(editSnapshot).map((option) => ({ ...option })),
               }
             : question,
         ),
@@ -220,9 +224,14 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
 
   function changeQuestionType(question: QuestionRow, type: QuestionType) {
     if (type === 'SINGLE_SELECT') {
-      const options = question.options.length >= 2
-        ? question.options
-        : [...question.options, ...Array.from({ length: 2 - question.options.length }, blankOption)];
+      const currentOptions = optionsFor(question);
+      const options =
+        currentOptions.length >= 2
+          ? currentOptions
+          : [
+              ...currentOptions,
+              ...Array.from({ length: 2 - currentOptions.length }, blankOption),
+            ];
       updateQuestion(question.id, { type, options });
     } else {
       updateQuestion(question.id, { type, options: [] });
@@ -231,13 +240,15 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
   }
 
   function addOption(question: QuestionRow) {
-    updateQuestion(question.id, { options: [...question.options, blankOption()] });
+    updateQuestion(question.id, {
+      options: [...optionsFor(question), blankOption()],
+    });
     setOptionError('');
   }
 
   function updateOption(question: QuestionRow, value: string, label: string) {
     updateQuestion(question.id, {
-      options: question.options.map((option) =>
+      options: optionsFor(question).map((option) =>
         option.value === value ? { ...option, label } : option,
       ),
     });
@@ -246,17 +257,22 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
 
   function deleteOption(question: QuestionRow, value: string) {
     updateQuestion(question.id, {
-      options: question.options.filter((option) => option.value !== value),
+      options: optionsFor(question).filter((option) => option.value !== value),
     });
     setOptionError('');
   }
 
-  function reorderOptions(question: QuestionRow, sourceValue: string, targetValue: string) {
+  function reorderOptions(
+    question: QuestionRow,
+    sourceValue: string,
+    targetValue: string,
+  ) {
     if (sourceValue === targetValue) return;
-    const sourceIndex = question.options.findIndex((option) => option.value === sourceValue);
-    const targetIndex = question.options.findIndex((option) => option.value === targetValue);
+    const options = optionsFor(question);
+    const sourceIndex = options.findIndex((option) => option.value === sourceValue);
+    const targetIndex = options.findIndex((option) => option.value === targetValue);
     if (sourceIndex < 0 || targetIndex < 0) return;
-    const reordered = [...question.options];
+    const reordered = [...options];
     const [moved] = reordered.splice(sourceIndex, 1);
     reordered.splice(targetIndex, 0, moved);
     updateQuestion(question.id, { options: reordered });
@@ -270,7 +286,10 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
   return (
     <>
       <div className="clinic-section-toolbar">
-        <p>Add questions to ask patients during booking. Maximum 5 active questions.</p>
+        <p>
+          Add questions to ask patients during booking. Maximum 5 active
+          questions.
+        </p>
         <button className="clinic-secondary" type="button" onClick={addQuestion}>
           + Add Question
         </button>
@@ -347,7 +366,10 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                         aria-label={`Question type for ${question.question}`}
                         value={question.type}
                         onChange={(event) =>
-                          changeQuestionType(question, event.target.value as QuestionType)
+                          changeQuestionType(
+                            question,
+                            event.target.value as QuestionType,
+                          )
                         }
                       >
                         <option value="TEXT">Text</option>
@@ -374,12 +396,19 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                           updateQuestion(question.id, { active });
                         }}
                       >
-                        <option value="ACTIVE" disabled={activatingWouldExceedLimit}>Active</option>
+                        <option
+                          value="ACTIVE"
+                          disabled={activatingWouldExceedLimit}
+                        >
+                          Active
+                        </option>
                         <option value="INACTIVE">Inactive</option>
                       </select>
                     </label>
                   ) : (
-                    <span className={`clinic-status-pill${question.active ? ' is-active' : ''}`}>
+                    <span
+                      className={`clinic-status-pill${question.active ? ' is-active' : ''}`}
+                    >
                       {question.active ? 'Active' : 'Inactive'}
                     </span>
                   )}
@@ -395,7 +424,9 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                       tabIndex={editing ? 0 : -1}
                       onChange={(event) => {
                         if (editing) {
-                          updateQuestion(question.id, { required: event.target.checked });
+                          updateQuestion(question.id, {
+                            required: event.target.checked,
+                          });
                         }
                       }}
                     />
@@ -456,16 +487,20 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
               </div>
 
               {editing && question.type === 'SINGLE_SELECT' ? (
-                <div className="question-management-options" onMouseDown={(event) => event.stopPropagation()}>
+                <div
+                  className="question-management-options"
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
                   <div className="question-management-options-heading">
                     <strong>Options patients can choose</strong>
                     <span>Patients can select one option only.</span>
                   </div>
 
                   <div className="question-management-option-list">
-                    {question.options.map((option, optionIndex) => {
+                    {optionsFor(question).map((option, optionIndex) => {
                       const optionDragging = draggingOptionValue === option.value;
-                      const optionDragOver = dragOverOptionValue === option.value && !optionDragging;
+                      const optionDragOver =
+                        dragOverOptionValue === option.value && !optionDragging;
                       return (
                         <div
                           className={`question-management-option-row${optionDragging ? ' is-dragging' : ''}${optionDragOver ? ' is-drag-over' : ''}`}
@@ -488,19 +523,34 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                             event.preventDefault();
                             event.stopPropagation();
                             if (draggingOptionValue !== null) {
-                              reorderOptions(question, draggingOptionValue, option.value);
+                              reorderOptions(
+                                question,
+                                draggingOptionValue,
+                                option.value,
+                              );
                             }
                             finishOptionDragging();
                           }}
                           onDragEnd={finishOptionDragging}
                         >
-                          <span className="question-management-option-handle" aria-hidden="true">⋮⋮</span>
+                          <span
+                            className="question-management-option-handle"
+                            aria-hidden="true"
+                          >
+                            ⋮⋮
+                          </span>
                           <input
                             aria-label={`Option ${optionIndex + 1} for ${question.question}`}
                             value={option.label}
                             maxLength={200}
                             placeholder={`Option ${optionIndex + 1}`}
-                            onChange={(event) => updateOption(question, option.value, event.target.value)}
+                            onChange={(event) =>
+                              updateOption(
+                                question,
+                                option.value,
+                                event.target.value,
+                              )
+                            }
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') {
                                 event.preventDefault();
@@ -513,7 +563,9 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                             type="button"
                             title="Delete option"
                             aria-label={`Delete option ${option.label || optionIndex + 1}`}
-                            onClick={() => deleteOption(question, option.value)}
+                            onClick={() =>
+                              deleteOption(question, option.value)
+                            }
                           >
                             <TrashIcon />
                           </button>
@@ -530,7 +582,14 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                     + Add Option
                   </button>
                   <small>Minimum 2 options are required.</small>
-                  {optionError ? <div className="question-management-option-error" role="alert">{optionError}</div> : null}
+                  {optionError ? (
+                    <div
+                      className="question-management-option-error"
+                      role="alert"
+                    >
+                      {optionError}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </Fragment>
