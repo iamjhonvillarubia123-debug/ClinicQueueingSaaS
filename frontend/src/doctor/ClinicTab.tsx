@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api/client';
+import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
 import { QuestionManagementEditor } from './QuestionManagementEditor';
 import { ServiceManagementEditor } from './ServiceManagementEditor';
 
@@ -1186,6 +1187,7 @@ function Review({
 function ClinicWizard({
   onExit,
   onSaved,
+  onApplied,
   initialValue,
   initialSchedule,
   initialCutoffLeadHours,
@@ -1204,6 +1206,7 @@ function ClinicWizard({
     services: ServiceRow[],
     questions: QuestionRow[],
   ) => Promise<SavedClinicDraftState>;
+  onApplied: () => Promise<void> | void;
   initialValue?: ClinicDraft;
   initialSchedule?: DayHours[];
   initialCutoffLeadHours?: number;
@@ -1229,6 +1232,7 @@ function ClinicWizard({
   );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showApplyDialog, setShowApplyDialog] = useState(false);
   const title =
     step === 1
       ? editing
@@ -1390,7 +1394,7 @@ function ClinicWizard({
     setStep(targetStep);
   }
 
-  function unavailableReviewPrimaryAction() {
+  function reviewPrimaryAction() {
     setSaveError('');
     if (initialStatus === 'DRAFT') {
       const hoursError = scheduleInputError();
@@ -1403,25 +1407,28 @@ function ClinicWizard({
       );
       return;
     }
-    if (initialStatus === 'ACTIVE') {
-      setSaveError(
-        'Apply Changes is not connected yet. Use Save as Draft to keep the proposed configuration without changing the live clinic.',
-      );
+    if (
+      initialStatus === 'ACTIVE' ||
+      initialStatus === 'DISABLED'
+    ) {
+      if (!practiceLocationId) {
+        setSaveError('Save this clinic before applying its configuration.');
+        return;
+      }
+      setShowApplyDialog(true);
       return;
     }
     void saveReviewDraft();
   }
 
   const reviewPrimaryLabel =
-    initialStatus === 'ACTIVE'
+    initialStatus === 'ACTIVE' || initialStatus === 'DISABLED'
       ? 'Apply Changes'
-      : initialStatus === 'DRAFT'
-        ? 'Activate Clinic'
-        : 'Save Clinic';
+      : 'Activate Clinic';
 
   const primaryAction =
     step === 5
-      ? unavailableReviewPrimaryAction
+      ? reviewPrimaryAction
       : () => {
           void saveAndContinue();
         };
@@ -1525,6 +1532,16 @@ function ClinicWizard({
           />
         </div>
       </div>
+      {showApplyDialog && practiceLocationId ? (
+        <ApplyClinicChangesDialog
+          practiceLocationId={practiceLocationId}
+          onCancel={() => setShowApplyDialog(false)}
+          onApplied={async () => {
+            setShowApplyDialog(false);
+            await onApplied();
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1882,6 +1899,19 @@ export function ClinicTabPage() {
     };
   }, []);
 
+  async function applied() {
+    try {
+      await loadClinics();
+      setLoadError('');
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : 'Unable to reload clinics.',
+      );
+    }
+    setEditingClinic(null);
+    setMode('list');
+  }
+
   async function saved(
     clinicId: string | undefined,
     clinic: ClinicDraft,
@@ -1998,6 +2028,7 @@ export function ClinicTabPage() {
           setMode('list');
         }}
         onSaved={saved}
+        onApplied={applied}
       />
     );
   if (mode === 'edit' && editingClinic)
@@ -2016,6 +2047,7 @@ export function ClinicTabPage() {
           setMode('list');
         }}
         onSaved={saved}
+        onApplied={applied}
       />
     );
   return (
