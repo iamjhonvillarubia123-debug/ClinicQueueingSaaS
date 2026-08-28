@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
 
 vi.mock('../api/client', () => ({
@@ -21,7 +21,9 @@ describe('ApplyClinicChangesDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and Apply' }));
     expect(
-      screen.getByText('Enter your current password to apply these clinic changes.'),
+      screen.getByText(
+        'Enter your current password to apply these clinic changes.',
+      ),
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Current password'), {
@@ -34,7 +36,9 @@ describe('ApplyClinicChangesDialog', () => {
       '/practice-location/apply-configuration-draft',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+        headers: expect.objectContaining({
+          'Idempotency-Key': expect.any(String),
+        }),
         body: {
           practiceLocationId: 'location-1',
           password: 'secret-password',
