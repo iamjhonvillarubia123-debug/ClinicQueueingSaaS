@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api/client';
+import { QuestionManagementEditor } from './QuestionManagementEditor';
 import { ServiceManagementEditor } from './ServiceManagementEditor';
 
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -922,100 +923,11 @@ function QuestionsEditor({
   questions: QuestionRow[];
   setQuestions: (value: QuestionRow[]) => void;
 }) {
-  function addQuestion() {
-    if (questions.length >= 5) return;
-    setQuestions([
-      ...questions,
-      {
-        id: `new-question-${Date.now()}`,
-        order: questions.length + 1,
-        question: 'New booking question',
-        type: 'TEXT',
-        required: false,
-        active: true,
-      },
-    ]);
-  }
   return (
-    <>
-      <div className="clinic-section-toolbar">
-        <p>
-          Add questions to ask patients during booking. Maximum 5 active
-          questions.
-        </p>
-        <button
-          className="clinic-secondary"
-          disabled={questions.length >= 5}
-          type="button"
-          onClick={addQuestion}
-        >
-          + Add Question
-        </button>
-      </div>
-      <div className="clinic-question-list">
-        {questions.map((question) => (
-          <div className="clinic-question-row" key={question.id}>
-            <span className="clinic-order">{question.order}</span>
-            <input
-              className="clinic-question-input"
-              value={question.question}
-              onChange={(e) =>
-                setQuestions(
-                  questions.map((row) =>
-                    row.id === question.id
-                      ? { ...row, question: e.target.value }
-                      : row,
-                  ),
-                )
-              }
-            />
-            <select
-              value={question.type}
-              onChange={(e) =>
-                setQuestions(
-                  questions.map((row) =>
-                    row.id === question.id
-                      ? { ...row, type: e.target.value as QuestionRow['type'] }
-                      : row,
-                  ),
-                )
-              }
-            >
-              <option value="TEXT">Text</option>
-              <option value="NUMBER">Number</option>
-              <option value="BOOLEAN">Yes / No</option>
-              <option value="SINGLE_SELECT">Single Choice</option>
-            </select>
-            <label className="clinic-check">
-              <input
-                type="checkbox"
-                checked={question.required}
-                onChange={(e) =>
-                  setQuestions(
-                    questions.map((row) =>
-                      row.id === question.id
-                        ? { ...row, required: e.target.checked }
-                        : row,
-                  ),
-                )
-              }
-              />{' '}
-              Required
-            </label>
-            <button
-              className="clinic-kebab"
-              type="button"
-              aria-label={`Actions for question ${question.order}`}
-            >
-              ⋮
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="clinic-info-strip">
-        ⓘ Supported question types: Text, Number, Yes / No, and Single Choice.
-      </div>
-    </>
+    <QuestionManagementEditor
+      questions={questions}
+      setQuestions={setQuestions}
+    />
   );
 }
 
