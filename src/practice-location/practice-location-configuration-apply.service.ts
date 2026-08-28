@@ -126,7 +126,9 @@ export class PracticeLocationConfigurationApplyService {
           },
         });
         if (!draft) {
-          throw new ConflictException('There are no proposed clinic changes to apply.');
+          throw new ConflictException(
+            'There are no proposed clinic changes to apply.',
+          );
         }
 
         const optionRows = draft.bookingQuestions.length
@@ -146,7 +148,8 @@ export class PracticeLocationConfigurationApplyService {
           : [];
         const optionsByQuestion = new Map<string, typeof optionRows>();
         for (const option of optionRows) {
-          const current = optionsByQuestion.get(option.bookingQuestionDraftId) ?? [];
+          const current =
+            optionsByQuestion.get(option.bookingQuestionDraftId) ?? [];
           current.push(option);
           optionsByQuestion.set(option.bookingQuestionDraftId, current);
         }
@@ -212,10 +215,11 @@ export class PracticeLocationConfigurationApplyService {
           });
         }
 
-        const effectiveServices = await transaction.practiceLocationService.findMany({
-          where: { practiceLocationId: location.id },
-          select: { id: true },
-        });
+        const effectiveServices =
+          await transaction.practiceLocationService.findMany({
+            where: { practiceLocationId: location.id },
+            select: { id: true },
+          });
         const retainedServiceIds = new Set<string>();
         for (const service of draft.services) {
           if (service.effectiveServiceId) {
@@ -339,10 +343,14 @@ export class PracticeLocationConfigurationApplyService {
 
         const effectiveTimeZone = draft.timeZone?.trim();
         if (!effectiveTimeZone) {
-          throw new ConflictException('Practice location time zone is required.');
+          throw new ConflictException(
+            'Practice location time zone is required.',
+          );
         }
         this.scheduleTime.assertValidTimeZone(effectiveTimeZone);
-        if (location.lifecycleStatus === PracticeLocationLifecycleStatus.ACTIVE) {
+        if (
+          location.lifecycleStatus === PracticeLocationLifecycleStatus.ACTIVE
+        ) {
           await this.recurringScheduleConflict.assertNoConflictForLocation(
             location.doctorProfileId,
             location.id,
@@ -475,12 +483,18 @@ export class PracticeLocationConfigurationApplyService {
     }
     const serviceNames = new Set<string>();
     for (const service of draft.services) {
-      if (!service.name.trim() || service.durationMinutes <= 0 || service.durationMinutes > 1440) {
+      if (
+        !service.name.trim() ||
+        service.durationMinutes <= 0 ||
+        service.durationMinutes > 1440
+      ) {
         throw new ConflictException('A proposed Service is invalid.');
       }
       const name = service.name.trim().toLowerCase();
       if (serviceNames.has(name)) {
-        throw new ConflictException('Service names must be unique within a clinic.');
+        throw new ConflictException(
+          'Service names must be unique within a clinic.',
+        );
       }
       serviceNames.add(name);
     }
@@ -553,7 +567,9 @@ export class PracticeLocationConfigurationApplyService {
           questionText: true,
           type: true,
           selectOptions: true,
-          _count: { select: { appointmentAnswers: true, bookingDraftAnswers: true } },
+          _count: {
+            select: { appointmentAnswers: true, bookingDraftAnswers: true },
+          },
         },
       });
       if (!existing) {
@@ -575,7 +591,13 @@ export class PracticeLocationConfigurationApplyService {
           : [];
       const existingValues = Array.isArray(existing.selectOptions)
         ? existing.selectOptions.flatMap((option) => {
-            if (!option || typeof option !== 'object' || Array.isArray(option)) return [];
+            if (
+              !option ||
+              typeof option !== 'object' ||
+              Array.isArray(option)
+            ) {
+              return [];
+            }
             const value = (option as { value?: unknown }).value;
             return typeof value === 'string' ? [value] : [];
           })
@@ -604,13 +626,17 @@ export class PracticeLocationConfigurationApplyService {
       where: {
         id: { not: practiceLocationId },
         doctorProfileId,
-        lifecycleStatus: { not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED },
+        lifecycleStatus: {
+          not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
+        },
         shortCode: { equals: normalized, mode: 'insensitive' },
       },
       select: { id: true },
     });
     if (duplicate) {
-      throw new ConflictException('Another clinic already uses this short code.');
+      throw new ConflictException(
+        'Another clinic already uses this short code.',
+      );
     }
   }
 
@@ -631,7 +657,9 @@ export class PracticeLocationConfigurationApplyService {
       FOR UPDATE OF pl
     `);
     const location = rows[0];
-    if (!location) throw new NotFoundException('Practice location was not found.');
+    if (!location) {
+      throw new NotFoundException('Practice location was not found.');
+    }
     return location;
   }
 
@@ -649,7 +677,8 @@ export class PracticeLocationConfigurationApplyService {
       !actor ||
       actor.role !== UserRole.DOCTOR ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE ||
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
       location.doctorUserId !== authenticatedUserId
     ) {
       throw new ForbiddenException(
@@ -685,8 +714,12 @@ export class PracticeLocationConfigurationApplyService {
 
   private normalizeIdempotencyKey(value: string) {
     const normalized = value?.trim();
-    if (!normalized) throw new BadRequestException('Idempotency-Key header is required.');
-    if (normalized.length > 100) throw new BadRequestException('Idempotency-Key is too long.');
+    if (!normalized) {
+      throw new BadRequestException('Idempotency-Key header is required.');
+    }
+    if (normalized.length > 100) {
+      throw new BadRequestException('Idempotency-Key is too long.');
+    }
     return normalized;
   }
 
