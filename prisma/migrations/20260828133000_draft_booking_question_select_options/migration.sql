@@ -10,16 +10,16 @@ CREATE TABLE "DoctorPracticeConfigurationDraftBookingQuestionOption" (
     CONSTRAINT "DoctorPracticeConfigurationDraftBookingQuestionOption_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "DoctorPracticeConfigurationDraftBookingQuestionOption_bookingQuestionDraftId_optionValue_key"
+CREATE UNIQUE INDEX "DPConfigDraftQuestionOption_question_value_key"
 ON "DoctorPracticeConfigurationDraftBookingQuestionOption"("bookingQuestionDraftId", "optionValue");
 
-CREATE UNIQUE INDEX "DoctorPracticeConfigurationDraftBookingQuestionOption_bookingQuestionDraftId_displayOrder_key"
+CREATE UNIQUE INDEX "DPConfigDraftQuestionOption_question_order_key"
 ON "DoctorPracticeConfigurationDraftBookingQuestionOption"("bookingQuestionDraftId", "displayOrder");
 
-CREATE INDEX "DoctorPracticeConfigurationDraftBookingQuestionOption_bookingQuestionDraftId_idx"
+CREATE INDEX "DPConfigDraftQuestionOption_question_idx"
 ON "DoctorPracticeConfigurationDraftBookingQuestionOption"("bookingQuestionDraftId");
 
 ALTER TABLE "DoctorPracticeConfigurationDraftBookingQuestionOption"
-ADD CONSTRAINT "DoctorPracticeConfigurationDraftBookingQuestionOption_bookingQuestionDraftId_fkey"
+ADD CONSTRAINT "DPConfigDraftQuestionOption_question_fkey"
 FOREIGN KEY ("bookingQuestionDraftId") REFERENCES "DoctorPracticeConfigurationDraftBookingQuestion"("id")
 ON DELETE CASCADE ON UPDATE CASCADE;
