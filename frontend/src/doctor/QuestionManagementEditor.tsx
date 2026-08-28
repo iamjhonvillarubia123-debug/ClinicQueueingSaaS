@@ -300,7 +300,7 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
           <span>Question</span>
           <span>Type</span>
           <span>Status</span>
-          <span>Required</span>
+          <span className="question-management-required-heading">Required</span>
           <span>Actions</span>
         </div>
 
@@ -414,21 +414,21 @@ export function QuestionManagementEditor({ questions, setQuestions }: Props) {
                   )}
                 </div>
 
-                <div className="question-management-required">
+                <div
+                  className="question-management-required"
+                  onDragStart={(event) => event.stopPropagation()}
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
                   <label className="question-management-required-control">
                     <input
                       aria-label={`Required for ${question.question}`}
                       type="checkbox"
                       checked={question.required}
-                      readOnly={!editing}
-                      tabIndex={editing ? 0 : -1}
-                      onChange={(event) => {
-                        if (editing) {
-                          updateQuestion(question.id, {
-                            required: event.target.checked,
-                          });
-                        }
-                      }}
+                      onChange={(event) =>
+                        updateQuestion(question.id, {
+                          required: event.target.checked,
+                        })
+                      }
                     />
                   </label>
                 </div>
