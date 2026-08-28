@@ -82,20 +82,63 @@
   align-items: center;
 }
 
+.question-management-required {
+  justify-content: flex-start;
+}
+
 .question-management-required-display,
 .question-management-required-control {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #475467;
+  color: #111;
   font-size: 12px;
+}
+
+.question-management-required-display > span,
+.question-management-required-control > span {
+  display: none;
 }
 
 .question-management-required-display input,
 .question-management-required-control input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
   width: 16px;
+  min-width: 16px;
   height: 16px;
+  min-height: 16px;
   margin: 0;
+  place-content: center;
+  border: 1.5px solid #111;
+  border-radius: 2px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.question-management-required-display input {
+  cursor: default;
+}
+
+.question-management-required-display input:checked,
+.question-management-required-control input:checked {
+  border-color: #111;
+  background: #111;
+}
+
+.question-management-required-display input:checked::before,
+.question-management-required-control input:checked::before {
+  width: 8px;
+  height: 4px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  content: '';
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.question-management-required-control input:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
 }
 
 .question-management-actions {
@@ -175,6 +218,14 @@
   color: #6b7280;
   font-size: 11px;
   font-weight: 500;
+}
+
+.question-management-row.is-editing .question-management-required-control {
+  display: inline-flex;
+}
+
+.question-management-row.is-editing .question-management-required-control > span {
+  display: none;
 }
 
 .question-management-row.is-editing input:not([type='checkbox']),
