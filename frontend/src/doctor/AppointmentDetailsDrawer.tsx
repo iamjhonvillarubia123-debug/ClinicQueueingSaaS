@@ -1,3 +1,5 @@
+import { OperationsIcon, type OperationsIconName } from './OperationsIcon';
+
 export type AppointmentDetailsModel = {
   queue: string;
   name: string;
@@ -18,7 +20,8 @@ export function AppointmentDetailsDrawer({ appointment, onClose, onReport }: Det
 }
 
 function DetailSection({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
-  return <section className="appointment-detail-section"><h3><span>{icon}</span>{title}</h3>{children}</section>;
+  const iconMap: Record<string, OperationsIconName> = { '♙': 'person', '▣': 'calendar', '▤': 'clinic', '☑': 'check', '◷': 'clock' };
+  return <section className="appointment-detail-section"><h3><span><OperationsIcon name={iconMap[icon] ?? 'info'} size={18} /></span>{title}</h3>{children}</section>;
 }
 
 const reportPatients: AppointmentDetailsModel[] = [

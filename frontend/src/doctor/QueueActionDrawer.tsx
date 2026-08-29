@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { OperationsIcon, type OperationsIconName } from './OperationsIcon';
 
 export type QueueDrawerMode = 'walkin' | 'adjust' | 'delay';
 type AdjustFlow = 'move' | 'return' | 'same-day' | 'correct';
@@ -16,7 +17,8 @@ const services = [
 ];
 
 function DrawerHeader({ icon, title, subtitle, onClose }: { icon: string; title: string; subtitle: string; onClose: () => void }) {
-  return <header className="queue-drawer-header"><span>{icon}</span><div><h2>{title}</h2><p>{subtitle}</p></div><button type="button" onClick={onClose} aria-label={`Close ${title}`}>×</button></header>;
+  const mapped: OperationsIconName = icon === '♨' ? 'coffee' : title === 'Adjust Queue' ? 'swap' : 'person';
+  return <header className="queue-drawer-header"><span><OperationsIcon name={mapped} /></span><div><h2>{title}</h2><p>{subtitle}</p></div><button type="button" onClick={onClose} aria-label={`Close ${title}`}><OperationsIcon name="close" size={19} /></button></header>;
 }
 
 function DrawerFooter({ onClose, primary, onPrimary, back, disabled }: { onClose: () => void; primary: string; onPrimary: () => void; back?: () => void; disabled?: boolean }) {
