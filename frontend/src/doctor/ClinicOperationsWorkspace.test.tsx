@@ -72,4 +72,17 @@ describe('ClinicOperationsWorkspace', () => {
     await user.click(screen.getByRole('button', { name: '▤ Generate PDF' }));
     expect(screen.getByRole('dialog', { name: 'Daily appointment report preview' })).toBeInTheDocument();
   });
+
+  it('shares the selected service date across clinic operation tabs', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole('button', { name: 'Next service date' }));
+    expect(screen.getByLabelText('Select service date')).toHaveValue('2026-08-26');
+    await user.click(screen.getByRole('button', { name: 'Queue' }));
+    expect(screen.getByLabelText('Select service date')).toHaveValue('2026-08-26');
+    await user.click(screen.getByRole('button', { name: 'Appointments' }));
+    expect(screen.getByLabelText('Select service date')).toHaveValue('2026-08-26');
+    expect(screen.getByRole('heading', { name: /Appointments for August 26, 2026/ })).toBeInTheDocument();
+  });
 });
