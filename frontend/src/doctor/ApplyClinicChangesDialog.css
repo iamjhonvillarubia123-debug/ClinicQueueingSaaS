@@ -48,6 +48,47 @@
   margin-top: 20px;
 }
 
+.clinic-delete-dialog {
+  width: min(100%, 500px);
+}
+
+.clinic-delete-warning {
+  color: #3f3f46;
+}
+
+.clinic-delete-form {
+  display: grid;
+  gap: 18px;
+}
+
+.clinic-confirmation-dialog .clinic-confirmation-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.clinic-confirmation-dialog .clinic-confirmation-check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: 0 0 18px;
+  margin: 1px 0 0;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: #111;
+}
+
+.clinic-delete-password {
+  margin-top: 2px;
+}
+
+.clinic-delete-dialog .clinic-confirmation-actions {
+  margin-top: 2px;
+}
+
 @media (max-width: 520px) {
   .clinic-confirmation-backdrop {
     align-items: end;
