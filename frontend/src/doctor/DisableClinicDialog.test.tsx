@@ -1,45 +1,46 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
 import { DisableClinicDialog } from './DisableClinicDialog';
 
-vi.mock('../api/client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../api/client')>();
-  return {
-    ...actual,
-    apiRequest: vi.fn(),
-  };
-});
+vi.mock('../api/client', () => ({ apiRequest: vi.fn() }));
 
 describe('DisableClinicDialog', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it('requires the Doctor current password', async () => {
+    render(
+      <DisableClinicDialog
+        practiceLocationId="location-1"
+        onDisabled={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm and Disable' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Enter your current password to disable this clinic.',
+      ),
+    ).toBeInTheDocument();
+    expect(apiRequest).not.toHaveBeenCalled();
   });
 
-  it('requires explicit warning acknowledgement and password before disabling', async () => {
+  it('sends the protected disable command with one idempotency key', async () => {
     vi.mocked(apiRequest).mockResolvedValue({
-      practiceLocationId: 'location-1',
-      lifecycleStatus: 'DISABLED',
-      disabledAt: '2026-08-29T00:00:00.000Z',
+      disabled: true,
+      replayed: false,
     });
     const onDisabled = vi.fn();
 
     render(
       <DisableClinicDialog
         practiceLocationId="location-1"
-        clinicName="North Clinic"
-        onClose={() => undefined}
         onDisabled={onDisabled}
+        onCancel={vi.fn()}
       />,
     );
-
-    const confirmButton = screen.getByRole('button', {
-      name: 'Confirm and Disable',
-    });
-    expect(confirmButton).toBeDisabled();
-
-    fireEvent.click(screen.getByLabelText(/I understand that disabling/i));
-    expect(confirmButton).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('Current password'), {
       target: { value: 'doctor-password' },
