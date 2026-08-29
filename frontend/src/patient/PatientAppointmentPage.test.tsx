@@ -24,9 +24,15 @@ const baseDashboard = {
   queueNumber: 7,
   status: 'WAITING',
   estimatedServiceMinutes: 30,
+  bookedServices: ['General Consultation'],
+  scheduledClinicHours: {
+    opensAtLocal: '08:00',
+    closesAtLocal: '17:00',
+  },
   clinicDayStatus: 'STARTED',
   nowServingQueueNumber: 4,
   patientsAhead: 2,
+  estimatedWaitMinutes: 50,
   canUseImHere: false,
 };
 
@@ -49,7 +55,7 @@ function renderPage() {
 }
 
 describe('C1 approved individual patient dashboard shell', () => {
-  it('shows the approved waiting shell with permanent Queue Number and authoritative live queue values', async () => {
+  it('shows the approved waiting shell with authoritative appointment, queue, wait, and scheduled-clinic values', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(jsonResponse(baseDashboard));
@@ -61,6 +67,7 @@ describe('C1 approved individual patient dashboard shell', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Queue number 7')).toHaveTextContent('007');
     expect(screen.getByText('Sunday, August 23, 2026')).toBeInTheDocument();
+    expect(screen.getByText('General Consultation')).toBeInTheDocument();
 
     const queueCard = screen
       .getByRole('heading', { name: 'QUEUE STATUS' })
@@ -69,7 +76,13 @@ describe('C1 approved individual patient dashboard shell', () => {
     const queue = within(queueCard as HTMLElement);
     expect(queue.getByText('Now Serving').parentElement).toHaveTextContent('004');
     expect(queue.getByText('People Ahead').parentElement).toHaveTextContent('2');
-    expect(queue.getByText('Estimated Wait').parentElement).toHaveTextContent('—');
+    expect(queue.getByText('Estimated Wait').parentElement).toHaveTextContent('50 min');
+
+    const todayCard = screen
+      .getByRole('heading', { name: "TODAY'S CLINIC" })
+      .closest('section');
+    expect(todayCard).not.toBeNull();
+    expect(within(todayCard as HTMLElement).getByText('8:00 AM – 5:00 PM')).toBeInTheDocument();
 
     expect(screen.getByRole('heading', { name: 'ACTION AREA' })).toBeInTheDocument();
     expect(screen.getByText(/No action is needed right now/i)).toBeInTheDocument();
@@ -86,6 +99,7 @@ describe('C1 approved individual patient dashboard shell', () => {
       canUseImHere: true,
       nowServingQueueNumber: 8,
       patientsAhead: null,
+      estimatedWaitMinutes: null,
     };
     const waiting = {
       ...baseDashboard,
@@ -93,6 +107,7 @@ describe('C1 approved individual patient dashboard shell', () => {
       canUseImHere: false,
       nowServingQueueNumber: 8,
       patientsAhead: 3,
+      estimatedWaitMinutes: 65,
     };
     let dashboardReads = 0;
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -150,6 +165,7 @@ describe('C1 approved individual patient dashboard shell', () => {
         canUseImHere: false,
         nowServingQueueNumber: 8,
         patientsAhead: null,
+        estimatedWaitMinutes: null,
       }),
     );
 
@@ -175,6 +191,7 @@ describe('C1 approved individual patient dashboard shell', () => {
         status: 'CALLED',
         nowServingQueueNumber: 7,
         patientsAhead: null,
+        estimatedWaitMinutes: null,
       }),
     );
 
@@ -192,13 +209,14 @@ describe('C1 approved individual patient dashboard shell', () => {
     expect(queue.getByText('Estimated Wait').parentElement).toHaveTextContent('—');
   });
 
-  it('does not promise that scheduled opening automatically starts the clinic', async () => {
+  it('does not show live queue metrics or promise that scheduled opening automatically starts the clinic', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({
         ...baseDashboard,
         clinicDayStatus: 'NOT_STARTED',
         nowServingQueueNumber: null,
-        patientsAhead: 2,
+        patientsAhead: null,
+        estimatedWaitMinutes: null,
       }),
     );
 
@@ -210,6 +228,14 @@ describe('C1 approved individual patient dashboard shell', () => {
     expect(
       screen.getByText('The queue will appear here when the clinic starts.'),
     ).toBeInTheDocument();
+    const queueCard = screen
+      .getByRole('heading', { name: 'QUEUE STATUS' })
+      .closest('section');
+    const queue = within(queueCard as HTMLElement);
+    expect(queue.getByText('Now Serving').parentElement).toHaveTextContent('—');
+    expect(queue.getByText('People Ahead').parentElement).toHaveTextContent('—');
+    expect(queue.getByText('Estimated Wait').parentElement).toHaveTextContent('—');
+    expect(screen.getByText('8:00 AM – 5:00 PM')).toBeInTheDocument();
     expect(screen.queryByText(/will start at/i)).not.toBeInTheDocument();
   });
 
