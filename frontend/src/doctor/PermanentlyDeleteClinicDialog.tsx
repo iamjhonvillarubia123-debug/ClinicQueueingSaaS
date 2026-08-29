@@ -65,19 +65,19 @@ export function PermanentlyDeleteClinicDialog({
   return (
     <div className="clinic-confirmation-backdrop" role="presentation">
       <section
-        className="clinic-confirmation-dialog"
+        className="clinic-confirmation-dialog clinic-delete-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-clinic-title"
       >
         <h2 id="delete-clinic-title">Permanently delete clinic</h2>
-        <p>
-          <strong>{clinicName || 'This clinic'}</strong> will be permanently
-          removed from normal clinic operations. Historical records required for
-          audit and retention are preserved, but this clinic cannot be restored
-          through the normal clinic lifecycle.
+        <p className="clinic-delete-warning">
+          <strong>{clinicName || 'This clinic'}</strong> will be removed from
+          normal clinic operations and cannot be restored through the normal
+          clinic lifecycle. Historical records required for audit and retention
+          will remain preserved.
         </p>
-        <form onSubmit={submit}>
+        <form className="clinic-delete-form" onSubmit={submit}>
           <label className="clinic-confirmation-check">
             <input
               type="checkbox"
@@ -85,9 +85,9 @@ export function PermanentlyDeleteClinicDialog({
               onChange={(event) => setConfirmed(event.target.checked)}
               disabled={submitting}
             />
-            I understand that this clinic deletion is permanent.
+            <span>I understand that this clinic deletion is permanent.</span>
           </label>
-          <label>
+          <label className="clinic-delete-password">
             Current password
             <input
               type="password"
