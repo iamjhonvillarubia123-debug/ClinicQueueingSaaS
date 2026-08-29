@@ -1,11 +1,16 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
 import { PermanentlyDeleteClinicDialog } from './PermanentlyDeleteClinicDialog';
 
 vi.mock('../api/client', () => ({
   apiRequest: vi.fn(),
 }));
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('PermanentlyDeleteClinicDialog', () => {
   it('requires permanent-delete confirmation before submitting', async () => {
