@@ -85,4 +85,15 @@ describe('ClinicOperationsWorkspace', () => {
     expect(screen.getByLabelText('Select service date')).toHaveValue('2026-08-26');
     expect(screen.getByRole('heading', { name: /Appointments for August 26, 2026/ })).toBeInTheDocument();
   });
+
+  it('opens a month calendar and selects a service date', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await user.click(screen.getByRole('button', { name: 'Open service date calendar' }));
+    expect(screen.getByRole('dialog', { name: 'Choose service date' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Wed, Aug 26, 2026' }));
+    expect(screen.getByLabelText('Select service date')).toHaveValue('2026-08-26');
+    expect(screen.queryByRole('dialog', { name: 'Choose service date' })).not.toBeInTheDocument();
+  });
 });
