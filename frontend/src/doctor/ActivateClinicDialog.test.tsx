@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivateClinicDialog } from './ActivateClinicDialog';
 
 vi.mock('../api/client', () => ({
@@ -7,6 +7,11 @@ vi.mock('../api/client', () => ({
 }));
 
 import { apiRequest } from '../api/client';
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('ActivateClinicDialog', () => {
   it('requires the current password', () => {

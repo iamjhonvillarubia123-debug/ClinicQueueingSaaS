@@ -34,9 +34,15 @@ type AppointmentDashboard = {
   queueNumber: number;
   status: AppointmentStatus;
   estimatedServiceMinutes: number;
+  bookedServices: string[];
+  scheduledClinicHours: {
+    opensAtLocal: string;
+    closesAtLocal: string;
+  } | null;
   clinicDayStatus: ClinicDayStatus;
   nowServingQueueNumber: number | null;
   patientsAhead: number | null;
+  estimatedWaitMinutes: number | null;
   canUseImHere: boolean;
 };
 
@@ -67,6 +73,26 @@ function formatServiceDate(value: string) {
     day: 'numeric',
     timeZone: 'UTC',
   }).format(date);
+}
+
+function formatClinicTime(value: string) {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return value;
+
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${minutes} ${period}`;
+}
+
+function formatScheduledHours(
+  scheduledClinicHours: AppointmentDashboard['scheduledClinicHours'],
+) {
+  if (!scheduledClinicHours) return 'Not scheduled';
+  return `${formatClinicTime(scheduledClinicHours.opensAtLocal)} – ${formatClinicTime(
+    scheduledClinicHours.closesAtLocal,
+  )}`;
 }
 
 function presentationFor(dashboard: AppointmentDashboard): PatientPresentation {
@@ -331,7 +357,11 @@ export function PatientAppointmentPage() {
                   </div>
                   <div>
                     <span>Service</span>
-                    <strong>—</strong>
+                    <strong>
+                      {dashboard.bookedServices.length > 0
+                        ? dashboard.bookedServices.join(', ')
+                        : '—'}
+                    </strong>
                   </div>
                 </div>
               </div>
@@ -353,7 +383,11 @@ export function PatientAppointmentPage() {
                 </div>
                 <div>
                   <span>Estimated Wait</span>
-                  <strong>—</strong>
+                  <strong>
+                    {dashboard.status === 'WAITING' && dashboard.estimatedWaitMinutes !== null
+                      ? `${dashboard.estimatedWaitMinutes} min`
+                      : '—'}
+                  </strong>
                 </div>
               </div>
               {dashboard.status === 'TEMPORARILY_ABSENT' ? (
@@ -391,7 +425,7 @@ export function PatientAppointmentPage() {
               <div>
                 <h2 id="patient-today-heading">TODAY'S CLINIC</h2>
                 <span>Scheduled Hours</span>
-                <strong>—</strong>
+                <strong>{formatScheduledHours(dashboard.scheduledClinicHours)}</strong>
               </div>
               <span className={`patient-clinic-state patient-tone-${presentation.tone}`}>{presentation.clinicState}</span>
             </section>

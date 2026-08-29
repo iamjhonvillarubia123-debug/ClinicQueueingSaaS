@@ -1,9 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
 import { DisableClinicDialog } from './DisableClinicDialog';
 
 vi.mock('../api/client', () => ({ apiRequest: vi.fn() }));
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('DisableClinicDialog', () => {
   it('requires the Doctor current password', async () => {
@@ -60,7 +65,7 @@ describe('DisableClinicDialog', () => {
         confirmDisable: true,
       },
     });
-    expect(options?.headers?.['Idempotency-Key']).toBeTruthy();
+    expect(new Headers(options?.headers).get('Idempotency-Key')).toBeTruthy();
     await waitFor(() => expect(onDisabled).toHaveBeenCalledTimes(1));
   });
 });
