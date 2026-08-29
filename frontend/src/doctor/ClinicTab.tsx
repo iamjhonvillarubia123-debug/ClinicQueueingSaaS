@@ -289,7 +289,9 @@ function countryName(countryCode: string | null | undefined) {
   return countryCode === 'PH' || !countryCode ? 'Philippines' : countryCode;
 }
 
-function basicInfoFromLocation(location: PracticeLocationResponse): ClinicDraft {
+function basicInfoFromLocation(
+  location: PracticeLocationResponse,
+): ClinicDraft {
   return {
     name: location.name ?? '',
     shortCode: location.shortCode ?? '',
@@ -324,7 +326,7 @@ function servicesFromResponse(
   return (services ?? []).map((service) => ({
     id: service.id,
     effectiveServiceId: fromDraft
-      ? service.effectiveServiceId ?? undefined
+      ? (service.effectiveServiceId ?? undefined)
       : service.id,
     sourceDoctorServiceTemplateId:
       service.sourceDoctorServiceTemplateId ?? undefined,
@@ -357,7 +359,7 @@ function questionsFromResponse(
   return (questions ?? []).map((question) => ({
     id: question.id,
     effectiveBookingQuestionId: fromDraft
-      ? question.effectiveBookingQuestionId ?? undefined
+      ? (question.effectiveBookingQuestionId ?? undefined)
       : question.id,
     sourceDoctorBookingQuestionTemplateId:
       question.sourceDoctorBookingQuestionTemplateId ?? undefined,
@@ -994,10 +996,14 @@ function Review({
   const servicesConfigured = services.length > 0;
   const questionsConfigured = questions.length > 0;
   const publicInformationConfigured = Boolean(
-    draft.contactNumber.trim() || draft.email.trim() || draft.description.trim(),
+    draft.contactNumber.trim() ||
+    draft.email.trim() ||
+    draft.description.trim(),
   );
   const activeServices = services.filter((service) => service.active).length;
-  const activeQuestions = questions.filter((question) => question.active).length;
+  const activeQuestions = questions.filter(
+    (question) => question.active,
+  ).length;
 
   function readinessMark(complete: boolean) {
     return (
@@ -1030,7 +1036,10 @@ function Review({
 
   return (
     <div className="clinic-review-layout">
-      <section className="clinic-readiness-card" aria-label="Activation readiness">
+      <section
+        className="clinic-readiness-card"
+        aria-label="Activation readiness"
+      >
         <div className="clinic-readiness-heading">
           <div>
             <h3>Activation Readiness</h3>
@@ -1039,34 +1048,59 @@ function Review({
               configuration.
             </p>
           </div>
-          <span className={`clinic-ready-icon${clinicHoursReady ? ' is-ready' : ''}`}>
+          <span
+            className={`clinic-ready-icon${clinicHoursReady ? ' is-ready' : ''}`}
+          >
             {clinicHoursReady ? '✓' : '○'}
           </span>
         </div>
         <div className="clinic-readiness-grid">
           <div className="clinic-readiness-item">
             {readinessMark(clinicHoursReady)}
-            <div><strong>Clinic Hours</strong><small>{clinicHoursReady ? 'Configured' : 'Required'}</small></div>
+            <div>
+              <strong>Clinic Hours</strong>
+              <small>{clinicHoursReady ? 'Configured' : 'Required'}</small>
+            </div>
           </div>
           <div className="clinic-readiness-item">
             {readinessMark(servicesConfigured)}
-            <div><strong>Services</strong><small>{servicesConfigured ? 'Configured' : 'Optional'}</small></div>
+            <div>
+              <strong>Services</strong>
+              <small>{servicesConfigured ? 'Configured' : 'Optional'}</small>
+            </div>
           </div>
           <div className="clinic-readiness-item">
             {readinessMark(questionsConfigured)}
-            <div><strong>Booking Questions</strong><small>{questionsConfigured ? 'Configured' : 'Optional'}</small></div>
+            <div>
+              <strong>Booking Questions</strong>
+              <small>{questionsConfigured ? 'Configured' : 'Optional'}</small>
+            </div>
           </div>
           <div className="clinic-readiness-item">
             {readinessMark(false)}
-            <div><strong>Secretaries</strong><small>Optional · not connected here</small></div>
+            <div>
+              <strong>Secretaries</strong>
+              <small>Optional · not connected here</small>
+            </div>
           </div>
           <div className="clinic-readiness-item">
             {readinessMark(publicInformationConfigured)}
-            <div><strong>Public Information</strong><small>{publicInformationConfigured ? 'Configured' : 'Optional'}</small></div>
+            <div>
+              <strong>Public Information</strong>
+              <small>
+                {publicInformationConfigured ? 'Configured' : 'Optional'}
+              </small>
+            </div>
           </div>
         </div>
-        <div className={`clinic-readiness-summary${clinicHoursReady ? ' is-ready' : ''}`}>
-          <strong>{clinicHoursReady ? 'Ready for activation' : 'Clinic Hours still required'}</strong>
+        <div
+          className={`clinic-readiness-summary${clinicHoursReady ? ' is-ready' : ''}`}
+        >
+          <strong>
+            {clinicHoursReady
+              ? 'Ready for activation'
+              : 'Clinic Hours still required'}
+          </strong>
           <span>
             {clinicHoursReady
               ? 'Optional configuration can be completed now or later.'
@@ -1079,25 +1113,43 @@ function Review({
         <div className="clinic-review-card">
           {reviewHeader('Basic Information', 1)}
           <dl className="clinic-review-basic-grid">
-            <dt>Clinic Name</dt><dd>{draft.name || 'Not entered'}</dd>
-            <dt>Short Code</dt><dd>{draft.shortCode || 'Not entered'}</dd>
-            <dt>Address</dt><dd>{draft.address || 'Not entered'}</dd>
-            <dt>Country</dt><dd>{draft.country}</dd>
-            <dt>Timezone</dt><dd>{draft.timeZone}</dd>
+            <dt>Clinic Name</dt>
+            <dd>{draft.name || 'Not entered'}</dd>
+            <dt>Short Code</dt>
+            <dd>{draft.shortCode || 'Not entered'}</dd>
+            <dt>Address</dt>
+            <dd>{draft.address || 'Not entered'}</dd>
+            <dt>Country</dt>
+            <dd>{draft.country}</dd>
+            <dt>Timezone</dt>
+            <dd>{draft.timeZone}</dd>
           </dl>
         </div>
 
         <div className="clinic-review-card">
           {reviewHeader('Clinic Hours', 2)}
           {openHours.length ? (
-            <div className="clinic-review-hours" role="table" aria-label="Clinic hours summary">
+            <div
+              className="clinic-review-hours"
+              role="table"
+              aria-label="Clinic hours summary"
+            >
               <div className="clinic-review-hours-head" role="row">
-                <span>Day</span><span>Clinic Hours</span><span>Online Cutoff</span><span>Maximum Until</span>
+                <span>Day</span>
+                <span>Clinic Hours</span>
+                <span>Online Cutoff</span>
+                <span>Maximum Until</span>
               </div>
               {openHours.map((row) => (
-                <div className="clinic-review-hours-row" role="row" key={row.day}>
+                <div
+                  className="clinic-review-hours-row"
+                  role="row"
+                  key={row.day}
+                >
                   <strong>{row.day}</strong>
-                  <span>{row.opens} – {row.closes}</span>
+                  <span>
+                    {row.opens} – {row.closes}
+                  </span>
                   <span>{onlineCutoffFor(row, cutoffLeadHours)}</span>
                   <span>{row.maximumUntil}</span>
                 </div>
@@ -1113,22 +1165,29 @@ function Review({
           {services.length ? (
             <div className="clinic-review-detail-list">
               <div className="clinic-review-service-head">
-                <span>Service</span><span>Duration</span><span>Status</span>
+                <span>Service</span>
+                <span>Duration</span>
+                <span>Status</span>
               </div>
               {services.map((service) => (
                 <div className="clinic-review-detail-row" key={service.id}>
                   <div>
                     <strong>{service.name}</strong>
-                    {service.description ? <small>{service.description}</small> : null}
+                    {service.description ? (
+                      <small>{service.description}</small>
+                    ) : null}
                   </div>
                   <span>{service.minutes} min</span>
-                  <span className={`clinic-review-state${service.active ? ' is-active' : ''}`}>
+                  <span
+                    className={`clinic-review-state${service.active ? ' is-active' : ''}`}
+                  >
                     {service.active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
               ))}
               <p className="clinic-review-count-note">
-                {activeServices} active · {services.length - activeServices} inactive
+                {activeServices} active · {services.length - activeServices}{' '}
+                inactive
               </p>
             </div>
           ) : (
@@ -1141,7 +1200,10 @@ function Review({
           {questions.length ? (
             <div className="clinic-review-detail-list">
               <div className="clinic-review-question-head">
-                <span>Question</span><span>Type</span><span>Required</span><span>Status</span>
+                <span>Question</span>
+                <span>Type</span>
+                <span>Required</span>
+                <span>Status</span>
               </div>
               {[...questions]
                 .sort((a, b) => a.order - b.order)
@@ -1149,21 +1211,29 @@ function Review({
                   <div className="clinic-review-question-row" key={question.id}>
                     <div>
                       <strong>{question.question}</strong>
-                      {question.type === 'SINGLE_SELECT' && question.options?.length ? (
+                      {question.type === 'SINGLE_SELECT' &&
+                      question.options?.length ? (
                         <small>
-                          Options: {question.options.map((option) => option.label).join(', ')}
+                          Options:{' '}
+                          {question.options
+                            .map((option) => option.label)
+                            .join(', ')}
                         </small>
                       ) : null}
                     </div>
                     <span>{reviewQuestionType(question.type)}</span>
                     <span>{question.required ? 'Required' : 'Optional'}</span>
-                    <span className={`clinic-review-state${question.active ? ' is-active' : ''}`}>
+                    <span
+                      className={`clinic-review-state${question.active ? ' is-active' : ''}`}
+                    >
                       {question.active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
                 ))}
               <p className="clinic-review-count-note">
-                {activeQuestions} active · {questions.filter((question) => question.required).length} required
+                {activeQuestions} active ·{' '}
+                {questions.filter((question) => question.required).length}{' '}
+                required
               </p>
             </div>
           ) : (
@@ -1174,9 +1244,12 @@ function Review({
         <div className="clinic-review-card">
           {reviewHeader('Public Information', 1)}
           <dl className="clinic-review-public-grid">
-            <dt>Contact Number</dt><dd>{draft.contactNumber || 'Not entered'}</dd>
-            <dt>Email</dt><dd>{draft.email || 'Not entered'}</dd>
-            <dt>Description</dt><dd>{draft.description || 'Not entered'}</dd>
+            <dt>Contact Number</dt>
+            <dd>{draft.contactNumber || 'Not entered'}</dd>
+            <dt>Email</dt>
+            <dd>{draft.email || 'Not entered'}</dd>
+            <dt>Description</dt>
+            <dd>{draft.description || 'Not entered'}</dd>
           </dl>
         </div>
       </div>
@@ -1338,19 +1411,24 @@ function ClinicWizard({
     setSaving(true);
     try {
       if (step === 2) {
-        await apiRequest<{ valid: true }>('/practice-location/schedule-preflight', {
-          method: 'POST',
-          body: {
-            practiceLocationId,
-            timeZone: draft.timeZone,
-            schedules: hours.map((row) => ({
-              weekday: weekdayFor(row.day),
-              isOpen: row.open,
-              opensAtLocal: row.open ? toApiLocalTime(row.opens) : undefined,
-              closesAtLocal: row.open ? toApiLocalTime(row.closes) : undefined,
-            })),
+        await apiRequest<{ valid: true }>(
+          '/practice-location/schedule-preflight',
+          {
+            method: 'POST',
+            body: {
+              practiceLocationId,
+              timeZone: draft.timeZone,
+              schedules: hours.map((row) => ({
+                weekday: weekdayFor(row.day),
+                isOpen: row.open,
+                opensAtLocal: row.open ? toApiLocalTime(row.opens) : undefined,
+                closesAtLocal: row.open
+                  ? toApiLocalTime(row.closes)
+                  : undefined,
+              })),
+            },
           },
-        });
+        );
       }
       await persistDraft();
       if (returnToReview) {
@@ -1407,10 +1485,7 @@ function ClinicWizard({
       );
       return;
     }
-    if (
-      initialStatus === 'ACTIVE' ||
-      initialStatus === 'DISABLED'
-    ) {
+    if (initialStatus === 'ACTIVE' || initialStatus === 'DISABLED') {
       if (!practiceLocationId) {
         setSaveError('Save this clinic before applying its configuration.');
         return;
@@ -1602,12 +1677,7 @@ function ClinicActionIcon({
 }
 
 type ClinicListAction =
-  | 'OPEN'
-  | 'EDIT'
-  | 'ACTIVATE'
-  | 'ASSIGN_SECRETARY'
-  | 'DISABLE'
-  | 'DELETE';
+  'OPEN' | 'EDIT' | 'ACTIVATE' | 'ASSIGN_SECRETARY' | 'DISABLE' | 'DELETE';
 
 function defaultClinicListAction(clinic: ClinicRecord): ClinicListAction {
   return clinic.status === 'ACTIVE' ? 'OPEN' : 'EDIT';
@@ -1841,7 +1911,9 @@ function ClinicList({
                           }
                           onClick={() => selectAction(clinic, action)}
                         >
-                          <ClinicActionIcon kind={clinicListActionIcon(action)} />
+                          <ClinicActionIcon
+                            kind={clinicListActionIcon(action)}
+                          />
                           <span>{clinicListActionLabel(action)}</span>
                           {action === selectedAction ? (
                             <span className="clinic-action-check">✓</span>
@@ -1997,7 +2069,9 @@ export function ClinicTabPage() {
             displayOrder: question.order,
             isActive: question.active,
             selectOptions:
-              question.type === 'SINGLE_SELECT' ? question.options ?? [] : undefined,
+              question.type === 'SINGLE_SELECT'
+                ? (question.options ?? [])
+                : undefined,
           })),
         },
       },

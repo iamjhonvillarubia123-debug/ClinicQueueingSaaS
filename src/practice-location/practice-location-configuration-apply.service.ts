@@ -619,7 +619,11 @@ export class PracticeLocationConfigurationApplyService {
           : [];
       const existingValues = Array.isArray(existing.selectOptions)
         ? existing.selectOptions.flatMap((option) => {
-            if (!option || typeof option !== 'object' || Array.isArray(option)) {
+            if (
+              !option ||
+              typeof option !== 'object' ||
+              Array.isArray(option)
+            ) {
               return [];
             }
             const value = (option as { value?: unknown }).value;

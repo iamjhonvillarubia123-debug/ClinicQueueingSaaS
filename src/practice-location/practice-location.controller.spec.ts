@@ -133,11 +133,9 @@ describe('PracticeLocationController', () => {
       request as never,
     );
 
-    expect(practiceLocationConfigurationDraftServiceMock.save).toHaveBeenCalledWith(
-      'doctor-1',
-      'location-1',
-      dto,
-    );
+    expect(
+      practiceLocationConfigurationDraftServiceMock.save,
+    ).toHaveBeenCalledWith('doctor-1', 'location-1', dto);
   });
 
   it('delegates protected configuration apply with idempotency', async () => {
@@ -154,11 +152,9 @@ describe('PracticeLocationController', () => {
       request as never,
     );
 
-    expect(practiceLocationConfigurationApplyServiceMock.apply).toHaveBeenCalledWith(
-      'doctor-1',
-      dto,
-      'settings-key',
-    );
+    expect(
+      practiceLocationConfigurationApplyServiceMock.apply,
+    ).toHaveBeenCalledWith('doctor-1', dto, 'settings-key');
   });
 
   it('checks current Doctor acknowledgement before activation', async () => {

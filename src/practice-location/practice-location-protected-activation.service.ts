@@ -97,7 +97,9 @@ export class PracticeLocationProtectedActivationService {
           return { activated: true, replayed: true };
         }
 
-        if (location.lifecycleStatus !== PracticeLocationLifecycleStatus.DRAFT) {
+        if (
+          location.lifecycleStatus !== PracticeLocationLifecycleStatus.DRAFT
+        ) {
           throw new ConflictException(
             'Only a draft practice location may be activated.',
           );
@@ -267,7 +269,8 @@ export class PracticeLocationProtectedActivationService {
       FOR UPDATE OF pl
     `);
     const location = rows[0];
-    if (!location) throw new NotFoundException('Practice location was not found.');
+    if (!location)
+      throw new NotFoundException('Practice location was not found.');
     return location;
   }
 
@@ -285,7 +288,8 @@ export class PracticeLocationProtectedActivationService {
       !actor ||
       actor.role !== UserRole.DOCTOR ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE ||
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
       location.doctorUserId !== authenticatedUserId
     ) {
       throw new ForbiddenException(
