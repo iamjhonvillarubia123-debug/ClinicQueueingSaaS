@@ -1778,6 +1778,7 @@ function availableClinicListActions(clinic: ClinicRecord): ClinicListAction[] {
 function ClinicList({
   clinics,
   onAdd,
+  onOpen,
   onEdit,
   onActivate,
   onDisable,
@@ -1785,6 +1786,7 @@ function ClinicList({
 }: {
   clinics: ClinicRecord[];
   onAdd: () => void;
+  onOpen: (clinic: ClinicRecord) => void;
   onEdit: (clinic: ClinicRecord) => void;
   onActivate: (clinic: ClinicRecord) => void;
   onDisable: (clinic: ClinicRecord) => void;
@@ -1838,6 +1840,10 @@ function ClinicList({
 
   function executeSelectedAction(clinic: ClinicRecord) {
     const action = selectedActionFor(clinic);
+    if (action === 'OPEN') {
+      onOpen(clinic);
+      return;
+    }
     if (action === 'EDIT') {
       onEdit(clinic);
       return;
@@ -1911,6 +1917,7 @@ function ClinicList({
             const selectedAction = selectedActionFor(clinic);
             const selectedLabel = clinicListActionLabel(selectedAction);
             const executableNow =
+              selectedAction === 'OPEN' ||
               selectedAction === 'EDIT' ||
               (selectedAction === 'ACTIVATE' && clinic.status === 'DRAFT') ||
               (selectedAction === 'DISABLE' && clinic.status === 'ACTIVE') ||
@@ -2012,9 +2019,105 @@ function ClinicList({
   );
 }
 
+type MockQueueStatus = 'WAITING' | 'SERVING' | 'COMPLETED';
+
+type MockQueuePatient = {
+  id: number;
+  queueNumber: string;
+  name: string;
+  service: string;
+  appointment: string;
+  status: MockQueueStatus;
+};
+
+const initialMockQueue: MockQueuePatient[] = [
+  { id: 1, queueNumber: 'A-001', name: 'Maria Santos', service: 'General Consultation', appointment: '9:00 AM', status: 'SERVING' },
+  { id: 2, queueNumber: 'A-002', name: 'Daniel Reyes', service: 'Follow-up Consultation', appointment: '9:20 AM', status: 'WAITING' },
+  { id: 3, queueNumber: 'A-003', name: 'Angela Cruz', service: 'General Consultation', appointment: '9:40 AM', status: 'WAITING' },
+  { id: 4, queueNumber: 'A-004', name: 'Paolo Garcia', service: 'Medical Certificate', appointment: '10:00 AM', status: 'WAITING' },
+  { id: 5, queueNumber: 'A-005', name: 'Sofia Mendoza', service: 'Follow-up Consultation', appointment: '10:20 AM', status: 'COMPLETED' },
+];
+
+function ClinicOperationsPage({ clinic, onBack }: { clinic: ClinicRecord; onBack: () => void }) {
+  const [queue, setQueue] = useState(initialMockQueue);
+  const [filter, setFilter] = useState<'ALL' | MockQueueStatus>('ALL');
+  const [search, setSearch] = useState('');
+  const [notice, setNotice] = useState('');
+  const visibleQueue = queue.filter((patient) =>
+    (filter === 'ALL' || patient.status === filter) &&
+    `${patient.queueNumber} ${patient.name} ${patient.service}`.toLowerCase().includes(search.toLowerCase()),
+  );
+  const serving = queue.find((patient) => patient.status === 'SERVING');
+  const waitingCount = queue.filter((patient) => patient.status === 'WAITING').length;
+  const completedCount = queue.filter((patient) => patient.status === 'COMPLETED').length;
+
+  function callNext() {
+    const next = queue.find((patient) => patient.status === 'WAITING');
+    if (!next) {
+      setNotice('There are no waiting patients to call.');
+      return;
+    }
+    setQueue((current) => current.map((patient) => {
+      if (patient.status === 'SERVING') return { ...patient, status: 'COMPLETED' };
+      if (patient.id === next.id) return { ...patient, status: 'SERVING' };
+      return patient;
+    }));
+    setNotice(`${next.queueNumber} · ${next.name} is now being served.`);
+  }
+
+  return (
+    <section className="clinic-operations-page">
+      <button className="clinic-operations-back" type="button" onClick={onBack}>← Back to Clinics</button>
+      <div className="clinic-operations-heading">
+        <div>
+          <div className="clinic-operations-title-line">
+            <h1>{clinic.name || 'Clinic'}</h1>
+            <span className="clinic-status-pill is-active">ACTIVE</span>
+          </div>
+          <p>{clinic.address || 'Clinic location'} · Today’s queue</p>
+        </div>
+        <button className="clinic-primary" type="button" onClick={() => setNotice('Clinic is already open for today.')}>Clinic Open</button>
+      </div>
+
+      <div className="clinic-stat-grid" aria-label="Queue summary">
+        <article><span>Now Serving</span><strong>{serving?.queueNumber ?? '—'}</strong><small>{serving?.name ?? 'No active patient'}</small></article>
+        <article><span>Waiting</span><strong>{waitingCount}</strong><small>patients in queue</small></article>
+        <article><span>Completed</span><strong>{completedCount}</strong><small>patients today</small></article>
+        <article><span>Estimated Wait</span><strong>{waitingCount * 20} min</strong><small>for the last patient</small></article>
+      </div>
+
+      <div className="clinic-now-serving">
+        <div className="clinic-now-serving-copy">
+          <span>NOW SERVING</span>
+          <strong>{serving?.queueNumber ?? 'Queue clear'}</strong>
+          <p>{serving ? `${serving.name} · ${serving.service}` : 'No patient is currently being served.'}</p>
+        </div>
+        <button type="button" onClick={callNext}>Call Next Patient →</button>
+      </div>
+
+      {notice ? <div className="clinic-local-notice" role="status">{notice}<button type="button" aria-label="Dismiss message" onClick={() => setNotice('')}>×</button></div> : null}
+
+      <div className="clinic-queue-section">
+        <div className="clinic-queue-heading"><div><h2>Patient Queue</h2><p>Manage today’s appointments and walk-ins.</p></div><button type="button" onClick={() => setNotice('The add-patient form will be designed in a later frontend screen.')}>+ Add Walk-in</button></div>
+        <div className="clinic-queue-controls">
+          <div className="clinic-tabs">
+            {(['ALL', 'WAITING', 'SERVING', 'COMPLETED'] as const).map((value) => <button className={filter === value ? 'is-active' : ''} type="button" onClick={() => setFilter(value)} key={value}>{value === 'ALL' ? 'All Patients' : value.charAt(0) + value.slice(1).toLowerCase()} <span>{value === 'ALL' ? queue.length : queue.filter((patient) => patient.status === value).length}</span></button>)}
+          </div>
+          <input className="clinic-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search patients…" aria-label="Search patients" />
+        </div>
+        <div className="clinic-queue-table">
+          <div className="clinic-queue-table-head"><span>Queue</span><span>Patient</span><span>Service</span><span>Appointment</span><span>Status</span><span /></div>
+          {visibleQueue.map((patient) => <article className="clinic-patient-row" key={patient.id}><strong>{patient.queueNumber}</strong><span>{patient.name}</span><span>{patient.service}</span><span>{patient.appointment}</span><span className={`clinic-queue-status is-${patient.status.toLowerCase()}`}>{patient.status}</span><button type="button" aria-label={`More options for ${patient.name}`}>•••</button></article>)}
+          {visibleQueue.length === 0 ? <div className="clinic-queue-empty">No patients match this view.</div> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function ClinicTabPage() {
   const initialNavigation = readClinicEditNavigation();
-  const [mode, setMode] = useState<'list' | 'create' | 'edit'>(() =>
+  const [mode, setMode] = useState<'list' | 'create' | 'edit' | 'open'>(() =>
     initialNavigation.clinicId ? 'edit' : 'list',
   );
   const [requestedClinicId, setRequestedClinicId] = useState<string | null>(
@@ -2026,6 +2129,7 @@ export function ClinicTabPage() {
   const [clinicsLoaded, setClinicsLoaded] = useState(false);
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
   const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
+  const [openClinic, setOpenClinic] = useState<ClinicRecord | null>(null);
   const [activatingClinicId, setActivatingClinicId] = useState<string | null>(
     null,
   );
@@ -2231,6 +2335,8 @@ export function ClinicTabPage() {
         onApplied={applied}
       />
     );
+  if (mode === 'open' && openClinic)
+    return <ClinicOperationsPage clinic={openClinic} onBack={() => { setOpenClinic(null); setMode('list'); }} />;
   if (mode === 'edit' && editingClinic)
     return (
       <ClinicWizard
@@ -2274,6 +2380,10 @@ export function ClinicTabPage() {
           writeClinicEditNavigation(null);
           setEditingClinic(null);
           setMode('create');
+        }}
+        onOpen={(clinic) => {
+          setOpenClinic(clinic);
+          setMode('open');
         }}
         onEdit={(clinic) => {
           setRequestedClinicId(clinic.id);

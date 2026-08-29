@@ -977,7 +977,136 @@
 .clinic-row-action-menu button.is-danger .clinic-row-action-icon {
   color: #b42318;
 }
+.clinic-operations-page {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+.clinic-operations-back {
+  min-height: auto;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5f6670;
+  font-size: 13px;
+  font-weight: 650;
+}
+.clinic-operations-back:hover { color: #111; }
+.clinic-operations-heading,
+.clinic-operations-title-line,
+.clinic-queue-heading,
+.clinic-queue-controls,
+.clinic-local-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.clinic-operations-title-line { justify-content: flex-start; }
+.clinic-operations-heading h1 { font-size: clamp(32px, 4vw, 46px); }
+.clinic-operations-heading p,
+.clinic-queue-heading p { margin: 7px 0 0; color: #6e7580; }
+.clinic-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 34px 0 18px;
+}
+.clinic-stat-grid article {
+  display: grid;
+  gap: 7px;
+  min-height: 132px;
+  padding: 20px;
+  border: 1px solid #e1e5e9;
+  border-radius: 12px;
+  background: #fff;
+}
+.clinic-stat-grid span { color: #6d7480; font-size: 12px; font-weight: 700; }
+.clinic-stat-grid strong { font-size: 29px; letter-spacing: -0.03em; }
+.clinic-stat-grid small { color: #858b94; }
+.clinic-now-serving {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 166px;
+  padding: 28px 32px;
+  border-radius: 14px;
+  background: #111;
+  color: #fff;
+}
+.clinic-now-serving-copy { display: grid; gap: 4px; }
+.clinic-now-serving-copy > span { color: #bfc2c6; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.clinic-now-serving-copy > strong { font-size: 42px; letter-spacing: -.04em; }
+.clinic-now-serving-copy p { margin: 0; color: #d6d7d9; }
+.clinic-now-serving > button {
+  border-color: #fff;
+  background: #fff;
+  color: #111;
+}
+.clinic-now-serving > button:hover { background: #ececec; }
+.clinic-local-notice {
+  margin-top: 14px;
+  padding: 12px 15px;
+  border: 1px solid #d7e8da;
+  border-radius: 9px;
+  background: #f2faf4;
+  color: #226936;
+  font-size: 13px;
+}
+.clinic-local-notice button { min-height: auto; padding: 0 4px; border: 0; background: transparent; color: inherit; font-size: 20px; }
+.clinic-queue-section { margin-top: 38px; }
+.clinic-queue-heading h2 { margin: 0; font-size: 24px; }
+.clinic-queue-heading > button {
+  border: 1px solid #d4d9df;
+  background: #fff;
+  color: #111;
+}
+.clinic-queue-heading > button:hover { background: #f7f8f9; }
+.clinic-queue-controls { margin: 20px 0 14px; }
+.clinic-queue-table {
+  overflow: hidden;
+  border: 1px solid #e1e5e9;
+  border-radius: 12px;
+}
+.clinic-queue-table-head,
+.clinic-patient-row {
+  display: grid;
+  grid-template-columns: 90px minmax(150px, 1.1fr) minmax(180px, 1.3fr) 120px 105px 42px;
+  gap: 16px;
+  align-items: center;
+  min-width: 830px;
+  padding: 14px 18px;
+}
+.clinic-queue-table-head {
+  border-bottom: 1px solid #e5e8eb;
+  background: #f8f9fa;
+  color: #6a717b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.clinic-patient-row { min-height: 66px; border-bottom: 1px solid #edf0f2; font-size: 13px; }
+.clinic-patient-row:last-child { border-bottom: 0; }
+.clinic-patient-row > button { min-height: 34px; padding: 0; border: 0; background: transparent; font-size: 15px; }
+.clinic-queue-status {
+  justify-self: start;
+  padding: 5px 8px;
+  border: 1px solid #d9dee3;
+  border-radius: 999px;
+  background: #f5f6f7;
+  color: #5d6570;
+  font-size: 10px;
+  font-weight: 800;
+}
+.clinic-queue-status.is-serving { border-color: #bfc9f4; background: #eff2ff; color: #3046a8; }
+.clinic-queue-status.is-completed { border-color: #d5ead9; background: #eff8f1; color: #28753b; }
+.clinic-queue-empty { padding: 48px 20px; text-align: center; color: #727985; }
+
 @media (max-width: 1050px) {
+  .clinic-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .clinic-queue-table { overflow-x: auto; }
   .clinic-stepper {
     overflow-x: auto;
   }
