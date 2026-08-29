@@ -418,10 +418,10 @@ function toClinicRecord(
 
 function Stepper({ step }: { step: Step }) {
   const labels = [
-    'Basic Info',
+    'Basic Informations',
     'Clinic Hours',
-    'Services',
-    'Questions',
+    'Clinic Services',
+    'Clinic Questions',
     'Review',
   ];
   return (
@@ -1318,9 +1318,9 @@ function ClinicWizard({
       : step === 2
         ? 'Clinic Hours (Required)'
         : step === 3
-          ? 'Services'
+          ? 'Clinic Services'
           : step === 4
-            ? 'Booking Questions'
+            ? 'Clinic Questions'
             : 'Review Your Clinic';
 
   function requiredFieldError() {
@@ -1536,7 +1536,7 @@ function ClinicWizard({
       <Stepper step={step} />
       <div className="clinic-work-card">
         <div className="clinic-work-heading">
-          <h2>{title}</h2>
+          <h2>{step === 1 ? 'Basic Informations' : title}</h2>
           {step === 1 ? (
             <p>Start with the clinic identity and location details.</p>
           ) : null}
