@@ -56,4 +56,20 @@ describe('ClinicOperationsWorkspace', () => {
     await user.click(screen.getByRole('button', { name: /DELAY \/ BREAK/ }));
     expect(screen.getByText('Pause patient serving')).toBeInTheDocument();
   });
+
+  it('opens appointment details and both report choices', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Appointments' }));
+
+    await user.click(screen.getByRole('button', { name: 'View Maria Santos' }));
+    expect(screen.getByRole('heading', { name: 'Appointment Details' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Print \/ Save PDF/ }));
+    expect(screen.getByRole('dialog', { name: 'Single appointment report preview' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close report preview' }));
+    await user.click(screen.getByRole('button', { name: 'Close appointment details' }));
+
+    await user.click(screen.getByRole('button', { name: '▤ Generate PDF' }));
+    expect(screen.getByRole('dialog', { name: 'Daily appointment report preview' })).toBeInTheDocument();
+  });
 });
