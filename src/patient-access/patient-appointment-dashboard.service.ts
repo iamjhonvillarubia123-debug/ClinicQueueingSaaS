@@ -11,6 +11,7 @@ import {
   PracticeLocationLifecycleStatus,
   Prisma,
   UserAccountStatus,
+  Weekday,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PatientBookingAccessService } from './patient-booking-access.service';
@@ -40,6 +41,11 @@ type DashboardAppointment = {
   clinicDayStatus: ClinicDayStatus | null;
 };
 
+type ScheduledClinicHours = {
+  opensAtLocal: string;
+  closesAtLocal: string;
+};
+
 @Injectable()
 export class PatientAppointmentDashboardService {
   constructor(
@@ -63,9 +69,12 @@ export class PatientAppointmentDashboardService {
     queueNumber: number;
     status: AppointmentStatus;
     estimatedServiceMinutes: number;
+    bookedServices: string[];
+    scheduledClinicHours: ScheduledClinicHours | null;
     clinicDayStatus: ClinicDayStatus | null;
     nowServingQueueNumber: number | null;
     patientsAhead: number | null;
+    estimatedWaitMinutes: number | null;
     canUseImHere: boolean;
   }> {
     return this.prisma.$transaction(async (transaction) => {
@@ -80,9 +89,16 @@ export class PatientAppointmentDashboardService {
       );
       this.assertOnlineServiceAvailable(appointment);
 
-      const [nowServingQueueNumber, patientsAhead] = await Promise.all([
+      const [
+        nowServingQueueNumber,
+        queueMetrics,
+        bookedServices,
+        scheduledClinicHours,
+      ] = await Promise.all([
         this.readNowServingQueueNumber(transaction, appointment),
-        this.readPatientsAhead(transaction, appointment),
+        this.readQueueMetrics(transaction, appointment),
+        this.readBookedServices(transaction, appointment.id),
+        this.readScheduledClinicHours(transaction, appointment),
       ]);
 
       return {
@@ -101,9 +117,12 @@ export class PatientAppointmentDashboardService {
         queueNumber: appointment.queueNumber,
         status: appointment.status,
         estimatedServiceMinutes: appointment.estimatedServiceMinutes,
+        bookedServices,
+        scheduledClinicHours,
         clinicDayStatus: appointment.clinicDayStatus,
         nowServingQueueNumber,
-        patientsAhead,
+        patientsAhead: queueMetrics.patientsAhead,
+        estimatedWaitMinutes: queueMetrics.estimatedWaitMinutes,
         canUseImHere: this.canUseImHere(appointment, access.purpose),
       };
     });
@@ -184,6 +203,10 @@ export class PatientAppointmentDashboardService {
     transaction: TransactionClient,
     appointment: DashboardAppointment,
   ): Promise<number | null> {
+    if (appointment.clinicDayStatus !== ClinicDayStatus.STARTED) {
+      return null;
+    }
+
     const current = await transaction.appointment.findFirst({
       where: {
         practiceLocationId: appointment.practiceLocationId,
@@ -196,25 +219,127 @@ export class PatientAppointmentDashboardService {
     return current?.queueNumber ?? null;
   }
 
-  private async readPatientsAhead(
+  private async readQueueMetrics(
     transaction: TransactionClient,
     appointment: DashboardAppointment,
-  ): Promise<number | null> {
+  ): Promise<{ patientsAhead: number | null; estimatedWaitMinutes: number | null }> {
     if (
+      appointment.clinicDayStatus !== ClinicDayStatus.STARTED ||
       appointment.status !== AppointmentStatus.WAITING ||
       appointment.servingOrderKey === null
     ) {
-      return null;
+      return { patientsAhead: null, estimatedWaitMinutes: null };
     }
 
-    return transaction.appointment.count({
+    const [called, ahead] = await Promise.all([
+      transaction.appointment.findFirst({
+        where: {
+          practiceLocationId: appointment.practiceLocationId,
+          serviceDate: appointment.serviceDate,
+          status: AppointmentStatus.CALLED,
+        },
+        select: { estimatedServiceMinutes: true },
+        orderBy: { calledAt: 'asc' },
+      }),
+      transaction.appointment.aggregate({
+        where: {
+          practiceLocationId: appointment.practiceLocationId,
+          serviceDate: appointment.serviceDate,
+          status: AppointmentStatus.WAITING,
+          servingOrderKey: { lt: appointment.servingOrderKey },
+        },
+        _count: { _all: true },
+        _sum: { estimatedServiceMinutes: true },
+      }),
+    ]);
+
+    return {
+      patientsAhead: ahead._count._all,
+      estimatedWaitMinutes:
+        (called?.estimatedServiceMinutes ?? 0) +
+        (ahead._sum.estimatedServiceMinutes ?? 0),
+    };
+  }
+
+  private async readBookedServices(
+    transaction: TransactionClient,
+    appointmentId: string,
+  ): Promise<string[]> {
+    const rows = await transaction.appointmentBookedService.findMany({
+      where: { appointmentId },
+      select: { serviceNameSnapshot: true },
+      orderBy: { serviceNameSnapshot: 'asc' },
+    });
+    return rows.map((row) => row.serviceNameSnapshot);
+  }
+
+  private async readScheduledClinicHours(
+    transaction: TransactionClient,
+    appointment: DashboardAppointment,
+  ): Promise<ScheduledClinicHours | null> {
+    const exception = await transaction.scheduleException.findFirst({
       where: {
         practiceLocationId: appointment.practiceLocationId,
         serviceDate: appointment.serviceDate,
-        status: AppointmentStatus.WAITING,
-        servingOrderKey: { lt: appointment.servingOrderKey },
+      },
+      select: {
+        isOpen: true,
+        opensAtLocal: true,
+        closesAtLocal: true,
       },
     });
+
+    if (exception) {
+      return this.toScheduledClinicHours(exception);
+    }
+
+    const recurring = await transaction.practiceSchedule.findFirst({
+      where: {
+        practiceLocationId: appointment.practiceLocationId,
+        weekday: this.weekdayForServiceDate(appointment.serviceDate),
+      },
+      select: {
+        isOpen: true,
+        opensAtLocal: true,
+        closesAtLocal: true,
+      },
+    });
+
+    return recurring ? this.toScheduledClinicHours(recurring) : null;
+  }
+
+  private toScheduledClinicHours(schedule: {
+    isOpen: boolean;
+    opensAtLocal: Date | null;
+    closesAtLocal: Date | null;
+  }): ScheduledClinicHours | null {
+    if (!schedule.isOpen || !schedule.opensAtLocal || !schedule.closesAtLocal) {
+      return null;
+    }
+
+    return {
+      opensAtLocal: this.formatLocalTime(schedule.opensAtLocal),
+      closesAtLocal: this.formatLocalTime(schedule.closesAtLocal),
+    };
+  }
+
+  private formatLocalTime(value: Date): string {
+    return `${String(value.getUTCHours()).padStart(2, '0')}:${String(
+      value.getUTCMinutes(),
+    ).padStart(2, '0')}`;
+  }
+
+  private weekdayForServiceDate(serviceDate: Date): Weekday {
+    const weekdays: Weekday[] = [
+      Weekday.SUNDAY,
+      Weekday.MONDAY,
+      Weekday.TUESDAY,
+      Weekday.WEDNESDAY,
+      Weekday.THURSDAY,
+      Weekday.FRIDAY,
+      Weekday.SATURDAY,
+    ];
+    return weekdays[serviceDate.getUTCDay()];
   }
 
   private canUseImHere(
