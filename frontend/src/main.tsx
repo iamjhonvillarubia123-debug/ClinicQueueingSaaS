@@ -10,6 +10,7 @@ import './styles/clinic.css';
 import './styles/clinic-schedule-actions.css';
 import './styles/clinic-list-actions.css';
 import './styles/clinic-operations.css';
+import './styles/queue-action-drawer.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

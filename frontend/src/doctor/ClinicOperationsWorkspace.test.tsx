@@ -39,4 +39,21 @@ describe('ClinicOperationsWorkspace', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'CALL_NEXT', patientId: 7 });
     expect(screen.getByRole('status')).toHaveTextContent('The next patient is now being served.');
   });
+
+  it('opens each approved queue action drawer', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Queue' }));
+
+    await user.click(screen.getByRole('button', { name: /ADD WALK-IN/ }));
+    expect(screen.getByRole('heading', { name: 'Add Walk-in' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close Add Walk-in' }));
+
+    await user.click(screen.getByRole('button', { name: /ADJUST QUEUE/ }));
+    expect(screen.getByText('What do you want to do?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close Adjust Queue' }));
+
+    await user.click(screen.getByRole('button', { name: /DELAY \/ BREAK/ }));
+    expect(screen.getByText('Pause patient serving')).toBeInTheDocument();
+  });
 });
