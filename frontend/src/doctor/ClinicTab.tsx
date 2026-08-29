@@ -1742,10 +1742,12 @@ function ClinicList({
   clinics,
   onAdd,
   onEdit,
+  onActivate,
 }: {
   clinics: ClinicRecord[];
   onAdd: () => void;
   onEdit: (clinic: ClinicRecord) => void;
+  onActivate: (clinic: ClinicRecord) => void;
 }) {
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
@@ -1795,7 +1797,13 @@ function ClinicList({
 
   function executeSelectedAction(clinic: ClinicRecord) {
     const action = selectedActionFor(clinic);
-    if (action === 'EDIT') onEdit(clinic);
+    if (action === 'EDIT') {
+      onEdit(clinic);
+      return;
+    }
+    if (action === 'ACTIVATE' && clinic.status === 'DRAFT') {
+      onActivate(clinic);
+    }
   }
 
   return (
@@ -1853,7 +1861,9 @@ function ClinicList({
           filtered.map((clinic) => {
             const selectedAction = selectedActionFor(clinic);
             const selectedLabel = clinicListActionLabel(selectedAction);
-            const executableNow = selectedAction === 'EDIT';
+            const executableNow =
+              selectedAction === 'EDIT' ||
+              (selectedAction === 'ACTIVATE' && clinic.status === 'DRAFT');
             return (
               <article className="clinic-clinic-row" key={clinic.id}>
                 <div className="clinic-building-icon">+</div>
@@ -1919,7 +1929,8 @@ function ClinicList({
                           role="menuitem"
                           key={action}
                           title={
-                            action === 'EDIT'
+                            action === 'EDIT' ||
+                            (action === 'ACTIVATE' && clinic.status === 'DRAFT')
                               ? undefined
                               : 'Available in a later implementation phase.'
                           }
@@ -1950,6 +1961,9 @@ export function ClinicTabPage() {
   const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
   const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
+  const [activatingClinicId, setActivatingClinicId] = useState<string | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState('');
 
   async function loadClinics() {
@@ -2155,7 +2169,29 @@ export function ClinicTabPage() {
           setEditingClinic(clinic);
           setMode('edit');
         }}
+        onActivate={(clinic) => {
+          setActivatingClinicId(clinic.id);
+        }}
       />
+      {activatingClinicId ? (
+        <ActivateClinicDialog
+          practiceLocationId={activatingClinicId}
+          onCancel={() => setActivatingClinicId(null)}
+          onActivated={async () => {
+            setActivatingClinicId(null);
+            try {
+              await loadClinics();
+              setLoadError('');
+            } catch (error) {
+              setLoadError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to reload clinics.',
+              );
+            }
+          }}
+        />
+      ) : null}
     </>
   );
 }
