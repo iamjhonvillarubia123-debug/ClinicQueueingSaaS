@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { ActivateClinicDialog } from './ActivateClinicDialog';
 import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
@@ -2021,8 +2022,9 @@ function ClinicList({
 }
 
 export function ClinicTabPage() {
+  const navigate = useNavigate();
   const initialNavigation = readClinicEditNavigation();
-  const [mode, setMode] = useState<'list' | 'create' | 'edit' | 'open'>(() =>
+  const [mode, setMode] = useState<'list' | 'create' | 'edit'>(() =>
     initialNavigation.clinicId ? 'edit' : 'list',
   );
   const [requestedClinicId, setRequestedClinicId] = useState<string | null>(
@@ -2034,7 +2036,6 @@ export function ClinicTabPage() {
   const [clinicsLoaded, setClinicsLoaded] = useState(false);
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
   const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
-  const [openClinic, setOpenClinic] = useState<ClinicRecord | null>(null);
   const [activatingClinicId, setActivatingClinicId] = useState<string | null>(
     null,
   );
@@ -2240,8 +2241,6 @@ export function ClinicTabPage() {
         onApplied={applied}
       />
     );
-  if (mode === 'open' && openClinic)
-    return <ClinicOperationsWorkspace clinic={{ name: openClinic.name || 'North Clinic', address: openClinic.address, timeZone: openClinic.timeZone }} onBack={() => { setOpenClinic(null); setMode('list'); }} />;
   if (mode === 'edit' && editingClinic)
     return (
       <ClinicWizard
@@ -2287,8 +2286,15 @@ export function ClinicTabPage() {
           setMode('create');
         }}
         onOpen={(clinic) => {
-          setOpenClinic(clinic);
-          setMode('open');
+          void navigate(`/app/clinics/${encodeURIComponent(clinic.id)}/operations`, {
+            state: {
+              clinic: {
+                name: clinic.name || 'North Clinic',
+                address: clinic.address,
+                timeZone: clinic.timeZone,
+              },
+            },
+          });
         }}
         onEdit={(clinic) => {
           setRequestedClinicId(clinic.id);
@@ -2366,5 +2372,25 @@ export function ClinicTabPage() {
         />
       ) : null}
     </>
+  );
+}
+
+export function ClinicOperationsRoutePage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const routeState = location.state as {
+    clinic?: { name?: string; address?: string; timeZone?: string };
+  } | null;
+  const clinic = routeState?.clinic;
+
+  return (
+    <ClinicOperationsWorkspace
+      clinic={{
+        name: clinic?.name || 'North Clinic',
+        address: clinic?.address || 'Clinic address',
+        timeZone: clinic?.timeZone || 'Asia/Manila',
+      }}
+      onBack={() => navigate('/app/clinics')}
+    />
   );
 }
