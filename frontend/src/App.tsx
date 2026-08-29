@@ -6,6 +6,7 @@ import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { ClinicTabPage } from './doctor/ClinicTab';
+import { ClinicOperationsWorkspace } from './doctor/ClinicOperationsWorkspace';
 import {
   DoctorOnly,
   DoctorWorkspacePlaceholder,
@@ -127,6 +128,19 @@ export function App() {
       <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
+      {import.meta.env.DEV ? (
+        <Route
+          path="/preview/clinic-operations"
+          element={
+            <main className="doctor-workspace-content">
+              <ClinicOperationsWorkspace
+                clinic={{ name: 'North Clinic', address: '123 Health St., Davao City', timeZone: 'Asia/Manila' }}
+                onBack={() => undefined}
+              />
+            </main>
+          }
+        />
+      ) : null}
 
       <Route element={<ProtectedRoute />}>
         <Route element={<LegacyShell />}>
