@@ -8,6 +8,7 @@ import { PracticeLocationDataRetentionGateService } from './practice-location-da
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
+import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationController } from './practice-location.controller';
 import { PracticeLocationService } from './practice-location.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
@@ -19,6 +20,9 @@ describe('PracticeLocationController', () => {
   const practiceLocationActivationServiceMock = {
     activate: jest.fn(),
     reactivate: jest.fn(),
+  };
+  const practiceLocationProtectedActivationServiceMock = {
+    activate: jest.fn(),
   };
   const practiceLocationConfigurationApplyServiceMock = {
     apply: jest.fn(),
@@ -66,6 +70,10 @@ describe('PracticeLocationController', () => {
         {
           provide: PracticeLocationActivationService,
           useValue: practiceLocationActivationServiceMock,
+        },
+        {
+          provide: PracticeLocationProtectedActivationService,
+          useValue: practiceLocationProtectedActivationServiceMock,
         },
         {
           provide: PracticeLocationConfigurationApplyService,
@@ -159,18 +167,20 @@ describe('PracticeLocationController', () => {
 
   it('checks current Doctor acknowledgement before activation', async () => {
     const request = { user: { userId: 'doctor-1' } };
-    const dto = { practiceLocationId: 'location-1' };
+    const dto = {
+      practiceLocationId: 'location-1',
+      password: 'secret',
+      confirmActivation: true,
+    };
 
     await controller.activate(dto, 'activation-key', request as never);
 
     expect(
       practiceLocationDataRetentionGateServiceMock.assertCurrentAcknowledgement,
     ).toHaveBeenCalledWith('doctor-1');
-    expect(practiceLocationActivationServiceMock.activate).toHaveBeenCalledWith(
-      'doctor-1',
-      dto,
-      'activation-key',
-    );
+    expect(
+      practiceLocationProtectedActivationServiceMock.activate,
+    ).toHaveBeenCalledWith('doctor-1', dto, 'activation-key');
   });
 
   it('checks current Doctor acknowledgement before reactivation', async () => {

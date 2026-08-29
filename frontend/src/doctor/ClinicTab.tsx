@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api/client';
+import { ActivateClinicDialog } from './ActivateClinicDialog';
 import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
 import { QuestionManagementEditor } from './QuestionManagementEditor';
 import { ServiceManagementEditor } from './ServiceManagementEditor';
@@ -1305,6 +1306,7 @@ function ClinicWizard({
   );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showActivateDialog, setShowActivateDialog] = useState(false);
   const [showApplyDialog, setShowApplyDialog] = useState(false);
   const title =
     step === 1
@@ -1480,9 +1482,11 @@ function ClinicWizard({
         setSaveError(hoursError);
         return;
       }
-      setSaveError(
-        'Activate Clinic is not connected yet. Use Save as Draft until the protected activation workflow is implemented.',
-      );
+      if (!practiceLocationId) {
+        setSaveError('Save this clinic before activating it.');
+        return;
+      }
+      setShowActivateDialog(true);
       return;
     }
     if (initialStatus === 'ACTIVE' || initialStatus === 'DISABLED') {
@@ -1607,6 +1611,16 @@ function ClinicWizard({
           />
         </div>
       </div>
+      {showActivateDialog && practiceLocationId ? (
+        <ActivateClinicDialog
+          practiceLocationId={practiceLocationId}
+          onCancel={() => setShowActivateDialog(false)}
+          onActivated={async () => {
+            setShowActivateDialog(false);
+            await onApplied();
+          }}
+        />
+      ) : null}
       {showApplyDialog && practiceLocationId ? (
         <ApplyClinicChangesDialog
           practiceLocationId={practiceLocationId}
