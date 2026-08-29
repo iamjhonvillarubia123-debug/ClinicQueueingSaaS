@@ -15,16 +15,23 @@ describe('DisableClinicDialog', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and Disable' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm and Disable' }),
+    );
 
     expect(
-      await screen.findByText('Enter your current password to disable this clinic.'),
+      await screen.findByText(
+        'Enter your current password to disable this clinic.',
+      ),
     ).toBeInTheDocument();
     expect(apiRequest).not.toHaveBeenCalled();
   });
 
   it('sends the protected disable command with one idempotency key', async () => {
-    vi.mocked(apiRequest).mockResolvedValue({ disabled: true, replayed: false });
+    vi.mocked(apiRequest).mockResolvedValue({
+      disabled: true,
+      replayed: false,
+    });
     const onDisabled = vi.fn();
 
     render(
@@ -38,7 +45,9 @@ describe('DisableClinicDialog', () => {
     fireEvent.change(screen.getByLabelText('Current password'), {
       target: { value: 'doctor-password' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm and Disable' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirm and Disable' }),
+    );
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(1));
     const [, options] = vi.mocked(apiRequest).mock.calls[0];

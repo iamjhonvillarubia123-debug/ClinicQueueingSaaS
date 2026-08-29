@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../api/client';
 import { ActivateClinicDialog } from './ActivateClinicDialog';
 import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
+import { DisableClinicDialog } from './DisableClinicDialog';
 import { QuestionManagementEditor } from './QuestionManagementEditor';
 import { ServiceManagementEditor } from './ServiceManagementEditor';
 
@@ -1743,11 +1744,13 @@ function ClinicList({
   onAdd,
   onEdit,
   onActivate,
+  onDisable,
 }: {
   clinics: ClinicRecord[];
   onAdd: () => void;
   onEdit: (clinic: ClinicRecord) => void;
   onActivate: (clinic: ClinicRecord) => void;
+  onDisable: (clinic: ClinicRecord) => void;
 }) {
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
@@ -1803,6 +1806,10 @@ function ClinicList({
     }
     if (action === 'ACTIVATE' && clinic.status === 'DRAFT') {
       onActivate(clinic);
+      return;
+    }
+    if (action === 'DISABLE' && clinic.status === 'ACTIVE') {
+      onDisable(clinic);
     }
   }
 
@@ -1863,7 +1870,8 @@ function ClinicList({
             const selectedLabel = clinicListActionLabel(selectedAction);
             const executableNow =
               selectedAction === 'EDIT' ||
-              (selectedAction === 'ACTIVATE' && clinic.status === 'DRAFT');
+              (selectedAction === 'ACTIVATE' && clinic.status === 'DRAFT') ||
+              (selectedAction === 'DISABLE' && clinic.status === 'ACTIVE');
             return (
               <article className="clinic-clinic-row" key={clinic.id}>
                 <div className="clinic-building-icon">+</div>
@@ -1930,7 +1938,9 @@ function ClinicList({
                           key={action}
                           title={
                             action === 'EDIT' ||
-                            (action === 'ACTIVATE' && clinic.status === 'DRAFT')
+                            (action === 'ACTIVATE' &&
+                              clinic.status === 'DRAFT') ||
+                            (action === 'DISABLE' && clinic.status === 'ACTIVE')
                               ? undefined
                               : 'Available in a later implementation phase.'
                           }
@@ -1962,6 +1972,9 @@ export function ClinicTabPage() {
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
   const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
   const [activatingClinicId, setActivatingClinicId] = useState<string | null>(
+    null,
+  );
+  const [disablingClinicId, setDisablingClinicId] = useState<string | null>(
     null,
   );
   const [loadError, setLoadError] = useState('');
@@ -2172,7 +2185,29 @@ export function ClinicTabPage() {
         onActivate={(clinic) => {
           setActivatingClinicId(clinic.id);
         }}
+        onDisable={(clinic) => {
+          setDisablingClinicId(clinic.id);
+        }}
       />
+      {disablingClinicId ? (
+        <DisableClinicDialog
+          practiceLocationId={disablingClinicId}
+          onCancel={() => setDisablingClinicId(null)}
+          onDisabled={async () => {
+            setDisablingClinicId(null);
+            try {
+              await loadClinics();
+              setLoadError('');
+            } catch (error) {
+              setLoadError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to reload clinics.',
+              );
+            }
+          }}
+        />
+      ) : null}
       {activatingClinicId ? (
         <ActivateClinicDialog
           practiceLocationId={activatingClinicId}
