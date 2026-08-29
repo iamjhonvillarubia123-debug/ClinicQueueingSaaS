@@ -180,6 +180,33 @@ const initialHours: DayHours[] = [
 const initialServices: ServiceRow[] = [];
 const initialQuestions: QuestionRow[] = [];
 
+function readClinicEditNavigation(): { clinicId: string | null; step: Step } {
+  const params = new URLSearchParams(window.location.search);
+  const clinicId = params.get('clinic');
+  const candidateStep = Number(params.get('step'));
+  const step =
+    Number.isInteger(candidateStep) && candidateStep >= 1 && candidateStep <= 5
+      ? (candidateStep as Step)
+      : 1;
+  return { clinicId, step };
+}
+
+function writeClinicEditNavigation(clinicId: string | null, step: Step = 1) {
+  const url = new URL(window.location.href);
+  if (clinicId) {
+    url.searchParams.set('clinic', clinicId);
+    url.searchParams.set('step', String(step));
+  } else {
+    url.searchParams.delete('clinic');
+    url.searchParams.delete('step');
+  }
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+}
+
 function clockMatch(value: string) {
   return value
     .trim()
@@ -1270,6 +1297,8 @@ function ClinicWizard({
   initialServices: initialServiceRows,
   initialQuestions: initialQuestionRows,
   initialStatus = 'DRAFT',
+  initialStep = 1,
+  onStepChange,
   editing,
   editingClinicId,
 }: {
@@ -1289,10 +1318,16 @@ function ClinicWizard({
   initialServices?: ServiceRow[];
   initialQuestions?: QuestionRow[];
   initialStatus?: ClinicStatus;
+  initialStep?: Step;
+  onStepChange?: (step: Step) => void;
   editing?: boolean;
   editingClinicId?: string;
 }) {
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStepState] = useState<Step>(initialStep);
+  function setStep(nextStep: Step) {
+    setStepState(nextStep);
+    onStepChange?.(nextStep);
+  }
   const [returnToReview, setReturnToReview] = useState(false);
   const [practiceLocationId, setPracticeLocationId] = useState(editingClinicId);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
@@ -1978,7 +2013,17 @@ function ClinicList({
 }
 
 export function ClinicTabPage() {
-  const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
+  const initialNavigation = readClinicEditNavigation();
+  const [mode, setMode] = useState<'list' | 'create' | 'edit'>(() =>
+    initialNavigation.clinicId ? 'edit' : 'list',
+  );
+  const [requestedClinicId, setRequestedClinicId] = useState<string | null>(
+    initialNavigation.clinicId,
+  );
+  const [requestedStep, setRequestedStep] = useState<Step>(
+    initialNavigation.step,
+  );
+  const [clinicsLoaded, setClinicsLoaded] = useState(false);
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
   const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
   const [activatingClinicId, setActivatingClinicId] = useState<string | null>(
@@ -1999,6 +2044,7 @@ export function ClinicTabPage() {
       .map(toClinicRecord)
       .filter((clinic): clinic is ClinicRecord => clinic !== null);
     setClinics(mapped);
+    setClinicsLoaded(true);
     return mapped;
   }
 
@@ -2013,17 +2059,44 @@ export function ClinicTabPage() {
             .filter((clinic): clinic is ClinicRecord => clinic !== null),
         );
         setLoadError('');
+        setClinicsLoaded(true);
       })
       .catch((error) => {
         if (cancelled) return;
         setLoadError(
           error instanceof Error ? error.message : 'Unable to load clinics.',
         );
+        setClinicsLoaded(true);
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!clinicsLoaded || !requestedClinicId) return;
+    const clinic = clinics.find((candidate) => candidate.id === requestedClinicId);
+    if (clinic) {
+      setEditingClinic(clinic);
+      setMode('edit');
+      return;
+    }
+
+    setRequestedClinicId(null);
+    setRequestedStep(1);
+    setEditingClinic(null);
+    setMode('list');
+    writeClinicEditNavigation(null);
+    setLoadError('The clinic you were editing is no longer available.');
+  }, [clinics, clinicsLoaded, requestedClinicId]);
+
+  function returnToClinicList() {
+    setRequestedClinicId(null);
+    setRequestedStep(1);
+    setEditingClinic(null);
+    setMode('list');
+    writeClinicEditNavigation(null);
+  }
 
   async function applied() {
     try {
@@ -2034,8 +2107,7 @@ export function ClinicTabPage() {
         error instanceof Error ? error.message : 'Unable to reload clinics.',
       );
     }
-    setEditingClinic(null);
-    setMode('list');
+    returnToClinicList();
   }
 
   async function saved(
@@ -2165,19 +2237,28 @@ export function ClinicTabPage() {
         editing
         editingClinicId={editingClinic.id}
         initialStatus={editingClinic.status}
+        initialStep={requestedStep}
+        onStepChange={(nextStep) => {
+          setRequestedStep(nextStep);
+          writeClinicEditNavigation(editingClinic.id, nextStep);
+        }}
         initialValue={editingClinic.editor.draft}
         initialSchedule={editingClinic.editor.hours}
         initialCutoffLeadHours={editingClinic.editor.cutoffLeadHours}
         initialServices={editingClinic.editor.services}
         initialQuestions={editingClinic.editor.questions}
-        onExit={() => {
-          setEditingClinic(null);
-          setMode('list');
-        }}
+        onExit={returnToClinicList}
         onSaved={saved}
         onApplied={applied}
       />
     );
+  if (mode === 'edit' && requestedClinicId && !editingClinic) {
+    return (
+      <section className="clinic-page" aria-live="polite">
+        <p>{clinicsLoaded ? 'Returning to clinics…' : 'Loading clinic…'}</p>
+      </section>
+    );
+  }
   return (
     <>
       {loadError ? (
@@ -2188,10 +2269,16 @@ export function ClinicTabPage() {
       <ClinicList
         clinics={clinics}
         onAdd={() => {
+          setRequestedClinicId(null);
+          setRequestedStep(1);
+          writeClinicEditNavigation(null);
           setEditingClinic(null);
           setMode('create');
         }}
         onEdit={(clinic) => {
+          setRequestedClinicId(clinic.id);
+          setRequestedStep(1);
+          writeClinicEditNavigation(clinic.id, 1);
           setEditingClinic(clinic);
           setMode('edit');
         }}
