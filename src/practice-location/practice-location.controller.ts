@@ -32,6 +32,7 @@ import { PracticeLocationDataRetentionGateService } from './practice-location-da
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
+import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationService } from './practice-location.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 
@@ -40,6 +41,7 @@ export class PracticeLocationController {
   constructor(
     private readonly practiceLocationService: PracticeLocationService,
     private readonly practiceLocationActivationService: PracticeLocationActivationService,
+    private readonly practiceLocationProtectedActivationService: PracticeLocationProtectedActivationService,
     private readonly practiceLocationConfigurationApplyService: PracticeLocationConfigurationApplyService,
     private readonly practiceLocationConfigurationDraftService: PracticeLocationConfigurationDraftService,
     private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
@@ -139,7 +141,7 @@ export class PracticeLocationController {
     await this.practiceLocationDataRetentionGateService.assertCurrentAcknowledgement(
       request.user.userId,
     );
-    return this.practiceLocationActivationService.activate(
+    return this.practiceLocationProtectedActivationService.activate(
       request.user.userId,
       dto,
       idempotencyKey,
