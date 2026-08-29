@@ -21,7 +21,9 @@ describe('PermanentlyDeleteClinicDialog', () => {
     fireEvent.change(screen.getByLabelText('Current password'), {
       target: { value: 'current-password' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Permanently Delete Clinic' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Permanently Delete Clinic' }),
+    );
 
     expect(
       await screen.findByText(
@@ -55,7 +57,9 @@ describe('PermanentlyDeleteClinicDialog', () => {
     fireEvent.change(screen.getByLabelText('Current password'), {
       target: { value: 'current-password' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Permanently Delete Clinic' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Permanently Delete Clinic' }),
+    );
 
     await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(1));
     expect(apiRequest).toHaveBeenCalledWith(

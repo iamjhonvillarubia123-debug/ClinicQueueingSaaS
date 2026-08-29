@@ -23,11 +23,15 @@ export function PermanentlyDeleteClinicDialog({
     event.preventDefault();
     if (submitting) return;
     if (!confirmed) {
-      setError('Confirm that you understand this clinic deletion is permanent.');
+      setError(
+        'Confirm that you understand this clinic deletion is permanent.',
+      );
       return;
     }
     if (!password) {
-      setError('Enter your current password to permanently delete this clinic.');
+      setError(
+        'Enter your current password to permanently delete this clinic.',
+      );
       return;
     }
 
@@ -69,9 +73,9 @@ export function PermanentlyDeleteClinicDialog({
         <h2 id="delete-clinic-title">Permanently delete clinic</h2>
         <p>
           <strong>{clinicName || 'This clinic'}</strong> will be permanently
-          removed from normal clinic operations. Historical records required
-          for audit and retention are preserved, but this clinic cannot be
-          restored through the normal clinic lifecycle.
+          removed from normal clinic operations. Historical records required for
+          audit and retention are preserved, but this clinic cannot be restored
+          through the normal clinic lifecycle.
         </p>
         <form onSubmit={submit}>
           <label className="clinic-confirmation-check">

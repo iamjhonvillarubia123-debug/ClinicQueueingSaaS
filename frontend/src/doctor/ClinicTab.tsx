@@ -3,6 +3,7 @@ import { apiRequest } from '../api/client';
 import { ActivateClinicDialog } from './ActivateClinicDialog';
 import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
 import { DisableClinicDialog } from './DisableClinicDialog';
+import { PermanentlyDeleteClinicDialog } from './PermanentlyDeleteClinicDialog';
 import { QuestionManagementEditor } from './QuestionManagementEditor';
 import { ServiceManagementEditor } from './ServiceManagementEditor';
 
@@ -1745,12 +1746,14 @@ function ClinicList({
   onEdit,
   onActivate,
   onDisable,
+  onDelete,
 }: {
   clinics: ClinicRecord[];
   onAdd: () => void;
   onEdit: (clinic: ClinicRecord) => void;
   onActivate: (clinic: ClinicRecord) => void;
   onDisable: (clinic: ClinicRecord) => void;
+  onDelete: (clinic: ClinicRecord) => void;
 }) {
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
@@ -1810,6 +1813,10 @@ function ClinicList({
     }
     if (action === 'DISABLE' && clinic.status === 'ACTIVE') {
       onDisable(clinic);
+      return;
+    }
+    if (action === 'DELETE') {
+      onDelete(clinic);
     }
   }
 
@@ -1871,7 +1878,8 @@ function ClinicList({
             const executableNow =
               selectedAction === 'EDIT' ||
               (selectedAction === 'ACTIVATE' && clinic.status === 'DRAFT') ||
-              (selectedAction === 'DISABLE' && clinic.status === 'ACTIVE');
+              (selectedAction === 'DISABLE' && clinic.status === 'ACTIVE') ||
+              selectedAction === 'DELETE';
             return (
               <article className="clinic-clinic-row" key={clinic.id}>
                 <div className="clinic-building-icon">+</div>
@@ -1940,7 +1948,9 @@ function ClinicList({
                             action === 'EDIT' ||
                             (action === 'ACTIVATE' &&
                               clinic.status === 'DRAFT') ||
-                            (action === 'DISABLE' && clinic.status === 'ACTIVE')
+                            (action === 'DISABLE' &&
+                              clinic.status === 'ACTIVE') ||
+                            action === 'DELETE'
                               ? undefined
                               : 'Available in a later implementation phase.'
                           }
@@ -1975,6 +1985,9 @@ export function ClinicTabPage() {
     null,
   );
   const [disablingClinicId, setDisablingClinicId] = useState<string | null>(
+    null,
+  );
+  const [deletingClinic, setDeletingClinic] = useState<ClinicRecord | null>(
     null,
   );
   const [loadError, setLoadError] = useState('');
@@ -2188,7 +2201,30 @@ export function ClinicTabPage() {
         onDisable={(clinic) => {
           setDisablingClinicId(clinic.id);
         }}
+        onDelete={(clinic) => {
+          setDeletingClinic(clinic);
+        }}
       />
+      {deletingClinic ? (
+        <PermanentlyDeleteClinicDialog
+          practiceLocationId={deletingClinic.id}
+          clinicName={deletingClinic.name}
+          onCancel={() => setDeletingClinic(null)}
+          onDeleted={async () => {
+            setDeletingClinic(null);
+            try {
+              await loadClinics();
+              setLoadError('');
+            } catch (error) {
+              setLoadError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to reload clinics.',
+              );
+            }
+          }}
+        />
+      ) : null}
       {disablingClinicId ? (
         <DisableClinicDialog
           practiceLocationId={disablingClinicId}
