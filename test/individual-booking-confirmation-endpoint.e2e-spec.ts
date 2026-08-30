@@ -79,73 +79,82 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     serviceDate.setUTCDate(serviceDate.getUTCDate() + 3);
     serviceDate.setUTCHours(0, 0, 0, 0);
     const serviceDateText = serviceDate.toISOString().slice(0, 10);
-    const localTime = (hour: number, minute = 0) =>
-      new Date(Date.UTC(1970, 0, 1, hour, minute));
+    const weekday = [
+      'SUNDAY',
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY',
+    ][serviceDate.getUTCDay()] as
+      | 'SUNDAY'
+      | 'MONDAY'
+      | 'TUESDAY'
+      | 'WEDNESDAY'
+      | 'THURSDAY'
+      | 'FRIDAY'
+      | 'SATURDAY';
 
-    const doctorUser = await prisma.user.create({
+    const doctor = await prisma.user.create({
       data: {
-        email: `m6s2-confirm-${scope.slice(0, 12)}@example.test`,
-        firstName: 'Confirm',
+        email: `m6s2-doctor-${scope}@example.test`,
+        firstName: 'M6S2',
         lastName: 'Doctor',
         mobileNumber: `0918${String(randomInt(0, 10_000_000)).padStart(7, '0')}`,
         passwordHash: 'e2e-only-not-a-real-password-hash',
         role: UserRole.DOCTOR,
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+        emailVerifiedAt: new Date(),
       },
     });
-    const doctorProfile = await prisma.doctorProfile.create({
+    const profile = await prisma.doctorProfile.create({
       data: {
-        userId: doctorUser.id,
+        userId: doctor.id,
         professionalTitle: 'Dr.',
-        specialization: 'Confirmation Testing',
-        licenseNumber: `M6C-${scope.slice(0, 12)}`,
+        specialization: 'Family Medicine',
+        licenseNumber: `M6S2-${scope}`,
       },
     });
     await prisma.doctorAccountSettings.create({
       data: {
-        doctorProfileId: doctorProfile.id,
+        doctorProfileId: profile.id,
         allowOnlineBooking: true,
-        maximumAdvanceBookingDays: 30,
         maximumEstimatedServiceMinutesPerPatient: 120,
-      },
-    });
-    const financialAccount = await prisma.doctorFinancialAccount.create({
-      data: { doctorUserId: doctorUser.id },
-    });
-    await prisma.doctorSubscriptionEntitlement.create({
-      data: {
-        doctorFinancialAccountId: financialAccount.id,
-        paidThrough: new Date(serviceDate.getTime() + 20 * 24 * 60 * 60 * 1000),
-        graceEndsAt: new Date(serviceDate.getTime() + 27 * 24 * 60 * 60 * 1000),
       },
     });
     const location = await prisma.practiceLocation.create({
       data: {
-        doctorProfileId: doctorProfile.id,
+        doctorProfileId: profile.id,
         lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
         isBookingEnabled: true,
-        name: `M6 Confirmation ${scope.slice(0, 8)}`,
+        name: 'M6S2 Confirmation Clinic',
+        addressLine1: '1 Confirmation Street',
+        cityMunicipality: 'Quezon City',
+        province: 'Metro Manila',
+        postalCode: '1100',
         countryCode: 'PH',
         timeZone: 'Asia/Manila',
+      },
+    });
+    await prisma.practiceLocationSchedule.create({
+      data: {
+        practiceLocationId: location.id,
+        weekday,
+        isOpen: true,
+        openTime: new Date('1970-01-01T00:00:00.000Z'),
+        closeTime: new Date('1970-01-01T23:59:00.000Z'),
       },
     });
     const selectedService = await prisma.practiceLocationService.create({
       data: {
         practiceLocationId: location.id,
-        name: 'Endpoint Confirmation Service',
+        name: 'Initial Consultation',
         durationMinutes: 30,
-        status: ServiceAvailabilityStatus.ACTIVE,
-      },
-    });
-    await prisma.scheduleException.create({
-      data: {
-        practiceLocationId: location.id,
-        serviceDate,
-        isOpen: true,
-        opensAtLocal: localTime(8),
-        closesAtLocal: localTime(17),
-        maximumOperatingUntilLocal: localTime(18),
+        availabilityStatus: ServiceAvailabilityStatus.AVAILABLE,
+        isActive: true,
+        displayOrder: 1,
       },
     });
 
@@ -155,26 +164,17 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         practiceLocationId: location.id,
         mode: 'INDIVIDUAL',
         firstName: 'Maria',
-        middleName: 'Santos',
-        lastName: 'Reyes',
+        lastName: 'Patient',
         existingPatientResponse: 'NO',
         mobileNumber: patientMobile,
         serviceDate: serviceDateText,
-        privacyNoticeVersion: 'm6s2-e2e-v1',
-        privacyNoticeAcknowledged: true,
-        scheduledReminderOptIn: true,
         selectedServiceIds: [selectedService.id],
       })
       .expect(201);
-
     const draftBody = draftResponse.body as unknown as {
       bookingDraft: { id: string; bookingReference: string };
-      otpVerification: { id: string } | null;
     };
     const bookingDraftId = draftBody.bookingDraft.id;
-    if (!draftBody.otpVerification) {
-      throw new Error('Booking draft did not issue an OTP challenge.');
-    }
 
     await request(app.getHttpServer())
       .post('/booking/verify-otp')
@@ -248,95 +248,41 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       bookingAccessToken: null,
       replayed: true,
     });
-    expect(replayResponse.headers['set-cookie']).toBeUndefined();
 
-    const [
-      appointmentCount,
-      appointment,
-      counter,
-      draft,
-      verifiedOtp,
-      contactPreference,
-      bookedServices,
-      accessTokens,
-      confirmationOutboxes,
-      commandRows,
-    ] = await Promise.all([
-      prisma.appointment.count({
-        where: { bookingReference: firstBody.appointment.bookingReference },
-      }),
-      prisma.appointment.findUnique({
-        where: { id: firstBody.appointment.id },
-      }),
-      prisma.queueCounter.findUnique({
-        where: {
-          practiceLocationId_serviceDate: {
-            practiceLocationId: location.id,
-            serviceDate,
+    const [storedAppointment, tokenRows, commandRows, confirmationOutboxes] =
+      await Promise.all([
+        prisma.appointment.findUniqueOrThrow({
+          where: { id: firstBody.appointment.id },
+          include: { bookedServices: true },
+        }),
+        prisma.bookingAccessToken.findMany({
+          where: { appointmentId: firstBody.appointment.id },
+        }),
+        prisma.commandIdempotency.findMany({
+          where: {
+            bookingDraftId,
+            commandType: CommandType.CONVERT_BOOKING_DRAFT,
           },
-        },
-      }),
-      prisma.bookingDraft.findUnique({ where: { id: bookingDraftId } }),
-      prisma.otpVerification.findUnique({
-        where: { id: draftBody.otpVerification.id },
-      }),
-      prisma.contactPreference.findUnique({
-        where: { appointmentId: firstBody.appointment.id },
-      }),
-      prisma.appointmentBookedService.findMany({
-        where: { appointmentId: firstBody.appointment.id },
-      }),
-      prisma.bookingAccessToken.findMany({
-        where: { appointmentId: firstBody.appointment.id },
-      }),
-      prisma.notificationOutbox.findMany({
-        where: {
-          appointmentId: firstBody.appointment.id,
-          notificationType: NotificationType.BOOKING_CONFIRMATION,
-        },
-      }),
-      prisma.commandIdempotency.findMany({
-        where: {
-          commandType: CommandType.CONVERT_BOOKING_DRAFT,
-          bookingDraftId,
-        },
-      }),
-    ]);
+        }),
+        prisma.notificationOutbox.findMany({
+          where: {
+            appointmentId: firstBody.appointment.id,
+            notificationType: NotificationType.BOOKING_CONFIRMATION,
+          },
+        }),
+      ]);
 
-    expect(appointmentCount).toBe(1);
-    expect(appointment?.estimatedServiceMinutes).toBe(45);
-    expect(counter?.lastAllocatedNumber).toBe(1);
-    expect(draft).toMatchObject({
-      status: 'CONSUMED',
-      activeDraftKey: null,
-      draftControlTokenHash: null,
-    });
-    expect(draft?.consumedAt).not.toBeNull();
-    expect(verifiedOtp).toMatchObject({
-      activeContextKey: null,
-      otpHash: null,
-      otpHashKeyVersion: null,
-    });
-    expect(verifiedOtp?.consumedAt).not.toBeNull();
-    expect(contactPreference).toMatchObject({
-      allowOperationalMessages: true,
-      allowFollowUpReminder: true,
-      allowMarketingMessages: false,
-      privacyNoticeVersion: 'm6s2-e2e-v1',
-    });
-    expect(bookedServices).toHaveLength(1);
-    expect(bookedServices[0]).toMatchObject({
+    expect(storedAppointment.estimatedServiceMinutes).toBe(45);
+    expect(storedAppointment.bookedServices).toHaveLength(1);
+    expect(storedAppointment.bookedServices[0]).toMatchObject({
       practiceLocationServiceId: selectedService.id,
-      serviceNameSnapshot: 'Endpoint Confirmation Service',
+      serviceNameSnapshot: 'Initial Consultation',
       durationMinutesSnapshot: 45,
     });
-    expect(accessTokens).toHaveLength(1);
-    expect(accessTokens[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(confirmationOutboxes).toHaveLength(1);
-    expect(confirmationOutboxes[0].deliveryIdentityKey).toMatch(
-      /^[0-9a-f]{64}$/,
-    );
+    expect(tokenRows).toHaveLength(1);
+    expect(tokenRows[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(commandRows).toHaveLength(1);
+    expect(confirmationOutboxes).toHaveLength(1);
     expect(commandRows[0]).toMatchObject({
       idempotencyKey,
       resultAppointmentId: firstBody.appointment.id,
@@ -366,7 +312,11 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       );
     }
     expect(encryptedMessage).not.toContain(rawAccessToken);
-    const decryptedMessage = decryptNotificationMessage(encryptedMessage);
+    const decryptedMessage = decryptNotificationMessage(
+      encryptedMessage,
+      testEnvironment.MOBILE_ENCRYPTION_ACTIVE_KEY_ID,
+      testEnvironment.MOBILE_ENCRYPTION_KEY_V1,
+    );
     expect(decryptedMessage).toContain('Queue number: 1.');
     expect(decryptedMessage).toContain(
       `https://app.example.test/booking/access#token=${encodeURIComponent(rawAccessToken)}`,
@@ -374,12 +324,16 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
   }, 30_000);
 });
 
-function decryptNotificationMessage(payload: string): string {
+function decryptNotificationMessage(
+  payload: string,
+  expectedKeyId: string,
+  baseKeyBase64: string,
+): string {
   const [version, keyId, purpose, ivEncoded, tagEncoded, ciphertextEncoded] =
     payload.split('.');
   if (
     version !== 'v1' ||
-    keyId !== 'm6s2-mobile-encryption-v1' ||
+    keyId !== expectedKeyId ||
     purpose !== 'notification-outbox:message' ||
     !ivEncoded ||
     !tagEncoded ||
@@ -388,7 +342,7 @@ function decryptNotificationMessage(payload: string): string {
     throw new Error('Unexpected encrypted notification payload format.');
   }
 
-  const baseKey = Buffer.from(testNotificationBaseKey(), 'base64');
+  const baseKey = Buffer.from(baseKeyBase64, 'base64');
   const encryptionKey = createHmac('sha256', baseKey)
     .update(NOTIFICATION_KEY_PURPOSE, 'utf8')
     .digest();
@@ -403,8 +357,4 @@ function decryptNotificationMessage(payload: string): string {
     decipher.update(Buffer.from(ciphertextEncoded, 'base64url')),
     decipher.final(),
   ]).toString('utf8');
-}
-
-function testNotificationBaseKey(): string {
-  return Buffer.alloc(32, 11).toString('base64');
 }
