@@ -257,11 +257,11 @@ describe('Appointment physical erasure (e2e)', () => {
   it('preserves an independent ScheduledReminder while destroying old Appointment access and recovery correlation', async () => {
     const fixture = await createFixture(AppointmentStatus.COMPLETED);
     const now = new Date('2026-08-21T00:00:00.000Z');
-    const liveExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const rawToken = 'A'.repeat(43);
     const tokenHash = createHash('sha256')
       .update(rawToken, 'utf8')
       .digest('hex');
+    const liveExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     await prisma.bookingAccessToken.create({
       data: {
@@ -300,6 +300,10 @@ describe('Appointment physical erasure (e2e)', () => {
       },
     });
 
+    const reminderScheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const reminderExpiresAt = new Date(
+      reminderScheduledFor.getTime() + 24 * 60 * 60 * 1000,
+    );
     const reminder = await prisma.scheduledReminder.create({
       data: {
         practiceLocationId: fixture.location.id,
@@ -309,8 +313,8 @@ describe('Appointment physical erasure (e2e)', () => {
         recipientMobileEncrypted: 'reminder-mobile',
         recipientMobileLastFour: '1234',
         status: 'SCHEDULED',
-        scheduledFor: new Date('2026-08-25T00:00:00.000Z'),
-        expiresAt: new Date('2026-08-26T00:00:00.000Z'),
+        scheduledFor: reminderScheduledFor,
+        expiresAt: reminderExpiresAt,
         messageBody: 'Independent reminder message',
         createdByUserId: fixture.doctorUserId,
         lastEditedByUserId: fixture.doctorUserId,
