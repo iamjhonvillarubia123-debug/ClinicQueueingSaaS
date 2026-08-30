@@ -14,15 +14,15 @@ import {
   Weekday,
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
-import { OtpGenerator } from './../src/otp/otp.generator';
+import { NotificationPayloadService } from './../src/notification/notification-payload.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 
-const KNOWN_BOOKING_OTP = '123456';
 const NOTIFICATION_KEY_PURPOSE = 'notification-outbox-message-v1';
 
 describe('Individual booking confirmation endpoint (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
+  let notificationPayload: NotificationPayloadService;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm6s2-e2e-only-jwt-secret-not-for-production',
@@ -45,12 +45,10 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    })
-      .overrideProvider(OtpGenerator)
-      .useValue({ generate: () => KNOWN_BOOKING_OTP })
-      .compile();
+    }).compile();
 
     prisma = moduleFixture.get(PrismaService);
+    notificationPayload = moduleFixture.get(NotificationPayloadService);
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
       new ValidationPipe({
@@ -167,12 +165,35 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       .expect(201);
     const draftBody = draftResponse.body as unknown as {
       bookingDraft: { id: string; bookingReference: string };
+      otpVerification: { id: string } | null;
     };
     const bookingDraftId = draftBody.bookingDraft.id;
+    const otpVerificationId = draftBody.otpVerification?.id;
+    if (!otpVerificationId) {
+      throw new Error('Booking draft did not issue an OTP challenge.');
+    }
+
+    const otpOutbox = await prisma.notificationOutbox.findFirstOrThrow({
+      where: {
+        otpVerificationId,
+        notificationType: NotificationType.OTP_VERIFICATION,
+      },
+      select: { messageBodyEncrypted: true },
+    });
+    if (!otpOutbox.messageBodyEncrypted) {
+      throw new Error('Booking OTP outbox did not contain a protected message.');
+    }
+    const otpMessage = notificationPayload.decryptMessage(
+      otpOutbox.messageBodyEncrypted,
+    );
+    const otp = otpMessage.match(/\b(\d{6})\b/)?.[1];
+    if (!otp) {
+      throw new Error('Booking OTP message did not contain a six-digit code.');
+    }
 
     await request(app.getHttpServer())
       .post('/booking/verify-otp')
-      .send({ bookingDraftId, otp: KNOWN_BOOKING_OTP })
+      .send({ bookingDraftId, otp })
       .expect(201);
 
     await prisma.practiceLocationService.update({
