@@ -17,6 +17,18 @@ export class PracticeLocationStaffController {
   ) {}
 
   @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/staff')
+  staff(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationStaffReadService.getClinicStaff(
+      request.user.userId,
+      practiceLocationId,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
   @Get(':practiceLocationId/operations/staff')
   operationsStaff(
     @Param('practiceLocationId') practiceLocationId: string,

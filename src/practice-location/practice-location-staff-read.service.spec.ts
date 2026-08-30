@@ -5,12 +5,103 @@ import { PracticeLocationStaffReadService } from './practice-location-staff-read
 describe('PracticeLocationStaffReadService', () => {
   const prisma = {
     practiceLocation: { findFirst: jest.fn() },
+    user: { findMany: jest.fn() },
   };
   const service = new PracticeLocationStaffReadService(
     prisma as unknown as PrismaService,
   );
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('returns date-independent staffing with effective activation time and authority', async () => {
+    const activatedAt = new Date('2026-08-28T00:15:00.000Z');
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: 'staff-1',
+      staffAssignments: [
+        {
+          id: 'staff-1',
+          staffRole: 'SECRETARY',
+          isActive: true,
+          activatedAt,
+          deactivatedAt: null,
+          updatedAt: activatedAt,
+          user: {
+            id: 'secretary-1',
+            firstName: 'Jane',
+            lastName: 'Reyes',
+            email: 'jane@example.test',
+            mobileNumber: '09183334444',
+            role: 'SECRETARY',
+            accountStatus: 'ACTIVE',
+            emailVerifiedAt: activatedAt,
+          },
+          authorityBundles: [{ bundleType: 'QUEUE_CLINIC_DAY_OPERATIONS' }],
+          substituteSecretaryCoverages: [],
+        },
+      ],
+    });
+    prisma.user.findMany.mockResolvedValue([]);
+
+    const result = await service.getClinicStaff('doctor-1', 'clinic-1');
+
+    expect(result.staffAssignments[0]).toEqual(
+      expect.objectContaining({
+        practiceStaffId: 'staff-1',
+        assignedAt: activatedAt,
+        isClinicSecretary: true,
+        authorityBundles: ['QUEUE_CLINIC_DAY_OPERATIONS'],
+      }),
+    );
+  });
+
+  it('does not disclose candidates when the clinic is outside Doctor ownership', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.getClinicStaff('doctor-1', 'clinic-2'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('limits existing candidates to verified active Secretaries associated with the Doctor', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
+      staffAssignments: [],
+    });
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: 'secretary-1',
+        firstName: 'Maria',
+        lastName: 'Santos',
+        email: 'maria@example.test',
+        mobileNumber: '09172223333',
+      },
+    ]);
+
+    const result = await service.getClinicStaff('doctor-1', 'clinic-1');
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          role: 'SECRETARY',
+          accountStatus: 'ACTIVE',
+          emailVerifiedAt: { not: null },
+          practiceStaffAssignments: {
+            some: {
+              practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
+            },
+          },
+        }),
+      }),
+    );
+    expect(result.candidates).toEqual([
+      expect.objectContaining({ userId: 'secretary-1', name: 'Maria Santos' }),
+    ]);
+  });
 
   it('rejects a non-canonical service date before reading staff', async () => {
     await expect(

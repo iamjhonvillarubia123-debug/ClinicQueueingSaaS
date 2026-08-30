@@ -9,6 +9,113 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PracticeLocationStaffReadService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getClinicStaff(userId: string, practiceLocationId: string) {
+    const location = await this.prisma.practiceLocation.findFirst({
+      where: { id: practiceLocationId, doctorProfile: { userId } },
+      select: {
+        id: true,
+        name: true,
+        currentRegularPracticeStaffId: true,
+        staffAssignments: {
+          orderBy: [{ isActive: 'desc' }, { activatedAt: 'asc' }],
+          select: {
+            id: true,
+            staffRole: true,
+            isActive: true,
+            activatedAt: true,
+            deactivatedAt: true,
+            updatedAt: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                mobileNumber: true,
+                role: true,
+                accountStatus: true,
+                emailVerifiedAt: true,
+              },
+            },
+            authorityBundles: {
+              where: { status: 'ACTIVE' },
+              orderBy: { grantedAt: 'asc' },
+              select: { bundleType: true },
+            },
+            substituteSecretaryCoverages: {
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                coverageMode: true,
+                fromServiceDate: true,
+                toServiceDate: true,
+                status: true,
+                createdAt: true,
+                endedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!location) {
+      throw new NotFoundException('Practice location was not found.');
+    }
+
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        role: 'SECRETARY',
+        accountStatus: 'ACTIVE',
+        emailVerifiedAt: { not: null },
+        practiceStaffAssignments: {
+          some: { practiceLocation: { doctorProfile: { userId } } },
+        },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        mobileNumber: true,
+      },
+    });
+
+    return {
+      clinic: { id: location.id, name: location.name },
+      staffAssignments: location.staffAssignments.map((assignment) => ({
+        practiceStaffId: assignment.id,
+        userId: assignment.user.id,
+        name: `${assignment.user.firstName} ${assignment.user.lastName}`.trim(),
+        email: assignment.user.email,
+        mobileNumber: assignment.user.mobileNumber,
+        assignmentActive: assignment.isActive,
+        operationallyReady:
+          assignment.isActive &&
+          assignment.staffRole === 'SECRETARY' &&
+          assignment.user.role === 'SECRETARY' &&
+          assignment.user.accountStatus === 'ACTIVE' &&
+          assignment.user.emailVerifiedAt !== null,
+        isClinicSecretary:
+          assignment.id === location.currentRegularPracticeStaffId,
+        assignedAt: assignment.activatedAt,
+        deactivatedAt: assignment.deactivatedAt,
+        updatedAt: assignment.updatedAt,
+        authorityBundles: assignment.authorityBundles.map(
+          ({ bundleType }) => bundleType,
+        ),
+        substituteCoverages: assignment.substituteSecretaryCoverages,
+      })),
+      candidates: candidates.map((candidate) => ({
+        userId: candidate.id,
+        name: `${candidate.firstName} ${candidate.lastName}`.trim(),
+        email: candidate.email,
+        mobileNumber: candidate.mobileNumber,
+      })),
+    };
+  }
+
   async getStaff(
     userId: string,
     practiceLocationId: string,
