@@ -14,7 +14,9 @@ describe('PracticeLocationConfigurationApplyService', () => {
   };
   const scheduleTime = { assertValidTimeZone: jest.fn() };
 
-  function buildTransaction(status = PracticeLocationLifecycleStatus.ACTIVE) {
+  function buildTransaction(
+    status: PracticeLocationLifecycleStatus = PracticeLocationLifecycleStatus.ACTIVE,
+  ) {
     const transaction = {
       $executeRaw: jest.fn().mockResolvedValue(0),
       $queryRaw: jest
