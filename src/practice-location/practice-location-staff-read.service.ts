@@ -56,6 +56,20 @@ export class PracticeLocationStaffReadService {
             },
           },
         },
+        secretaryInvitations: {
+          where: { status: 'PENDING' },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            normalizedEmail: true,
+            mobileNumber: true,
+            status: true,
+            expiresAt: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -112,6 +126,15 @@ export class PracticeLocationStaffReadService {
         name: `${candidate.firstName} ${candidate.lastName}`.trim(),
         email: candidate.email,
         mobileNumber: candidate.mobileNumber,
+      })),
+      pendingInvitations: location.secretaryInvitations.map((invitation) => ({
+        invitationId: invitation.id,
+        name: `${invitation.firstName} ${invitation.lastName}`.trim(),
+        email: invitation.normalizedEmail,
+        mobileNumber: invitation.mobileNumber,
+        status: invitation.status,
+        invitedAt: invitation.createdAt,
+        expiresAt: invitation.expiresAt,
       })),
     };
   }

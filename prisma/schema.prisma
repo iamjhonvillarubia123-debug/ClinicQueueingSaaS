@@ -230,6 +230,19 @@ enum NotificationAttemptOutcome {
   UNCERTAIN
 }
 
+enum SecretaryInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum SecretaryAccessProfile {
+  STANDARD
+  FULL_CLINIC_CONFIGURATION
+  CUSTOM
+}
+
 enum CommandType {
   CONVERT_BOOKING_DRAFT
   CREATE_STAFF_APPOINTMENT
@@ -507,6 +520,8 @@ model User {
   revokedPracticeStaffAuthorityBundles PracticeStaffAuthorityBundle[] @relation("PracticeStaffAuthorityBundleRevokedBy")
   substituteCoveragesCreated SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageCreatedBy")
   substituteCoveragesEnded SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageEndedBy")
+  secretaryInvitationsSent SecretaryInvitation[] @relation("SecretaryInvitationInvitedBy")
+  secretaryInvitationAccepted SecretaryInvitation? @relation("SecretaryInvitationAcceptedUser")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
   createdScheduledReminders        ScheduledReminder[]                  @relation("ScheduledReminderCreatedBy")
@@ -812,6 +827,7 @@ model PracticeLocation {
   notificationOutboxes          NotificationOutbox[]
   substituteSecretaryCoverages SubstituteSecretaryCoverage[]
   substituteSecretaryCoverageDates SubstituteSecretaryCoverageDate[]
+  secretaryInvitations SecretaryInvitation[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -853,6 +869,40 @@ model PracticeStaff {
   @@index([practiceLocationId, isActive])
   @@index([userId, isActive])
   @@index([practiceLocationId, isActive, activatedAt], map: "PracticeStaff_location_active_activated_idx")
+}
+
+model SecretaryInvitation {
+  id String @id @default(uuid())
+  practiceLocationId String
+  invitedByUserId String
+  normalizedEmail String @db.VarChar(255)
+  firstName String @db.VarChar(100)
+  lastName String @db.VarChar(100)
+  mobileNumber String @db.VarChar(30)
+  tokenHash String? @db.VarChar(64)
+  activeInvitationKey String? @unique @db.VarChar(64)
+  status SecretaryInvitationStatus @default(PENDING)
+  expiresAt DateTime @db.Timestamptz(3)
+  acceptedAt DateTime? @db.Timestamptz(3)
+  acceptedUserId String? @unique
+  revokedAt DateTime? @db.Timestamptz(3)
+  requestedAccessProfile SecretaryAccessProfile @default(STANDARD)
+  requestedCanManageClinicDetails Boolean @default(false)
+  requestedCanManageServices Boolean @default(false)
+  requestedCanManageBookingQuestions Boolean @default(false)
+  requestedCanManageSchedules Boolean @default(false)
+  requestedCancelClinicDay Boolean @default(false)
+  requestedAssignDaySecretary Boolean @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  invitedByUser User @relation("SecretaryInvitationInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  acceptedUser User? @relation("SecretaryInvitationAcceptedUser", fields: [acceptedUserId], references: [id], onDelete: Restrict)
+  notificationOutbox NotificationOutbox?
+  @@index([tokenHash])
+  @@index([status, expiresAt])
+  @@index([practiceLocationId, createdAt])
+  @@index([invitedByUserId, createdAt])
 }
 
 model PracticeStaffAuthorityBundle {
@@ -1537,6 +1587,7 @@ model NotificationOutbox {
   subscriptionPurchase         SubscriptionPurchase?         @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
   refundRequest                RefundRequest?                @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
   administrativeAccountAction  AdministrativeAccountAction?  @relation(fields: [administrativeAccountActionId], references: [id], onDelete: Restrict)
+  secretaryInvitation SecretaryInvitation? @relation(fields: [secretaryInvitationId], references: [id], onDelete: Restrict)
   notificationLogs NotificationLog[]
   @@index([status, nextAttemptAt], map: "NotificationOutbox_status_nextAttempt_idx")
   @@index([status, leaseExpiresAt], map: "NotificationOutbox_status_lease_idx")
