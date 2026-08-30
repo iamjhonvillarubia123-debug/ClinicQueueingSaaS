@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -15,7 +19,9 @@ export class PracticeLocationOperationsContextService {
       throw new NotFoundException('Practice location was not found.');
     }
     if (!location.timeZone) {
-      throw new ConflictException('Practice location time zone is not configured.');
+      throw new ConflictException(
+        'Practice location time zone is not configured.',
+      );
     }
 
     return {
@@ -39,7 +45,9 @@ export class PracticeLocationOperationsContextService {
     const month = value('month');
     const day = value('day');
     if (!year || !month || !day) {
-      throw new ConflictException('Unable to derive the clinic-local service date.');
+      throw new ConflictException(
+        'Unable to derive the clinic-local service date.',
+      );
     }
     return `${year}-${month}-${day}`;
   }
