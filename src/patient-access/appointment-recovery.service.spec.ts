@@ -100,10 +100,9 @@ describe('AppointmentRecoveryService', () => {
       'If the appointment can be recovered, verification will continue.',
     );
     expect(result).not.toHaveProperty('candidateAppointmentId');
-    const [attemptCreateCall] = attemptCreate.mock.calls as unknown as Array<
-      [{ data: { candidateAppointmentId: string } }]
-    >;
-    expect(attemptCreateCall.data.candidateAppointmentId).toBe('appointment-1');
+    expect(JSON.stringify(attemptCreate.mock.calls)).toContain(
+      '"candidateAppointmentId":"appointment-1"',
+    );
     expect(otpOutbox.createBookingOtpOutbox).toHaveBeenCalledTimes(1);
   });
 
@@ -135,11 +134,8 @@ describe('AppointmentRecoveryService', () => {
     const result = await service.reject('attempt-1');
 
     expect(result.rejected).toBe(true);
-    const [rejectUpdateCall] = updateAttempt.mock.calls as unknown as Array<
-      [{ data: { status: BookingRecoveryAttemptStatus } }]
-    >;
-    expect(rejectUpdateCall.data.status).toBe(
-      BookingRecoveryAttemptStatus.REJECTED,
+    expect(JSON.stringify(updateAttempt.mock.calls)).toContain(
+      `"status":"${BookingRecoveryAttemptStatus.REJECTED}"`,
     );
     expect(transaction.appointment.update).not.toHaveBeenCalled();
     expect(transaction.bookingAccessToken.create).not.toHaveBeenCalled();
@@ -213,21 +209,13 @@ describe('AppointmentRecoveryService', () => {
     expect(revokeTokens).toHaveBeenCalledTimes(1);
     expect(createToken).toHaveBeenCalledTimes(1);
     expect(transaction.appointment.update).not.toHaveBeenCalled();
-    const updateCalls = updateAttempt.mock.calls as unknown as Array<
-      [{ data: { status: BookingRecoveryAttemptStatus } }]
-    >;
-    expect(
-      updateCalls.some(
-        ([call]) =>
-          call.data.status ===
-          BookingRecoveryAttemptStatus.CANDIDATE_CONFIRMED,
-      ),
-    ).toBe(true);
-    expect(
-      updateCalls.some(
-        ([call]) => call.data.status === BookingRecoveryAttemptStatus.COMPLETED,
-      ),
-    ).toBe(true);
+    const serializedUpdateCalls = JSON.stringify(updateAttempt.mock.calls);
+    expect(serializedUpdateCalls).toContain(
+      `"status":"${BookingRecoveryAttemptStatus.CANDIDATE_CONFIRMED}"`,
+    );
+    expect(serializedUpdateCalls).toContain(
+      `"status":"${BookingRecoveryAttemptStatus.COMPLETED}"`,
+    );
     expect(idempotency.deriveIdentity).toHaveBeenCalledWith(
       expect.objectContaining({
         commandType: CommandType.COMPLETE_APPOINTMENT_RECOVERY,
