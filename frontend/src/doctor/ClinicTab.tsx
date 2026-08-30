@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { ActivateClinicDialog } from './ActivateClinicDialog';
 import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
@@ -7,7 +7,11 @@ import { DisableClinicDialog } from './DisableClinicDialog';
 import { PermanentlyDeleteClinicDialog } from './PermanentlyDeleteClinicDialog';
 import { QuestionManagementEditor } from './QuestionManagementEditor';
 import { ServiceManagementEditor } from './ServiceManagementEditor';
-import { ClinicOperationsWorkspace } from './ClinicOperationsWorkspace';
+import {
+  ClinicOperationsWorkspace,
+  type ClinicOperationsOverview,
+  type ClinicOperationsQueue,
+} from './ClinicOperationsWorkspace';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type ClinicStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
@@ -2085,7 +2089,9 @@ export function ClinicTabPage() {
 
   useEffect(() => {
     if (!clinicsLoaded || !requestedClinicId) return;
-    const clinic = clinics.find((candidate) => candidate.id === requestedClinicId);
+    const clinic = clinics.find(
+      (candidate) => candidate.id === requestedClinicId,
+    );
     if (clinic) {
       setEditingClinic(clinic);
       setMode('edit');
@@ -2286,15 +2292,18 @@ export function ClinicTabPage() {
           setMode('create');
         }}
         onOpen={(clinic) => {
-          void navigate(`/app/clinics/${encodeURIComponent(clinic.id)}/operations`, {
-            state: {
-              clinic: {
-                name: clinic.name || 'North Clinic',
-                address: clinic.address,
-                timeZone: clinic.timeZone,
+          void navigate(
+            `/app/clinics/${encodeURIComponent(clinic.id)}/operations`,
+            {
+              state: {
+                clinic: {
+                  name: clinic.name || 'North Clinic',
+                  address: clinic.address,
+                  timeZone: clinic.timeZone,
+                },
               },
             },
-          });
+          );
         }}
         onEdit={(clinic) => {
           setRequestedClinicId(clinic.id);
@@ -2378,10 +2387,78 @@ export function ClinicTabPage() {
 export function ClinicOperationsRoutePage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { clinicId } = useParams();
+  const [serviceDate, setServiceDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [overview, setOverview] = useState<ClinicOperationsOverview | null>(
+    null,
+  );
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState('');
+  const [queue, setQueue] = useState<ClinicOperationsQueue | null>(null);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueError, setQueueError] = useState('');
   const routeState = location.state as {
     clinic?: { name?: string; address?: string; timeZone?: string };
   } | null;
   const clinic = routeState?.clinic;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!clinicId) {
+      setOverviewError('Clinic identifier is missing.');
+      setOverviewLoading(false);
+      return;
+    }
+    setOverviewLoading(true);
+    setOverviewError('');
+    void apiRequest<ClinicOperationsOverview>(
+      `/practice-location/${encodeURIComponent(clinicId)}/operations/overview?serviceDate=${encodeURIComponent(serviceDate)}`,
+    )
+      .then((result) => {
+        if (!cancelled) setOverview(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setOverview(null);
+          setOverviewError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to load clinic operations.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setOverviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId, serviceDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!clinicId) {
+      setQueueError('Clinic identifier is missing.');
+      setQueueLoading(false);
+      return;
+    }
+    setQueueLoading(true);
+    setQueueError('');
+    void apiRequest<ClinicOperationsQueue>(
+      `/practice-location/${encodeURIComponent(clinicId)}/operations/queue?serviceDate=${encodeURIComponent(serviceDate)}`,
+    )
+      .then((result) => { if (!cancelled) setQueue(result); })
+      .catch((error) => {
+        if (!cancelled) {
+          setQueue(null);
+          setQueueError(error instanceof Error ? error.message : 'Unable to load the queue.');
+        }
+      })
+      .finally(() => { if (!cancelled) setQueueLoading(false); });
+    return () => { cancelled = true; };
+  }, [clinicId, serviceDate]);
 
   return (
     <ClinicOperationsWorkspace
@@ -2391,6 +2468,13 @@ export function ClinicOperationsRoutePage() {
         timeZone: clinic?.timeZone || 'Asia/Manila',
       }}
       onBack={() => navigate('/app/clinics')}
+      overview={overview}
+      overviewLoading={overviewLoading}
+      overviewError={overviewError}
+      queue={queue}
+      queueLoading={queueLoading}
+      queueError={queueError}
+      onOverviewServiceDateChange={setServiceDate}
     />
   );
 }

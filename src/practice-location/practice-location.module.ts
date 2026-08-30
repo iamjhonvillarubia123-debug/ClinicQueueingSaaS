@@ -13,6 +13,7 @@ import { PracticeLocationProtectedActivationService } from './practice-location-
 import { PracticeLocationService } from './practice-location.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 import { PracticeLocationController } from './practice-location.controller';
+import { PracticeLocationOperationsService } from './practice-location-operations.service';
 
 @Module({
   imports: [PrismaModule, AuthModule, ScheduleModule],
@@ -27,6 +28,7 @@ import { PracticeLocationController } from './practice-location.controller';
     PracticeLocationLifecycleService,
     PracticeLocationPermanentDeleteService,
     PracticeSchedulePreflightService,
+    PracticeLocationOperationsService,
   ],
   controllers: [PracticeLocationController],
 })

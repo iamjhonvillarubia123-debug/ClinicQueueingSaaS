@@ -11,6 +11,7 @@ import { PracticeLocationPermanentDeleteService } from './practice-location-perm
 import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationController } from './practice-location.controller';
 import { PracticeLocationService } from './practice-location.service';
+import { PracticeLocationOperationsService } from './practice-location-operations.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 
 describe('PracticeLocationController', () => {
@@ -37,6 +38,7 @@ describe('PracticeLocationController', () => {
   const practiceLocationLifecycleServiceMock = {};
   const practiceLocationPermanentDeleteServiceMock = {};
   const practiceSchedulePreflightServiceMock = {};
+  const practiceLocationOperationsServiceMock = { getOverview: jest.fn() };
   const authenticationServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
@@ -102,6 +104,10 @@ describe('PracticeLocationController', () => {
         {
           provide: PracticeSchedulePreflightService,
           useValue: practiceSchedulePreflightServiceMock,
+        },
+        {
+          provide: PracticeLocationOperationsService,
+          useValue: practiceLocationOperationsServiceMock,
         },
         {
           provide: AuthenticationService,

@@ -3,6 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClinicOperationsWorkspace } from './ClinicOperationsWorkspace';
 
+const overview = {
+  clinic: { id: 'clinic-1', name: 'North Clinic', address: 'Davao City', countryCode: 'PH', timeZone: 'Asia/Manila', lifecycleStatus: 'ACTIVE', doctorName: 'Dr. Juan Dela Cruz' },
+  serviceDate: '2026-08-25', schedule: { isOpen: true, opensAt: '08:00', closesAt: '17:00' },
+  clinicDay: { id: 'day-1', status: 'STARTED', openingOverrideAt: null, startedAt: '2026-08-25T00:00:00.000Z', closedAt: null, operatingSecretary: { practiceStaffId: 'staff-1', userId: 'user-1', name: 'Maria Santos' } },
+  queue: { counts: { WAITING: 2, CALLED: 1, COMPLETED: 3, CANCELLED: 0 }, waitingCount: 2, nowServing: { id: 'appointment-6', bookingReference: '#APP-0012', queueNumber: 6, name: 'Maria Santos', status: 'CALLED', estimatedServiceMinutes: 15, serviceNames: ['General Consultation'], enteredAt: '2026-08-25T00:15:00.000Z', calledAt: '2026-08-25T01:15:00.000Z', completedAt: null }, next: { id: 'appointment-7', bookingReference: '#APP-0013', queueNumber: 7, name: 'Pedro Reyes', status: 'WAITING', estimatedServiceMinutes: 5, serviceNames: ['Dental Cleaning'], enteredAt: '2026-08-25T01:20:00.000Z', calledAt: null, completedAt: null }, waitingPreview: [] },
+  appointments: { total: 6, counts: { WAITING: 2, CALLED: 1, COMPLETED: 3, CANCELLED: 0 } }, timeline: [],
+};
+
 afterEach(cleanup);
 
 function renderWorkspace(onEvent = vi.fn()) {
@@ -11,6 +19,7 @@ function renderWorkspace(onEvent = vi.fn()) {
       clinic={{ name: 'North Clinic', address: 'Davao City', timeZone: 'Asia/Manila' }}
       onBack={vi.fn()}
       onEvent={onEvent}
+      overview={overview}
     />,
   );
   return onEvent;

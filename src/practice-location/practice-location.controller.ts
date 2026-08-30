@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   Param,
+  Query,
   Patch,
   Post,
   Put,
@@ -34,6 +35,7 @@ import { PracticeLocationLifecycleService } from './practice-location-lifecycle.
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationService } from './practice-location.service';
+import { PracticeLocationOperationsService } from './practice-location-operations.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 
 @Controller('practice-location')
@@ -49,7 +51,28 @@ export class PracticeLocationController {
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
     private readonly practiceSchedulePreflightService: PracticeSchedulePreflightService,
+    private readonly practiceLocationOperationsService: PracticeLocationOperationsService,
   ) {}
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/overview')
+  operationsOverview(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getOverview(request.user.userId, practiceLocationId, serviceDate);
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/queue')
+  operationsQueue(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getQueue(request.user.userId, practiceLocationId, serviceDate);
+  }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Put(':practiceLocationId/configuration-draft')
