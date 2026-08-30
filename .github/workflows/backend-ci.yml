@@ -50,9 +50,17 @@ jobs:
           src/practice-location/dto/apply-practice-location-configuration-draft.dto.ts
           src/practice-location/dto/activate-practice-location.dto.ts
       - name: Lint Open Clinic operations service
-        run: npx eslint src/practice-location/practice-location-operations.service.ts
+        run: >-
+          npx eslint
+          src/practice-location/practice-location-operations.service.ts
+          src/practice-location/practice-location-operations-context.service.ts
+          src/practice-location/practice-location.controller.ts
+          src/practice-location/practice-location.module.ts
       - name: Lint Open Clinic operations tests
-        run: npx eslint src/practice-location/practice-location-operations.service.spec.ts
+        run: >-
+          npx eslint
+          src/practice-location/practice-location-operations.service.spec.ts
+          src/practice-location/practice-location-operations-context.service.spec.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
@@ -74,4 +82,5 @@ jobs:
           practice-location-configuration-apply.service.spec.ts
           practice-location-protected-activation.service.spec.ts
           practice-location-operations.service.spec.ts
+          practice-location-operations-context.service.spec.ts
       - run: npm run build
