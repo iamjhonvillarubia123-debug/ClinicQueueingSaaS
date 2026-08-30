@@ -25,6 +25,7 @@ type AuditInput = {
 
 describe('SubstituteSecretaryService', () => {
   let service: SubstituteSecretaryService;
+  const auditCreateMock = jest.fn(async (input: AuditInput) => input);
 
   const prismaServiceMock = {
     $transaction: jest.fn(),
@@ -36,7 +37,7 @@ describe('SubstituteSecretaryService', () => {
       create: jest.fn(),
     },
     clinicDay: { create: jest.fn(), update: jest.fn() },
-    clinicDayOperatingStaffAudit: { create: jest.fn() },
+    clinicDayOperatingStaffAudit: { create: auditCreateMock },
   };
 
   const readyStaff = (id: string, userId: string) => ({
@@ -64,8 +65,8 @@ describe('SubstituteSecretaryService', () => {
   });
 
   const latestAudit = (): AuditInput['data'] => {
-    const input = prismaServiceMock.clinicDayOperatingStaffAudit.create.mock
-      .calls[0]?.[0] as unknown as AuditInput;
+    const input = auditCreateMock.mock.calls[0]?.[0];
+    if (!input) throw new Error('Expected an operating staff audit call.');
     return input.data;
   };
 
@@ -97,7 +98,6 @@ describe('SubstituteSecretaryService', () => {
       operatingPracticeStaffId: null,
     });
     prismaServiceMock.clinicDay.update.mockResolvedValue({});
-    prismaServiceMock.clinicDayOperatingStaffAudit.create.mockResolvedValue({});
     prismaServiceMock.user.findUnique.mockResolvedValue({
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.ACTIVE,
@@ -317,9 +317,7 @@ describe('SubstituteSecretaryService', () => {
     });
 
     expect(prismaServiceMock.clinicDay.update).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.clinicDayOperatingStaffAudit.create,
-    ).not.toHaveBeenCalled();
+    expect(auditCreateMock).not.toHaveBeenCalled();
     expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 });
