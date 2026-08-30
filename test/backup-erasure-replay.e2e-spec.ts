@@ -1,6 +1,6 @@
+import { createHash, randomUUID } from 'crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { createHash, randomUUID } from 'crypto';
 import { App } from 'supertest/types';
 import {
   AppointmentStatus,
@@ -95,6 +95,7 @@ describe('Backup erasure replay (e2e)', () => {
 
   it('replays a still-valid erasure ledger against restored Appointment correlation without double-counting analytics', async () => {
     const now = new Date('2026-08-21T12:00:00.000Z');
+    const liveExpiry = new Date(Date.now() + DAY_MS);
     const { location, unique } = await createLocation();
     const serviceDate = new Date('2026-08-20T00:00:00.000Z');
     const appointmentId = randomUUID();
@@ -146,7 +147,7 @@ describe('Backup erasure replay (e2e)', () => {
         appointmentId,
         tokenHash: createHash('sha256').update(rawToken).digest('hex'),
         purpose: 'VIEW_AND_MANAGE_BOOKING',
-        expiresAt: new Date(now.getTime() + DAY_MS),
+        expiresAt: liveExpiry,
       },
     });
 
@@ -165,7 +166,7 @@ describe('Backup erasure replay (e2e)', () => {
         verifiedAt: new Date(now.getTime() - 3 * 60 * 1000),
         candidateConfirmedAt: new Date(now.getTime() - 2 * 60 * 1000),
         completedAt: new Date(now.getTime() - 60 * 1000),
-        expiresAt: new Date(now.getTime() + DAY_MS),
+        expiresAt: liveExpiry,
       },
     });
 
