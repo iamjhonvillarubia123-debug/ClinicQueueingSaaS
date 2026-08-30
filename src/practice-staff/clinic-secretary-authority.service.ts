@@ -100,7 +100,11 @@ export class ClinicSecretaryAuthorityService {
       );
       await this.lockUsers(transaction, [authenticatedUserId, dto.userId]);
 
-      const actor = await this.readDoctor(transaction, authenticatedUserId, false);
+      const actor = await this.readDoctor(
+        transaction,
+        authenticatedUserId,
+        false,
+      );
       const secretary = await this.readSecretary(transaction, dto.userId);
       this.assertCurrentDoctor(actor);
 
@@ -108,7 +112,10 @@ export class ClinicSecretaryAuthorityService {
         where: { commandIdentityKey },
       });
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         return {
           assigned: true,
           replayed: true,
@@ -201,7 +208,11 @@ export class ClinicSecretaryAuthorityService {
       );
       await this.lockUsers(transaction, [authenticatedUserId, dto.userId]);
 
-      const actor = await this.readDoctor(transaction, authenticatedUserId, true);
+      const actor = await this.readDoctor(
+        transaction,
+        authenticatedUserId,
+        true,
+      );
       const secretary = await this.readSecretary(transaction, dto.userId);
       this.assertCurrentDoctor(actor);
       await this.assertPassword(dto.password, actor?.passwordHash);
@@ -210,7 +221,10 @@ export class ClinicSecretaryAuthorityService {
         where: { commandIdentityKey },
       });
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         const current = await this.lockAssignmentByUserAndLocation(
           transaction,
           dto.userId,
@@ -237,7 +251,9 @@ export class ClinicSecretaryAuthorityService {
         location.currentRegularPracticeStaffId,
       );
       if (!previousAssignment) {
-        throw new ConflictException('Current Clinic Secretary assignment is unavailable.');
+        throw new ConflictException(
+          'Current Clinic Secretary assignment is unavailable.',
+        );
       }
       if (previousAssignment.userId === dto.userId) {
         throw new ConflictException(
@@ -327,7 +343,11 @@ export class ClinicSecretaryAuthorityService {
         dto.practiceLocationId,
       );
       await this.lockUsers(transaction, [authenticatedUserId]);
-      const actor = await this.readDoctor(transaction, authenticatedUserId, true);
+      const actor = await this.readDoctor(
+        transaction,
+        authenticatedUserId,
+        true,
+      );
       this.assertCurrentDoctor(actor);
       await this.assertPassword(dto.password, actor?.passwordHash);
 
@@ -335,7 +355,10 @@ export class ClinicSecretaryAuthorityService {
         where: { commandIdentityKey },
       });
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         return { removed: true, replayed: true };
       }
 
@@ -351,7 +374,9 @@ export class ClinicSecretaryAuthorityService {
         location.currentRegularPracticeStaffId,
       );
       if (!previousAssignment) {
-        throw new ConflictException('Current Clinic Secretary assignment is unavailable.');
+        throw new ConflictException(
+          'Current Clinic Secretary assignment is unavailable.',
+        );
       }
 
       const now = new Date();
@@ -408,7 +433,9 @@ export class ClinicSecretaryAuthorityService {
     const allowed = new Set(Object.values(ClinicSecretaryAuthorityBundle));
     const unique = [...new Set(values)];
     if (unique.some((value) => !allowed.has(value))) {
-      throw new BadRequestException('Unsupported Clinic Secretary authority bundle.');
+      throw new BadRequestException(
+        'Unsupported Clinic Secretary authority bundle.',
+      );
     }
     return unique.sort();
   }
@@ -559,7 +586,9 @@ export class ClinicSecretaryAuthorityService {
     actorUserId: string,
     now: Date,
   ): Promise<void> {
-    const clinicDays = await transaction.$queryRaw<ClinicDayContinuity[]>(Prisma.sql`
+    const clinicDays = await transaction.$queryRaw<
+      ClinicDayContinuity[]
+    >(Prisma.sql`
       SELECT
         "id", "practiceLocationId", "serviceDate", "status", "operatingPracticeStaffId"
       FROM "ClinicDay"
@@ -597,7 +626,9 @@ export class ClinicSecretaryAuthorityService {
     actorUserId: string,
     now: Date,
   ): Promise<void> {
-    const clinicDays = await transaction.$queryRaw<ClinicDayContinuity[]>(Prisma.sql`
+    const clinicDays = await transaction.$queryRaw<
+      ClinicDayContinuity[]
+    >(Prisma.sql`
       SELECT
         "id", "practiceLocationId", "serviceDate", "status", "operatingPracticeStaffId"
       FROM "ClinicDay"
@@ -645,7 +676,9 @@ export class ClinicSecretaryAuthorityService {
     actorUserId: string,
     practiceLocationId: string,
   ): Promise<LockedPracticeLocation> {
-    const rows = await transaction.$queryRaw<LockedPracticeLocation[]>(Prisma.sql`
+    const rows = await transaction.$queryRaw<
+      LockedPracticeLocation[]
+    >(Prisma.sql`
       SELECT
         pl."id",
         dp."userId" AS "doctorUserId",
@@ -708,7 +741,7 @@ export class ClinicSecretaryAuthorityService {
         administrativeRestrictionStatus: true,
         ...(includePasswordHash ? { passwordHash: true } : {}),
       },
-    }) as Promise<DoctorIdentity | null>;
+    });
   }
 
   private async readSecretary(
@@ -731,7 +764,8 @@ export class ClinicSecretaryAuthorityService {
       !actor ||
       actor.role !== UserRole.DOCTOR ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ForbiddenException(
         'Only an eligible current Doctor may manage Clinic Secretary authority.',
@@ -756,7 +790,8 @@ export class ClinicSecretaryAuthorityService {
     location: LockedPracticeLocation,
   ): void {
     if (
-      location.lifecycleStatus === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
+      location.lifecycleStatus ===
+      PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
     ) {
       throw new ConflictException(
         'A permanently deleted Practice Location cannot receive staff authority.',

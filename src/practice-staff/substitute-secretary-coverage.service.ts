@@ -95,7 +95,10 @@ export class SubstituteSecretaryCoverageService {
 
     return this.prisma.$transaction(async (transaction) => {
       await this.acquireCommandLock(transaction, commandIdentityKey);
-      await this.acquireLocationCoverageLock(transaction, dto.practiceLocationId);
+      await this.acquireLocationCoverageLock(
+        transaction,
+        dto.practiceLocationId,
+      );
       const location = await this.lockOwnedPracticeLocation(
         transaction,
         authenticatedUserId,
@@ -108,7 +111,10 @@ export class SubstituteSecretaryCoverageService {
 
       const replay = await this.readReplay(transaction, commandIdentityKey);
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         return {
           created: true,
           replayed: true,
@@ -119,11 +125,10 @@ export class SubstituteSecretaryCoverageService {
       this.assertLocationCanHaveStaff(location);
       this.assertEligibleSecretary(secretary);
       const now = new Date();
-      const assignment = await this.prepareAssignment(
+      const assignment = await this.lockOperationalAssignment(
         transaction,
         dto.userId,
         location.id,
-        now,
       );
 
       await this.assertNoCoverageOverlap(
@@ -186,9 +191,14 @@ export class SubstituteSecretaryCoverageService {
       await this.acquireCommandLock(transaction, commandIdentityKey);
       const scope = await this.readCoverageScope(transaction, dto.coverageId);
       if (!scope) {
-        throw new NotFoundException('Substitute Secretary coverage was not found.');
+        throw new NotFoundException(
+          'Substitute Secretary coverage was not found.',
+        );
       }
-      await this.acquireLocationCoverageLock(transaction, scope.practiceLocationId);
+      await this.acquireLocationCoverageLock(
+        transaction,
+        scope.practiceLocationId,
+      );
       const location = await this.lockOwnedPracticeLocation(
         transaction,
         authenticatedUserId,
@@ -201,7 +211,10 @@ export class SubstituteSecretaryCoverageService {
 
       const replay = await this.readReplay(transaction, commandIdentityKey);
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         return {
           replaced: true,
           replayed: true,
@@ -223,11 +236,10 @@ export class SubstituteSecretaryCoverageService {
       }
 
       const now = new Date();
-      const assignment = await this.prepareAssignment(
+      const assignment = await this.lockOperationalAssignment(
         transaction,
         dto.userId,
         location.id,
-        now,
       );
 
       await this.endCoverage(
@@ -297,9 +309,14 @@ export class SubstituteSecretaryCoverageService {
       await this.acquireCommandLock(transaction, commandIdentityKey);
       const scope = await this.readCoverageScope(transaction, dto.coverageId);
       if (!scope) {
-        throw new NotFoundException('Substitute Secretary coverage was not found.');
+        throw new NotFoundException(
+          'Substitute Secretary coverage was not found.',
+        );
       }
-      await this.acquireLocationCoverageLock(transaction, scope.practiceLocationId);
+      await this.acquireLocationCoverageLock(
+        transaction,
+        scope.practiceLocationId,
+      );
       const location = await this.lockOwnedPracticeLocation(
         transaction,
         authenticatedUserId,
@@ -311,7 +328,10 @@ export class SubstituteSecretaryCoverageService {
 
       const replay = await this.readReplay(transaction, commandIdentityKey);
       if (replay) {
-        this.assertCompatibleReplay(replay.requestFingerprint, requestFingerprint);
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
         return {
           cancelled: true,
           replayed: true,
@@ -381,8 +401,12 @@ export class SubstituteSecretaryCoverageService {
         'One Clinic Day coverage must use the same start and end Service Date.',
       );
     }
-    if (!Object.values(SubstituteSecretaryCoverageMode).includes(dto.coverageMode)) {
-      throw new BadRequestException('Unsupported Substitute Secretary coverage mode.');
+    if (
+      !Object.values(SubstituteSecretaryCoverageMode).includes(dto.coverageMode)
+    ) {
+      throw new BadRequestException(
+        'Unsupported Substitute Secretary coverage mode.',
+      );
     }
 
     return {
@@ -398,8 +422,13 @@ export class SubstituteSecretaryCoverageService {
       throw new BadRequestException('Service Date must use YYYY-MM-DD.');
     }
     const parsed = new Date(`${value}T00:00:00.000Z`);
-    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
-      throw new BadRequestException('Service Date is not a valid calendar date.');
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== value
+    ) {
+      throw new BadRequestException(
+        'Service Date is not a valid calendar date.',
+      );
     }
     return parsed;
   }
@@ -515,11 +544,10 @@ export class SubstituteSecretaryCoverageService {
     }
   }
 
-  private async prepareAssignment(
+  private async lockOperationalAssignment(
     transaction: TransactionClient,
     userId: string,
     practiceLocationId: string,
-    now: Date,
   ): Promise<StaffAssignment> {
     const rows = await transaction.$queryRaw<StaffAssignment[]>(Prisma.sql`
       SELECT "id", "userId", "practiceLocationId", "staffRole", "isActive"
@@ -530,48 +558,16 @@ export class SubstituteSecretaryCoverageService {
       FOR UPDATE
     `);
     const existing = rows[0];
-    if (existing) {
-      if (existing.staffRole !== PracticeStaffRole.SECRETARY) {
-        throw new ConflictException('Existing practice staff role is invalid.');
-      }
-      if (!existing.isActive) {
-        await transaction.$executeRaw(Prisma.sql`
-          UPDATE "PracticeStaff"
-          SET
-            "isActive" = TRUE,
-            "activatedAt" = ${now},
-            "deactivatedAt" = NULL,
-            "updatedAt" = ${now}
-          WHERE "id" = ${existing.id}
-        `);
-      }
-      return { ...existing, isActive: true };
+    if (
+      !existing ||
+      existing.staffRole !== PracticeStaffRole.SECRETARY ||
+      !existing.isActive
+    ) {
+      throw new ForbiddenException(
+        'Selected Secretary is not operationally ready for this Practice Location.',
+      );
     }
-
-    const id = randomUUID();
-    await transaction.$executeRaw(Prisma.sql`
-      INSERT INTO "PracticeStaff" (
-        "id", "userId", "practiceLocationId", "staffRole", "isActive",
-        "createdAt", "updatedAt", "activatedAt", "deactivatedAt"
-      ) VALUES (
-        ${id},
-        ${userId},
-        ${practiceLocationId},
-        'SECRETARY'::"PracticeStaffRole",
-        TRUE,
-        ${now},
-        ${now},
-        ${now},
-        NULL
-      )
-    `);
-    return {
-      id,
-      userId,
-      practiceLocationId,
-      staffRole: PracticeStaffRole.SECRETARY,
-      isActive: true,
-    };
+    return existing;
   }
 
   private async readCoverageScope(
@@ -620,7 +616,9 @@ export class SubstituteSecretaryCoverageService {
     actorUserId: string,
     practiceLocationId: string,
   ): Promise<LockedPracticeLocation> {
-    const rows = await transaction.$queryRaw<LockedPracticeLocation[]>(Prisma.sql`
+    const rows = await transaction.$queryRaw<
+      LockedPracticeLocation[]
+    >(Prisma.sql`
       SELECT
         pl."id",
         dp."userId" AS "doctorUserId",
@@ -659,7 +657,8 @@ export class SubstituteSecretaryCoverageService {
       !actor ||
       actor.role !== UserRole.DOCTOR ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
-      actor.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ForbiddenException(
         'Only an eligible current Doctor may manage Substitute Secretary coverage.',
@@ -682,7 +681,8 @@ export class SubstituteSecretaryCoverageService {
 
   private assertLocationCanHaveStaff(location: LockedPracticeLocation): void {
     if (
-      location.lifecycleStatus === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
+      location.lifecycleStatus ===
+      PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
     ) {
       throw new ConflictException(
         'A permanently deleted Practice Location cannot receive staff authority.',
