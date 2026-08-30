@@ -152,14 +152,6 @@ export class ClinicSecretaryAuthorityService {
         data: { currentRegularPracticeStaffId: assignment.id },
       });
 
-      await this.assignToUnstaffedStartedClinicDays(
-        transaction,
-        location.id,
-        assignment.id,
-        authenticatedUserId,
-        now,
-      );
-
       await transaction.commandIdempotency.create({
         data: {
           idempotencyKey: key,
@@ -285,7 +277,6 @@ export class ClinicSecretaryAuthorityService {
         transaction,
         location.id,
         previousAssignment.id,
-        newAssignment.id,
         authenticatedUserId,
         now,
       );
@@ -388,7 +379,6 @@ export class ClinicSecretaryAuthorityService {
         transaction,
         location.id,
         previousAssignment.id,
-        null,
         authenticatedUserId,
         now,
       );
@@ -579,50 +569,10 @@ export class ClinicSecretaryAuthorityService {
     `);
   }
 
-  private async assignToUnstaffedStartedClinicDays(
-    transaction: TransactionClient,
-    practiceLocationId: string,
-    newPracticeStaffId: string,
-    actorUserId: string,
-    now: Date,
-  ): Promise<void> {
-    const clinicDays = await transaction.$queryRaw<
-      ClinicDayContinuity[]
-    >(Prisma.sql`
-      SELECT
-        "id", "practiceLocationId", "serviceDate", "status", "operatingPracticeStaffId"
-      FROM "ClinicDay"
-      WHERE "practiceLocationId" = ${practiceLocationId}
-        AND "status" = 'STARTED'::"ClinicDayStatus"
-        AND "operatingPracticeStaffId" IS NULL
-      ORDER BY "id"
-      FOR UPDATE
-    `);
-    for (const clinicDay of clinicDays) {
-      await transaction.clinicDay.update({
-        where: { id: clinicDay.id },
-        data: { operatingPracticeStaffId: newPracticeStaffId },
-      });
-      await transaction.clinicDayOperatingStaffAudit.create({
-        data: {
-          clinicDayId: clinicDay.id,
-          practiceLocationId: clinicDay.practiceLocationId,
-          serviceDate: clinicDay.serviceDate,
-          changeType: ClinicDayOperatingStaffChangeType.ASSIGNED,
-          previousOperatingPracticeStaffId: null,
-          newOperatingPracticeStaffId: newPracticeStaffId,
-          actorUserId,
-          createdAt: now,
-        },
-      });
-    }
-  }
-
   private async reconcileOutgoingOperatingAuthority(
     transaction: TransactionClient,
     practiceLocationId: string,
     previousPracticeStaffId: string,
-    replacementPracticeStaffId: string | null,
     actorUserId: string,
     now: Date,
   ): Promise<void> {
@@ -643,27 +593,18 @@ export class ClinicSecretaryAuthorityService {
       FOR UPDATE
     `);
     for (const clinicDay of clinicDays) {
-      const isLiveReplacement =
-        clinicDay.status === ClinicDayStatus.STARTED &&
-        replacementPracticeStaffId !== null;
-      const newOperatingPracticeStaffId = isLiveReplacement
-        ? replacementPracticeStaffId
-        : null;
-      const changeType = isLiveReplacement
-        ? ClinicDayOperatingStaffChangeType.REPLACED
-        : ClinicDayOperatingStaffChangeType.CLEARED;
       await transaction.clinicDay.update({
         where: { id: clinicDay.id },
-        data: { operatingPracticeStaffId: newOperatingPracticeStaffId },
+        data: { operatingPracticeStaffId: null },
       });
       await transaction.clinicDayOperatingStaffAudit.create({
         data: {
           clinicDayId: clinicDay.id,
           practiceLocationId: clinicDay.practiceLocationId,
           serviceDate: clinicDay.serviceDate,
-          changeType,
+          changeType: ClinicDayOperatingStaffChangeType.CLEARED,
           previousOperatingPracticeStaffId: previousPracticeStaffId,
-          newOperatingPracticeStaffId,
+          newOperatingPracticeStaffId: null,
           actorUserId,
           createdAt: now,
         },

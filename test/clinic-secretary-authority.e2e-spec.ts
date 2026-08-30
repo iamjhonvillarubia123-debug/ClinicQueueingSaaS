@@ -122,6 +122,16 @@ describe('Clinic Secretary authority bundles (e2e)', () => {
   });
 
   it('assigns only selected predefined bundles and keeps CANCEL_CLINIC_DAY separate', async () => {
+    const startedAt = new Date();
+    const liveClinicDay = await prisma.clinicDay.create({
+      data: {
+        practiceLocationId,
+        serviceDate: dateValue('2026-10-01'),
+        status: 'STARTED',
+        startedAt,
+        createdAt: startedAt,
+      },
+    });
     const bundles = [
       ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
       ClinicSecretaryAuthorityBundle.REPORTS_VIEW_ONLY,
@@ -140,19 +150,23 @@ describe('Clinic Secretary authority bundles (e2e)', () => {
       throw new Error('Clinic Secretary assignment result was incomplete.');
     }
 
-    const [storedBundles, capabilities] = await Promise.all([
-      prisma.practiceStaffAuthorityBundle.findMany({
-        where: { practiceStaffId, status: 'ACTIVE' },
-        orderBy: { bundleType: 'asc' },
-      }),
-      prisma.practiceStaffCapability.findMany({
-        where: { practiceStaffId, status: 'ACTIVE' },
-      }),
-    ]);
+    const [storedBundles, capabilities, unchangedClinicDay] = await Promise.all(
+      [
+        prisma.practiceStaffAuthorityBundle.findMany({
+          where: { practiceStaffId, status: 'ACTIVE' },
+          orderBy: { bundleType: 'asc' },
+        }),
+        prisma.practiceStaffCapability.findMany({
+          where: { practiceStaffId, status: 'ACTIVE' },
+        }),
+        prisma.clinicDay.findUniqueOrThrow({ where: { id: liveClinicDay.id } }),
+      ],
+    );
     expect(storedBundles.map((item) => item.bundleType).sort()).toEqual(
       [...bundles].sort(),
     );
     expect(capabilities).toHaveLength(0);
+    expect(unchangedClinicDay.operatingPracticeStaffId).toBeNull();
   });
 
   it('replaces atomically, revokes the outgoing assignment, and keeps its User active', async () => {
@@ -160,6 +174,17 @@ describe('Clinic Secretary authority bundles (e2e)', () => {
       where: { id: practiceLocationId },
     });
     const outgoingStaffId = before.currentRegularPracticeStaffId!;
+    const startedAt = new Date();
+    const liveClinicDay = await prisma.clinicDay.create({
+      data: {
+        practiceLocationId,
+        serviceDate: dateValue('2026-10-02'),
+        status: 'STARTED',
+        startedAt,
+        createdAt: startedAt,
+        operatingPracticeStaffId: outgoingStaffId,
+      },
+    });
     const result = await service.replace(
       doctorUserId,
       {
@@ -174,26 +199,43 @@ describe('Clinic Secretary authority bundles (e2e)', () => {
       `replace-${scope}`,
     );
 
-    const [location, outgoingStaff, outgoingUser, outgoingActiveBundles] =
-      await Promise.all([
-        prisma.practiceLocation.findUniqueOrThrow({
-          where: { id: practiceLocationId },
-        }),
-        prisma.practiceStaff.findUniqueOrThrow({
-          where: { id: outgoingStaffId },
-        }),
-        prisma.user.findUniqueOrThrow({
-          where: { id: firstSecretaryUserId },
-        }),
-        prisma.practiceStaffAuthorityBundle.count({
-          where: { practiceStaffId: outgoingStaffId, status: 'ACTIVE' },
-        }),
-      ]);
+    const [
+      location,
+      outgoingStaff,
+      outgoingUser,
+      outgoingActiveBundles,
+      reconciledClinicDay,
+      operatingAudit,
+    ] = await Promise.all([
+      prisma.practiceLocation.findUniqueOrThrow({
+        where: { id: practiceLocationId },
+      }),
+      prisma.practiceStaff.findUniqueOrThrow({
+        where: { id: outgoingStaffId },
+      }),
+      prisma.user.findUniqueOrThrow({
+        where: { id: firstSecretaryUserId },
+      }),
+      prisma.practiceStaffAuthorityBundle.count({
+        where: { practiceStaffId: outgoingStaffId, status: 'ACTIVE' },
+      }),
+      prisma.clinicDay.findUniqueOrThrow({ where: { id: liveClinicDay.id } }),
+      prisma.clinicDayOperatingStaffAudit.findFirstOrThrow({
+        where: {
+          clinicDayId: liveClinicDay.id,
+          previousOperatingPracticeStaffId: outgoingStaffId,
+        },
+      }),
+    ]);
     expect(location.currentRegularPracticeStaffId).toBe(result.practiceStaffId);
     expect(outgoingStaff.isActive).toBe(false);
     expect(outgoingStaff.deactivatedAt).not.toBeNull();
     expect(outgoingUser.accountStatus).toBe(UserAccountStatus.ACTIVE);
     expect(outgoingActiveBundles).toBe(0);
+    expect(reconciledClinicDay.status).toBe('STARTED');
+    expect(reconciledClinicDay.operatingPracticeStaffId).toBeNull();
+    expect(operatingAudit.changeType).toBe('CLEARED');
+    expect(operatingAudit.newOperatingPracticeStaffId).toBeNull();
   });
 
   it('removes only the clinic assignment and preserves the User and other-clinic assignment', async () => {
@@ -241,3 +283,7 @@ describe('Clinic Secretary authority bundles (e2e)', () => {
     return user.id;
   }
 });
+
+function dateValue(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
