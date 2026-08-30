@@ -7,6 +7,7 @@ import {
   AuthoritativeAppointmentReportPreview,
   type AuthoritativeAppointmentReport,
 } from './AuthoritativeAppointmentReportPreview';
+import { AuthoritativeClinicStaffTab } from './AuthoritativeClinicStaffTab';
 import {
   QueueActionDrawer,
   type QueueDrawerBookingConfiguration,
@@ -365,6 +366,7 @@ export function AuthoritativeClinicOperationsWorkspace({
   const [tab, setTab] = useState<OperationsTab>('overview');
   const [notice, setNotice] = useState('');
   const clinicName = overview?.clinic.name ?? queue?.clinic.name ?? appointments?.clinic.name ?? 'Clinic';
+  const clinicId = overview?.clinic.id ?? queue?.clinic.id ?? appointments?.clinic.id ?? null;
   const doctorName = overview?.clinic.doctorName ?? queue?.clinic.doctorName ?? appointments?.clinic.doctorName ?? '';
 
   async function handleEvent(event: ClinicOperationsEvent) {
@@ -389,7 +391,7 @@ export function AuthoritativeClinicOperationsWorkspace({
       {tab === 'overview' ? overview ? <OverviewTab operations={overview} serviceDate={serviceDate} onServiceDateChange={onServiceDateChange} goTo={setTab} /> : <OperationalState loading={overviewLoading} error={overviewError} empty="No operational overview is available for this clinic." /> : null}
       {tab === 'queue' ? queue ? <QueueTab data={queue} serviceDate={serviceDate} onServiceDateChange={onServiceDateChange} onEvent={handleEvent} bookingConfiguration={bookingConfiguration} onNotice={setNotice} /> : <OperationalState loading={queueLoading} error={queueError} empty="No queue data is available for this service date." /> : null}
       {tab === 'appointments' ? appointments ? <AppointmentsTab data={appointments} serviceDate={serviceDate} onServiceDateChange={onServiceDateChange} loadAppointmentDetails={loadAppointmentDetails} loadDailyAppointmentReport={loadDailyAppointmentReport} /> : <OperationalState loading={appointmentsLoading} error={appointmentsError} empty="No appointment data is available for this service date." /> : null}
-      {tab === 'staff' ? <div className="ops-workspace-state"><strong>Staff integration is not connected yet.</strong><span>This tab will be implemented in its own governed slice. No sample secretary records are shown as production data.</span></div> : null}
+      {tab === 'staff' ? clinicId ? <AuthoritativeClinicStaffTab clinicId={clinicId} serviceDate={serviceDate} onServiceDateChange={onServiceDateChange} /> : <OperationalState loading={false} error="" empty="No clinic identifier is available for staff data." /> : null}
       <footer className="ops-scope-note">{overview ? `${overview.clinic.address || 'Address unavailable'} · ${overview.clinic.timeZone ?? 'Timezone unavailable'} · ${overview.queue.waitingCount} patients waiting` : 'Operational data is shown only when returned by the backend.'}</footer>
     </section>
   );
