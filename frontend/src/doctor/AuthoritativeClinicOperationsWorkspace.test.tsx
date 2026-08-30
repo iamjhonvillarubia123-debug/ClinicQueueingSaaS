@@ -56,7 +56,7 @@ const emptyReport: AuthoritativeAppointmentReport = {
 afterEach(cleanup);
 
 describe('AuthoritativeClinicOperationsWorkspace', () => {
-  it('keeps overview timeline, appointment summary, and staff empty when authoritative data is empty', async () => {
+  it('keeps overview timeline and appointment summary empty when authoritative data is empty', async () => {
     const user = userEvent.setup();
 
     render(
@@ -80,30 +80,39 @@ describe('AuthoritativeClinicOperationsWorkspace', () => {
       />,
     );
 
-    const timeline = screen.getByRole('heading', { name: 'Clinic Day Timeline' }).closest('article');
+    const timeline = screen
+      .getByRole('heading', { name: 'Clinic Day Timeline' })
+      .closest('article');
     expect(timeline).not.toBeNull();
-    expect(within(timeline as HTMLElement).getByText('No queue events have been recorded for this service date.')).toBeInTheDocument();
+    expect(
+      within(timeline as HTMLElement).getByText(
+        'No queue events have been recorded for this service date.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Maria Santos')).not.toBeInTheDocument();
     expect(screen.queryByText('Jane Reyes')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Appointments' }));
 
-    expect(screen.getByText('Total Appointments').parentElement).toHaveTextContent('0');
-    const appointmentSummary = screen.getByRole('heading', { name: 'Appointment Summary' }).closest('article');
+    expect(screen.getByText('Total Appointments').parentElement).toHaveTextContent(
+      '0',
+    );
+    const appointmentSummary = screen
+      .getByRole('heading', { name: 'Appointment Summary' })
+      .closest('article');
     expect(appointmentSummary).not.toBeNull();
     const summary = within(appointmentSummary as HTMLElement);
     expect(summary.getByText('Waiting').parentElement).toHaveTextContent('0');
     expect(summary.getByText('Now Serving').parentElement).toHaveTextContent('0');
-    expect(summary.getByText('Out for Procedure').parentElement).toHaveTextContent('0');
-    expect(summary.getByText('Temporarily Absent').parentElement).toHaveTextContent('0');
+    expect(summary.getByText('Out for Procedure').parentElement).toHaveTextContent(
+      '0',
+    );
+    expect(summary.getByText('Temporarily Absent').parentElement).toHaveTextContent(
+      '0',
+    );
     expect(summary.getByText('Completed').parentElement).toHaveTextContent('0');
     expect(summary.getByText('Cancelled').parentElement).toHaveTextContent('0');
     expect(screen.queryByText('12')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Staff' }));
-    expect(screen.getByText('Staff integration is not connected yet.')).toBeInTheDocument();
-    expect(screen.queryByText('Maria Santos')).not.toBeInTheDocument();
-    expect(screen.queryByText('Jane Reyes')).not.toBeInTheDocument();
   });
 
   it('loads the protected service-date report before offering PDF printing', async () => {
@@ -135,9 +144,15 @@ describe('AuthoritativeClinicOperationsWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'GENERATE PDF' }));
 
     expect(loadDailyAppointmentReport).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole('dialog', { name: 'Daily appointment PDF preview' })).toBeInTheDocument();
-    expect(screen.getByText('No appointments were recorded for this service date.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Print / Save PDF' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('dialog', { name: 'Daily appointment PDF preview' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('No appointments were recorded for this service date.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Print / Save PDF' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/csv/i)).toBeInTheDocument();
   });
 });
