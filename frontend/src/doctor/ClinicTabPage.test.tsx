@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
 import { ClinicTabPage } from './ClinicTab';
@@ -51,6 +52,14 @@ const location = {
   ],
 };
 
+function renderClinicTabPage() {
+  return render(
+    <MemoryRouter>
+      <ClinicTabPage />
+    </MemoryRouter>,
+  );
+}
+
 afterEach(cleanup);
 
 describe('ClinicTabPage configuration draft persistence', () => {
@@ -73,7 +82,7 @@ describe('ClinicTabPage configuration draft persistence', () => {
 
   it('loads persisted hours and saves the whole configuration document', async () => {
     const user = userEvent.setup();
-    render(<ClinicTabPage />);
+    renderClinicTabPage();
 
     await user.click(
       await screen.findByRole('button', { name: 'Edit Clinic' }),
@@ -160,7 +169,7 @@ describe('ClinicTabPage configuration draft persistence', () => {
     });
 
     const user = userEvent.setup();
-    render(<ClinicTabPage />);
+    renderClinicTabPage();
 
     await user.click(
       await screen.findByRole('button', { name: 'Add New Clinic' }),
@@ -228,7 +237,7 @@ describe('ClinicTabPage configuration draft persistence', () => {
 
   it('removes a Service from the working draft and persists the omission', async () => {
     const user = userEvent.setup();
-    render(<ClinicTabPage />);
+    renderClinicTabPage();
 
     await user.click(
       await screen.findByRole('button', { name: 'Edit Clinic' }),
@@ -262,7 +271,7 @@ describe('ClinicTabPage configuration draft persistence', () => {
 
   it('changes the clinic main action when a dropdown action is selected without executing it', async () => {
     const user = userEvent.setup();
-    render(<ClinicTabPage />);
+    renderClinicTabPage();
 
     await user.click(
       await screen.findByRole('button', {
@@ -342,7 +351,7 @@ describe('ClinicTabPage configuration draft persistence', () => {
     });
 
     const user = userEvent.setup();
-    render(<ClinicTabPage />);
+    renderClinicTabPage();
 
     expect(await screen.findByText('Saved Clinic')).toBeInTheDocument();
     expect(screen.queryByText('Draft Clinic Name')).not.toBeInTheDocument();
