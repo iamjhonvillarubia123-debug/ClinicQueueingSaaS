@@ -148,9 +148,7 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         practiceLocationId: location.id,
         name: 'Initial Consultation',
         durationMinutes: 30,
-        availabilityStatus: ServiceAvailabilityStatus.AVAILABLE,
-        isActive: true,
-        displayOrder: 1,
+        status: ServiceAvailabilityStatus.ACTIVE,
       },
     });
 
