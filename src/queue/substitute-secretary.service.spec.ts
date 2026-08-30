@@ -6,6 +6,7 @@ import {
   ClinicDayOperatingStaffChangeType,
   ClinicDayStatus,
   CommandType,
+  PracticeLocationLifecycleStatus,
   PracticeStaffRole,
   UserAccountStatus,
   UserRole,
@@ -25,7 +26,7 @@ describe('SubstituteSecretaryService', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
-    clinicDay: { update: jest.fn() },
+    clinicDay: { create: jest.fn(), update: jest.fn() },
     clinicDayOperatingStaffAudit: { create: jest.fn() },
   };
 
@@ -49,6 +50,7 @@ describe('SubstituteSecretaryService', () => {
     serviceDate: new Date('2026-08-15T00:00:00.000Z'),
     status,
     operatingPracticeStaffId,
+    lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
     doctorUserId: 'doctor-1',
   });
 
@@ -69,8 +71,13 @@ describe('SubstituteSecretaryService', () => {
     );
     prismaServiceMock.$executeRaw.mockResolvedValue(1);
     prismaServiceMock.commandIdempotency.findUnique.mockResolvedValue(null);
-    prismaServiceMock.commandIdempotency.create.mockResolvedValue({
-      id: 'cmd-1',
+    prismaServiceMock.commandIdempotency.create.mockResolvedValue({ id: 'cmd-1' });
+    prismaServiceMock.clinicDay.create.mockResolvedValue({
+      id: 'clinic-day-1',
+      practiceLocationId: 'location-1',
+      serviceDate: new Date('2026-08-15T00:00:00.000Z'),
+      status: ClinicDayStatus.NOT_STARTED,
+      operatingPracticeStaffId: null,
     });
     prismaServiceMock.clinicDay.update.mockResolvedValue({});
     prismaServiceMock.clinicDayOperatingStaffAudit.create.mockResolvedValue({});
@@ -81,11 +88,61 @@ describe('SubstituteSecretaryService', () => {
     });
   });
 
+  it('lazily creates a NOT_STARTED ClinicDay when assigning an Operating Secretary by service date', async () => {
+    prismaServiceMock.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'location-1',
+          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+          doctorUserId: 'doctor-1',
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        readyStaff('staff-regular', 'secretary-regular'),
+      ]);
+
+    await expect(
+      service.assign(
+        'doctor-1',
+        {
+          practiceLocationId: 'location-1',
+          serviceDate: '2026-08-15',
+          userId: 'secretary-regular',
+        },
+        'assign-by-date-key',
+      ),
+    ).resolves.toEqual({
+      assigned: true,
+      replayed: false,
+      commandType: CommandType.CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY,
+      clinicDayId: 'clinic-day-1',
+    });
+
+    expect(prismaServiceMock.clinicDay.create).toHaveBeenCalledWith({
+      data: {
+        practiceLocationId: 'location-1',
+        serviceDate: new Date('2026-08-15T00:00:00.000Z'),
+        status: ClinicDayStatus.NOT_STARTED,
+      },
+      select: {
+        id: true,
+        practiceLocationId: true,
+        serviceDate: true,
+        status: true,
+        operatingPracticeStaffId: true,
+      },
+    });
+    expect(prismaServiceMock.clinicDay.update).toHaveBeenCalledWith({
+      where: { id: 'clinic-day-1' },
+      data: { operatingPracticeStaffId: 'staff-regular' },
+    });
+  });
+
   it('assigns an operationally ready regular PracticeStaff member as the initial Operating Secretary', async () => {
     prismaServiceMock.$queryRaw
-      .mockResolvedValueOnce([
-        clinicDay(ClinicDayStatus.NOT_STARTED, null),
-      ])
+      .mockResolvedValueOnce([clinicDay(ClinicDayStatus.NOT_STARTED, null)])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         readyStaff('staff-regular', 'secretary-regular'),
@@ -107,9 +164,7 @@ describe('SubstituteSecretaryService', () => {
       where: { id: 'clinic-day-1' },
       data: { operatingPracticeStaffId: 'staff-regular' },
     });
-    expect(
-      prismaServiceMock.clinicDayOperatingStaffAudit.create,
-    ).toHaveBeenCalledWith({
+    expect(prismaServiceMock.clinicDayOperatingStaffAudit.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         changeType: ClinicDayOperatingStaffChangeType.ASSIGNED,
         previousOperatingPracticeStaffId: null,
@@ -161,9 +216,7 @@ describe('SubstituteSecretaryService', () => {
       where: { id: 'clinic-day-1' },
       data: { operatingPracticeStaffId: 'staff-new' },
     });
-    expect(
-      prismaServiceMock.clinicDayOperatingStaffAudit.create,
-    ).toHaveBeenCalledWith({
+    expect(prismaServiceMock.clinicDayOperatingStaffAudit.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         changeType: ClinicDayOperatingStaffChangeType.REPLACED,
         previousOperatingPracticeStaffId: 'staff-old',
@@ -203,18 +256,13 @@ describe('SubstituteSecretaryService', () => {
         { clinicDayId: 'clinic-day-1' },
         'clear-operating-key',
       ),
-    ).resolves.toEqual({
-      cleared: true,
-      replayed: false,
-    });
+    ).resolves.toEqual({ cleared: true, replayed: false });
 
     expect(prismaServiceMock.clinicDay.update).toHaveBeenCalledWith({
       where: { id: 'clinic-day-1' },
       data: { operatingPracticeStaffId: null },
     });
-    expect(
-      prismaServiceMock.clinicDayOperatingStaffAudit.create,
-    ).toHaveBeenCalledWith({
+    expect(prismaServiceMock.clinicDayOperatingStaffAudit.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         changeType: ClinicDayOperatingStaffChangeType.CLEARED,
         previousOperatingPracticeStaffId: 'staff-operating',
@@ -252,9 +300,7 @@ describe('SubstituteSecretaryService', () => {
     });
 
     expect(prismaServiceMock.clinicDay.update).not.toHaveBeenCalled();
-    expect(
-      prismaServiceMock.clinicDayOperatingStaffAudit.create,
-    ).not.toHaveBeenCalled();
+    expect(prismaServiceMock.clinicDayOperatingStaffAudit.create).not.toHaveBeenCalled();
     expect(prismaServiceMock.commandIdempotency.create).not.toHaveBeenCalled();
   });
 });
