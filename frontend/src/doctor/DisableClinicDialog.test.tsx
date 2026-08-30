@@ -60,7 +60,8 @@ describe('DisableClinicDialog', () => {
         confirmDisable: true,
       },
     });
-    expect(options?.headers?.['Idempotency-Key']).toBeTruthy();
+    const headers = options?.headers as Record<string, string> | undefined;
+    expect(headers?.['Idempotency-Key']).toBeTruthy();
     await waitFor(() => expect(onDisabled).toHaveBeenCalledTimes(1));
   });
 });
