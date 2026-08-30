@@ -61,7 +61,11 @@ export class PracticeLocationController {
     @Query('serviceDate') serviceDate: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.practiceLocationOperationsService.getOverview(request.user.userId, practiceLocationId, serviceDate);
+    return this.practiceLocationOperationsService.getOverview(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
   }
 
   @UseGuards(SessionAuthGuard)
@@ -71,7 +75,53 @@ export class PracticeLocationController {
     @Query('serviceDate') serviceDate: string,
     @Request() request: AuthenticatedRequest,
   ) {
-    return this.practiceLocationOperationsService.getQueue(request.user.userId, practiceLocationId, serviceDate);
+    return this.practiceLocationOperationsService.getQueue(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/appointments')
+  operationsAppointments(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getAppointments(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/appointments/:appointmentId')
+  operationsAppointmentDetails(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Param('appointmentId') appointmentId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getAppointmentDetails(
+      request.user.userId,
+      practiceLocationId,
+      appointmentId,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/appointment-report')
+  operationsAppointmentReport(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getDailyAppointmentReport(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)

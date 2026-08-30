@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ScheduleModule } from '../schedule/schedule.module';
+import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
 import { PracticeLocationConfigurationApplyService } from './practice-location-configuration-apply.service';
 import { PracticeLocationConfigurationDraftService } from './practice-location-configuration-draft.service';
@@ -16,7 +17,7 @@ import { PracticeLocationController } from './practice-location.controller';
 import { PracticeLocationOperationsService } from './practice-location-operations.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, ScheduleModule],
+  imports: [PrismaModule, AuthModule, ScheduleModule, MobileNumberModule],
   providers: [
     PracticeLocationService,
     PracticeLocationActivationService,

@@ -8,6 +8,7 @@ import {
 import {
   AppointmentDetailsDrawer,
   AppointmentReportPreview,
+  type AppointmentDetailsModel,
 } from './AppointmentDetailsDrawer';
 import { ServiceDateControl, formatServiceDate } from './ServiceDateControl';
 import { OperationsIcon, type OperationsIconName } from './OperationsIcon';
@@ -939,12 +940,18 @@ function AppointmentsTab({
   onLocalAction,
   serviceDate,
   onServiceDateChange,
+  loadAppointmentDetails,
 }: {
   patients: Patient[];
   onLocalAction: (event: ClinicOperationsEvent) => void;
+  loadAppointmentDetails?: (
+    appointmentId: string | number,
+  ) => Promise<AppointmentDetailsModel>;
 } & ServiceDateProps) {
   const [selectedAppointment, setSelectedAppointment] =
-    useState<Patient | null>(null);
+    useState<AppointmentDetailsModel | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
   const [reportMode, setReportMode] = useState<'single' | 'daily' | null>(null);
   const [filter, setFilter] = useState('ALL');
   const filtered =
@@ -1029,7 +1036,24 @@ function AppointmentsTab({
               <button
                 type="button"
                 aria-label={`View ${p.name}`}
-                onClick={() => setSelectedAppointment(p)}
+                onClick={() => {
+                  if (!loadAppointmentDetails) {
+                    setSelectedAppointment(p);
+                    return;
+                  }
+                  setDetailsLoading(true);
+                  setDetailsError('');
+                  void loadAppointmentDetails(p.id)
+                    .then(setSelectedAppointment)
+                    .catch((error: unknown) =>
+                      setDetailsError(
+                        error instanceof Error
+                          ? error.message
+                          : 'Unable to load appointment details.',
+                      ),
+                    )
+                    .finally(() => setDetailsLoading(false));
+                }}
               >
                 <OperationsIcon name="eye" size={18} />
               </button>
@@ -1095,6 +1119,16 @@ function AppointmentsTab({
           </article>
         </aside>
       </div>
+      {detailsLoading ? (
+        <div className="ops-workspace-state" role="status">
+          Loading appointment details…
+        </div>
+      ) : null}
+      {detailsError ? (
+        <div className="ops-workspace-state is-error" role="alert">
+          {detailsError}
+        </div>
+      ) : null}
       {selectedAppointment ? (
         <AppointmentDetailsDrawer
           appointment={selectedAppointment}
@@ -1339,6 +1373,7 @@ export function ClinicOperationsWorkspace({
   queueError = '',
   onOverviewServiceDateChange,
   bookingConfiguration,
+  loadAppointmentDetails,
 }: {
   clinic: { name: string; address: string; timeZone: string };
   onBack: () => void;
@@ -1351,6 +1386,9 @@ export function ClinicOperationsWorkspace({
   queueError?: string;
   onOverviewServiceDateChange?: (serviceDate: string) => void;
   bookingConfiguration?: QueueDrawerBookingConfiguration | null;
+  loadAppointmentDetails?: (
+    appointmentId: string | number,
+  ) => Promise<AppointmentDetailsModel>;
 }) {
   const [tab, setTab] = useState<OperationsTab>('overview');
   const [serviceDate, setServiceDate] = useState('2026-08-25');
@@ -1579,6 +1617,7 @@ export function ClinicOperationsWorkspace({
           onLocalAction={handleEvent}
           serviceDate={serviceDate}
           onServiceDateChange={changeServiceDate}
+          loadAppointmentDetails={loadAppointmentDetails}
         />
       ) : null}
       {tab === 'staff' ? <StaffTab onLocalAction={handleEvent} /> : null}

@@ -14,6 +14,7 @@ import {
   type ClinicOperationsEvent,
 } from './ClinicOperationsWorkspace';
 import type { QueueDrawerBookingConfiguration } from './QueueActionDrawer';
+import type { AppointmentDetailsModel } from './AppointmentDetailsDrawer';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type ClinicStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
@@ -2559,6 +2560,65 @@ export function ClinicOperationsRoutePage() {
     setOperationsRevision((current) => current + 1);
   }
 
+  async function loadAppointmentDetails(
+    appointmentId: string | number,
+  ): Promise<AppointmentDetailsModel> {
+    if (!clinicId) throw new Error('Clinic identifier is missing.');
+    const details = await apiRequest<{
+      id: string;
+      bookingReference: string;
+      queueNumber: number;
+      status: string;
+      serviceDate: string;
+      estimatedServiceMinutes: number;
+      patientName: string;
+      mobileNumber: string | null;
+      source: 'ONLINE' | 'STAFF_ASSISTED';
+      createdAt: string;
+      calledAt: string | null;
+      completedAt: string | null;
+      cancelledAt: string | null;
+      services: Array<{ id: string; name: string; durationMinutes: number }>;
+      answers: Array<{
+        questionId: string;
+        question: string;
+        answer: string | null;
+      }>;
+      history: Array<{
+        id: string;
+        type: string;
+        occurredAt: string;
+        actorName: string;
+        actorRole: string;
+      }>;
+    }>(
+      `/practice-location/${encodeURIComponent(clinicId)}/operations/appointments/${encodeURIComponent(String(appointmentId))}`,
+    );
+    return {
+      id: details.id,
+      queue: `#${String(details.queueNumber).padStart(2, '0')}`,
+      name: details.patientName || 'Patient',
+      reference: details.bookingReference,
+      service:
+        details.services.map((service) => service.name).join(', ') || '—',
+      source: details.source === 'ONLINE' ? 'Online' : 'Staff-assisted',
+      status:
+        details.status === 'CALLED'
+          ? 'NOW SERVING'
+          : details.status.replaceAll('_', ' '),
+      mobileNumber: details.mobileNumber,
+      serviceDate: details.serviceDate,
+      estimatedServiceMinutes: details.estimatedServiceMinutes,
+      createdAt: details.createdAt,
+      calledAt: details.calledAt,
+      completedAt: details.completedAt,
+      cancelledAt: details.cancelledAt,
+      services: details.services,
+      answers: details.answers,
+      history: details.history,
+    };
+  }
+
   return (
     <ClinicOperationsWorkspace
       clinic={{
@@ -2576,6 +2636,7 @@ export function ClinicOperationsRoutePage() {
       onEvent={handleOperationsEvent}
       onOverviewServiceDateChange={setServiceDate}
       bookingConfiguration={bookingConfiguration}
+      loadAppointmentDetails={loadAppointmentDetails}
     />
   );
 }
