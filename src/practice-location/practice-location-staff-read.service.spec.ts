@@ -73,11 +73,7 @@ describe('PracticeLocationStaffReadService', () => {
       ],
     });
 
-    const result = await service.getStaff(
-      'doctor-1',
-      'clinic-1',
-      '2026-08-30',
-    );
+    const result = await service.getStaff('doctor-1', 'clinic-1', '2026-08-30');
 
     expect(result.regularSecretary?.practiceStaffId).toBe(regular.id);
     expect(result.operatingSecretary?.practiceStaffId).toBe(substitute.id);
@@ -107,11 +103,7 @@ describe('PracticeLocationStaffReadService', () => {
       clinicDays: [],
     });
 
-    const result = await service.getStaff(
-      'doctor-1',
-      'clinic-1',
-      '2026-08-30',
-    );
+    const result = await service.getStaff('doctor-1', 'clinic-1', '2026-08-30');
 
     expect(result.regularSecretary).toBeNull();
     expect(result.operatingSecretary).toBeNull();
