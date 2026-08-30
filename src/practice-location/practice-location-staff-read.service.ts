@@ -36,6 +36,7 @@ export class PracticeLocationStaffReadService {
                 email: true,
                 role: true,
                 accountStatus: true,
+                emailVerifiedAt: true,
               },
             },
           },
@@ -56,6 +57,7 @@ export class PracticeLocationStaffReadService {
                 email: true,
                 role: true,
                 accountStatus: true,
+                emailVerifiedAt: true,
               },
             },
           },
@@ -82,6 +84,7 @@ export class PracticeLocationStaffReadService {
                     email: true,
                     role: true,
                     accountStatus: true,
+                    emailVerifiedAt: true,
                   },
                 },
               },
@@ -133,6 +136,7 @@ export class PracticeLocationStaffReadService {
       email: string;
       role: string;
       accountStatus: string;
+      emailVerifiedAt: Date | null;
     };
   }) {
     return {
@@ -144,6 +148,12 @@ export class PracticeLocationStaffReadService {
       assignmentActive: staff.isActive,
       userRole: staff.user.role,
       accountStatus: staff.user.accountStatus,
+      operationallyReady:
+        staff.isActive &&
+        staff.staffRole === 'SECRETARY' &&
+        staff.user.role === 'SECRETARY' &&
+        staff.user.accountStatus === 'ACTIVE' &&
+        staff.user.emailVerifiedAt !== null,
       assignedAt: staff.createdAt,
       updatedAt: staff.updatedAt,
     };
