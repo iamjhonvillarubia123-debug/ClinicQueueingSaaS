@@ -255,7 +255,7 @@ export function ClinicStaffView({
             disabled={actionPending || !onOperatingSecretaryAction}
             onClick={() =>
               data.clinicDay &&
-              void onOperatingSecretaryAction({
+              void onOperatingSecretaryAction?.({
                 type: 'CLEAR',
                 clinicDayId: data.clinicDay.id,
               })
