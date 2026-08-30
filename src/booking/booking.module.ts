@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { FinancialModule } from '../financial/financial.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
@@ -36,6 +37,7 @@ import { PublicBookingReplacementService } from './public-booking-replacement.se
 
 @Module({
   imports: [
+    AuthModule,
     MobileNumberModule,
     OtpModule,
     ScheduleModule,
