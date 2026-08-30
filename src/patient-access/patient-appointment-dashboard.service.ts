@@ -8,6 +8,7 @@ import {
   AppointmentStatus,
   BookingAccessTokenPurpose,
   ClinicDayStatus,
+  ClinicDayOperationalNoticeKind,
   PracticeLocationLifecycleStatus,
   Prisma,
   UserAccountStatus,
@@ -67,6 +68,14 @@ export class PatientAppointmentDashboardService {
     nowServingQueueNumber: number | null;
     patientsAhead: number | null;
     canUseImHere: boolean;
+    activeOperationalNotice: {
+      id: string;
+      kind: ClinicDayOperationalNoticeKind;
+      reason: string;
+      message: string | null;
+      startsAt: Date;
+      expectedResumeAt: Date;
+    } | null;
   }> {
     return this.prisma.$transaction(async (transaction) => {
       const access = await this.patientAccess.validateReadToken(
@@ -80,10 +89,27 @@ export class PatientAppointmentDashboardService {
       );
       this.assertOnlineServiceAvailable(appointment);
 
-      const [nowServingQueueNumber, patientsAhead] = await Promise.all([
-        this.readNowServingQueueNumber(transaction, appointment),
-        this.readPatientsAhead(transaction, appointment),
-      ]);
+      const [nowServingQueueNumber, patientsAhead, activeOperationalNotice] =
+        await Promise.all([
+          this.readNowServingQueueNumber(transaction, appointment),
+          this.readPatientsAhead(transaction, appointment),
+          transaction.clinicDayOperationalNotice.findFirst({
+            where: {
+              practiceLocationId: appointment.practiceLocationId,
+              serviceDate: appointment.serviceDate,
+              status: 'ACTIVE',
+            },
+            select: {
+              id: true,
+              kind: true,
+              reason: true,
+              message: true,
+              startsAt: true,
+              expectedResumeAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          }),
+        ]);
 
       return {
         bookingReference: appointment.bookingReference,
@@ -105,6 +131,7 @@ export class PatientAppointmentDashboardService {
         nowServingQueueNumber,
         patientsAhead,
         canUseImHere: this.canUseImHere(appointment, access.purpose),
+        activeOperationalNotice,
       };
     });
   }

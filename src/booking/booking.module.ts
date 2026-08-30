@@ -15,6 +15,8 @@ import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
 import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingController } from './booking.controller';
+import { StaffAppointmentController } from './staff-appointment.controller';
+import { StaffAppointmentService } from './staff-appointment.service';
 import { BookingDraftCleanupService } from './booking-draft-cleanup.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
@@ -46,12 +48,14 @@ import { PublicBookingReplacementService } from './public-booking-replacement.se
   ],
   controllers: [
     BookingController,
+    StaffAppointmentController,
     PublicBookingDuplicateUseExistingController,
     BookingGroupAddPersonController,
     BookingGroupMemberCancellationController,
   ],
   providers: [
     BookingService,
+    StaffAppointmentService,
     BookingConfigurationService,
     PublicBookingEntryService,
     BookingAnswerValidationService,

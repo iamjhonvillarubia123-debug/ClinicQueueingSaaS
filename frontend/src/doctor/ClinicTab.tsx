@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
+import { ActivateClinicDialog } from './ActivateClinicDialog';
+import { ApplyClinicChangesDialog } from './ApplyClinicChangesDialog';
+import { DisableClinicDialog } from './DisableClinicDialog';
+import { PermanentlyDeleteClinicDialog } from './PermanentlyDeleteClinicDialog';
+import { QuestionManagementEditor } from './QuestionManagementEditor';
+import { ServiceManagementEditor } from './ServiceManagementEditor';
+import {
+  ClinicOperationsWorkspace,
+  type ClinicOperationsOverview,
+  type ClinicOperationsQueue,
+  type ClinicOperationsEvent,
+} from './ClinicOperationsWorkspace';
+import type { QueueDrawerBookingConfiguration } from './QueueActionDrawer';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 type ClinicStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
@@ -30,11 +44,52 @@ export type DayHours = {
   closes: string;
   maximumUntil: string;
 };
+
+type ServiceRow = {
+  id: string | number;
+  effectiveServiceId?: string;
+  sourceDoctorServiceTemplateId?: string;
+  name: string;
+  description: string;
+  minutes: number;
+  active: boolean;
+};
+
+type QuestionOption = {
+  value: string;
+  label: string;
+};
+
+type QuestionRow = {
+  id: string | number;
+  effectiveBookingQuestionId?: string;
+  sourceDoctorBookingQuestionTemplateId?: string;
+  order: number;
+  question: string;
+  type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
+  required: boolean;
+  active: boolean;
+  options?: QuestionOption[];
+};
+
+type ClinicEditorState = {
+  draft: ClinicDraft;
+  hours: DayHours[];
+  cutoffLeadHours: number;
+  services: ServiceRow[];
+  questions: QuestionRow[];
+};
+
+type SavedClinicDraftState = {
+  id: string;
+  services: ServiceRow[];
+  questions: QuestionRow[];
+};
+
 type ClinicRecord = ClinicDraft & {
   id: string;
   status: ClinicStatus;
-  hours: DayHours[];
-  cutoffLeadHours: number;
+  editor: ClinicEditorState;
 };
 
 type PracticeScheduleResponse = {
@@ -46,31 +101,61 @@ type PracticeScheduleResponse = {
   maximumOperatingUntilLocal: string | null;
 };
 
+type PracticeServiceResponse = {
+  id: string;
+  sourceDoctorServiceTemplateId?: string | null;
+  effectiveServiceId?: string | null;
+  name: string;
+  description?: string | null;
+  durationMinutes: number;
+  status: 'ACTIVE' | 'INACTIVE';
+};
+
+type BookingQuestionResponse = {
+  id: string;
+  effectiveBookingQuestionId?: string | null;
+  sourceDoctorBookingQuestionTemplateId?: string | null;
+  questionText: string;
+  type: QuestionRow['type'];
+  isRequired: boolean;
+  displayOrder: number;
+  isActive: boolean;
+  selectOptions?: unknown;
+};
+
+type DoctorConfigurationDraftResponse = {
+  name: string | null;
+  shortCode: string | null;
+  addressLine1: string | null;
+  addressLine2?: string | null;
+  cityMunicipality?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  contactNumber: string | null;
+  clinicEmail: string | null;
+  clinicDescription: string | null;
+  countryCode: string | null;
+  timeZone: string | null;
+  schedules: PracticeScheduleResponse[];
+  services: PracticeServiceResponse[];
+  bookingQuestions: BookingQuestionResponse[];
+};
+
 type PracticeLocationResponse = {
   id: string;
   lifecycleStatus: ClinicStatus | 'PERMANENTLY_DELETED';
   name: string | null;
+  shortCode?: string | null;
   addressLine1: string | null;
   contactNumber: string | null;
+  clinicEmail?: string | null;
+  clinicDescription?: string | null;
   countryCode: string | null;
   timeZone: string | null;
+  services?: PracticeServiceResponse[];
+  bookingQuestions?: BookingQuestionResponse[];
   practiceSchedules?: PracticeScheduleResponse[];
-  doctorScheduleDraft?: { schedules: PracticeScheduleResponse[] } | null;
-};
-
-type ServiceRow = {
-  id: number;
-  name: string;
-  description: string;
-  minutes: number;
-  active: boolean;
-};
-type QuestionRow = {
-  id: number;
-  order: number;
-  question: string;
-  type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
-  required: boolean;
+  doctorScheduleDraft?: DoctorConfigurationDraftResponse | null;
 };
 
 const initialDraft: ClinicDraft = {
@@ -100,39 +185,35 @@ const initialHours: DayHours[] = [
   maximumUntil: index < 5 ? '06:00 PM' : '02:00 PM',
 }));
 
-const initialServices: ServiceRow[] = [
-  {
-    id: 1,
-    name: 'General Consultation',
-    description: 'Regular check-up and consultation',
-    minutes: 30,
-    active: true,
-  },
-  {
-    id: 2,
-    name: 'Follow-up Consultation',
-    description: 'Follow-up check-up for existing patients',
-    minutes: 20,
-    active: true,
-  },
-];
+const initialServices: ServiceRow[] = [];
+const initialQuestions: QuestionRow[] = [];
 
-const initialQuestions: QuestionRow[] = [
-  {
-    id: 1,
-    order: 1,
-    question: 'What is the reason for your visit?',
-    type: 'SINGLE_SELECT',
-    required: true,
-  },
-  {
-    id: 2,
-    order: 2,
-    question: 'Have you had this condition before?',
-    type: 'BOOLEAN',
-    required: true,
-  },
-];
+function readClinicEditNavigation(): { clinicId: string | null; step: Step } {
+  const params = new URLSearchParams(window.location.search);
+  const clinicId = params.get('clinic');
+  const candidateStep = Number(params.get('step'));
+  const step =
+    Number.isInteger(candidateStep) && candidateStep >= 1 && candidateStep <= 5
+      ? (candidateStep as Step)
+      : 1;
+  return { clinicId, step };
+}
+
+function writeClinicEditNavigation(clinicId: string | null, step: Step = 1) {
+  const url = new URL(window.location.href);
+  if (clinicId) {
+    url.searchParams.set('clinic', clinicId);
+    url.searchParams.set('step', String(step));
+  } else {
+    url.searchParams.delete('clinic');
+    url.searchParams.delete('step');
+  }
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+}
 
 function clockMatch(value: string) {
   return value
@@ -242,38 +323,140 @@ function cutoffLeadHoursFromSchedules(
   return Math.max(0, Math.min(12, Math.round((closing - cutoff) / 60)));
 }
 
+function countryName(countryCode: string | null | undefined) {
+  return countryCode === 'PH' || !countryCode ? 'Philippines' : countryCode;
+}
+
+function basicInfoFromLocation(
+  location: PracticeLocationResponse,
+): ClinicDraft {
+  return {
+    name: location.name ?? '',
+    shortCode: location.shortCode ?? '',
+    address: location.addressLine1 ?? '',
+    country: countryName(location.countryCode),
+    timeZone: location.timeZone ?? 'Asia/Manila',
+    contactNumber: location.contactNumber ?? '',
+    email: location.clinicEmail ?? '',
+    description: location.clinicDescription ?? '',
+  };
+}
+
+function basicInfoFromDoctorDraft(
+  draft: DoctorConfigurationDraftResponse,
+): ClinicDraft {
+  return {
+    name: draft.name ?? '',
+    shortCode: draft.shortCode ?? '',
+    address: draft.addressLine1 ?? '',
+    country: countryName(draft.countryCode),
+    timeZone: draft.timeZone ?? 'Asia/Manila',
+    contactNumber: draft.contactNumber ?? '',
+    email: draft.clinicEmail ?? '',
+    description: draft.clinicDescription ?? '',
+  };
+}
+
+function servicesFromResponse(
+  services: PracticeServiceResponse[] | undefined,
+  fromDraft: boolean,
+): ServiceRow[] {
+  return (services ?? []).map((service) => ({
+    id: service.id,
+    effectiveServiceId: fromDraft
+      ? (service.effectiveServiceId ?? undefined)
+      : service.id,
+    sourceDoctorServiceTemplateId:
+      service.sourceDoctorServiceTemplateId ?? undefined,
+    name: service.name,
+    description: service.description ?? '',
+    minutes: service.durationMinutes,
+    active: service.status === 'ACTIVE',
+  }));
+}
+
+function selectOptionsFromResponse(value: unknown): QuestionOption[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((option) => {
+    if (!option || typeof option !== 'object') return [];
+    const candidate = option as { value?: unknown; label?: unknown };
+    if (
+      typeof candidate.value !== 'string' ||
+      typeof candidate.label !== 'string'
+    ) {
+      return [];
+    }
+    return [{ value: candidate.value, label: candidate.label }];
+  });
+}
+
+function questionsFromResponse(
+  questions: BookingQuestionResponse[] | undefined,
+  fromDraft: boolean,
+): QuestionRow[] {
+  return (questions ?? []).map((question) => ({
+    id: question.id,
+    effectiveBookingQuestionId: fromDraft
+      ? (question.effectiveBookingQuestionId ?? undefined)
+      : question.id,
+    sourceDoctorBookingQuestionTemplateId:
+      question.sourceDoctorBookingQuestionTemplateId ?? undefined,
+    order: question.displayOrder,
+    question: question.questionText,
+    type: question.type,
+    required: question.isRequired,
+    active: question.isActive,
+    options:
+      question.type === 'SINGLE_SELECT'
+        ? selectOptionsFromResponse(question.selectOptions)
+        : [],
+  }));
+}
+
 function toClinicRecord(
   location: PracticeLocationResponse,
 ): ClinicRecord | null {
   if (location.lifecycleStatus === 'PERMANENTLY_DELETED') return null;
-  const editableSchedules = location.doctorScheduleDraft?.schedules?.length
-    ? location.doctorScheduleDraft.schedules
+
+  const effectiveDraft = basicInfoFromLocation(location);
+  const doctorDraft = location.doctorScheduleDraft ?? null;
+  const hasWholeDoctorDraft = Boolean(doctorDraft?.timeZone);
+  const editorSchedules = doctorDraft?.schedules?.length
+    ? doctorDraft.schedules
     : location.practiceSchedules;
+  const editorDraft =
+    hasWholeDoctorDraft && doctorDraft
+      ? basicInfoFromDoctorDraft(doctorDraft)
+      : effectiveDraft;
+  const editorServices =
+    hasWholeDoctorDraft && doctorDraft
+      ? servicesFromResponse(doctorDraft.services, true)
+      : servicesFromResponse(location.services, false);
+  const editorQuestions =
+    hasWholeDoctorDraft && doctorDraft
+      ? questionsFromResponse(doctorDraft.bookingQuestions, true)
+      : questionsFromResponse(location.bookingQuestions, false);
+
   return {
     id: location.id,
-    name: location.name ?? '',
-    shortCode: '',
-    address: location.addressLine1 ?? '',
-    country:
-      location.countryCode === 'PH' || !location.countryCode
-        ? 'Philippines'
-        : location.countryCode,
-    timeZone: location.timeZone ?? 'Asia/Manila',
-    contactNumber: location.contactNumber ?? '',
-    email: '',
-    description: '',
+    ...effectiveDraft,
     status: location.lifecycleStatus,
-    hours: hoursFromSchedules(editableSchedules),
-    cutoffLeadHours: cutoffLeadHoursFromSchedules(editableSchedules),
+    editor: {
+      draft: editorDraft,
+      hours: hoursFromSchedules(editorSchedules),
+      cutoffLeadHours: cutoffLeadHoursFromSchedules(editorSchedules),
+      services: editorServices,
+      questions: editorQuestions,
+    },
   };
 }
 
 function Stepper({ step }: { step: Step }) {
   const labels = [
-    'Basic Info',
+    'Basic Informations',
     'Clinic Hours',
-    'Services',
-    'Questions',
+    'Clinic Services',
+    'Clinic Questions',
     'Review',
   ];
   return (
@@ -795,102 +978,8 @@ function ServicesEditor({
   services: ServiceRow[];
   setServices: (value: ServiceRow[]) => void;
 }) {
-  function addService() {
-    setServices([
-      ...services,
-      {
-        id: Date.now(),
-        name: 'New Service',
-        description: 'Clinic-specific service',
-        minutes: 30,
-        active: true,
-      },
-    ]);
-  }
-
-  function updateService(id: number, patch: Partial<ServiceRow>) {
-    setServices(
-      services.map((service) =>
-        service.id === id ? { ...service, ...patch } : service,
-      ),
-    );
-  }
-
   return (
-    <>
-      <div className="clinic-section-toolbar">
-        <p>Add or manage the services offered in this clinic.</p>
-        <div>
-          <button className="clinic-secondary" type="button">
-            Apply Doctor Defaults
-          </button>
-          <button className="clinic-primary" type="button" onClick={addService}>
-            + Add Service
-          </button>
-        </div>
-      </div>
-      <div className="clinic-card-list">
-        {services.map((service) => (
-          <div className="clinic-list-row" key={service.id}>
-            <div className="clinic-service-copy">
-              <input
-                className="clinic-service-name-input"
-                aria-label={`Service name for ${service.name}`}
-                value={service.name}
-                onChange={(event) =>
-                  updateService(service.id, { name: event.target.value })
-                }
-                placeholder="Service name"
-              />
-              <input
-                className="clinic-service-description-input"
-                aria-label={`Service description for ${service.name}`}
-                value={service.description}
-                onChange={(event) =>
-                  updateService(service.id, { description: event.target.value })
-                }
-                placeholder="Short service description"
-              />
-            </div>
-            <label className="clinic-inline-field">
-              <span>Duration</span>
-              <input
-                type="number"
-                min={1}
-                max={1440}
-                value={service.minutes}
-                onChange={(event) =>
-                  updateService(service.id, {
-                    minutes: Number(event.target.value),
-                  })
-                }
-              />{' '}
-              min
-            </label>
-            <button
-              className={`clinic-status-pill${service.active ? ' is-active' : ''}`}
-              type="button"
-              onClick={() =>
-                updateService(service.id, { active: !service.active })
-              }
-            >
-              {service.active ? 'Active' : 'Inactive'}
-            </button>
-            <button
-              className="clinic-kebab"
-              type="button"
-              aria-label={`Actions for ${service.name}`}
-            >
-              ⋮
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="clinic-info-strip">
-        ⓘ Service duration must be greater than 0 minutes and up to 24 hours
-        (1,440 minutes).
-      </div>
-    </>
+    <ServiceManagementEditor services={services} setServices={setServices} />
   );
 }
 
@@ -901,99 +990,19 @@ function QuestionsEditor({
   questions: QuestionRow[];
   setQuestions: (value: QuestionRow[]) => void;
 }) {
-  function addQuestion() {
-    if (questions.length >= 5) return;
-    setQuestions([
-      ...questions,
-      {
-        id: Date.now(),
-        order: questions.length + 1,
-        question: 'New booking question',
-        type: 'TEXT',
-        required: false,
-      },
-    ]);
-  }
   return (
-    <>
-      <div className="clinic-section-toolbar">
-        <p>
-          Add questions to ask patients during booking. Maximum 5 active
-          questions.
-        </p>
-        <button
-          className="clinic-secondary"
-          disabled={questions.length >= 5}
-          type="button"
-          onClick={addQuestion}
-        >
-          + Add Question
-        </button>
-      </div>
-      <div className="clinic-question-list">
-        {questions.map((question) => (
-          <div className="clinic-question-row" key={question.id}>
-            <span className="clinic-order">{question.order}</span>
-            <input
-              className="clinic-question-input"
-              value={question.question}
-              onChange={(e) =>
-                setQuestions(
-                  questions.map((row) =>
-                    row.id === question.id
-                      ? { ...row, question: e.target.value }
-                      : row,
-                  ),
-                )
-              }
-            />
-            <select
-              value={question.type}
-              onChange={(e) =>
-                setQuestions(
-                  questions.map((row) =>
-                    row.id === question.id
-                      ? { ...row, type: e.target.value as QuestionRow['type'] }
-                      : row,
-                  ),
-                )
-              }
-            >
-              <option value="TEXT">Text</option>
-              <option value="NUMBER">Number</option>
-              <option value="BOOLEAN">Yes / No</option>
-              <option value="SINGLE_SELECT">Single Choice</option>
-            </select>
-            <label className="clinic-check">
-              <input
-                type="checkbox"
-                checked={question.required}
-                onChange={(e) =>
-                  setQuestions(
-                    questions.map((row) =>
-                      row.id === question.id
-                        ? { ...row, required: e.target.checked }
-                        : row,
-                  ),
-                )
-              />{' '}
-              Required
-            </label>
-            <button
-              className="clinic-kebab"
-              type="button"
-              aria-label={`Actions for question ${question.order}`}
-            >
-              ⋮
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="clinic-info-strip">
-        ⓘ Supported question types: Text, Number, Yes / No, and Single Choice.
-      </div>
-    </>
+    <QuestionManagementEditor
+      questions={questions}
+      setQuestions={setQuestions}
+    />
   );
+}
+
+function reviewQuestionType(type: QuestionRow['type']) {
+  if (type === 'NUMBER') return 'Number';
+  if (type === 'BOOLEAN') return 'Yes / No';
+  if (type === 'SINGLE_SELECT') return 'Single Choice';
+  return 'Text';
 }
 
 function Review({
@@ -1002,80 +1011,286 @@ function Review({
   services,
   questions,
   cutoffLeadHours,
+  onEdit,
 }: {
   draft: ClinicDraft;
   hours: DayHours[];
   services: ServiceRow[];
   questions: QuestionRow[];
   cutoffLeadHours: number;
+  onEdit: (step: Step) => void;
 }) {
+  const openHours = hours.filter((row) => row.open);
+  const clinicHoursReady =
+    openHours.length > 0 &&
+    openHours.every(
+      (row) =>
+        isValidClock(row.opens) &&
+        isValidClock(row.closes) &&
+        isValidClock(row.maximumUntil) &&
+        parseClock(row.closes) > parseClock(row.opens) &&
+        parseClock(row.maximumUntil) >= parseClock(row.closes),
+    );
+  const servicesConfigured = services.length > 0;
+  const questionsConfigured = questions.length > 0;
+  const publicInformationConfigured = Boolean(
+    draft.contactNumber.trim() ||
+    draft.email.trim() ||
+    draft.description.trim(),
+  );
+  const activeServices = services.filter((service) => service.active).length;
+  const activeQuestions = questions.filter(
+    (question) => question.active,
+  ).length;
+
+  function readinessMark(complete: boolean) {
+    return (
+      <span
+        className={
+          complete
+            ? 'clinic-readiness-check is-complete'
+            : 'clinic-readiness-check'
+        }
+      >
+        {complete ? '✓' : '○'}
+      </span>
+    );
+  }
+
+  function reviewHeader(title: string, step: Step) {
+    return (
+      <div className="clinic-review-card-heading">
+        <h3>{title}</h3>
+        <button
+          className="clinic-review-edit"
+          type="button"
+          onClick={() => onEdit(step)}
+        >
+          Edit
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="clinic-review-layout">
+      <section
+        className="clinic-readiness-card"
+        aria-label="Activation readiness"
+      >
+        <div className="clinic-readiness-heading">
+          <div>
+            <h3>Activation Readiness</h3>
+            <p>
+              Clinic Hours are required for activation. Other items are optional
+              configuration.
+            </p>
+          </div>
+          <span
+            className={`clinic-ready-icon${clinicHoursReady ? ' is-ready' : ''}`}
+          >
+            {clinicHoursReady ? '✓' : '○'}
+          </span>
+        </div>
+        <div className="clinic-readiness-grid">
+          <div className="clinic-readiness-item">
+            {readinessMark(clinicHoursReady)}
+            <div>
+              <strong>Clinic Hours</strong>
+              <small>{clinicHoursReady ? 'Configured' : 'Required'}</small>
+            </div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(servicesConfigured)}
+            <div>
+              <strong>Services</strong>
+              <small>{servicesConfigured ? 'Configured' : 'Optional'}</small>
+            </div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(questionsConfigured)}
+            <div>
+              <strong>Booking Questions</strong>
+              <small>{questionsConfigured ? 'Configured' : 'Optional'}</small>
+            </div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(false)}
+            <div>
+              <strong>Secretaries</strong>
+              <small>Optional · not connected here</small>
+            </div>
+          </div>
+          <div className="clinic-readiness-item">
+            {readinessMark(publicInformationConfigured)}
+            <div>
+              <strong>Public Information</strong>
+              <small>
+                {publicInformationConfigured ? 'Configured' : 'Optional'}
+              </small>
+            </div>
+          </div>
+        </div>
+        <div
+          className={`clinic-readiness-summary${clinicHoursReady ? ' is-ready' : ''}`}
+        >
+          <strong>
+            {clinicHoursReady
+              ? 'Ready for activation'
+              : 'Clinic Hours still required'}
+          </strong>
+          <span>
+            {clinicHoursReady
+              ? 'Optional configuration can be completed now or later.'
+              : 'Add at least one valid clinic-hours schedule before activation.'}
+          </span>
+        </div>
+      </section>
+
       <div className="clinic-review-stack">
         <div className="clinic-review-card">
-          <h3>Basic Information</h3>
-          <dl>
+          {reviewHeader('Basic Information', 1)}
+          <dl className="clinic-review-basic-grid">
             <dt>Clinic Name</dt>
             <dd>{draft.name || 'Not entered'}</dd>
+            <dt>Short Code</dt>
+            <dd>{draft.shortCode || 'Not entered'}</dd>
             <dt>Address</dt>
             <dd>{draft.address || 'Not entered'}</dd>
             <dt>Country</dt>
             <dd>{draft.country}</dd>
             <dt>Timezone</dt>
             <dd>{draft.timeZone}</dd>
-            <dt>Contact Number</dt>
-            <dd>{draft.contactNumber || 'Optional'}</dd>
           </dl>
         </div>
+
         <div className="clinic-review-card">
-          <h3>Clinic Hours</h3>
-          {hours
-            .filter((row) => row.open)
-            .map((row) => (
-              <p key={row.day}>
-                <strong>{row.day}</strong> {row.opens} – {row.closes} · Online
-                cutoff {onlineCutoffFor(row, cutoffLeadHours)} · Max until{' '}
-                {row.maximumUntil}
+          {reviewHeader('Clinic Hours', 2)}
+          {openHours.length ? (
+            <div
+              className="clinic-review-hours"
+              role="table"
+              aria-label="Clinic hours summary"
+            >
+              <div className="clinic-review-hours-head" role="row">
+                <span>Day</span>
+                <span>Clinic Hours</span>
+                <span>Online Cutoff</span>
+                <span>Maximum Until</span>
+              </div>
+              {openHours.map((row) => (
+                <div
+                  className="clinic-review-hours-row"
+                  role="row"
+                  key={row.day}
+                >
+                  <strong>{row.day}</strong>
+                  <span>
+                    {row.opens} – {row.closes}
+                  </span>
+                  <span>{onlineCutoffFor(row, cutoffLeadHours)}</span>
+                  <span>{row.maximumUntil}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>No clinic hours configured.</p>
+          )}
+        </div>
+
+        <div className="clinic-review-card">
+          {reviewHeader(`Services (${services.length})`, 3)}
+          {services.length ? (
+            <div className="clinic-review-detail-list">
+              <div className="clinic-review-service-head">
+                <span>Service</span>
+                <span>Duration</span>
+                <span>Status</span>
+              </div>
+              {services.map((service) => (
+                <div className="clinic-review-detail-row" key={service.id}>
+                  <div>
+                    <strong>{service.name}</strong>
+                    {service.description ? (
+                      <small>{service.description}</small>
+                    ) : null}
+                  </div>
+                  <span>{service.minutes} min</span>
+                  <span
+                    className={`clinic-review-state${service.active ? ' is-active' : ''}`}
+                  >
+                    {service.active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              ))}
+              <p className="clinic-review-count-note">
+                {activeServices} active · {services.length - activeServices}{' '}
+                inactive
               </p>
-            ))}
+            </div>
+          ) : (
+            <p>No services configured.</p>
+          )}
         </div>
+
         <div className="clinic-review-card">
-          <h3>Services ({services.length})</h3>
-          <p>
-            {services.map((service) => service.name).join(' · ') ||
-              'No services configured'}
-          </p>
+          {reviewHeader(`Booking Questions (${questions.length})`, 4)}
+          {questions.length ? (
+            <div className="clinic-review-detail-list">
+              <div className="clinic-review-question-head">
+                <span>Question</span>
+                <span>Type</span>
+                <span>Required</span>
+                <span>Status</span>
+              </div>
+              {[...questions]
+                .sort((a, b) => a.order - b.order)
+                .map((question) => (
+                  <div className="clinic-review-question-row" key={question.id}>
+                    <div>
+                      <strong>{question.question}</strong>
+                      {question.type === 'SINGLE_SELECT' &&
+                      question.options?.length ? (
+                        <small>
+                          Options:{' '}
+                          {question.options
+                            .map((option) => option.label)
+                            .join(', ')}
+                        </small>
+                      ) : null}
+                    </div>
+                    <span>{reviewQuestionType(question.type)}</span>
+                    <span>{question.required ? 'Required' : 'Optional'}</span>
+                    <span
+                      className={`clinic-review-state${question.active ? ' is-active' : ''}`}
+                    >
+                      {question.active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                ))}
+              <p className="clinic-review-count-note">
+                {activeQuestions} active ·{' '}
+                {questions.filter((question) => question.required).length}{' '}
+                required
+              </p>
+            </div>
+          ) : (
+            <p>No booking questions configured.</p>
+          )}
         </div>
+
         <div className="clinic-review-card">
-          <h3>Booking Questions ({questions.length})</h3>
-          <p>
-            {questions.filter((question) => question.required).length} required,{' '}
-            {questions.filter((question) => !question.required).length} optional
-          </p>
+          {reviewHeader('Public Information', 1)}
+          <dl className="clinic-review-public-grid">
+            <dt>Contact Number</dt>
+            <dd>{draft.contactNumber || 'Not entered'}</dd>
+            <dt>Email</dt>
+            <dd>{draft.email || 'Not entered'}</dd>
+            <dt>Description</dt>
+            <dd>{draft.description || 'Not entered'}</dd>
+          </dl>
         </div>
       </div>
-      <aside className="clinic-readiness-card">
-        <span className="clinic-ready-icon">✓</span>
-        <h3>Activation Readiness</h3>
-        <p>Your clinic can be activated once required items are complete.</p>
-        <h4>Required for Activation</h4>
-        <p className="clinic-ready-line">
-          Clinic Hours <span>✓</span>
-        </p>
-        <h4>Optional Configuration</h4>
-        <p className="clinic-ready-line">
-          Services <span>○</span>
-        </p>
-        <p className="clinic-ready-line">
-          Booking Questions <span>○</span>
-        </p>
-        <p className="clinic-ready-line">
-          Secretaries <span>○</span>
-        </p>
-        <p className="clinic-ready-line">
-          Public Information <span>○</span>
-        </p>
-      </aside>
     </div>
   );
 }
@@ -1083,35 +1298,61 @@ function Review({
 function ClinicWizard({
   onExit,
   onSaved,
+  onApplied,
   initialValue,
   initialSchedule,
   initialCutoffLeadHours,
+  initialServices: initialServiceRows,
+  initialQuestions: initialQuestionRows,
+  initialStatus = 'DRAFT',
+  initialStep = 1,
+  onStepChange,
   editing,
   editingClinicId,
 }: {
   onExit: () => void;
   onSaved: (
+    clinicId: string | undefined,
     clinic: ClinicDraft,
-    status: ClinicStatus,
     hours: DayHours[],
     cutoffLeadHours: number,
-  ) => Promise<void>;
+    services: ServiceRow[],
+    questions: QuestionRow[],
+  ) => Promise<SavedClinicDraftState>;
+  onApplied: () => Promise<void> | void;
   initialValue?: ClinicDraft;
   initialSchedule?: DayHours[];
   initialCutoffLeadHours?: number;
+  initialServices?: ServiceRow[];
+  initialQuestions?: QuestionRow[];
+  initialStatus?: ClinicStatus;
+  initialStep?: Step;
+  onStepChange?: (step: Step) => void;
   editing?: boolean;
   editingClinicId?: string;
 }) {
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStepState] = useState<Step>(initialStep);
+  function setStep(nextStep: Step) {
+    setStepState(nextStep);
+    onStepChange?.(nextStep);
+  }
+  const [returnToReview, setReturnToReview] = useState(false);
+  const [practiceLocationId, setPracticeLocationId] = useState(editingClinicId);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
   const [hours, setHours] = useState(initialSchedule ?? initialHours);
   const [cutoffLeadHours, setCutoffLeadHours] = useState(
     initialCutoffLeadHours ?? 2,
   );
-  const [services, setServices] = useState(initialServices);
-  const [questions, setQuestions] = useState(initialQuestions);
+  const [services, setServices] = useState(
+    initialServiceRows ?? initialServices,
+  );
+  const [questions, setQuestions] = useState(
+    initialQuestionRows ?? initialQuestions,
+  );
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showActivateDialog, setShowActivateDialog] = useState(false);
+  const [showApplyDialog, setShowApplyDialog] = useState(false);
   const title =
     step === 1
       ? editing
@@ -1120,25 +1361,75 @@ function ClinicWizard({
       : step === 2
         ? 'Clinic Hours (Required)'
         : step === 3
-          ? 'Services'
+          ? 'Clinic Services'
           : step === 4
-            ? 'Booking Questions'
+            ? 'Clinic Questions'
             : 'Review Your Clinic';
-  const canContinue =
-    step !== 1 ||
-    Boolean(
-      draft.name.trim() &&
-      draft.address.trim() &&
-      draft.country &&
-      draft.timeZone,
-    );
 
-  async function saveDraft() {
+  function requiredFieldError() {
+    const missing = [
+      !draft.name.trim() ? 'Clinic Name' : '',
+      !draft.address.trim() ? 'Address' : '',
+      !draft.country ? 'Country' : '',
+      !draft.timeZone ? 'Timezone' : '',
+    ].filter(Boolean);
+    return missing.length
+      ? `Complete the required fields before continuing: ${missing.join(', ')}.`
+      : '';
+  }
+
+  function scheduleInputError() {
+    const invalidFormatRow = hours.find(
+      (row) =>
+        row.open &&
+        (!isValidClock(row.opens) ||
+          !isValidClock(row.closes) ||
+          !isValidClock(row.maximumUntil)),
+    );
+    if (invalidFormatRow) {
+      return `${invalidFormatRow.day} contains an invalid time. Use a time such as 08:07 AM.`;
+    }
+    const invalidRow = hours.find(
+      (row) => row.open && parseClock(row.closes) <= parseClock(row.opens),
+    );
+    if (invalidRow) {
+      return `${invalidRow.day} closing time must be later than its opening time.`;
+    }
+    const invalidMaximumRow = hours.find(
+      (row) =>
+        row.open && parseClock(row.maximumUntil) < parseClock(row.closes),
+    );
+    if (invalidMaximumRow) {
+      return `${invalidMaximumRow.day} maximum operating time cannot be earlier than its closing time.`;
+    }
+    if (!hours.some((row) => row.open)) {
+      return 'Select at least one open clinic day before continuing.';
+    }
+    return '';
+  }
+
+  async function persistDraft() {
+    const saved = await onSaved(
+      practiceLocationId,
+      draft,
+      hours,
+      cutoffLeadHours,
+      services,
+      questions,
+    );
+    setPracticeLocationId(saved.id);
+    setServices(saved.services);
+    setQuestions(saved.questions);
+    return saved.id;
+  }
+
+  async function saveDraftAndExit() {
     if (saving) return;
     setSaveError('');
     setSaving(true);
     try {
-      await onSaved(draft, 'DRAFT', hours, cutoffLeadHours);
+      await persistDraft();
+      onExit();
     } catch (error) {
       setSaveError(
         error instanceof Error
@@ -1150,106 +1441,121 @@ function ClinicWizard({
     }
   }
 
-  function next() {
-    setSaveError('');
-    if (!canContinue) {
-      const missing = [
-        !draft.name.trim() ? 'Clinic Name' : '',
-        !draft.address.trim() ? 'Address' : '',
-        !draft.country ? 'Country' : '',
-        !draft.timeZone ? 'Timezone' : '',
-      ].filter(Boolean);
-      setSaveError(
-        `Complete the required fields before continuing: ${missing.join(', ')}.`,
-      );
-      return;
-    }
-    setStep(Math.min(5, step + 1) as Step);
-  }
-
-  async function validateHoursAndContinue() {
+  async function saveAndContinue() {
     if (saving) return;
     setSaveError('');
-
-    const invalidFormatRow = hours.find(
-      (row) =>
-        row.open &&
-        (!isValidClock(row.opens) ||
-          !isValidClock(row.closes) ||
-          !isValidClock(row.maximumUntil)),
-    );
-    if (invalidFormatRow) {
-      setSaveError(
-        `${invalidFormatRow.day} contains an invalid time. Use a time such as 08:07 AM.`,
-      );
+    const requiredError = requiredFieldError();
+    if (step === 1 && requiredError) {
+      setSaveError(requiredError);
       return;
     }
-    const invalidRow = hours.find(
-      (row) => row.open && parseClock(row.closes) <= parseClock(row.opens),
-    );
-    if (invalidRow) {
-      setSaveError(
-        `${invalidRow.day} closing time must be later than its opening time.`,
-      );
-      return;
-    }
-    const invalidMaximumRow = hours.find(
-      (row) =>
-        row.open && parseClock(row.maximumUntil) < parseClock(row.closes),
-    );
-    if (invalidMaximumRow) {
-      setSaveError(
-        `${invalidMaximumRow.day} maximum operating time cannot be earlier than its closing time.`,
-      );
-      return;
-    }
-    if (!hours.some((row) => row.open)) {
-      setSaveError('Select at least one open clinic day before continuing.');
+    const hoursError = scheduleInputError();
+    if (hoursError) {
+      setSaveError(hoursError);
       return;
     }
 
     setSaving(true);
     try {
-      await apiRequest<{ valid: true }>(
-        '/practice-location/schedule-preflight',
-        {
-          method: 'POST',
-          body: {
-            practiceLocationId: editingClinicId,
-            timeZone: draft.timeZone,
-            schedules: hours.map((row) => ({
-              weekday: weekdayFor(row.day),
-              isOpen: row.open,
-              opensAtLocal: row.open ? toApiLocalTime(row.opens) : undefined,
-              closesAtLocal: row.open ? toApiLocalTime(row.closes) : undefined,
-            })),
+      if (step === 2) {
+        await apiRequest<{ valid: true }>(
+          '/practice-location/schedule-preflight',
+          {
+            method: 'POST',
+            body: {
+              practiceLocationId,
+              timeZone: draft.timeZone,
+              schedules: hours.map((row) => ({
+                weekday: weekdayFor(row.day),
+                isOpen: row.open,
+                opensAtLocal: row.open ? toApiLocalTime(row.opens) : undefined,
+                closesAtLocal: row.open
+                  ? toApiLocalTime(row.closes)
+                  : undefined,
+              })),
+            },
           },
-        },
-      );
-      setStep(3);
+        );
+      }
+      await persistDraft();
+      if (returnToReview) {
+        setReturnToReview(false);
+        setStep(5);
+      } else {
+        setStep(Math.min(5, step + 1) as Step);
+      }
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : 'Clinic hours could not be validated.';
+        error instanceof Error ? error.message : 'Unable to save this clinic.';
       setSaveError(
-        `Cannot continue with these clinic hours. ${message} Adjust the schedule so it does not overlap another active clinic.`,
+        step === 2
+          ? `Cannot continue with these clinic hours. ${message} Adjust the schedule so it does not overlap another active clinic.`
+          : message,
       );
     } finally {
       setSaving(false);
     }
   }
 
+  async function saveReviewDraft() {
+    if (saving) return;
+    setSaveError('');
+    setSaving(true);
+    try {
+      await persistDraft();
+      onExit();
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : 'Unable to save this clinic.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function editFromReview(targetStep: Step) {
+    setSaveError('');
+    setReturnToReview(true);
+    setStep(targetStep);
+  }
+
+  function reviewPrimaryAction() {
+    setSaveError('');
+    if (initialStatus === 'DRAFT') {
+      const hoursError = scheduleInputError();
+      if (hoursError) {
+        setSaveError(hoursError);
+        return;
+      }
+      if (!practiceLocationId) {
+        setSaveError('Save this clinic before activating it.');
+        return;
+      }
+      setShowActivateDialog(true);
+      return;
+    }
+    if (initialStatus === 'ACTIVE' || initialStatus === 'DISABLED') {
+      if (!practiceLocationId) {
+        setSaveError('Save this clinic before applying its configuration.');
+        return;
+      }
+      setShowApplyDialog(true);
+      return;
+    }
+    void saveReviewDraft();
+  }
+
+  const reviewPrimaryLabel =
+    initialStatus === 'ACTIVE' || initialStatus === 'DISABLED'
+      ? 'Apply Changes'
+      : 'Activate Clinic';
+
   const primaryAction =
     step === 5
-      ? () => {
-          void saveDraft();
-        }
-      : step === 2
-        ? () => {
-            void validateHoursAndContinue();
-          }
-        : next;
+      ? reviewPrimaryAction
+      : () => {
+          void saveAndContinue();
+        };
 
   return (
     <section className="clinic-page">
@@ -1265,13 +1571,15 @@ function ClinicWizard({
               : 'Enter the basic details of your clinic.'
             : step === 5
               ? 'Please review all information before creating your clinic.'
-              : 'Configure this clinic now or save it as a draft and continue later.'}
+              : returnToReview
+                ? 'Make the change, then save and return directly to Review.'
+                : 'Configure this clinic now or save it as a draft and continue later.'}
         </p>
       </div>
       <Stepper step={step} />
       <div className="clinic-work-card">
         <div className="clinic-work-heading">
-          <h2>{title}</h2>
+          <h2>{step === 1 ? 'Basic Informations' : title}</h2>
           {step === 1 ? (
             <p>Start with the clinic identity and location details.</p>
           ) : null}
@@ -1300,6 +1608,7 @@ function ClinicWizard({
             services={services}
             questions={questions}
             cutoffLeadHours={cutoffLeadHours}
+            onEdit={editFromReview}
           />
         ) : null}
         {saveError ? (
@@ -1308,9 +1617,20 @@ function ClinicWizard({
           </div>
         ) : null}
         <div className="clinic-footer-actions">
-          {step === 1 ? (
+          {step === 1 && !returnToReview ? (
             <button className="clinic-secondary" type="button" onClick={onExit}>
               Cancel
+            </button>
+          ) : returnToReview ? (
+            <button
+              className="clinic-secondary"
+              type="button"
+              onClick={() => {
+                setReturnToReview(false);
+                setStep(5);
+              }}
+            >
+              Back to Review
             </button>
           ) : (
             <button
@@ -1324,18 +1644,38 @@ function ClinicWizard({
           <SplitAction
             primaryLabel={
               step === 5
-                ? editing
-                  ? 'Save Clinic'
-                  : 'Create Clinic'
-                : 'Save and Continue'
+                ? reviewPrimaryLabel
+                : returnToReview
+                  ? 'Save and Return to Review'
+                  : 'Save and Continue'
             }
             onPrimary={primaryAction}
             onDraft={() => {
-              void saveDraft();
+              void saveDraftAndExit();
             }}
           />
         </div>
       </div>
+      {showActivateDialog && practiceLocationId ? (
+        <ActivateClinicDialog
+          practiceLocationId={practiceLocationId}
+          onCancel={() => setShowActivateDialog(false)}
+          onActivated={async () => {
+            setShowActivateDialog(false);
+            await onApplied();
+          }}
+        />
+      ) : null}
+      {showApplyDialog && practiceLocationId ? (
+        <ApplyClinicChangesDialog
+          practiceLocationId={practiceLocationId}
+          onCancel={() => setShowApplyDialog(false)}
+          onApplied={async () => {
+            setShowApplyDialog(false);
+            await onApplied();
+          }}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1396,12 +1736,7 @@ function ClinicActionIcon({
 }
 
 type ClinicListAction =
-  | 'OPEN'
-  | 'EDIT'
-  | 'ACTIVATE'
-  | 'ASSIGN_SECRETARY'
-  | 'DISABLE'
-  | 'DELETE';
+  'OPEN' | 'EDIT' | 'ACTIVATE' | 'ASSIGN_SECRETARY' | 'DISABLE' | 'DELETE';
 
 function defaultClinicListAction(clinic: ClinicRecord): ClinicListAction {
   return clinic.status === 'ACTIVE' ? 'OPEN' : 'EDIT';
@@ -1451,11 +1786,19 @@ function availableClinicListActions(clinic: ClinicRecord): ClinicListAction[] {
 function ClinicList({
   clinics,
   onAdd,
+  onOpen,
   onEdit,
+  onActivate,
+  onDisable,
+  onDelete,
 }: {
   clinics: ClinicRecord[];
   onAdd: () => void;
+  onOpen: (clinic: ClinicRecord) => void;
   onEdit: (clinic: ClinicRecord) => void;
+  onActivate: (clinic: ClinicRecord) => void;
+  onDisable: (clinic: ClinicRecord) => void;
+  onDelete: (clinic: ClinicRecord) => void;
 }) {
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
@@ -1505,7 +1848,25 @@ function ClinicList({
 
   function executeSelectedAction(clinic: ClinicRecord) {
     const action = selectedActionFor(clinic);
-    if (action === 'EDIT') onEdit(clinic);
+    if (action === 'OPEN') {
+      onOpen(clinic);
+      return;
+    }
+    if (action === 'EDIT') {
+      onEdit(clinic);
+      return;
+    }
+    if (action === 'ACTIVATE' && clinic.status === 'DRAFT') {
+      onActivate(clinic);
+      return;
+    }
+    if (action === 'DISABLE' && clinic.status === 'ACTIVE') {
+      onDisable(clinic);
+      return;
+    }
+    if (action === 'DELETE') {
+      onDelete(clinic);
+    }
   }
 
   return (
@@ -1563,7 +1924,12 @@ function ClinicList({
           filtered.map((clinic) => {
             const selectedAction = selectedActionFor(clinic);
             const selectedLabel = clinicListActionLabel(selectedAction);
-            const executableNow = selectedAction === 'EDIT';
+            const executableNow =
+              selectedAction === 'OPEN' ||
+              selectedAction === 'EDIT' ||
+              (selectedAction === 'ACTIVATE' && clinic.status === 'DRAFT') ||
+              (selectedAction === 'DISABLE' && clinic.status === 'ACTIVE') ||
+              selectedAction === 'DELETE';
             return (
               <article className="clinic-clinic-row" key={clinic.id}>
                 <div className="clinic-building-icon">+</div>
@@ -1629,13 +1995,20 @@ function ClinicList({
                           role="menuitem"
                           key={action}
                           title={
-                            action === 'EDIT'
+                            action === 'EDIT' ||
+                            (action === 'ACTIVATE' &&
+                              clinic.status === 'DRAFT') ||
+                            (action === 'DISABLE' &&
+                              clinic.status === 'ACTIVE') ||
+                            action === 'DELETE'
                               ? undefined
                               : 'Available in a later implementation phase.'
                           }
                           onClick={() => selectAction(clinic, action)}
                         >
-                          <ClinicActionIcon kind={clinicListActionIcon(action)} />
+                          <ClinicActionIcon
+                            kind={clinicListActionIcon(action)}
+                          />
                           <span>{clinicListActionLabel(action)}</span>
                           {action === selectedAction ? (
                             <span className="clinic-action-check">✓</span>
@@ -1655,9 +2028,29 @@ function ClinicList({
 }
 
 export function ClinicTabPage() {
-  const [mode, setMode] = useState<'list' | 'create' | 'edit'>('list');
+  const navigate = useNavigate();
+  const initialNavigation = readClinicEditNavigation();
+  const [mode, setMode] = useState<'list' | 'create' | 'edit'>(() =>
+    initialNavigation.clinicId ? 'edit' : 'list',
+  );
+  const [requestedClinicId, setRequestedClinicId] = useState<string | null>(
+    initialNavigation.clinicId,
+  );
+  const [requestedStep, setRequestedStep] = useState<Step>(
+    initialNavigation.step,
+  );
+  const [clinicsLoaded, setClinicsLoaded] = useState(false);
   const [clinics, setClinics] = useState<ClinicRecord[]>([]);
   const [editingClinic, setEditingClinic] = useState<ClinicRecord | null>(null);
+  const [activatingClinicId, setActivatingClinicId] = useState<string | null>(
+    null,
+  );
+  const [disablingClinicId, setDisablingClinicId] = useState<string | null>(
+    null,
+  );
+  const [deletingClinic, setDeletingClinic] = useState<ClinicRecord | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState('');
 
   async function loadClinics() {
@@ -1667,6 +2060,8 @@ export function ClinicTabPage() {
       .map(toClinicRecord)
       .filter((clinic): clinic is ClinicRecord => clinic !== null);
     setClinics(mapped);
+    setClinicsLoaded(true);
+    return mapped;
   }
 
   useEffect(() => {
@@ -1680,61 +2075,79 @@ export function ClinicTabPage() {
             .filter((clinic): clinic is ClinicRecord => clinic !== null),
         );
         setLoadError('');
+        setClinicsLoaded(true);
       })
       .catch((error) => {
         if (cancelled) return;
         setLoadError(
           error instanceof Error ? error.message : 'Unable to load clinics.',
         );
+        setClinicsLoaded(true);
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
+  useEffect(() => {
+    if (!clinicsLoaded || !requestedClinicId) return;
+    const clinic = clinics.find(
+      (candidate) => candidate.id === requestedClinicId,
+    );
+    if (clinic) {
+      setEditingClinic(clinic);
+      setMode('edit');
+      return;
+    }
+
+    setRequestedClinicId(null);
+    setRequestedStep(1);
+    setEditingClinic(null);
+    setMode('list');
+    writeClinicEditNavigation(null);
+    setLoadError('The clinic you were editing is no longer available.');
+  }, [clinics, clinicsLoaded, requestedClinicId]);
+
+  function returnToClinicList() {
+    setRequestedClinicId(null);
+    setRequestedStep(1);
+    setEditingClinic(null);
+    setMode('list');
+    writeClinicEditNavigation(null);
+  }
+
+  async function applied() {
+    try {
+      await loadClinics();
+      setLoadError('');
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : 'Unable to reload clinics.',
+      );
+    }
+    returnToClinicList();
+  }
+
   async function saved(
+    clinicId: string | undefined,
     clinic: ClinicDraft,
-    _status: ClinicStatus,
     hours: DayHours[],
     cutoffLeadHours: number,
-  ) {
-    let practiceLocationId: string;
-    if (editingClinic) {
-      practiceLocationId = editingClinic.id;
-      await apiRequest<PracticeLocationResponse>(
-        `/practice-location/${editingClinic.id}`,
-        {
-          method: 'PATCH',
-          body: {
-            name: clinic.name.trim() || undefined,
-            addressLine1: clinic.address.trim() || undefined,
-            contactNumber: clinic.contactNumber.trim() || undefined,
-            countryCode:
-              clinic.country === 'Philippines'
-                ? 'PH'
-                : clinic.country.slice(0, 2).toUpperCase(),
-            timeZone: clinic.timeZone,
-          },
-        },
-      );
-    } else {
+    services: ServiceRow[],
+    questions: QuestionRow[],
+  ): Promise<SavedClinicDraftState> {
+    if (!clinicId) {
       const created = await apiRequest<PracticeLocationResponse>(
         '/practice-location',
         {
           method: 'POST',
           body: {
             name: clinic.name.trim() || undefined,
+            shortCode: clinic.shortCode.trim() || undefined,
             addressLine1: clinic.address.trim() || undefined,
             contactNumber: clinic.contactNumber.trim() || undefined,
-          },
-        },
-      );
-      practiceLocationId = created.id;
-      await apiRequest<PracticeLocationResponse>(
-        `/practice-location/${practiceLocationId}`,
-        {
-          method: 'PATCH',
-          body: {
+            clinicEmail: clinic.email.trim() || undefined,
+            clinicDescription: clinic.description.trim() || undefined,
             countryCode:
               clinic.country === 'Philippines'
                 ? 'PH'
@@ -1743,12 +2156,32 @@ export function ClinicTabPage() {
           },
         },
       );
+      await loadClinics();
+      return {
+        id: created.id,
+        services: servicesFromResponse(created.services, false),
+        questions: questionsFromResponse(created.bookingQuestions, false),
+      };
     }
-    await apiRequest(
-      `/practice-location/${practiceLocationId}/draft-schedule`,
+
+    const savedConfiguration = await apiRequest<PracticeLocationResponse>(
+      `/practice-location/${clinicId}/configuration-draft`,
       {
         method: 'PUT',
         body: {
+          basicInfo: {
+            name: clinic.name.trim() || undefined,
+            shortCode: clinic.shortCode.trim() || undefined,
+            addressLine1: clinic.address.trim() || undefined,
+            contactNumber: clinic.contactNumber.trim() || undefined,
+            clinicEmail: clinic.email.trim() || undefined,
+            clinicDescription: clinic.description.trim() || undefined,
+            countryCode:
+              clinic.country === 'Philippines'
+                ? 'PH'
+                : clinic.country.slice(0, 2).toUpperCase(),
+            timeZone: clinic.timeZone,
+          },
           schedules: hours.map((row) => ({
             weekday: weekdayFor(row.day),
             isOpen: row.open,
@@ -1757,33 +2190,93 @@ export function ClinicTabPage() {
             maximumOnlineBookingUntilLocal: row.open
               ? toApiLocalTime(onlineCutoffFor(row, cutoffLeadHours))
               : undefined,
-            maximumOperatingUntilLocal: toApiLocalTime(row.maximumUntil),
+            maximumOperatingUntilLocal: row.open
+              ? toApiLocalTime(row.maximumUntil)
+              : undefined,
+          })),
+          services: services.map((service) => ({
+            effectiveServiceId: service.effectiveServiceId,
+            sourceDoctorServiceTemplateId:
+              service.sourceDoctorServiceTemplateId,
+            name: service.name,
+            description: service.description || undefined,
+            durationMinutes: service.minutes,
+            status: service.active ? 'ACTIVE' : 'INACTIVE',
+          })),
+          bookingQuestions: questions.map((question) => ({
+            effectiveBookingQuestionId: question.effectiveBookingQuestionId,
+            sourceDoctorBookingQuestionTemplateId:
+              question.sourceDoctorBookingQuestionTemplateId,
+            questionText: question.question,
+            type: question.type,
+            isRequired: question.required,
+            displayOrder: question.order,
+            isActive: question.active,
+            selectOptions:
+              question.type === 'SINGLE_SELECT'
+                ? (question.options ?? [])
+                : undefined,
           })),
         },
       },
     );
+
     await loadClinics();
-    setEditingClinic(null);
-    setMode('list');
+    const doctorDraft = savedConfiguration.doctorScheduleDraft;
+    const wholeDraftSaved = Boolean(doctorDraft?.timeZone);
+    return {
+      id: clinicId,
+      services:
+        wholeDraftSaved && doctorDraft
+          ? servicesFromResponse(doctorDraft.services, true)
+          : servicesFromResponse(savedConfiguration.services, false),
+      questions:
+        wholeDraftSaved && doctorDraft
+          ? questionsFromResponse(doctorDraft.bookingQuestions, true)
+          : questionsFromResponse(savedConfiguration.bookingQuestions, false),
+    };
   }
 
   if (mode === 'create')
-    return <ClinicWizard onExit={() => setMode('list')} onSaved={saved} />;
-  if (mode === 'edit' && editingClinic)
     return (
       <ClinicWizard
-        editing
-        editingClinicId={editingClinic.id}
-        initialValue={editingClinic}
-        initialSchedule={editingClinic.hours}
-        initialCutoffLeadHours={editingClinic.cutoffLeadHours}
+        initialStatus="DRAFT"
         onExit={() => {
           setEditingClinic(null);
           setMode('list');
         }}
         onSaved={saved}
+        onApplied={applied}
       />
     );
+  if (mode === 'edit' && editingClinic)
+    return (
+      <ClinicWizard
+        editing
+        editingClinicId={editingClinic.id}
+        initialStatus={editingClinic.status}
+        initialStep={requestedStep}
+        onStepChange={(nextStep) => {
+          setRequestedStep(nextStep);
+          writeClinicEditNavigation(editingClinic.id, nextStep);
+        }}
+        initialValue={editingClinic.editor.draft}
+        initialSchedule={editingClinic.editor.hours}
+        initialCutoffLeadHours={editingClinic.editor.cutoffLeadHours}
+        initialServices={editingClinic.editor.services}
+        initialQuestions={editingClinic.editor.questions}
+        onExit={returnToClinicList}
+        onSaved={saved}
+        onApplied={applied}
+      />
+    );
+  if (mode === 'edit' && requestedClinicId && !editingClinic) {
+    return (
+      <section className="clinic-page" aria-live="polite">
+        <p>{clinicsLoaded ? 'Returning to clinics…' : 'Loading clinic…'}</p>
+      </section>
+    );
+  }
   return (
     <>
       {loadError ? (
@@ -1794,14 +2287,295 @@ export function ClinicTabPage() {
       <ClinicList
         clinics={clinics}
         onAdd={() => {
+          setRequestedClinicId(null);
+          setRequestedStep(1);
+          writeClinicEditNavigation(null);
           setEditingClinic(null);
           setMode('create');
         }}
+        onOpen={(clinic) => {
+          void navigate(
+            `/app/clinics/${encodeURIComponent(clinic.id)}/operations`,
+            {
+              state: {
+                clinic: {
+                  name: clinic.name || 'North Clinic',
+                  address: clinic.address,
+                  timeZone: clinic.timeZone,
+                },
+              },
+            },
+          );
+        }}
         onEdit={(clinic) => {
+          setRequestedClinicId(clinic.id);
+          setRequestedStep(1);
+          writeClinicEditNavigation(clinic.id, 1);
           setEditingClinic(clinic);
           setMode('edit');
         }}
+        onActivate={(clinic) => {
+          setActivatingClinicId(clinic.id);
+        }}
+        onDisable={(clinic) => {
+          setDisablingClinicId(clinic.id);
+        }}
+        onDelete={(clinic) => {
+          setDeletingClinic(clinic);
+        }}
       />
+      {deletingClinic ? (
+        <PermanentlyDeleteClinicDialog
+          practiceLocationId={deletingClinic.id}
+          clinicName={deletingClinic.name}
+          onCancel={() => setDeletingClinic(null)}
+          onDeleted={async () => {
+            setDeletingClinic(null);
+            try {
+              await loadClinics();
+              setLoadError('');
+            } catch (error) {
+              setLoadError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to reload clinics.',
+              );
+            }
+          }}
+        />
+      ) : null}
+      {disablingClinicId ? (
+        <DisableClinicDialog
+          practiceLocationId={disablingClinicId}
+          onCancel={() => setDisablingClinicId(null)}
+          onDisabled={async () => {
+            setDisablingClinicId(null);
+            try {
+              await loadClinics();
+              setLoadError('');
+            } catch (error) {
+              setLoadError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to reload clinics.',
+              );
+            }
+          }}
+        />
+      ) : null}
+      {activatingClinicId ? (
+        <ActivateClinicDialog
+          practiceLocationId={activatingClinicId}
+          onCancel={() => setActivatingClinicId(null)}
+          onActivated={async () => {
+            setActivatingClinicId(null);
+            try {
+              await loadClinics();
+              setLoadError('');
+            } catch (error) {
+              setLoadError(
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to reload clinics.',
+              );
+            }
+          }}
+        />
+      ) : null}
     </>
+  );
+}
+
+export function ClinicOperationsRoutePage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { clinicId } = useParams();
+  const [serviceDate, setServiceDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [overview, setOverview] = useState<ClinicOperationsOverview | null>(
+    null,
+  );
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [overviewError, setOverviewError] = useState('');
+  const [queue, setQueue] = useState<ClinicOperationsQueue | null>(null);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueError, setQueueError] = useState('');
+  const [operationsRevision, setOperationsRevision] = useState(0);
+  const [bookingConfiguration, setBookingConfiguration] =
+    useState<QueueDrawerBookingConfiguration | null>(null);
+  const routeState = location.state as {
+    clinic?: { name?: string; address?: string; timeZone?: string };
+  } | null;
+  const clinic = routeState?.clinic;
+
+  useEffect(() => {
+    if (!clinicId) return;
+    void apiRequest<QueueDrawerBookingConfiguration>(
+      `/booking/configuration/${encodeURIComponent(clinicId)}`,
+    )
+      .then(setBookingConfiguration)
+      .catch(() => setBookingConfiguration(null));
+  }, [clinicId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!clinicId) {
+      setOverviewError('Clinic identifier is missing.');
+      setOverviewLoading(false);
+      return;
+    }
+    setOverviewLoading(true);
+    setOverviewError('');
+    void apiRequest<ClinicOperationsOverview>(
+      `/practice-location/${encodeURIComponent(clinicId)}/operations/overview?serviceDate=${encodeURIComponent(serviceDate)}`,
+    )
+      .then((result) => {
+        if (!cancelled) setOverview(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setOverview(null);
+          setOverviewError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to load clinic operations.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setOverviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId, serviceDate, operationsRevision]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!clinicId) {
+      setQueueError('Clinic identifier is missing.');
+      setQueueLoading(false);
+      return;
+    }
+    setQueueLoading(true);
+    setQueueError('');
+    void apiRequest<ClinicOperationsQueue>(
+      `/practice-location/${encodeURIComponent(clinicId)}/operations/queue?serviceDate=${encodeURIComponent(serviceDate)}`,
+    )
+      .then((result) => {
+        if (!cancelled) setQueue(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setQueue(null);
+          setQueueError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to load the queue.',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setQueueLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId, serviceDate, operationsRevision]);
+
+  async function handleOperationsEvent(event: ClinicOperationsEvent) {
+    if (!clinicId) throw new Error('Clinic identifier is missing.');
+    if (event.type === 'CALL_NEXT') {
+      await apiRequest('/clinic-days/next-patient', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: {
+          practiceLocationId: clinicId,
+          serviceDate,
+          patientOutcome: event.patientOutcome,
+        },
+      });
+    } else if (event.type === 'RETURN_TO_QUEUE') {
+      await apiRequest('/clinic-days/staff-reinsert', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: {
+          practiceLocationId: clinicId,
+          serviceDate,
+          appointmentId: String(event.patientId),
+        },
+      });
+    } else if (event.type === 'STAFF_REINSERT') {
+      await apiRequest('/clinic-days/staff-reinsert', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: {
+          practiceLocationId: clinicId,
+          serviceDate,
+          appointmentId: String(event.patientId),
+          ...(event.afterPatientId === undefined
+            ? {}
+            : { afterAppointmentId: String(event.afterPatientId) }),
+        },
+      });
+    } else if (event.type === 'UNDO_QUEUE') {
+      await apiRequest('/clinic-days/undo', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: { practiceLocationId: clinicId, serviceDate },
+      });
+    } else if (event.type === 'ADD_WALK_IN') {
+      await apiRequest('/booking/staff-appointment', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: {
+          practiceLocationId: clinicId,
+          serviceDate,
+          firstName: event.firstName,
+          lastName: event.lastName,
+          mobileNumber: event.mobileNumber,
+          existingPatientResponse: event.existingPatientResponse,
+          selectedServiceIds: event.selectedServiceIds,
+          answers: event.answers,
+        },
+      });
+    } else if (event.type === 'OPERATIONAL_NOTICE') {
+      await apiRequest('/clinic-days/operational-notices/start', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: {
+          practiceLocationId: clinicId,
+          serviceDate,
+          kind: event.kind,
+          reason: event.reason,
+          message: event.message,
+          expectedResumeAt: event.expectedResumeAt,
+        },
+      });
+    } else {
+      return;
+    }
+    setOperationsRevision((current) => current + 1);
+  }
+
+  return (
+    <ClinicOperationsWorkspace
+      clinic={{
+        name: clinic?.name || 'North Clinic',
+        address: clinic?.address || 'Clinic address',
+        timeZone: clinic?.timeZone || 'Asia/Manila',
+      }}
+      onBack={() => navigate('/app/clinics')}
+      overview={overview}
+      overviewLoading={overviewLoading}
+      overviewError={overviewError}
+      queue={queue}
+      queueLoading={queueLoading}
+      queueError={queueError}
+      onEvent={handleOperationsEvent}
+      onOverviewServiceDateChange={setServiceDate}
+      bookingConfiguration={bookingConfiguration}
+    />
   );
 }

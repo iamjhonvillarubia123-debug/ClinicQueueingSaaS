@@ -9,6 +9,8 @@ import { ScheduleModule } from '../schedule/schedule.module';
 import { CancelAppointmentController } from './cancel-appointment.controller';
 import { CancelAppointmentService } from './cancel-appointment.service';
 import { ClinicDayCancellationService } from './clinic-day-cancellation.service';
+import { ClinicDayOperationalNoticeController } from './clinic-day-operational-notice.controller';
+import { ClinicDayOperationalNoticeService } from './clinic-day-operational-notice.service';
 import { CloseClinicController } from './close-clinic.controller';
 import { CloseClinicService } from './close-clinic.service';
 import { ImHereController } from './im-here.controller';
@@ -41,6 +43,7 @@ import { UndoQueueService } from './undo-queue.service';
   providers: [
     CancelAppointmentService,
     ClinicDayCancellationService,
+    ClinicDayOperationalNoticeService,
     CloseClinicService,
     ImHereService,
     NextPatientService,
@@ -54,6 +57,7 @@ import { UndoQueueService } from './undo-queue.service';
   ],
   controllers: [
     CancelAppointmentController,
+    ClinicDayOperationalNoticeController,
     CloseClinicController,
     ImHereController,
     NextPatientController,
@@ -66,6 +70,7 @@ import { UndoQueueService } from './undo-queue.service';
   exports: [
     CancelAppointmentService,
     ClinicDayCancellationService,
+    ClinicDayOperationalNoticeService,
     CloseClinicService,
     ImHereService,
     NextPatientService,

@@ -9,6 +9,10 @@ import './styles/doctor.css';
 import './styles/clinic.css';
 import './styles/clinic-schedule-actions.css';
 import './styles/clinic-list-actions.css';
+import './styles/clinic-operations.css';
+import './styles/queue-action-drawer.css';
+import './styles/appointment-details.css';
+import './styles/service-date-control.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -236,6 +236,20 @@ export class StartClinicService {
             select: { id: true, status: true, startedAt: true },
           });
 
+      await transaction.clinicDayOperationalNotice.updateMany({
+        where: {
+          clinicDayId: clinicDay.id,
+          kind: 'DELAYED_OPENING',
+          status: 'ACTIVE',
+        },
+        data: {
+          status: 'ENDED',
+          endedAt: now,
+          endedByUserId: authenticatedUserId,
+          activeNoticeKey: null,
+        },
+      });
+
       const firstWaiting = await this.lockFirstWaitingAppointment(
         transaction,
         dto.practiceLocationId,
