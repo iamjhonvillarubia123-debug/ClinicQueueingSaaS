@@ -1,5 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
 import { ClinicTabPage } from './ClinicTab';
@@ -42,6 +43,14 @@ const effectiveLocation = {
   ],
   doctorScheduleDraft: null,
 };
+
+function renderClinicTabPage() {
+  return render(
+    <MemoryRouter>
+      <ClinicTabPage />
+    </MemoryRouter>,
+  );
+}
 
 afterEach(cleanup);
 
@@ -108,7 +117,7 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     });
 
     const user = userEvent.setup();
-    const firstRender = render(<ClinicTabPage />);
+    const firstRender = renderClinicTabPage();
 
     expect(await screen.findByText('Effective Clinic')).toBeInTheDocument();
 
@@ -157,7 +166,7 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
     expect(savedServiceDescription).toBe('Unpublished draft wording');
 
     firstRender.unmount();
-    render(<ClinicTabPage />);
+    renderClinicTabPage();
 
     expect(await screen.findByText('Effective Clinic')).toBeInTheDocument();
     expect(screen.queryByText('Draft Consultation')).not.toBeInTheDocument();
