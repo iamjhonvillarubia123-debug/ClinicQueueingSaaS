@@ -21,6 +21,7 @@ describe('StartClinicService commercial suspension', () => {
         .fn()
         .mockResolvedValueOnce([context])
         .mockResolvedValueOnce([{ id: 'doctor-1' }])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]),
       user: {
         findUnique: jest.fn(() =>
