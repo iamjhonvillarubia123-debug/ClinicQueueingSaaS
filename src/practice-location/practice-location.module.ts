@@ -16,6 +16,8 @@ import { PracticeLocationService } from './practice-location.service';
 import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 import { PracticeLocationController } from './practice-location.controller';
 import { PracticeLocationOperationsService } from './practice-location-operations.service';
+import { PracticeLocationStaffController } from './practice-location-staff.controller';
+import { PracticeLocationStaffReadService } from './practice-location-staff-read.service';
 
 @Module({
   imports: [PrismaModule, AuthModule, ScheduleModule, MobileNumberModule],
@@ -32,7 +34,8 @@ import { PracticeLocationOperationsService } from './practice-location-operation
     PracticeLocationPermanentDeleteService,
     PracticeSchedulePreflightService,
     PracticeLocationOperationsService,
+    PracticeLocationStaffReadService,
   ],
-  controllers: [PracticeLocationController],
+  controllers: [PracticeLocationController, PracticeLocationStaffController],
 })
 export class PracticeLocationModule {}
