@@ -143,7 +143,7 @@ describe('PracticeLocationController', () => {
 
     await controller.saveConfigurationDraft(
       'location-1',
-      dto as never,
+      dto,
       request as never,
     );
 

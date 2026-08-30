@@ -1,4 +1,8 @@
-import { BookingRecoveryAttemptStatus, CommandType, OtpPurpose } from '../../generated/prisma/client';
+import {
+  BookingRecoveryAttemptStatus,
+  CommandType,
+  OtpPurpose,
+} from '../../generated/prisma/client';
 import { AppointmentRecoveryService } from './appointment-recovery.service';
 
 describe('AppointmentRecoveryService', () => {
@@ -8,16 +12,22 @@ describe('AppointmentRecoveryService', () => {
     lastFour: '4567',
   };
 
-  function buildService(transaction: Record<string, unknown>, locationId = 'location-1') {
+  function buildService(
+    transaction: Record<string, unknown>,
+    locationId = 'location-1',
+  ) {
     const prisma = {
       practiceLocation: {
         findUnique: jest.fn().mockResolvedValue({ id: locationId }),
       },
-      $transaction: jest.fn((callback: (tx: Record<string, unknown>) => unknown) =>
-        Promise.resolve(callback(transaction)),
+      $transaction: jest.fn(
+        (callback: (tx: Record<string, unknown>) => unknown) =>
+          Promise.resolve(callback(transaction)),
       ),
     };
-    const mobileNumber = { protect: jest.fn().mockReturnValue(protectedMobile) };
+    const mobileNumber = {
+      protect: jest.fn().mockReturnValue(protectedMobile),
+    };
     const otpGenerator = { generate: jest.fn().mockReturnValue('123456') };
     const otpService = {
       hashOtp: jest.fn().mockReturnValue('otp-hash'),
@@ -34,20 +44,31 @@ describe('AppointmentRecoveryService', () => {
         expiresAt: new Date(date.getTime() + 24 * 60 * 60 * 1000),
       })),
     };
-    const otpOutbox = { createBookingOtpOutbox: jest.fn().mockResolvedValue(undefined) };
-    const notificationPayload = { encryptMessage: jest.fn().mockReturnValue('encrypted-message') };
+    const otpOutbox = {
+      createBookingOtpOutbox: jest.fn().mockResolvedValue(undefined),
+    };
+    const notificationPayload = {
+      encryptMessage: jest.fn().mockReturnValue('encrypted-message'),
+    };
 
     const service = new AppointmentRecoveryService(
       prisma as never,
       mobileNumber as never,
-      otpGenerator as never,
+      otpGenerator,
       otpService as never,
       idempotency as never,
       otpOutbox as never,
       notificationPayload as never,
     );
 
-    return { service, prisma, mobileNumber, otpOutbox, idempotency, notificationPayload };
+    return {
+      service,
+      prisma,
+      mobileNumber,
+      otpOutbox,
+      idempotency,
+      notificationPayload,
+    };
   }
 
   it('keeps the request response neutral while binding a unique eligible candidate internally', async () => {
@@ -56,7 +77,9 @@ describe('AppointmentRecoveryService', () => {
       expiresAt: new Date('2026-08-23T01:15:00.000Z'),
     });
     const transaction = {
-      appointment: { findMany: jest.fn().mockResolvedValue([{ id: 'appointment-1' }]) },
+      appointment: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'appointment-1' }]),
+      },
       bookingRecoveryAttempt: { create: attemptCreate },
       otpVerification: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -73,11 +96,15 @@ describe('AppointmentRecoveryService', () => {
       mobileNumber: '+639171234567',
     });
 
-    expect(result.message).toBe('If the appointment can be recovered, verification will continue.');
+    expect(result.message).toBe(
+      'If the appointment can be recovered, verification will continue.',
+    );
     expect(result).not.toHaveProperty('candidateAppointmentId');
     expect(attemptCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ candidateAppointmentId: 'appointment-1' }),
+        data: expect.objectContaining({
+          candidateAppointmentId: 'appointment-1',
+        }),
       }),
     );
     expect(otpOutbox.createBookingOtpOutbox).toHaveBeenCalledTimes(1);
@@ -99,7 +126,9 @@ describe('AppointmentRecoveryService', () => {
           completedAt: null,
         },
       ]),
-      otpVerification: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      otpVerification: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       bookingRecoveryAttempt: { update: updateAttempt },
       appointment: { update: jest.fn() },
       bookingAccessToken: { create: jest.fn(), updateMany: jest.fn() },
@@ -111,7 +140,9 @@ describe('AppointmentRecoveryService', () => {
     expect(result.rejected).toBe(true);
     expect(updateAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: BookingRecoveryAttemptStatus.REJECTED }),
+        data: expect.objectContaining({
+          status: BookingRecoveryAttemptStatus.REJECTED,
+        }),
       }),
     );
     expect(transaction.appointment.update).not.toHaveBeenCalled();
@@ -134,7 +165,9 @@ describe('AppointmentRecoveryService', () => {
       completedAt: null,
     };
     const revokeTokens = jest.fn().mockResolvedValue({ count: 2 });
-    const createToken = jest.fn().mockResolvedValue({ id: 'replacement-token' });
+    const createToken = jest
+      .fn()
+      .mockResolvedValue({ id: 'replacement-token' });
     const updateAttempt = jest.fn().mockResolvedValue({ id: 'attempt-1' });
     const transaction = {
       $queryRaw: jest
@@ -160,34 +193,48 @@ describe('AppointmentRecoveryService', () => {
         update: jest.fn().mockResolvedValue({ id: 'otp-1' }),
       },
       bookingAccessToken: { updateMany: revokeTokens, create: createToken },
-      commandIdempotency: { create: jest.fn().mockResolvedValue({ id: 'command-1' }) },
-      notificationOutbox: { create: jest.fn().mockResolvedValue({ id: 'outbox-1' }) },
+      commandIdempotency: {
+        create: jest.fn().mockResolvedValue({ id: 'command-1' }),
+      },
+      notificationOutbox: {
+        create: jest.fn().mockResolvedValue({ id: 'outbox-1' }),
+      },
       appointment: {
         findUnique: jest.fn(),
         update: jest.fn(),
       },
     };
-    const { service, idempotency, notificationPayload } = buildService(transaction);
+    const { service, idempotency, notificationPayload } =
+      buildService(transaction);
 
     const result = await service.confirmAndComplete('attempt-1', 'idem-1');
 
-    expect(result.appointment).toEqual({ bookingReference: 'CQ-G3X2C2', queueNumber: 1 });
+    expect(result.appointment).toEqual({
+      bookingReference: 'CQ-G3X2C2',
+      queueNumber: 1,
+    });
     expect(result.rawToken).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(revokeTokens).toHaveBeenCalledTimes(1);
     expect(createToken).toHaveBeenCalledTimes(1);
     expect(transaction.appointment.update).not.toHaveBeenCalled();
     expect(updateAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: BookingRecoveryAttemptStatus.CANDIDATE_CONFIRMED }),
+        data: expect.objectContaining({
+          status: BookingRecoveryAttemptStatus.CANDIDATE_CONFIRMED,
+        }),
       }),
     );
     expect(updateAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: BookingRecoveryAttemptStatus.COMPLETED }),
+        data: expect.objectContaining({
+          status: BookingRecoveryAttemptStatus.COMPLETED,
+        }),
       }),
     );
     expect(idempotency.deriveIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ commandType: CommandType.COMPLETE_APPOINTMENT_RECOVERY }),
+      expect.objectContaining({
+        commandType: CommandType.COMPLETE_APPOINTMENT_RECOVERY,
+      }),
     );
     expect(notificationPayload.encryptMessage).toHaveBeenCalledWith(
       expect.stringContaining('CQ-G3X2C2'),

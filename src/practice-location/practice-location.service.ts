@@ -34,8 +34,9 @@ export class PracticeLocationService {
 
     const name = this.normalizeOptionalText(createPracticeLocationDto.name);
     const shortCode =
-      this.normalizeOptionalText(createPracticeLocationDto.shortCode)?.toUpperCase() ??
-      null;
+      this.normalizeOptionalText(
+        createPracticeLocationDto.shortCode,
+      )?.toUpperCase() ?? null;
     const addressLine1 = this.normalizeOptionalText(
       createPracticeLocationDto.addressLine1,
     );
@@ -111,14 +112,16 @@ export class PracticeLocationService {
             createPracticeLocationDto.contactNumber,
           ),
           clinicEmail:
-            this.normalizeOptionalText(createPracticeLocationDto.clinicEmail)?.toLowerCase() ??
-            null,
+            this.normalizeOptionalText(
+              createPracticeLocationDto.clinicEmail,
+            )?.toLowerCase() ?? null,
           clinicDescription: this.normalizeOptionalText(
             createPracticeLocationDto.clinicDescription,
           ),
           countryCode:
-            this.normalizeOptionalText(createPracticeLocationDto.countryCode)?.toUpperCase() ??
-            null,
+            this.normalizeOptionalText(
+              createPracticeLocationDto.countryCode,
+            )?.toUpperCase() ?? null,
           timeZone: this.normalizeOptionalText(
             createPracticeLocationDto.timeZone,
           ),
@@ -454,10 +457,7 @@ export class PracticeLocationService {
               in: draftQuestions.map((question) => question.id),
             },
           },
-          orderBy: [
-            { bookingQuestionDraftId: 'asc' },
-            { displayOrder: 'asc' },
-          ],
+          orderBy: [{ bookingQuestionDraftId: 'asc' }, { displayOrder: 'asc' }],
         },
       );
     const optionsByQuestionId = new Map<
@@ -465,7 +465,8 @@ export class PracticeLocationService {
       Array<{ value: string; label: string }>
     >();
     for (const option of optionRows) {
-      const current = optionsByQuestionId.get(option.bookingQuestionDraftId) ?? [];
+      const current =
+        optionsByQuestionId.get(option.bookingQuestionDraftId) ?? [];
       current.push({ value: option.optionValue, label: option.optionLabel });
       optionsByQuestionId.set(option.bookingQuestionDraftId, current);
     }
@@ -481,14 +482,15 @@ export class PracticeLocationService {
                 const effectiveOptions = question.effectiveBookingQuestionId
                   ? location.bookingQuestions.find(
                       (effectiveQuestion) =>
-                        effectiveQuestion.id === question.effectiveBookingQuestionId,
+                        effectiveQuestion.id ===
+                        question.effectiveBookingQuestionId,
                     )?.selectOptions
                   : undefined;
                 return {
                   ...question,
                   selectOptions:
                     question.type === BookingQuestionType.SINGLE_SELECT
-                      ? draftOptions ?? effectiveOptions ?? []
+                      ? (draftOptions ?? effectiveOptions ?? [])
                       : null,
                 };
               },

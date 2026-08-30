@@ -4,7 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PracticeLocationLifecycleStatus, Prisma } from '../../generated/prisma/client';
+import {
+  PracticeLocationLifecycleStatus,
+  Prisma,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ValidatePracticeScheduleDto } from './dto/validate-practice-schedule.dto';
@@ -38,7 +41,11 @@ export class PracticeSchedulePreflightService {
         where: { id: requestedLocationId, doctorProfileId: doctorProfile.id },
         select: { id: true, lifecycleStatus: true },
       });
-      if (!owned || owned.lifecycleStatus === PracticeLocationLifecycleStatus.PERMANENTLY_DELETED) {
+      if (
+        !owned ||
+        owned.lifecycleStatus ===
+          PracticeLocationLifecycleStatus.PERMANENTLY_DELETED
+      ) {
         throw new NotFoundException('Practice location not found.');
       }
     }
@@ -63,7 +70,10 @@ export class PracticeSchedulePreflightService {
         });
 
         for (const schedule of dto.schedules) {
-          if (schedule.isOpen && (!schedule.opensAtLocal || !schedule.closesAtLocal)) {
+          if (
+            schedule.isOpen &&
+            (!schedule.opensAtLocal || !schedule.closesAtLocal)
+          ) {
             throw new ConflictException(
               `Opening and closing times are required for ${schedule.weekday.toLowerCase()}.`,
             );
@@ -74,8 +84,12 @@ export class PracticeSchedulePreflightService {
               practiceLocationId: candidateLocationId,
               weekday: schedule.weekday,
               isOpen: schedule.isOpen,
-              opensAtLocal: schedule.isOpen ? this.localTime(schedule.opensAtLocal!) : null,
-              closesAtLocal: schedule.isOpen ? this.localTime(schedule.closesAtLocal!) : null,
+              opensAtLocal: schedule.isOpen
+                ? this.localTime(schedule.opensAtLocal!)
+                : null,
+              closesAtLocal: schedule.isOpen
+                ? this.localTime(schedule.closesAtLocal!)
+                : null,
             },
           });
         }
@@ -84,7 +98,7 @@ export class PracticeSchedulePreflightService {
           doctorProfile.id,
           candidateLocationId,
           timeZone,
-          tx as Prisma.TransactionClient,
+          tx,
         );
 
         throw new SuccessfulPreflightRollback();

@@ -62,7 +62,9 @@ export class PracticeLocationConfigurationDraftService {
           basicInfo.shortCode,
         );
 
-        if (location.lifecycleStatus === PracticeLocationLifecycleStatus.DRAFT) {
+        if (
+          location.lifecycleStatus === PracticeLocationLifecycleStatus.DRAFT
+        ) {
           const existingQuestions = await transaction.bookingQuestion.findMany({
             where: { practiceLocationId },
             select: {
@@ -254,7 +256,9 @@ export class PracticeLocationConfigurationDraftService {
       select: { id: true },
     });
     if (duplicate) {
-      throw new ConflictException('Another clinic already uses this short code.');
+      throw new ConflictException(
+        'Another clinic already uses this short code.',
+      );
     }
   }
 
@@ -491,15 +495,16 @@ export class PracticeLocationConfigurationDraftService {
               in: draftQuestions.map((question) => question.id),
             },
           },
-          orderBy: [
-            { bookingQuestionDraftId: 'asc' },
-            { displayOrder: 'asc' },
-          ],
+          orderBy: [{ bookingQuestionDraftId: 'asc' }, { displayOrder: 'asc' }],
         },
       );
-    const optionsByQuestionId = new Map<string, Array<{ value: string; label: string }>>();
+    const optionsByQuestionId = new Map<
+      string,
+      Array<{ value: string; label: string }>
+    >();
     for (const option of optionRows) {
-      const current = optionsByQuestionId.get(option.bookingQuestionDraftId) ?? [];
+      const current =
+        optionsByQuestionId.get(option.bookingQuestionDraftId) ?? [];
       current.push({ value: option.optionValue, label: option.optionLabel });
       optionsByQuestionId.set(option.bookingQuestionDraftId, current);
     }
@@ -512,7 +517,7 @@ export class PracticeLocationConfigurationDraftService {
           ...question,
           selectOptions:
             question.type === BookingQuestionType.SINGLE_SELECT
-              ? optionsByQuestionId.get(question.id) ?? []
+              ? (optionsByQuestionId.get(question.id) ?? [])
               : null,
         })),
       },

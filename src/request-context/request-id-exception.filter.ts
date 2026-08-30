@@ -42,7 +42,8 @@ export class RequestIdExceptionFilter implements ExceptionFilter {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      const error = exception instanceof Error ? exception : new Error(String(exception));
+      const error =
+        exception instanceof Error ? exception : new Error(String(exception));
       this.logger.error(
         `Unhandled request exception requestId=${requestId}: ${error.message}`,
         error.stack,

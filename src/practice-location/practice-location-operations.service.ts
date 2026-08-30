@@ -192,11 +192,7 @@ export class PracticeLocationOperationsService {
     );
     const details = await Promise.all(
       appointments.patients.map((appointment) =>
-        this.getAppointmentDetails(
-          userId,
-          practiceLocationId,
-          appointment.id,
-        ),
+        this.getAppointmentDetails(userId, practiceLocationId, appointment.id),
       ),
     );
     return {

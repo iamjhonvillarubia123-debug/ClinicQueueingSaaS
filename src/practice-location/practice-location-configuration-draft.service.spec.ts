@@ -132,10 +132,14 @@ describe('PracticeLocationConfigurationDraftService', () => {
 
     expect(transactionMock.practiceLocation.update).not.toHaveBeenCalled();
     expect(transactionMock.practiceSchedule.upsert).not.toHaveBeenCalled();
-    expect(transactionMock.practiceLocationService.deleteMany).not.toHaveBeenCalled();
+    expect(
+      transactionMock.practiceLocationService.deleteMany,
+    ).not.toHaveBeenCalled();
     expect(transactionMock.bookingQuestion.deleteMany).not.toHaveBeenCalled();
 
-    expect(transactionMock.doctorPracticeScheduleDraft.upsert).toHaveBeenCalledWith(
+    expect(
+      transactionMock.doctorPracticeScheduleDraft.upsert,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { practiceLocationId: 'location-1' },
         update: expect.objectContaining({
@@ -191,7 +195,8 @@ describe('PracticeLocationConfigurationDraftService', () => {
     });
 
     expect(
-      transactionMock.doctorPracticeConfigurationDraftBookingQuestionOption.createMany,
+      transactionMock.doctorPracticeConfigurationDraftBookingQuestionOption
+        .createMany,
     ).toHaveBeenCalledWith({
       data: [
         {
@@ -243,7 +248,9 @@ describe('PracticeLocationConfigurationDraftService', () => {
       }),
     );
     expect(transactionMock.practiceSchedule.upsert).toHaveBeenCalledTimes(7);
-    expect(transactionMock.practiceLocationService.createMany).toHaveBeenCalled();
+    expect(
+      transactionMock.practiceLocationService.createMany,
+    ).toHaveBeenCalled();
     expect(transactionMock.bookingQuestion.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({
@@ -255,7 +262,9 @@ describe('PracticeLocationConfigurationDraftService', () => {
         }),
       ],
     });
-    expect(transactionMock.doctorPracticeScheduleDraft.upsert).not.toHaveBeenCalled();
+    expect(
+      transactionMock.doctorPracticeScheduleDraft.upsert,
+    ).not.toHaveBeenCalled();
   });
 
   it('stores Single Choice options directly for a DRAFT clinic setup', async () => {
@@ -305,9 +314,9 @@ describe('PracticeLocationConfigurationDraftService', () => {
       .mockResolvedValueOnce(null);
     transactionMock.bookingQuestion.findMany.mockResolvedValue([]);
 
-    await expect(service.save('user-1', 'location-1', dto)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(
+      service.save('user-1', 'location-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(transactionMock.bookingQuestion.deleteMany).not.toHaveBeenCalled();
   });
 
@@ -340,7 +349,9 @@ describe('PracticeLocationConfigurationDraftService', () => {
             isRequired: false,
             displayOrder: 0,
             isActive: true,
-            selectOptions: [{ value: 'GENERAL', label: 'General Consultation' }],
+            selectOptions: [
+              { value: 'GENERAL', label: 'General Consultation' },
+            ],
           },
         ],
       }),
