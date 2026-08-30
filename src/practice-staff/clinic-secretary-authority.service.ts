@@ -398,7 +398,7 @@ export class ClinicSecretaryAuthorityService {
   }
 
   private normalizeBundles(
-    values: ClinicSecretaryAuthorityBundle[],
+    values?: ClinicSecretaryAuthorityBundle[],
   ): ClinicSecretaryAuthorityBundle[] {
     if (!Array.isArray(values) || values.length === 0) {
       throw new BadRequestException(
