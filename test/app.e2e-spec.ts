@@ -774,6 +774,7 @@ describe('AppController (e2e)', () => {
         tokenHash: null,
         activeResetKey: null,
         createdAt: oldTerminalCreatedAt,
+        updatedAt: new Date(0),
         expiresAt: oldTerminalExpiresAt,
       },
     });
