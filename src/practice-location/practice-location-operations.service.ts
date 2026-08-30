@@ -99,6 +99,7 @@ export class PracticeLocationOperationsService {
       },
     });
     if (!appointment) throw new NotFoundException('Appointment was not found.');
+
     let mobileNumber: string | null = null;
     if (appointment.mobileNumberEncrypted) {
       try {
@@ -111,6 +112,7 @@ export class PracticeLocationOperationsService {
           : null;
       }
     }
+
     return {
       id: appointment.id,
       bookingReference: appointment.bookingReference,
@@ -158,25 +160,15 @@ export class PracticeLocationOperationsService {
                 ? 'Yes'
                 : 'No'),
         })),
-      history: [
-        {
-          id: `created-${appointment.id}`,
-          type: 'ENTERED_QUEUE',
-          occurredAt: appointment.createdAt,
-          actorName: appointment.createdByUserId ? 'Staff' : 'System',
-          actorRole: appointment.createdByUserId ? 'STAFF' : 'SYSTEM',
-        },
-        ...appointment.queueEventLinks.map((link) => ({
-          id: link.queueEvent.id,
-          type: link.queueEvent.type,
-          occurredAt: link.queueEvent.createdAt,
-          actorName: link.queueEvent.actorUser
-            ? `${link.queueEvent.actorUser.firstName} ${link.queueEvent.actorUser.lastName}`
-            : link.queueEvent.actorType,
-          actorRole:
-            link.queueEvent.actorUser?.role ?? link.queueEvent.actorType,
-        })),
-      ],
+      history: appointment.queueEventLinks.map((link) => ({
+        id: link.queueEvent.id,
+        type: link.queueEvent.type,
+        occurredAt: link.queueEvent.createdAt,
+        actorName: link.queueEvent.actorUser
+          ? `${link.queueEvent.actorUser.firstName} ${link.queueEvent.actorUser.lastName}`
+          : link.queueEvent.actorType,
+        actorRole: link.queueEvent.actorUser?.role ?? link.queueEvent.actorType,
+      })),
     };
   }
 
@@ -302,6 +294,10 @@ export class PracticeLocationOperationsService {
           where: { weekday: WEEKDAYS[serviceDate.getUTCDay()] },
           select: { isOpen: true, opensAtLocal: true, closesAtLocal: true },
         },
+        scheduleExceptions: {
+          where: { serviceDate },
+          select: { isOpen: true, opensAtLocal: true, closesAtLocal: true },
+        },
         clinicDays: {
           where: { serviceDate },
           select: {
@@ -366,7 +362,9 @@ export class PracticeLocationOperationsService {
     ]);
 
     const clinicDay = location.clinicDays[0] ?? null;
-    const schedule = location.practiceSchedules[0] ?? null;
+    const recurringSchedule = location.practiceSchedules[0] ?? null;
+    const scheduleException = location.scheduleExceptions[0] ?? null;
+    const schedule = scheduleException ?? recurringSchedule;
     const counts = Object.values(AppointmentStatus).reduce<
       Record<string, number>
     >((result, status) => {
@@ -404,8 +402,12 @@ export class PracticeLocationOperationsService {
       schedule: schedule
         ? {
             isOpen: schedule.isOpen,
-            opensAt: this.formatTime(schedule.opensAtLocal),
-            closesAt: this.formatTime(schedule.closesAtLocal),
+            opensAt: schedule.isOpen
+              ? this.formatTime(schedule.opensAtLocal)
+              : null,
+            closesAt: schedule.isOpen
+              ? this.formatTime(schedule.closesAtLocal)
+              : null,
           }
         : null,
       clinicDay: clinicDay

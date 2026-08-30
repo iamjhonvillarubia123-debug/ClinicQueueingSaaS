@@ -5,7 +5,8 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
-import { ClinicOperationsRoutePage, ClinicTabPage } from './doctor/ClinicTab';
+import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
+import { ClinicTabPage } from './doctor/ClinicTab';
 import { ClinicOperationsWorkspace } from './doctor/ClinicOperationsWorkspace';
 import {
   DoctorOnly,
@@ -144,7 +145,7 @@ export function App() {
           <Route element={<DoctorWorkspaceShell />}>
             <Route
               path="/app/clinics/:clinicId/operations"
-              element={<ClinicOperationsRoutePage />}
+              element={<AuthoritativeClinicOperationsRoutePage />}
             />
           </Route>
         </>
@@ -160,7 +161,7 @@ export function App() {
             <Route path="/app/overview" element={<DoctorWorkspacePlaceholder title="Overview" description="Your clinic overview will appear here once the approved workspace content is designed and connected." />} />
             <Route path="/app/clinics" element={<ClinicTabPage />} />
             {!import.meta.env.DEV ? (
-              <Route path="/app/clinics/:clinicId/operations" element={<ClinicOperationsRoutePage />} />
+              <Route path="/app/clinics/:clinicId/operations" element={<AuthoritativeClinicOperationsRoutePage />} />
             ) : null}
             <Route path="/app/calendar" element={<DoctorWorkspacePlaceholder title="Calendar" description="Doctor-wide availability and calendar controls will be placed here after workflow review." />} />
             <Route path="/app/secretaries" element={<DoctorWorkspacePlaceholder title="Secretaries" description="Secretary invitations, assignments, and governance will be connected here in its approved workflow slice." />} />

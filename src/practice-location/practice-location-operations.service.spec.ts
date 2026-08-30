@@ -9,8 +9,8 @@ import {
   PracticeLocationLifecycleStatus,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PracticeLocationOperationsService } from './practice-location-operations.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import { PracticeLocationOperationsService } from './practice-location-operations.service';
 
 describe('PracticeLocationOperationsService', () => {
   const prisma = {
@@ -42,19 +42,15 @@ describe('PracticeLocationOperationsService', () => {
   });
 
   it('does not disclose a clinic outside the doctor ownership scope', async () => {
-    prisma.doctorProfile.findUnique.mockResolvedValue({
-      id: 'doctor-profile-1',
-    });
+    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
     prisma.practiceLocation.findFirst.mockResolvedValue(null);
     await expect(
       service.getOverview('doctor-1', 'clinic-2', '2026-08-25'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('builds the overview from authoritative clinic-day and appointment state', async () => {
-    prisma.doctorProfile.findUnique.mockResolvedValue({
-      id: 'doctor-profile-1',
-    });
+  it('builds the overview from authoritative clinic-day and recurring schedule state', async () => {
+    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -75,6 +71,7 @@ describe('PracticeLocationOperationsService', () => {
           closesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
         },
       ],
+      scheduleExceptions: [],
       clinicDays: [
         {
           id: 'day-1',
@@ -136,7 +133,97 @@ describe('PracticeLocationOperationsService', () => {
     expect(result.clinicDay?.operatingSecretary?.name).toBe('Maria Santos');
   });
 
-  it('returns authoritative appointment details for an owned clinic', async () => {
+  it('gives a service-date schedule exception precedence over the recurring schedule', async () => {
+    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      addressLine1: '123 Health St.',
+      cityMunicipality: 'Davao City',
+      province: null,
+      countryCode: 'PH',
+      timeZone: 'Asia/Manila',
+      lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+      doctorProfile: {
+        professionalTitle: 'Dr.',
+        user: { firstName: 'Juan', lastName: 'Dela Cruz' },
+      },
+      practiceSchedules: [
+        {
+          isOpen: true,
+          opensAtLocal: new Date('1970-01-01T08:00:00.000Z'),
+          closesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
+        },
+      ],
+      scheduleExceptions: [
+        {
+          isOpen: true,
+          opensAtLocal: new Date('1970-01-01T10:00:00.000Z'),
+          closesAtLocal: new Date('1970-01-01T14:00:00.000Z'),
+        },
+      ],
+      clinicDays: [],
+    });
+    prisma.appointment.findMany.mockResolvedValue([]);
+    prisma.queueEvent.findMany.mockResolvedValue([]);
+
+    const result = await service.getOverview(
+      'doctor-1',
+      'clinic-1',
+      '2026-08-25',
+    );
+
+    expect(result.schedule).toEqual({
+      isOpen: true,
+      opensAt: '10:00',
+      closesAt: '14:00',
+    });
+  });
+
+  it('returns a closed service date when the schedule exception closes the clinic', async () => {
+    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      addressLine1: '123 Health St.',
+      cityMunicipality: 'Davao City',
+      province: null,
+      countryCode: 'PH',
+      timeZone: 'Asia/Manila',
+      lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+      doctorProfile: {
+        professionalTitle: 'Dr.',
+        user: { firstName: 'Juan', lastName: 'Dela Cruz' },
+      },
+      practiceSchedules: [
+        {
+          isOpen: true,
+          opensAtLocal: new Date('1970-01-01T08:00:00.000Z'),
+          closesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
+        },
+      ],
+      scheduleExceptions: [
+        { isOpen: false, opensAtLocal: null, closesAtLocal: null },
+      ],
+      clinicDays: [],
+    });
+    prisma.appointment.findMany.mockResolvedValue([]);
+    prisma.queueEvent.findMany.mockResolvedValue([]);
+
+    const result = await service.getOverview(
+      'doctor-1',
+      'clinic-1',
+      '2026-08-25',
+    );
+
+    expect(result.schedule).toEqual({
+      isOpen: false,
+      opensAt: null,
+      closesAt: null,
+    });
+  });
+
+  it('returns only authoritative queue events in appointment history', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({ id: 'clinic-1' });
     mobileNumbers.decrypt.mockReturnValue('+639171234567');
     prisma.appointment.findFirst.mockResolvedValue({
@@ -178,7 +265,22 @@ describe('PracticeLocationOperationsService', () => {
           },
         },
       ],
-      queueEventLinks: [],
+      queueEventLinks: [
+        {
+          role: 'SUBJECT',
+          queueEvent: {
+            id: 'event-1',
+            type: 'CALL_NEXT',
+            createdAt: new Date('2026-08-25T01:15:00.000Z'),
+            actorType: 'USER',
+            actorUser: {
+              firstName: 'Juan',
+              lastName: 'Dela Cruz',
+              role: 'DOCTOR',
+            },
+          },
+        },
+      ],
     });
 
     const result = await service.getAppointmentDetails(
@@ -189,6 +291,11 @@ describe('PracticeLocationOperationsService', () => {
     expect(result.mobileNumber).toBe('+639171234567');
     expect(result.services[0].name).toBe('Consultation');
     expect(result.answers[0].answer).toBe('Toothache');
-    expect(result.history[0].type).toBe('ENTERED_QUEUE');
+    expect(result.history).toHaveLength(1);
+    expect(result.history[0]).toMatchObject({
+      id: 'event-1',
+      type: 'CALL_NEXT',
+      actorName: 'Juan Dela Cruz',
+    });
   });
 });
