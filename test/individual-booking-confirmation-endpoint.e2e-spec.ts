@@ -11,6 +11,7 @@ import {
   ServiceAvailabilityStatus,
   UserAccountStatus,
   UserRole,
+  Weekday,
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
 import { OtpGenerator } from './../src/otp/otp.generator';
@@ -79,22 +80,17 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
     serviceDate.setUTCDate(serviceDate.getUTCDate() + 3);
     serviceDate.setUTCHours(0, 0, 0, 0);
     const serviceDateText = serviceDate.toISOString().slice(0, 10);
-    const weekday = [
-      'SUNDAY',
-      'MONDAY',
-      'TUESDAY',
-      'WEDNESDAY',
-      'THURSDAY',
-      'FRIDAY',
-      'SATURDAY',
-    ][serviceDate.getUTCDay()] as
-      | 'SUNDAY'
-      | 'MONDAY'
-      | 'TUESDAY'
-      | 'WEDNESDAY'
-      | 'THURSDAY'
-      | 'FRIDAY'
-      | 'SATURDAY';
+    const weekdays = [
+      Weekday.SUNDAY,
+      Weekday.MONDAY,
+      Weekday.TUESDAY,
+      Weekday.WEDNESDAY,
+      Weekday.THURSDAY,
+      Weekday.FRIDAY,
+      Weekday.SATURDAY,
+    ];
+    const weekday = weekdays[serviceDate.getUTCDay()];
+    if (!weekday) throw new Error('Unable to resolve service-date weekday.');
 
     const doctor = await prisma.user.create({
       data: {
@@ -138,13 +134,13 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         timeZone: 'Asia/Manila',
       },
     });
-    await prisma.practiceLocationSchedule.create({
+    await prisma.practiceSchedule.create({
       data: {
         practiceLocationId: location.id,
         weekday,
         isOpen: true,
-        openTime: new Date('1970-01-01T00:00:00.000Z'),
-        closeTime: new Date('1970-01-01T23:59:00.000Z'),
+        opensAtLocal: new Date('1970-01-01T00:00:00.000Z'),
+        closesAtLocal: new Date('1970-01-01T23:59:00.000Z'),
       },
     });
     const selectedService = await prisma.practiceLocationService.create({
@@ -249,14 +245,21 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       replayed: true,
     });
 
-    const [storedAppointment, tokenRows, commandRows, confirmationOutboxes] =
+    const [appointments, counter, commandRows, confirmationOutboxes] =
       await Promise.all([
-        prisma.appointment.findUniqueOrThrow({
-          where: { id: firstBody.appointment.id },
-          include: { bookedServices: true },
+        prisma.appointment.findMany({
+          where: {
+            practiceLocationId: location.id,
+            serviceDate,
+          },
         }),
-        prisma.bookingAccessToken.findMany({
-          where: { appointmentId: firstBody.appointment.id },
+        prisma.queueCounter.findUnique({
+          where: {
+            practiceLocationId_serviceDate: {
+              practiceLocationId: location.id,
+              serviceDate,
+            },
+          },
         }),
         prisma.commandIdempotency.findMany({
           where: {
@@ -272,15 +275,9 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         }),
       ]);
 
-    expect(storedAppointment.estimatedServiceMinutes).toBe(45);
-    expect(storedAppointment.bookedServices).toHaveLength(1);
-    expect(storedAppointment.bookedServices[0]).toMatchObject({
-      practiceLocationServiceId: selectedService.id,
-      serviceNameSnapshot: 'Initial Consultation',
-      durationMinutesSnapshot: 45,
-    });
-    expect(tokenRows).toHaveLength(1);
-    expect(tokenRows[0].tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(appointments).toHaveLength(1);
+    expect(appointments[0]?.queueNumber).toBe(1);
+    expect(counter?.lastAllocatedNumber).toBe(1);
     expect(commandRows).toHaveLength(1);
     expect(confirmationOutboxes).toHaveLength(1);
     expect(commandRows[0]).toMatchObject({
@@ -312,49 +309,44 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       );
     }
     expect(encryptedMessage).not.toContain(rawAccessToken);
-    const decryptedMessage = decryptNotificationMessage(
-      encryptedMessage,
-      testEnvironment.MOBILE_ENCRYPTION_ACTIVE_KEY_ID,
-      testEnvironment.MOBILE_ENCRYPTION_KEY_V1,
-    );
+    const decryptedMessage = decryptNotificationMessage(encryptedMessage);
     expect(decryptedMessage).toContain('Queue number: 1.');
     expect(decryptedMessage).toContain(
       `https://app.example.test/booking/access#token=${encodeURIComponent(rawAccessToken)}`,
     );
   }, 30_000);
-});
 
-function decryptNotificationMessage(
-  payload: string,
-  expectedKeyId: string,
-  baseKeyBase64: string,
-): string {
-  const [version, keyId, purpose, ivEncoded, tagEncoded, ciphertextEncoded] =
-    payload.split('.');
-  if (
-    version !== 'v1' ||
-    keyId !== expectedKeyId ||
-    purpose !== 'notification-outbox:message' ||
-    !ivEncoded ||
-    !tagEncoded ||
-    !ciphertextEncoded
-  ) {
-    throw new Error('Unexpected encrypted notification payload format.');
+  function decryptNotificationMessage(payload: string): string {
+    const [version, keyId, purpose, ivEncoded, tagEncoded, ciphertextEncoded] =
+      payload.split('.');
+    if (
+      version !== 'v1' ||
+      keyId !== testEnvironment.MOBILE_ENCRYPTION_ACTIVE_KEY_ID ||
+      purpose !== 'notification-outbox:message' ||
+      !ivEncoded ||
+      !tagEncoded ||
+      !ciphertextEncoded
+    ) {
+      throw new Error('Unexpected encrypted notification payload format.');
+    }
+
+    const baseKey = Buffer.from(
+      testEnvironment.MOBILE_ENCRYPTION_KEY_V1,
+      'base64',
+    );
+    const encryptionKey = createHmac('sha256', baseKey)
+      .update(NOTIFICATION_KEY_PURPOSE, 'utf8')
+      .digest();
+    const decipher = createDecipheriv(
+      'aes-256-gcm',
+      encryptionKey,
+      Buffer.from(ivEncoded, 'base64url'),
+    );
+    decipher.setAAD(Buffer.from(purpose, 'utf8'));
+    decipher.setAuthTag(Buffer.from(tagEncoded, 'base64url'));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextEncoded, 'base64url')),
+      decipher.final(),
+    ]).toString('utf8');
   }
-
-  const baseKey = Buffer.from(baseKeyBase64, 'base64');
-  const encryptionKey = createHmac('sha256', baseKey)
-    .update(NOTIFICATION_KEY_PURPOSE, 'utf8')
-    .digest();
-  const decipher = createDecipheriv(
-    'aes-256-gcm',
-    encryptionKey,
-    Buffer.from(ivEncoded, 'base64url'),
-  );
-  decipher.setAAD(Buffer.from(purpose, 'utf8'));
-  decipher.setAuthTag(Buffer.from(tagEncoded, 'base64url'));
-  return Buffer.concat([
-    decipher.update(Buffer.from(ciphertextEncoded, 'base64url')),
-    decipher.final(),
-  ]).toString('utf8');
-}
+});
