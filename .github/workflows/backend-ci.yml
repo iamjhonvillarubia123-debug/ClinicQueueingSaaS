@@ -47,6 +47,8 @@ jobs:
           src/practice-location/practice-location-configuration-apply.service.spec.ts
           src/practice-location/practice-location-protected-activation.service.ts
           src/practice-location/practice-location-protected-activation.service.spec.ts
+          src/practice-location/practice-location-operations.service.ts
+          src/practice-location/practice-location-operations.service.spec.ts
           src/practice-location/dto/apply-practice-location-configuration-draft.dto.ts
           src/practice-location/dto/activate-practice-location.dto.ts
       - name: Check development acceptance scripts
@@ -56,7 +58,7 @@ jobs:
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
           node --check scripts/wire-clinic-activation-ui.mjs
-      - name: Test public booking, patient recovery, and clinic configuration controls
+      - name: Test public booking, patient recovery, clinic configuration, and open clinic reads
         run: >-
           npm test -- --runInBand
           public-booking-entry.service.spec.ts
@@ -69,4 +71,5 @@ jobs:
           practice-location-configuration-draft.service.spec.ts
           practice-location-configuration-apply.service.spec.ts
           practice-location-protected-activation.service.spec.ts
+          practice-location-operations.service.spec.ts
       - run: npm run build
