@@ -114,10 +114,8 @@ export class PracticeLocationStaffReadService {
         : null,
       staffAssignments: location.staffAssignments.map((assignment) => ({
         ...this.toStaff(assignment),
-        isRegular:
-          assignment.id === location.currentRegularPracticeStaffId,
-        isOperating:
-          assignment.id === clinicDay?.operatingPracticeStaffId,
+        isRegular: assignment.id === location.currentRegularPracticeStaffId,
+        isOperating: assignment.id === clinicDay?.operatingPracticeStaffId,
       })),
     };
   }
