@@ -658,3 +658,45 @@
     padding: 22px 16px;
   }
 }
+
+.staff-assignment-drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 610px;
+  padding: 26px 22px 18px;
+  border: 1px solid #dce2e8;
+  border-radius: 9px;
+  background: #fff;
+}
+.staff-drawer-close { position: absolute; top: 12px; right: 12px; border: 0; background: transparent; font-size: 22px; }
+.staff-drawer-step { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #1469ed; color: #fff; font-size: 11px; font-weight: 800; }
+.staff-assignment-drawer h2 { margin: 18px 0 7px; font-size: 17px; }
+.staff-assignment-drawer > p { margin: 0 0 16px; color: #53606e; font-size: 10px; line-height: 1.55; }
+.staff-choice-card { display: grid; gap: 7px; width: 100%; margin-bottom: 12px; padding: 16px; border: 1px solid #d9dfe7; border-radius: 7px; background: #fff; text-align: left; }
+.staff-choice-card.is-selected { border-color: #3980ef; background: #f7faff; }
+.staff-choice-card b { font-size: 11px; }
+.staff-choice-card span { color: #53606e; font-size: 9px; line-height: 1.5; }
+.staff-candidate-list { display: grid; gap: 9px; }
+.staff-candidate-list button { display: grid; grid-template-columns: 16px 1fr; gap: 10px; align-items: center; padding: 12px; border: 1px solid #dce2e8; border-radius: 7px; background: #fff; text-align: left; }
+.staff-candidate-list button.is-selected { border-color: #3980ef; background: #f7faff; }
+.staff-candidate-list i { width: 12px; height: 12px; border: 1px solid #aeb7c1; border-radius: 50%; }
+.staff-candidate-list button.is-selected i { border: 4px solid #1469ed; }
+.staff-candidate-list span { display: grid; gap: 3px; }
+.staff-candidate-list small { color: #5d6875; font-size: 8px; }
+.staff-bundle-list { display: grid; gap: 8px; }
+.staff-bundle-list label, .staff-radio { padding: 11px; border: 1px solid #dce2e8; border-radius: 6px; font-size: 10px; }
+.staff-replacement-warning, .staff-neutral-note, .staff-drawer-message { margin-top: 14px; padding: 12px; border-radius: 6px; background: #fff7e8; color: #654c20; font-size: 9px; line-height: 1.5; }
+.staff-replacement-warning label { display: grid; gap: 5px; margin-top: 10px; }
+.staff-replacement-warning input, .staff-date-fields input { min-height: 34px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 8px; }
+.staff-neutral-note { background: #f2f6fd; color: #40536e; }
+.staff-date-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+.staff-date-fields label { display: grid; gap: 5px; font-size: 9px; }
+.staff-review { display: grid; gap: 0; border: 1px solid #dce2e8; border-radius: 7px; }
+.staff-review div { display: grid; grid-template-columns: 115px 1fr; gap: 8px; padding: 10px; border-bottom: 1px solid #e7ebef; font-size: 9px; }
+.staff-review div:last-child { border-bottom: 0; }
+.staff-review dt { color: #637080; }.staff-review dd { margin: 0; font-weight: 650; }
+.staff-assignment-drawer footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; padding-top: 18px; }
+.staff-assignment-drawer footer button { min-height: 38px; border: 1px solid #d3dae2; border-radius: 6px; background: #fff; font-size: 10px; font-weight: 750; }
+.staff-assignment-drawer footer button.is-primary { border-color: #111; background: #111; color: #fff; }
+.staff-assignment-drawer footer button:disabled { opacity: .45; }

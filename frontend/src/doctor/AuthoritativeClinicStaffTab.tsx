@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../api/client';
+import { StaffAssignmentDrawer, type StaffAssignmentCommand } from './StaffAssignmentDrawer';
 
 type StaffFilter = 'ALL' | 'ACTIVE' | 'DISABLED' | 'PENDING';
 export type SubstituteCoverage = { id: string; coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE'; fromServiceDate: string; toServiceDate: string; status: 'ACTIVE' | 'CANCELLED' | 'SUPERSEDED'; createdAt: string; endedAt: string | null };
@@ -68,14 +69,40 @@ export function AuthoritativeClinicStaffTab({ clinicId }: { clinicId: string }) 
   const [data, setData] = useState<AuthoritativeClinicStaff | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState('');
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError('');
     void apiRequest<AuthoritativeClinicStaff>(`/practice-location/${encodeURIComponent(clinicId)}/staff`).then((result) => { if (!cancelled) setData(result); }).catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Unable to load clinic staff.'); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [clinicId]);
+  }, [clinicId, revision]);
+
+  async function assign(command: StaffAssignmentCommand) {
+    setPending(true); setMessage('');
+    try {
+      if (command.role === 'CLINIC_SECRETARY') {
+        const replacing = data?.staffAssignments.some((staff) => staff.isClinicSecretary && staff.assignmentActive);
+        await apiRequest(`/practice-staff/regular/${replacing ? 'replace' : 'assign'}`, {
+          method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: { practiceLocationId: clinicId, userId: command.userId, authorityBundles: command.authorityBundles, ...(replacing ? { password: command.password } : {}) },
+        });
+      } else {
+        await apiRequest('/practice-staff/substitute-coverage/create', {
+          method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: { practiceLocationId: clinicId, userId: command.userId, coverageMode: command.coverageMode, fromServiceDate: command.fromServiceDate, toServiceDate: command.toServiceDate },
+        });
+      }
+      setMessage('Assignment successful.');
+      setRevision((value) => value + 1);
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Unable to assign this Secretary.');
+    } finally { setPending(false); }
+  }
   if (loading) return <div className="ops-workspace-state" role="status">Loading staff assignments…</div>;
   if (error) return <div className="ops-workspace-state is-error" role="alert"><strong>Unable to load clinic staff.</strong><span>{error}</span></div>;
   if (!data) return <div className="ops-workspace-state">No staff data is available.</div>;
-  return <ClinicStaffView data={data} />;
+  return <div className={`clinic-staff-shell${drawerOpen ? ' has-drawer' : ''}`}><ClinicStaffView data={data} onAssign={() => { setMessage(''); setDrawerOpen(true); }} />{drawerOpen ? <StaffAssignmentDrawer data={data} pending={pending} message={message} onClose={() => setDrawerOpen(false)} onSubmit={assign} /> : null}</div>;
 }
