@@ -1,0 +1,198 @@
+.ops-staff {
+  display: grid;
+  gap: 14px;
+}
+
+.ops-staff .ops-summary-strip {
+  grid-template-columns: minmax(230px, 1.35fr) repeat(3, minmax(150px, 1fr));
+  margin-bottom: 0;
+}
+
+.ops-staff .ops-summary-strip > div {
+  min-width: 0;
+}
+
+.ops-staff .ops-summary-strip strong {
+  overflow-wrap: anywhere;
+}
+
+.ops-staff .ops-appointment-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 14px;
+  margin-top: 0;
+  align-items: start;
+}
+
+.ops-staff .ops-appointment-layout > main {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ops-staff .ops-appointment-layout > main > .ops-card,
+.ops-staff > .ops-card {
+  padding: 20px;
+}
+
+.ops-staff .ops-card h3 {
+  line-height: 1.35;
+}
+
+.ops-staff .ops-card > p {
+  margin: 8px 0 0;
+  color: #596374;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ops-staff .ops-appointment-layout > main > .ops-card > div {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.ops-staff .ops-appointment-layout > main > .ops-card > div > strong {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.ops-staff .ops-appointment-layout > main > .ops-card > div > small {
+  display: block;
+  color: #596374;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ops-staff .ops-appointment-layout > aside {
+  min-width: 0;
+}
+
+.ops-staff .ops-appointment-layout > aside > .ops-card {
+  padding: 20px;
+}
+
+.ops-staff .ops-summary-list {
+  margin-top: 16px;
+  gap: 0;
+}
+
+.ops-staff .ops-summary-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 12px 0;
+  border-top: 1px solid #e5e9ed;
+}
+
+.ops-staff .ops-summary-list li:first-child {
+  border-top: 0;
+}
+
+.ops-staff .ops-summary-list li > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ops-staff .ops-summary-list li > span:first-child strong {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ops-staff .ops-summary-list li > span:first-child small {
+  color: #596374;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ops-staff .ops-summary-list li > span:last-child {
+  max-width: 130px;
+  text-align: right;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.ops-staff > .ops-card > div {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.ops-staff > .ops-card label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ops-staff > .ops-card select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cfd6de;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+}
+
+.ops-staff > .ops-card .ops-action {
+  margin-top: 12px;
+}
+
+.ops-staff > .ops-card > div .ops-action {
+  margin-top: 0;
+}
+
+@media (max-width: 1100px) {
+  .ops-staff .ops-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ops-staff .ops-summary-strip > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .ops-staff .ops-summary-strip > div:nth-child(n + 3) {
+    margin-top: 14px;
+  }
+
+  .ops-staff .ops-appointment-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .ops-staff .ops-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .ops-staff .ops-summary-strip > div {
+    padding: 12px 4px;
+    border-right: 0;
+    border-top: 1px solid #dfe3e8;
+  }
+
+  .ops-staff .ops-summary-strip > div:first-of-type {
+    border-top: 0;
+  }
+
+  .ops-staff .ops-summary-list li {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .ops-staff .ops-summary-list li > span:last-child {
+    max-width: none;
+    text-align: left;
+  }
+
+  .ops-staff > .ops-card > div {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
