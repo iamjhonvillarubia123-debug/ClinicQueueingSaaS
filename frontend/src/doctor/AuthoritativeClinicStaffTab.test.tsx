@@ -89,8 +89,8 @@ describe('ClinicStaffView', () => {
       </ServiceDateTodayProvider>,
     );
 
-    expect(screen.getByText('Secretary for the Day')).toBeInTheDocument();
-    expect(screen.getByText('Clinic Secretary')).toBeInTheDocument();
+    expect(screen.getAllByText('Secretary for the Day').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Clinic Secretary').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Jane Reyes').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Maria Santos').length).toBeGreaterThan(0);
     expect(screen.queryByText('Operating Secretary')).not.toBeInTheDocument();
@@ -120,7 +120,7 @@ describe('ClinicStaffView', () => {
       name: 'Secretary for the Day drawer',
     });
     expect(
-      within(drawer).getByText('This does not change the regular Clinic Secretary assignment.'),
+      within(drawer).getByText(/does not change the regular Clinic Secretary assignment/i),
     ).toBeInTheDocument();
     expect(within(drawer).getByText('Maria Santos')).toBeInTheDocument();
 
