@@ -209,6 +209,9 @@ export class PublicBookingReplacementService {
     await this.prisma.$transaction(async (transaction) => {
       const now = new Date();
       const draft = await this.lockDraft(transaction, bookingDraftId);
+      if (draft.status === 'CONSUMED' && draft.consumedAt) {
+        return;
+      }
       this.assertDraftUsable(draft, now);
       const otp = await this.lockVerifiedBookingOtp(
         transaction,
