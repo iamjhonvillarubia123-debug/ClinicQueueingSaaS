@@ -137,18 +137,21 @@ describe('PracticeLocationConfigurationDraftService', () => {
     ).not.toHaveBeenCalled();
     expect(transactionMock.bookingQuestion.deleteMany).not.toHaveBeenCalled();
 
-    expect(
-      transactionMock.doctorPracticeScheduleDraft.upsert,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { practiceLocationId: 'location-1' },
-        update: expect.objectContaining({
-          name: 'Draft Clinic Name',
-          shortCode: 'NORTH',
-          timeZone: 'Asia/Manila',
-        }),
-      }),
-    );
+    const [scheduleDraftUpsertCall] = transactionMock.doctorPracticeScheduleDraft
+      .upsert.mock.calls as unknown as Array<
+      [
+        {
+          where: { practiceLocationId: string };
+          update: { name: string; shortCode: string; timeZone: string };
+        },
+      ]
+    >;
+    expect(scheduleDraftUpsertCall.where.practiceLocationId).toBe('location-1');
+    expect(scheduleDraftUpsertCall.update).toMatchObject({
+      name: 'Draft Clinic Name',
+      shortCode: 'NORTH',
+      timeZone: 'Asia/Manila',
+    });
     expect(
       transactionMock.doctorPracticeConfigurationDraftService.createMany,
     ).toHaveBeenCalledWith(
@@ -162,17 +165,24 @@ describe('PracticeLocationConfigurationDraftService', () => {
         ],
       }),
     );
-    expect(
-      transactionMock.doctorPracticeConfigurationDraftBookingQuestion.create,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          effectiveBookingQuestionId: 'question-1',
-          questionText: 'Draft question?',
-          displayOrder: 0,
-        }),
-      }),
-    );
+    const [bookingQuestionCreateCall] = transactionMock
+      .doctorPracticeConfigurationDraftBookingQuestion.create.mock
+      .calls as unknown as Array<
+      [
+        {
+          data: {
+            effectiveBookingQuestionId: string;
+            questionText: string;
+            displayOrder: number;
+          };
+        },
+      ]
+    >;
+    expect(bookingQuestionCreateCall.data).toMatchObject({
+      effectiveBookingQuestionId: 'question-1',
+      questionText: 'Draft question?',
+      displayOrder: 0,
+    });
   });
 
   it('stores Single Choice options in an ACTIVE clinic draft with stable values and labels', async () => {
@@ -237,16 +247,21 @@ describe('PracticeLocationConfigurationDraftService', () => {
 
     await service.save('user-1', 'location-1', dto);
 
-    expect(transactionMock.practiceLocation.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'location-1' },
-        data: expect.objectContaining({
-          name: 'Draft Clinic Name',
-          shortCode: 'NORTH',
-          clinicEmail: 'draft@example.com',
-        }),
-      }),
-    );
+    const [locationUpdateCall] = transactionMock.practiceLocation.update.mock
+      .calls as unknown as Array<
+      [
+        {
+          where: { id: string };
+          data: { name: string; shortCode: string; clinicEmail: string };
+        },
+      ]
+    >;
+    expect(locationUpdateCall.where.id).toBe('location-1');
+    expect(locationUpdateCall.data).toMatchObject({
+      name: 'Draft Clinic Name',
+      shortCode: 'NORTH',
+      clinicEmail: 'draft@example.com',
+    });
     expect(transactionMock.practiceSchedule.upsert).toHaveBeenCalledTimes(7);
     expect(
       transactionMock.practiceLocationService.createMany,
