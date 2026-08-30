@@ -23,7 +23,7 @@ export class ReplaceRegularSecretaryDto {
   @ArrayNotEmpty()
   @ArrayUnique()
   @IsEnum(ClinicSecretaryAuthorityBundle, { each: true })
-  authorityBundles!: ClinicSecretaryAuthorityBundle[];
+  authorityBundles?: ClinicSecretaryAuthorityBundle[];
 
   @IsString()
   @IsNotEmpty()
