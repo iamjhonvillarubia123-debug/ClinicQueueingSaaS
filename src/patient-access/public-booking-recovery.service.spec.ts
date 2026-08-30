@@ -34,8 +34,8 @@ describe('PublicBookingRecoveryService replacement authority binding', () => {
 
     const prisma = {
       $transaction: jest.fn(
-        async (callback: (tx: typeof transaction) => unknown) =>
-          callback(transaction),
+        (callback: (tx: typeof transaction) => unknown) =>
+          Promise.resolve(callback(transaction)),
       ),
       bookingRecoveryAttempt: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -83,10 +83,11 @@ describe('PublicBookingRecoveryService replacement authority binding', () => {
     });
 
     expect(transaction.otpVerification.create).toHaveBeenCalledTimes(1);
-    const createCall = transaction.otpVerification.create.mock
-      .calls[0]?.[0] as {
-      data: { createdAt: Date; verifiedAt: Date; expiresAt: Date };
-    };
+    const createCalls = transaction.otpVerification.create.mock
+      .calls as unknown as Array<
+      [{ data: { createdAt: Date; verifiedAt: Date; expiresAt: Date } }]
+    >;
+    const createCall = createCalls[0]?.[0];
     expect(createCall.data.createdAt).toBeInstanceOf(Date);
     expect(createCall.data.verifiedAt).toBeInstanceOf(Date);
     expect(createCall.data.createdAt.getTime()).toBe(
