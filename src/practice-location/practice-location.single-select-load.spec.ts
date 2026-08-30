@@ -97,8 +97,8 @@ describe('PracticeLocationService Single Choice loading', () => {
 
     const result = await service.findAllForDoctor('doctor-user');
 
-    expect(
-      result[0].doctorScheduleDraft?.bookingQuestions[0].selectOptions,
-    ).toEqual(effectiveOptions);
+    expect(result[0].doctorScheduleDraft?.bookingQuestions[0]).toEqual(
+      expect.objectContaining({ selectOptions: effectiveOptions }),
+    );
   });
 });
