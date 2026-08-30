@@ -42,7 +42,9 @@ describe('PracticeLocationOperationsService', () => {
   });
 
   it('does not disclose a clinic outside the doctor ownership scope', async () => {
-    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prisma.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     prisma.practiceLocation.findFirst.mockResolvedValue(null);
     await expect(
       service.getOverview('doctor-1', 'clinic-2', '2026-08-25'),
@@ -50,7 +52,9 @@ describe('PracticeLocationOperationsService', () => {
   });
 
   it('builds the overview from authoritative clinic-day and recurring schedule state', async () => {
-    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prisma.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -81,7 +85,11 @@ describe('PracticeLocationOperationsService', () => {
           closedAt: null,
           operatingPracticeStaff: {
             id: 'staff-1',
-            user: { id: 'secretary-1', firstName: 'Maria', lastName: 'Santos' },
+            user: {
+              id: 'secretary-1',
+              firstName: 'Maria',
+              lastName: 'Santos',
+            },
           },
         },
       ],
@@ -134,7 +142,9 @@ describe('PracticeLocationOperationsService', () => {
   });
 
   it('gives a service-date schedule exception precedence over the recurring schedule', async () => {
-    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prisma.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -181,7 +191,9 @@ describe('PracticeLocationOperationsService', () => {
   });
 
   it('returns a closed service date when the schedule exception closes the clinic', async () => {
-    prisma.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-profile-1' });
+    prisma.doctorProfile.findUnique.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
