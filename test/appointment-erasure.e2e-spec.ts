@@ -257,7 +257,7 @@ describe('Appointment physical erasure (e2e)', () => {
   it('preserves an independent ScheduledReminder while destroying old Appointment access and recovery correlation', async () => {
     const fixture = await createFixture(AppointmentStatus.COMPLETED);
     const now = new Date('2026-08-21T00:00:00.000Z');
-    const rawToken = 'A'.repeat(43);
+    const rawToken = `A${randomUUID().replaceAll('-', '')}`;
     const tokenHash = createHash('sha256')
       .update(rawToken, 'utf8')
       .digest('hex');
