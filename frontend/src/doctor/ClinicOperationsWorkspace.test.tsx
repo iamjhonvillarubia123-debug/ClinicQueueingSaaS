@@ -45,7 +45,7 @@ describe('ClinicOperationsWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'Queue' }));
     await user.click(screen.getByRole('button', { name: 'CALL NEXT' }));
 
-    expect(onEvent).toHaveBeenCalledWith({ type: 'CALL_NEXT', patientId: 7 });
+    expect(onEvent).toHaveBeenCalledWith({ type: 'CALL_NEXT', patientId: 7, patientOutcome: 'COMPLETED' });
     expect(screen.getByRole('status')).toHaveTextContent('The next patient is now being served.');
   });
 
@@ -64,6 +64,17 @@ describe('ClinicOperationsWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: /DELAY \/ BREAK/ }));
     expect(screen.getByText('Pause patient serving')).toBeInTheDocument();
+  });
+
+  it('routes queue correction and missed-patient placement through backend-ready commands', async () => {
+    const user = userEvent.setup();
+    const onEvent = renderWorkspace();
+    await user.click(screen.getByRole('button', { name: 'Queue' }));
+    await user.click(screen.getByRole('button', { name: /ADJUST QUEUE/ }));
+    await user.click(screen.getByRole('button', { name: /Return a temporarily absent patient/ }));
+    await user.click(screen.getByRole('button', { name: 'REVIEW' }));
+    await user.click(screen.getByRole('button', { name: 'CONFIRM' }));
+    expect(onEvent).toHaveBeenCalledWith({ type: 'STAFF_REINSERT', patientId: 10, afterPatientId: undefined });
   });
 
   it('opens appointment details and both report choices', async () => {

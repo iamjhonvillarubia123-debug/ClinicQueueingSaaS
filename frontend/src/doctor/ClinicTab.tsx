@@ -11,6 +11,7 @@ import {
   ClinicOperationsWorkspace,
   type ClinicOperationsOverview,
   type ClinicOperationsQueue,
+  type ClinicOperationsEvent,
 } from './ClinicOperationsWorkspace';
 
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -2399,6 +2400,7 @@ export function ClinicOperationsRoutePage() {
   const [queue, setQueue] = useState<ClinicOperationsQueue | null>(null);
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState('');
+  const [operationsRevision, setOperationsRevision] = useState(0);
   const routeState = location.state as {
     clinic?: { name?: string; address?: string; timeZone?: string };
   } | null;
@@ -2435,7 +2437,7 @@ export function ClinicOperationsRoutePage() {
     return () => {
       cancelled = true;
     };
-  }, [clinicId, serviceDate]);
+  }, [clinicId, serviceDate, operationsRevision]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2458,7 +2460,35 @@ export function ClinicOperationsRoutePage() {
       })
       .finally(() => { if (!cancelled) setQueueLoading(false); });
     return () => { cancelled = true; };
-  }, [clinicId, serviceDate]);
+  }, [clinicId, serviceDate, operationsRevision]);
+
+  async function handleOperationsEvent(event: ClinicOperationsEvent) {
+    if (!clinicId) throw new Error('Clinic identifier is missing.');
+    if (event.type === 'CALL_NEXT') {
+      await apiRequest('/clinic-days/next-patient', {
+        method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: { practiceLocationId: clinicId, serviceDate, patientOutcome: event.patientOutcome },
+      });
+    } else if (event.type === 'RETURN_TO_QUEUE') {
+      await apiRequest('/clinic-days/staff-reinsert', {
+        method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: { practiceLocationId: clinicId, serviceDate, appointmentId: String(event.patientId) },
+      });
+    } else if (event.type === 'STAFF_REINSERT') {
+      await apiRequest('/clinic-days/staff-reinsert', {
+        method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: { practiceLocationId: clinicId, serviceDate, appointmentId: String(event.patientId), ...(event.afterPatientId === undefined ? {} : { afterAppointmentId: String(event.afterPatientId) }) },
+      });
+    } else if (event.type === 'UNDO_QUEUE') {
+      await apiRequest('/clinic-days/undo', {
+        method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
+        body: { practiceLocationId: clinicId, serviceDate },
+      });
+    } else {
+      return;
+    }
+    setOperationsRevision((current) => current + 1);
+  }
 
   return (
     <ClinicOperationsWorkspace
@@ -2474,6 +2504,7 @@ export function ClinicOperationsRoutePage() {
       queue={queue}
       queueLoading={queueLoading}
       queueError={queueError}
+      onEvent={handleOperationsEvent}
       onOverviewServiceDateChange={setServiceDate}
     />
   );

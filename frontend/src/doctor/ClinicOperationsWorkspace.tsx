@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { QueueActionDrawer, type QueueDrawerMode } from './QueueActionDrawer';
+import { QueueActionDrawer, type QueueDrawerCommand, type QueueDrawerMode } from './QueueActionDrawer';
 import {
   AppointmentDetailsDrawer,
   AppointmentReportPreview,
@@ -21,9 +21,12 @@ type PatientStatus =
   | 'CANCELLED';
 
 export type ClinicOperationsEvent =
-  | { type: 'CALL_NEXT'; patientId: string | number }
+  | { type: 'CALL_NEXT'; patientId: string | number; patientOutcome: 'COMPLETED' | 'OUT_FOR_PROCEDURE' | 'NOW_SERVING' }
   | { type: 'COMPLETE_CURRENT'; patientId: string | number }
   | { type: 'RETURN_TO_QUEUE'; patientId: string | number }
+  | { type: 'STAFF_REINSERT'; patientId: string | number; afterPatientId?: string | number }
+  | { type: 'UNDO_QUEUE' }
+  | { type: 'ADD_WALK_IN' }
   | { type: 'OPEN_ASSIGN_SECRETARY' }
   | { type: 'GENERATE_PDF' }
   | { type: 'PLACEHOLDER_ACTION'; label: string };
@@ -280,16 +283,19 @@ function ActionButton({
   children,
   onClick,
   variant = 'outline',
+  pressed,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   variant?: 'outline' | 'solid' | 'blue' | 'green' | 'orange';
+  pressed?: boolean;
 }) {
   return (
     <button
-      className={`ops-action is-${variant}`}
+      className={`ops-action is-${variant}${pressed ? ' is-selected' : ''}`}
       type="button"
       onClick={onClick}
+      aria-pressed={pressed}
     >
       {children}
     </button>
@@ -631,14 +637,20 @@ function QueueTab({
   onServiceDateChange,
 }: {
   patients: Patient[];
-  onLocalAction: (event: ClinicOperationsEvent) => void;
+  onLocalAction: (event: ClinicOperationsEvent) => void | Promise<void>;
 } & ServiceDateProps) {
   const [drawer, setDrawer] = useState<QueueDrawerMode | null>(null);
+  const [patientOutcome, setPatientOutcome] = useState<'COMPLETED' | 'OUT_FOR_PROCEDURE' | 'NOW_SERVING'>('COMPLETED');
   const current = patients.find((p) => p.status === 'NOW SERVING')!;
   const next = patients.find((p) => p.status === 'WAITING')!;
   const waiting = patients.filter((p) => p.status === 'WAITING');
   const absent = patients.filter((p) => p.status === 'TEMPORARILY ABSENT');
   const procedure = patients.filter((p) => p.status === 'OUT FOR PROCEDURE');
+  function handleDrawerCommand(command: QueueDrawerCommand) {
+    if (command.type === 'STAFF_REINSERT') return onLocalAction({ type: 'STAFF_REINSERT', patientId: command.appointmentId, afterPatientId: command.afterAppointmentId });
+    if (command.type === 'UNDO_QUEUE') return onLocalAction({ type: 'UNDO_QUEUE' });
+    return onLocalAction({ type: 'ADD_WALK_IN' });
+  }
   return (
     <div className="ops-queue">
       <SummaryStrip
@@ -661,33 +673,21 @@ function QueueTab({
             </div>
             <ActionButton
               variant="green"
-              onClick={() =>
-                onLocalAction({
-                  type: 'COMPLETE_CURRENT',
-                  patientId: current.id,
-                })
-              }
+              pressed={patientOutcome === 'COMPLETED'}
+              onClick={() => setPatientOutcome('COMPLETED')}
             >
               <ActionLabel icon="check">COMPLETE</ActionLabel>
             </ActionButton>
             <ActionButton
               variant="orange"
-              onClick={() =>
-                onLocalAction({
-                  type: 'PLACEHOLDER_ACTION',
-                  label: 'Out for procedure',
-                })
-              }
+              pressed={patientOutcome === 'OUT_FOR_PROCEDURE'}
+              onClick={() => setPatientOutcome('OUT_FOR_PROCEDURE')}
             >
               <ActionLabel icon="procedure">OUT FOR PROCEDURE</ActionLabel>
             </ActionButton>
             <ActionButton
-              onClick={() =>
-                onLocalAction({
-                  type: 'PLACEHOLDER_ACTION',
-                  label: 'Did not respond',
-                })
-              }
+              pressed={patientOutcome === 'NOW_SERVING'}
+              onClick={() => setPatientOutcome('NOW_SERVING')}
             >
               <ActionLabel icon="person">DID NOT RESPOND</ActionLabel>
             </ActionButton>
@@ -845,7 +845,7 @@ function QueueTab({
         <ActionButton
           variant="green"
           onClick={() =>
-            onLocalAction({ type: 'CALL_NEXT', patientId: next.id })
+            onLocalAction({ type: 'CALL_NEXT', patientId: next.id, patientOutcome })
           }
         >
           <ActionLabel icon="play">CALL NEXT</ActionLabel>
@@ -861,6 +861,8 @@ function QueueTab({
         <QueueActionDrawer
           mode={drawer}
           onClose={() => setDrawer(null)}
+          patients={patients.map(({ id, queue: queueNumber, name, service, status }) => ({ id, queue: queueNumber, name, service, status }))}
+          onQueueCommand={handleDrawerCommand}
           onComplete={(message) =>
             onLocalAction({ type: 'PLACEHOLDER_ACTION', label: message })
           }
@@ -1277,7 +1279,7 @@ export function ClinicOperationsWorkspace({
 }: {
   clinic: { name: string; address: string; timeZone: string };
   onBack: () => void;
-  onEvent?: (event: ClinicOperationsEvent) => void;
+  onEvent?: (event: ClinicOperationsEvent) => void | Promise<void>;
   overview?: ClinicOperationsOverview | null;
   overviewLoading?: boolean;
   overviewError?: string;
@@ -1333,8 +1335,13 @@ export function ClinicOperationsWorkspace({
     setServiceDate(value);
     onOverviewServiceDateChange?.(value);
   }
-  function handleEvent(event: ClinicOperationsEvent) {
-    onEvent?.(event);
+  async function handleEvent(event: ClinicOperationsEvent) {
+    try {
+      await onEvent?.(event);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to update clinic operations.');
+      return;
+    }
     if (event.type === 'CALL_NEXT') {
       if (!queue)
         setPreviewPatients((current) =>
@@ -1363,6 +1370,12 @@ export function ClinicOperationsWorkspace({
           ),
         );
       setNotice('Patient returned to the waiting queue.');
+    } else if (event.type === 'STAFF_REINSERT') {
+      setNotice('Queue placement updated.');
+    } else if (event.type === 'UNDO_QUEUE') {
+      setNotice('The latest Call Next operation was corrected.');
+    } else if (event.type === 'ADD_WALK_IN') {
+      setNotice('Walk-in creation requires the staff-assisted booking API.');
     } else if (event.type === 'GENERATE_PDF')
       setNotice('PDF generation is ready for backend connection.');
     else if (event.type === 'PLACEHOLDER_ACTION')
