@@ -147,9 +147,7 @@ describe('PracticeLocationConfigurationDraftService', () => {
       '"name":"Draft Clinic Name"',
     );
     expect(serializedScheduleDraftCalls).toContain('"shortCode":"NORTH"');
-    expect(serializedScheduleDraftCalls).toContain(
-      '"timeZone":"Asia/Manila"',
-    );
+    expect(serializedScheduleDraftCalls).toContain('"timeZone":"Asia/Manila"');
     expect(
       transactionMock.doctorPracticeConfigurationDraftService.createMany,
     ).toHaveBeenCalledWith(
