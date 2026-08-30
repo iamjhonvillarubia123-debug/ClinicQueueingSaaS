@@ -116,6 +116,16 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         maximumEstimatedServiceMinutesPerPatient: 120,
       },
     });
+    const financialAccount = await prisma.doctorFinancialAccount.create({
+      data: { doctorUserId: doctor.id },
+    });
+    await prisma.doctorSubscriptionEntitlement.create({
+      data: {
+        doctorFinancialAccountId: financialAccount.id,
+        paidThrough: new Date(serviceDate.getTime() + 20 * 24 * 60 * 60 * 1000),
+        graceEndsAt: new Date(serviceDate.getTime() + 27 * 24 * 60 * 60 * 1000),
+      },
+    });
     const location = await prisma.practiceLocation.create({
       data: {
         doctorProfileId: profile.id,
@@ -330,7 +340,8 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       );
     }
     expect(encryptedMessage).not.toContain(rawAccessToken);
-    const decryptedMessage = notificationPayload.decryptMessage(encryptedMessage);
+    const decryptedMessage =
+      notificationPayload.decryptMessage(encryptedMessage);
     expect(decryptedMessage).toContain('Queue number: 1.');
     expect(decryptedMessage).toContain(
       `https://app.example.test/booking/access#token=${encodeURIComponent(rawAccessToken)}`,
