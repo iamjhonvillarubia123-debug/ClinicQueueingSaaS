@@ -46,6 +46,11 @@ describe('PracticeLocationActivationService', () => {
   };
 
   const time = (hour: number) => new Date(Date.UTC(1970, 0, 1, hour));
+  const activationDto = {
+    practiceLocationId: 'location-1',
+    password: 'test-password',
+    confirmActivation: true,
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -140,11 +145,7 @@ describe('PracticeLocationActivationService', () => {
     arrangeLocation(PracticeLocationLifecycleStatus.DRAFT);
 
     await expect(
-      service.activate(
-        'doctor-1',
-        { practiceLocationId: 'location-1' },
-        'activate-key',
-      ),
+      service.activate('doctor-1', activationDto, 'activate-key'),
     ).resolves.toEqual({ activated: true, replayed: false });
 
     expect(
@@ -173,7 +174,7 @@ describe('PracticeLocationActivationService', () => {
     await expect(
       service.activate(
         'doctor-1',
-        { practiceLocationId: 'location-1' },
+        activationDto,
         'activate-recurring-conflict-key',
       ),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -208,11 +209,7 @@ describe('PracticeLocationActivationService', () => {
     prismaServiceMock.practiceSchedule.findMany.mockResolvedValue([]);
 
     await expect(
-      service.activate(
-        'doctor-1',
-        { practiceLocationId: 'location-1' },
-        'activate-key',
-      ),
+      service.activate('doctor-1', activationDto, 'activate-key'),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prismaServiceMock.practiceLocation.update).not.toHaveBeenCalled();
@@ -225,11 +222,7 @@ describe('PracticeLocationActivationService', () => {
     });
 
     await expect(
-      service.activate(
-        'doctor-1',
-        { practiceLocationId: 'location-1' },
-        'activate-key',
-      ),
+      service.activate('doctor-1', activationDto, 'activate-key'),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(prismaServiceMock.practiceSchedule.findMany).not.toHaveBeenCalled();
@@ -262,11 +255,7 @@ describe('PracticeLocationActivationService', () => {
     });
 
     await expect(
-      service.activate(
-        'doctor-1',
-        { practiceLocationId: 'location-1' },
-        'activate-key',
-      ),
+      service.activate('doctor-1', activationDto, 'activate-key'),
     ).resolves.toEqual({ activated: true, replayed: true });
 
     expect(prismaServiceMock.practiceSchedule.findMany).not.toHaveBeenCalled();
