@@ -10,6 +10,7 @@ import type {
   ClinicOperationsQueue,
 } from './ClinicOperationsWorkspace';
 import type { QueueDrawerBookingConfiguration } from './QueueActionDrawer';
+import { ServiceDateTodayProvider } from './ServiceDateControl';
 
 type AppointmentDetailsResponse = {
   id: string;
@@ -45,6 +46,13 @@ type AppointmentReportResponse = {
   generatedAt: string;
 };
 
+type OperationsContext = {
+  practiceLocationId: string;
+  clinicName: string | null;
+  timeZone: string;
+  currentServiceDate: string;
+};
+
 function mapAppointmentDetails(details: AppointmentDetailsResponse): AppointmentDetailsModel {
   return {
     id: details.id,
@@ -70,7 +78,9 @@ function mapAppointmentDetails(details: AppointmentDetailsResponse): Appointment
 export function AuthoritativeClinicOperationsRoutePage() {
   const navigate = useNavigate();
   const { clinicId } = useParams();
-  const [serviceDate, setServiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [operationsContext, setOperationsContext] = useState<OperationsContext | null>(null);
+  const [contextError, setContextError] = useState('');
+  const [serviceDate, setServiceDate] = useState<string | null>(null);
   const [overview, setOverview] = useState<ClinicOperationsOverview | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [overviewError, setOverviewError] = useState('');
@@ -82,6 +92,40 @@ export function AuthoritativeClinicOperationsRoutePage() {
   const [appointmentsError, setAppointmentsError] = useState('');
   const [bookingConfiguration, setBookingConfiguration] = useState<QueueDrawerBookingConfiguration | null>(null);
   const [operationsRevision, setOperationsRevision] = useState(0);
+
+  useEffect(() => {
+    if (!clinicId) {
+      setOperationsContext(null);
+      setServiceDate(null);
+      setContextError('Clinic identifier is missing.');
+      return;
+    }
+    let cancelled = false;
+    setOperationsContext(null);
+    setServiceDate(null);
+    setContextError('');
+    void apiRequest<OperationsContext>(
+      `/practice-location/${encodeURIComponent(clinicId)}/operations/context`,
+    )
+      .then((result) => {
+        if (!cancelled) {
+          setOperationsContext(result);
+          setServiceDate(result.currentServiceDate);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setContextError(
+            error instanceof Error
+              ? error.message
+              : 'Unable to determine the clinic-local service date.',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clinicId]);
 
   useEffect(() => {
     if (!clinicId) {
@@ -97,12 +141,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!clinicId) {
-      setOverview(null);
-      setOverviewError('Clinic identifier is missing.');
-      setOverviewLoading(false);
-      return;
-    }
+    if (!clinicId || !serviceDate) return;
     setOverviewLoading(true);
     setOverviewError('');
     void apiRequest<ClinicOperationsOverview>(`/practice-location/${encodeURIComponent(clinicId)}/operations/overview?serviceDate=${encodeURIComponent(serviceDate)}`)
@@ -119,12 +158,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!clinicId) {
-      setQueue(null);
-      setQueueError('Clinic identifier is missing.');
-      setQueueLoading(false);
-      return;
-    }
+    if (!clinicId || !serviceDate) return;
     setQueueLoading(true);
     setQueueError('');
     void apiRequest<ClinicOperationsQueue>(`/practice-location/${encodeURIComponent(clinicId)}/operations/queue?serviceDate=${encodeURIComponent(serviceDate)}`)
@@ -141,12 +175,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!clinicId) {
-      setAppointments(null);
-      setAppointmentsError('Clinic identifier is missing.');
-      setAppointmentsLoading(false);
-      return;
-    }
+    if (!clinicId || !serviceDate) return;
     setAppointmentsLoading(true);
     setAppointmentsError('');
     void apiRequest<ClinicOperationsQueue>(`/practice-location/${encodeURIComponent(clinicId)}/operations/appointments?serviceDate=${encodeURIComponent(serviceDate)}`)
@@ -162,7 +191,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
   }, [clinicId, serviceDate, operationsRevision]);
 
   async function handleOperationsEvent(event: ClinicOperationsEvent) {
-    if (!clinicId) throw new Error('Clinic identifier is missing.');
+    if (!clinicId || !serviceDate) throw new Error('Clinic service date is not available.');
     if (event.type === 'CALL_NEXT') {
       await apiRequest('/clinic-days/next-patient', { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: { practiceLocationId: clinicId, serviceDate, patientOutcome: event.patientOutcome } });
     } else if (event.type === 'RETURN_TO_QUEUE') {
@@ -188,7 +217,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
   }
 
   async function loadDailyAppointmentReport(): Promise<AuthoritativeAppointmentReport> {
-    if (!clinicId) throw new Error('Clinic identifier is missing.');
+    if (!clinicId || !serviceDate) throw new Error('Clinic service date is not available.');
     const report = await apiRequest<AppointmentReportResponse>(`/practice-location/${encodeURIComponent(clinicId)}/operations/appointment-report?serviceDate=${encodeURIComponent(serviceDate)}`);
     return {
       ...report,
@@ -196,24 +225,39 @@ export function AuthoritativeClinicOperationsRoutePage() {
     };
   }
 
+  if (contextError) {
+    return (
+      <div className="ops-workspace-state is-error" role="alert">
+        <strong>Unable to open clinic operations.</strong>
+        <span>{contextError}</span>
+      </div>
+    );
+  }
+
+  if (!serviceDate || !operationsContext) {
+    return <div className="ops-workspace-state" role="status">Loading clinic-local service date…</div>;
+  }
+
   return (
-    <AuthoritativeClinicOperationsWorkspace
-      overview={overview}
-      overviewLoading={overviewLoading}
-      overviewError={overviewError}
-      queue={queue}
-      queueLoading={queueLoading}
-      queueError={queueError}
-      appointments={appointments}
-      appointmentsLoading={appointmentsLoading}
-      appointmentsError={appointmentsError}
-      serviceDate={serviceDate}
-      onServiceDateChange={setServiceDate}
-      onBack={() => navigate('/app/clinics')}
-      onEvent={handleOperationsEvent}
-      bookingConfiguration={bookingConfiguration}
-      loadAppointmentDetails={loadAppointmentDetails}
-      loadDailyAppointmentReport={loadDailyAppointmentReport}
-    />
+    <ServiceDateTodayProvider today={operationsContext.currentServiceDate}>
+      <AuthoritativeClinicOperationsWorkspace
+        overview={overview}
+        overviewLoading={overviewLoading}
+        overviewError={overviewError}
+        queue={queue}
+        queueLoading={queueLoading}
+        queueError={queueError}
+        appointments={appointments}
+        appointmentsLoading={appointmentsLoading}
+        appointmentsError={appointmentsError}
+        serviceDate={serviceDate}
+        onServiceDateChange={setServiceDate}
+        onBack={() => navigate('/app/clinics')}
+        onEvent={handleOperationsEvent}
+        bookingConfiguration={bookingConfiguration}
+        loadAppointmentDetails={loadAppointmentDetails}
+        loadDailyAppointmentReport={loadDailyAppointmentReport}
+      />
+    </ServiceDateTodayProvider>
   );
 }
