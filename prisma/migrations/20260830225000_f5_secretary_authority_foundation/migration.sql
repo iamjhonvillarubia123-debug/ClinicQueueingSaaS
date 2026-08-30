@@ -112,7 +112,9 @@ CREATE TABLE "SubstituteSecretaryCoverage" (
   CONSTRAINT "SubstituteSecretaryCoverage_end_shape_check" CHECK (
     ("status" = 'ACTIVE' AND "endedAt" IS NULL AND "endedByUserId" IS NULL)
     OR
-    ("status" <> 'ACTIVE' AND "endedAt" IS NOT NULL AND "endedByUserId" IS NOT NULL)
+    ("status" IN ('CANCELLED', 'SUPERSEDED') AND "endedAt" IS NOT NULL AND "endedByUserId" IS NOT NULL)
+    OR
+    ("status" = 'EXPIRED' AND "endedAt" IS NOT NULL AND "endedByUserId" IS NULL)
   )
 );
 
