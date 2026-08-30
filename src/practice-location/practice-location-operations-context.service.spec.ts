@@ -35,9 +35,9 @@ describe('PracticeLocationOperationsContextService', () => {
 
   it('does not disclose a clinic outside the doctor ownership scope', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue(null);
-    await expect(service.getContext('doctor-1', 'clinic-2')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.getContext('doctor-1', 'clinic-2'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects an operations context when the clinic timezone is missing', async () => {
@@ -46,8 +46,8 @@ describe('PracticeLocationOperationsContextService', () => {
       name: 'North Clinic',
       timeZone: null,
     });
-    await expect(service.getContext('doctor-1', 'clinic-1')).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.getContext('doctor-1', 'clinic-1'),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
