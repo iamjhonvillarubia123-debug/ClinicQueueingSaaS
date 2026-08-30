@@ -1,6 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { createDecipheriv, createHmac, randomInt, randomUUID } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import {
@@ -16,8 +16,6 @@ import {
 import { AppModule } from './../src/app.module';
 import { NotificationPayloadService } from './../src/notification/notification-payload.service';
 import { PrismaService } from './../src/prisma/prisma.service';
-
-const NOTIFICATION_KEY_PURPOSE = 'notification-outbox-message-v1';
 
 describe('Individual booking confirmation endpoint (e2e)', () => {
   let app: INestApplication<App>;
@@ -161,6 +159,8 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
         mobileNumber: patientMobile,
         serviceDate: serviceDateText,
         selectedServiceIds: [selectedService.id],
+        privacyNoticeVersion: 'm6s2-e2e',
+        privacyNoticeAcknowledged: true,
       })
       .expect(201);
     const draftBody = draftResponse.body as unknown as {
@@ -181,7 +181,9 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       select: { messageBodyEncrypted: true },
     });
     if (!otpOutbox.messageBodyEncrypted) {
-      throw new Error('Booking OTP outbox did not contain a protected message.');
+      throw new Error(
+        'Booking OTP outbox did not contain a protected message.',
+      );
     }
     const otpMessage = notificationPayload.decryptMessage(
       otpOutbox.messageBodyEncrypted,
@@ -328,44 +330,10 @@ describe('Individual booking confirmation endpoint (e2e)', () => {
       );
     }
     expect(encryptedMessage).not.toContain(rawAccessToken);
-    const decryptedMessage = decryptNotificationMessage(encryptedMessage);
+    const decryptedMessage = notificationPayload.decryptMessage(encryptedMessage);
     expect(decryptedMessage).toContain('Queue number: 1.');
     expect(decryptedMessage).toContain(
       `https://app.example.test/booking/access#token=${encodeURIComponent(rawAccessToken)}`,
     );
   }, 30_000);
-
-  function decryptNotificationMessage(payload: string): string {
-    const [version, keyId, purpose, ivEncoded, tagEncoded, ciphertextEncoded] =
-      payload.split('.');
-    if (
-      version !== 'v1' ||
-      keyId !== testEnvironment.MOBILE_ENCRYPTION_ACTIVE_KEY_ID ||
-      purpose !== 'notification-outbox:message' ||
-      !ivEncoded ||
-      !tagEncoded ||
-      !ciphertextEncoded
-    ) {
-      throw new Error('Unexpected encrypted notification payload format.');
-    }
-
-    const baseKey = Buffer.from(
-      testEnvironment.MOBILE_ENCRYPTION_KEY_V1,
-      'base64',
-    );
-    const encryptionKey = createHmac('sha256', baseKey)
-      .update(NOTIFICATION_KEY_PURPOSE, 'utf8')
-      .digest();
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      encryptionKey,
-      Buffer.from(ivEncoded, 'base64url'),
-    );
-    decipher.setAAD(Buffer.from(purpose, 'utf8'));
-    decipher.setAuthTag(Buffer.from(tagEncoded, 'base64url'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(ciphertextEncoded, 'base64url')),
-      decipher.final(),
-    ]).toString('utf8');
-  }
 });
