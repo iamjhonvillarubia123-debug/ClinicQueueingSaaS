@@ -58,12 +58,18 @@ jobs:
           src/practice-location/practice-location-staff.controller.ts
           src/practice-location/practice-location.controller.ts
           src/practice-location/practice-location.module.ts
+          src/queue/substitute-secretary.service.ts
+          src/queue/substitute-secretary.controller.ts
+          src/queue/start-clinic.service.ts
+          src/queue/dto/assign-substitute-secretary.dto.ts
       - name: Lint Open Clinic operations tests
         run: >-
           npx eslint
           src/practice-location/practice-location-operations.service.spec.ts
           src/practice-location/practice-location-operations-context.service.spec.ts
           src/practice-location/practice-location-staff-read.service.spec.ts
+          src/queue/substitute-secretary.service.spec.ts
+          src/queue/start-clinic-operating-secretary.service.spec.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
@@ -71,7 +77,7 @@ jobs:
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
           node --check scripts/wire-clinic-activation-ui.mjs
-      - name: Test public booking, patient recovery, clinic configuration, and open clinic reads
+      - name: Test public booking, patient recovery, clinic configuration, open clinic reads, and operating staff authority
         run: >-
           npm test -- --runInBand
           public-booking-entry.service.spec.ts
@@ -87,4 +93,6 @@ jobs:
           practice-location-operations.service.spec.ts
           practice-location-operations-context.service.spec.ts
           practice-location-staff-read.service.spec.ts
+          substitute-secretary.service.spec.ts
+          start-clinic-operating-secretary.service.spec.ts
       - run: npm run build
