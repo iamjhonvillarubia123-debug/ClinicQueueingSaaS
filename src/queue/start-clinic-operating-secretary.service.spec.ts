@@ -51,18 +51,12 @@ describe('StartClinicService operating secretary authority', () => {
 
   it('lets the owning Doctor start without assigning a regular Secretary implicitly', async () => {
     await expect(
-      resolver.assertActorAuthorityAndResolveOperatingStaff(
-        {},
-        context,
-        null,
-        {
-          id: 'doctor-1',
-          role: UserRole.DOCTOR,
-          accountStatus: UserAccountStatus.ACTIVE,
-          administrativeRestrictionStatus:
-            AdministrativeRestrictionStatus.NONE,
-        },
-      ),
+      resolver.assertActorAuthorityAndResolveOperatingStaff({}, context, null, {
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      }),
     ).resolves.toBeNull();
   });
 
@@ -80,8 +74,7 @@ describe('StartClinicService operating secretary authority', () => {
           id: 'doctor-1',
           role: UserRole.DOCTOR,
           accountStatus: UserAccountStatus.ACTIVE,
-          administrativeRestrictionStatus:
-            AdministrativeRestrictionStatus.NONE,
+          administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
         },
       ),
     ).resolves.toBe('staff-operating');
@@ -89,18 +82,12 @@ describe('StartClinicService operating secretary authority', () => {
 
   it('does not grant a Secretary START CLINIC authority without an explicit ClinicDay operating assignment', async () => {
     await expect(
-      resolver.assertActorAuthorityAndResolveOperatingStaff(
-        {},
-        context,
-        null,
-        {
-          id: 'secretary-1',
-          role: UserRole.SECRETARY,
-          accountStatus: UserAccountStatus.ACTIVE,
-          administrativeRestrictionStatus:
-            AdministrativeRestrictionStatus.NONE,
-        },
-      ),
+      resolver.assertActorAuthorityAndResolveOperatingStaff({}, context, null, {
+        id: 'secretary-1',
+        role: UserRole.SECRETARY,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
