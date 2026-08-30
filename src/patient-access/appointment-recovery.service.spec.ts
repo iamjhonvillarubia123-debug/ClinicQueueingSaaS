@@ -100,13 +100,10 @@ describe('AppointmentRecoveryService', () => {
       'If the appointment can be recovered, verification will continue.',
     );
     expect(result).not.toHaveProperty('candidateAppointmentId');
-    expect(attemptCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          candidateAppointmentId: 'appointment-1',
-        }),
-      }),
-    );
+    const [attemptCreateCall] = attemptCreate.mock.calls as unknown as Array<
+      [{ data: { candidateAppointmentId: string } }]
+    >;
+    expect(attemptCreateCall.data.candidateAppointmentId).toBe('appointment-1');
     expect(otpOutbox.createBookingOtpOutbox).toHaveBeenCalledTimes(1);
   });
 
@@ -138,12 +135,11 @@ describe('AppointmentRecoveryService', () => {
     const result = await service.reject('attempt-1');
 
     expect(result.rejected).toBe(true);
-    expect(updateAttempt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: BookingRecoveryAttemptStatus.REJECTED,
-        }),
-      }),
+    const [rejectUpdateCall] = updateAttempt.mock.calls as unknown as Array<
+      [{ data: { status: BookingRecoveryAttemptStatus } }]
+    >;
+    expect(rejectUpdateCall.data.status).toBe(
+      BookingRecoveryAttemptStatus.REJECTED,
     );
     expect(transaction.appointment.update).not.toHaveBeenCalled();
     expect(transaction.bookingAccessToken.create).not.toHaveBeenCalled();
@@ -217,20 +213,21 @@ describe('AppointmentRecoveryService', () => {
     expect(revokeTokens).toHaveBeenCalledTimes(1);
     expect(createToken).toHaveBeenCalledTimes(1);
     expect(transaction.appointment.update).not.toHaveBeenCalled();
-    expect(updateAttempt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: BookingRecoveryAttemptStatus.CANDIDATE_CONFIRMED,
-        }),
-      }),
-    );
-    expect(updateAttempt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          status: BookingRecoveryAttemptStatus.COMPLETED,
-        }),
-      }),
-    );
+    const updateCalls = updateAttempt.mock.calls as unknown as Array<
+      [{ data: { status: BookingRecoveryAttemptStatus } }]
+    >;
+    expect(
+      updateCalls.some(
+        ([call]) =>
+          call.data.status ===
+          BookingRecoveryAttemptStatus.CANDIDATE_CONFIRMED,
+      ),
+    ).toBe(true);
+    expect(
+      updateCalls.some(
+        ([call]) => call.data.status === BookingRecoveryAttemptStatus.COMPLETED,
+      ),
+    ).toBe(true);
     expect(idempotency.deriveIdentity).toHaveBeenCalledWith(
       expect.objectContaining({
         commandType: CommandType.COMPLETE_APPOINTMENT_RECOVERY,
