@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthoritativeClinicOperationsWorkspace } from './AuthoritativeClinicOperationsWorkspace';
+import type { AuthoritativeAppointmentReport } from './AuthoritativeAppointmentReportPreview';
 import type {
   ClinicOperationsOverview,
   ClinicOperationsQueue,
@@ -20,11 +21,7 @@ const clinic = {
 const overview: ClinicOperationsOverview = {
   clinic,
   serviceDate: '2026-08-25',
-  schedule: {
-    isOpen: false,
-    opensAt: null,
-    closesAt: null,
-  },
+  schedule: { isOpen: false, opensAt: null, closesAt: null },
   clinicDay: null,
   queue: {
     counts: {},
@@ -33,10 +30,7 @@ const overview: ClinicOperationsOverview = {
     next: null,
     waitingPreview: [],
   },
-  appointments: {
-    total: 0,
-    counts: {},
-  },
+  appointments: { total: 0, counts: {} },
   timeline: [],
 };
 
@@ -48,6 +42,15 @@ const emptyQueue: ClinicOperationsQueue = {
   counts: {},
   patients: [],
   timeline: [],
+};
+
+const emptyReport: AuthoritativeAppointmentReport = {
+  clinic,
+  serviceDate: '2026-08-25',
+  schedule: overview.schedule,
+  counts: {},
+  appointments: [],
+  generatedAt: '2026-08-25T10:00:00.000Z',
 };
 
 afterEach(cleanup);
@@ -73,29 +76,20 @@ describe('AuthoritativeClinicOperationsWorkspace', () => {
         onEvent={vi.fn()}
         bookingConfiguration={null}
         loadAppointmentDetails={vi.fn()}
+        loadDailyAppointmentReport={vi.fn().mockResolvedValue(emptyReport)}
       />,
     );
 
-    const timeline = screen.getByRole('heading', {
-      name: 'Clinic Day Timeline',
-    }).closest('article');
+    const timeline = screen.getByRole('heading', { name: 'Clinic Day Timeline' }).closest('article');
     expect(timeline).not.toBeNull();
-    expect(
-      within(timeline as HTMLElement).getByText(
-        'No queue events have been recorded for this service date.',
-      ),
-    ).toBeInTheDocument();
+    expect(within(timeline as HTMLElement).getByText('No queue events have been recorded for this service date.')).toBeInTheDocument();
     expect(screen.queryByText('Maria Santos')).not.toBeInTheDocument();
     expect(screen.queryByText('Jane Reyes')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Appointments' }));
 
-    expect(screen.getByText('Total Appointments').parentElement).toHaveTextContent(
-      '0',
-    );
-    const appointmentSummary = screen
-      .getByRole('heading', { name: 'Appointment Summary' })
-      .closest('article');
+    expect(screen.getByText('Total Appointments').parentElement).toHaveTextContent('0');
+    const appointmentSummary = screen.getByRole('heading', { name: 'Appointment Summary' }).closest('article');
     expect(appointmentSummary).not.toBeNull();
     const summary = within(appointmentSummary as HTMLElement);
     expect(summary.getByText('Waiting').parentElement).toHaveTextContent('0');
@@ -107,11 +101,43 @@ describe('AuthoritativeClinicOperationsWorkspace', () => {
     expect(screen.queryByText('12')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Staff' }));
-
-    expect(
-      screen.getByText('Staff integration is not connected yet.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Staff integration is not connected yet.')).toBeInTheDocument();
     expect(screen.queryByText('Maria Santos')).not.toBeInTheDocument();
     expect(screen.queryByText('Jane Reyes')).not.toBeInTheDocument();
+  });
+
+  it('loads the protected service-date report before offering PDF printing', async () => {
+    const user = userEvent.setup();
+    const loadDailyAppointmentReport = vi.fn().mockResolvedValue(emptyReport);
+
+    render(
+      <AuthoritativeClinicOperationsWorkspace
+        overview={overview}
+        overviewLoading={false}
+        overviewError=""
+        queue={emptyQueue}
+        queueLoading={false}
+        queueError=""
+        appointments={emptyQueue}
+        appointmentsLoading={false}
+        appointmentsError=""
+        serviceDate="2026-08-25"
+        onServiceDateChange={vi.fn()}
+        onBack={vi.fn()}
+        onEvent={vi.fn()}
+        bookingConfiguration={null}
+        loadAppointmentDetails={vi.fn()}
+        loadDailyAppointmentReport={loadDailyAppointmentReport}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Appointments' }));
+    await user.click(screen.getByRole('button', { name: 'GENERATE PDF' }));
+
+    expect(loadDailyAppointmentReport).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('dialog', { name: 'Daily appointment PDF preview' })).toBeInTheDocument();
+    expect(screen.getByText('No appointments were recorded for this service date.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Print / Save PDF' })).toBeInTheDocument();
+    expect(screen.queryByText(/csv/i)).toBeInTheDocument();
   });
 });
