@@ -9,6 +9,7 @@ import { PracticeLocationConfigurationDraftService } from './practice-location-c
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
+import { PracticeLocationOperationsContextService } from './practice-location-operations-context.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationService } from './practice-location.service';
@@ -27,6 +28,7 @@ import { PracticeLocationOperationsService } from './practice-location-operation
     PracticeLocationDataRetentionGateService,
     PracticeLocationDraftScheduleService,
     PracticeLocationLifecycleService,
+    PracticeLocationOperationsContextService,
     PracticeLocationPermanentDeleteService,
     PracticeSchedulePreflightService,
     PracticeLocationOperationsService,
