@@ -78,7 +78,7 @@ const staff: AuthoritativeClinicStaff = {
 afterEach(cleanup);
 
 describe('ClinicStaffView', () => {
-  it('presents regular and service-date Operating Secretary as distinct authority roles', () => {
+  it('presents Clinic Secretary and Secretary for the Day as distinct user-facing concepts', () => {
     render(
       <ServiceDateTodayProvider today="2026-08-30">
         <ClinicStaffView
@@ -89,40 +89,15 @@ describe('ClinicStaffView', () => {
       </ServiceDateTodayProvider>,
     );
 
-    const regularCard = screen
-      .getByRole('heading', { name: 'Current Regular Secretary' })
-      .closest('article');
-    expect(regularCard).not.toBeNull();
-    expect(
-      within(regularCard as HTMLElement).getByText('Maria Santos'),
-    ).toBeInTheDocument();
-
-    const operatingCard = screen
-      .getByRole('heading', {
-        name: 'Operating Secretary for August 30, 2026',
-      })
-      .closest('article');
-    expect(operatingCard).not.toBeNull();
-    expect(
-      within(operatingCard as HTMLElement).getByText('Jane Reyes'),
-    ).toBeInTheDocument();
-    expect(
-      within(operatingCard as HTMLElement).queryByText('Maria Santos'),
-    ).not.toBeInTheDocument();
-
-    const assignments = screen
-      .getByRole('heading', { name: 'Practice Staff Assignments (2)' })
-      .closest('article');
-    expect(assignments).not.toBeNull();
-    expect(
-      within(assignments as HTMLElement).getByText('Regular'),
-    ).toBeInTheDocument();
-    expect(
-      within(assignments as HTMLElement).getByText('Operating'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Secretary for the Day')).toBeInTheDocument();
+    expect(screen.getByText('Clinic Secretary')).toBeInTheDocument();
+    expect(screen.getAllByText('Jane Reyes').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Maria Santos').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Operating Secretary')).not.toBeInTheDocument();
+    expect(screen.queryByText('Regular Secretary')).not.toBeInTheDocument();
   });
 
-  it('offers the ready regular Secretary as a valid replacement after START CLINIC', async () => {
+  it('opens the Secretary for the Day drawer and performs a started-day handoff', async () => {
     const user = userEvent.setup();
     const onOperatingSecretaryAction = vi.fn();
 
@@ -137,11 +112,20 @@ describe('ClinicStaffView', () => {
       </ServiceDateTodayProvider>,
     );
 
-    expect(
-      screen.getByRole('option', { name: 'Maria Santos · Regular Secretary' }),
-    ).toBeInTheDocument();
     await user.click(
-      screen.getByRole('button', { name: 'REPLACE OPERATING SECRETARY' }),
+      screen.getByRole('button', { name: 'Change Secretary for the Day' }),
+    );
+
+    const drawer = screen.getByRole('complementary', {
+      name: 'Secretary for the Day drawer',
+    });
+    expect(
+      within(drawer).getByText('This does not change the regular Clinic Secretary assignment.'),
+    ).toBeInTheDocument();
+    expect(within(drawer).getByText('Maria Santos')).toBeInTheDocument();
+
+    await user.click(
+      within(drawer).getByRole('button', { name: 'Change Secretary for the Day' }),
     );
 
     expect(onOperatingSecretaryAction).toHaveBeenCalledWith({
@@ -151,7 +135,7 @@ describe('ClinicStaffView', () => {
     });
   });
 
-  it('supports initial assignment before ClinicDay creation and excludes non-ready staff', async () => {
+  it('supports initial day assignment before ClinicDay creation and excludes non-ready staff', async () => {
     const user = userEvent.setup();
     const onOperatingSecretaryAction = vi.fn();
     const beforeStart: AuthoritativeClinicStaff = {
@@ -179,9 +163,17 @@ describe('ClinicStaffView', () => {
       </ServiceDateTodayProvider>,
     );
 
-    expect(screen.queryByRole('option', { name: 'Jane Reyes' })).not.toBeInTheDocument();
     await user.click(
-      screen.getByRole('button', { name: 'ASSIGN OPERATING SECRETARY' }),
+      screen.getByRole('button', { name: 'Assign Secretary for the Day' }),
+    );
+    const drawer = screen.getByRole('complementary', {
+      name: 'Secretary for the Day drawer',
+    });
+    expect(within(drawer).getByText('Maria Santos')).toBeInTheDocument();
+    expect(within(drawer).queryByText('Jane Reyes')).not.toBeInTheDocument();
+
+    await user.click(
+      within(drawer).getByRole('button', { name: 'Assign Secretary for the Day' }),
     );
     expect(onOperatingSecretaryAction).toHaveBeenCalledWith({
       type: 'ASSIGN',
@@ -189,7 +181,7 @@ describe('ClinicStaffView', () => {
     });
   });
 
-  it('can clear an Operating Secretary to Doctor control', async () => {
+  it('can remove the Secretary for the Day and return control to the Doctor', async () => {
     const user = userEvent.setup();
     const onOperatingSecretaryAction = vi.fn();
 
@@ -205,8 +197,15 @@ describe('ClinicStaffView', () => {
     );
 
     await user.click(
-      screen.getByRole('button', { name: 'CLEAR OPERATING SECRETARY' }),
+      screen.getByRole('button', { name: 'Change Secretary for the Day' }),
     );
+    const drawer = screen.getByRole('complementary', {
+      name: 'Secretary for the Day drawer',
+    });
+    await user.click(
+      within(drawer).getByRole('button', { name: 'Remove Secretary for the Day' }),
+    );
+
     expect(onOperatingSecretaryAction).toHaveBeenCalledWith({
       type: 'CLEAR',
       clinicDayId: 'day-1',
