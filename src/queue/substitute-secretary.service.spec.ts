@@ -25,7 +25,7 @@ type AuditInput = {
 
 describe('SubstituteSecretaryService', () => {
   let service: SubstituteSecretaryService;
-  const auditCreateMock = jest.fn(async (input: AuditInput) => input);
+  const auditCreateMock = jest.fn((input: AuditInput) => Promise.resolve(input));
 
   const prismaServiceMock = {
     $transaction: jest.fn(),
