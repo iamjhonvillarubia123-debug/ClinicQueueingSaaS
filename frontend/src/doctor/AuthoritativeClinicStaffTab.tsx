@@ -34,22 +34,253 @@ export type AuthoritativeClinicStaff = {
   staffAssignments: ClinicStaffAssignment[];
 };
 
-type OperatingSecretaryAction =
+type DaySecretaryAction =
   | { type: 'ASSIGN'; userId: string }
   | { type: 'REPLACE'; clinicDayId: string; userId: string }
   | { type: 'CLEAR'; clinicDayId: string };
 
-function StaffIdentity({ staff }: { staff: ClinicStaffMember | null }) {
-  if (!staff) return <p>Not assigned</p>;
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function formatAssignedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+function StaffStatus({ staff }: { staff: ClinicStaffAssignment }) {
+  const active = staff.assignmentActive && staff.accountStatus === 'ACTIVE';
   return (
-    <div>
-      <strong>{staff.name}</strong>
-      <small>{staff.email}</small>
-      <small>
-        {staff.assignmentActive ? 'Active assignment' : 'Inactive assignment'} ·{' '}
-        {staff.accountStatus.replaceAll('_', ' ')} account
-      </small>
-    </div>
+    <span className={`clinic-staff-status ${active ? 'is-active' : 'is-inactive'}`}>
+      <i aria-hidden="true" />
+      {active ? 'Active' : 'Inactive'}
+    </span>
+  );
+}
+
+function SecretaryForDayPanel({
+  data,
+  serviceDate,
+  onServiceDateChange,
+  onOpenDrawer,
+}: {
+  data: AuthoritativeClinicStaff;
+  serviceDate: string;
+  onServiceDateChange: (value: string) => void;
+  onOpenDrawer: () => void;
+}) {
+  const terminal =
+    data.clinicDay?.status === 'CLOSED' || data.clinicDay?.status === 'CANCELLED';
+  return (
+    <section className="clinic-day-secretary-panel" aria-labelledby="day-secretary-title">
+      <div className="clinic-day-secretary-date">
+        <ServiceDateControl
+          compact
+          value={serviceDate}
+          onChange={onServiceDateChange}
+        />
+      </div>
+      <div className="clinic-day-secretary-copy">
+        <small id="day-secretary-title">Secretary for the Day</small>
+        <strong>{data.operatingSecretary?.name ?? 'Doctor handling this clinic day'}</strong>
+        <span>
+          {data.operatingSecretary
+            ? `Assigned for ${formatServiceDate(serviceDate, true)}`
+            : 'No Secretary has day-specific clinic authority.'}
+        </span>
+      </div>
+      <div className="clinic-day-secretary-context">
+        <small>Clinic Secretary</small>
+        <strong>{data.regularSecretary?.name ?? 'Not assigned'}</strong>
+        <span>Regular clinic assignment</span>
+      </div>
+      <button
+        type="button"
+        className="clinic-staff-primary-button"
+        onClick={onOpenDrawer}
+        disabled={terminal}
+      >
+        {data.operatingSecretary
+          ? 'Change Secretary for the Day'
+          : 'Assign Secretary for the Day'}
+      </button>
+    </section>
+  );
+}
+
+function DaySecretaryDrawer({
+  data,
+  serviceDate,
+  actionPending,
+  actionMessage,
+  onClose,
+  onAction,
+}: {
+  data: AuthoritativeClinicStaff;
+  serviceDate: string;
+  actionPending: boolean;
+  actionMessage: string;
+  onClose: () => void;
+  onAction: (action: DaySecretaryAction) => void | Promise<void>;
+}) {
+  const candidates = useMemo(
+    () =>
+      data.staffAssignments.filter(
+        (staff) => staff.operationallyReady && !staff.isOperating,
+      ),
+    [data.staffAssignments],
+  );
+  const [selectedUserId, setSelectedUserId] = useState(
+    candidates[0]?.userId ?? '',
+  );
+  const status = data.clinicDay?.status ?? 'NOT_STARTED';
+  const terminal = status === 'CLOSED' || status === 'CANCELLED';
+  const started = status === 'STARTED';
+
+  useEffect(() => {
+    if (!candidates.some((staff) => staff.userId === selectedUserId)) {
+      setSelectedUserId(candidates[0]?.userId ?? '');
+    }
+  }, [candidates, selectedUserId]);
+
+  function submit() {
+    if (!selectedUserId || terminal) return;
+    if (data.operatingSecretary && data.clinicDay && started) {
+      void onAction({
+        type: 'REPLACE',
+        clinicDayId: data.clinicDay.id,
+        userId: selectedUserId,
+      });
+      return;
+    }
+    if (!data.operatingSecretary) {
+      void onAction({ type: 'ASSIGN', userId: selectedUserId });
+    }
+  }
+
+  return (
+    <aside className="clinic-day-secretary-drawer" aria-label="Secretary for the Day drawer">
+      <button
+        className="clinic-day-secretary-close"
+        type="button"
+        onClick={onClose}
+        aria-label="Close Secretary for the Day drawer"
+      >
+        ×
+      </button>
+      <header>
+        <span className="clinic-drawer-step">1</span>
+        <div>
+          <h2>Secretary for the Day</h2>
+          <p>{formatServiceDate(serviceDate, true)}</p>
+        </div>
+      </header>
+
+      <div className="clinic-day-secretary-explainer">
+        <strong>Day-specific clinic authority</strong>
+        <p>
+          Choose who will handle live clinic operations for this service date.
+          This does not change the regular Clinic Secretary assignment.
+        </p>
+      </div>
+
+      <section className="clinic-day-secretary-current">
+        <small>Currently assigned for this day</small>
+        <strong>{data.operatingSecretary?.name ?? 'No Secretary assigned'}</strong>
+        <span>
+          {data.operatingSecretary?.email ?? 'The Doctor is handling this clinic day.'}
+        </span>
+      </section>
+
+      {terminal ? (
+        <div className="clinic-day-secretary-note">
+          This Clinic Day is {status.replaceAll('_', ' ').toLowerCase()} and can no longer
+          change its day Secretary.
+        </div>
+      ) : null}
+
+      {!terminal && data.operatingSecretary && !started ? (
+        <div className="clinic-day-secretary-note">
+          Before the clinic starts, remove the current day assignment before choosing a
+          different Secretary. Once the clinic has started, this becomes a direct handoff.
+        </div>
+      ) : null}
+
+      {!terminal && (!data.operatingSecretary || started) ? (
+        <section className="clinic-day-secretary-options">
+          <h3>
+            {data.operatingSecretary ? 'Choose the new Secretary' : 'Choose a Secretary'}
+          </h3>
+          {candidates.length ? (
+            candidates.map((staff) => (
+              <button
+                type="button"
+                key={staff.practiceStaffId}
+                className={`clinic-day-secretary-option${
+                  selectedUserId === staff.userId ? ' is-selected' : ''
+                }`}
+                onClick={() => setSelectedUserId(staff.userId)}
+              >
+                <b>{initials(staff.name)}</b>
+                <span>
+                  <strong>{staff.name}</strong>
+                  <small>{staff.email}</small>
+                  {staff.isRegular ? <em>Clinic Secretary</em> : null}
+                </span>
+                <i aria-hidden="true" />
+              </button>
+            ))
+          ) : (
+            <p className="clinic-day-secretary-empty">
+              No other operationally-ready Secretary is assigned to this clinic.
+            </p>
+          )}
+          <button
+            type="button"
+            className="clinic-staff-primary-button is-full"
+            disabled={actionPending || !selectedUserId || candidates.length === 0}
+            onClick={submit}
+          >
+            {actionPending
+              ? 'Updating…'
+              : data.operatingSecretary
+                ? 'Change Secretary for the Day'
+                : 'Assign Secretary for the Day'}
+          </button>
+        </section>
+      ) : null}
+
+      {!terminal && data.operatingSecretary && data.clinicDay ? (
+        <button
+          type="button"
+          className="clinic-staff-secondary-button is-full"
+          disabled={actionPending}
+          onClick={() =>
+            void onAction({ type: 'CLEAR', clinicDayId: data.clinicDay!.id })
+          }
+        >
+          Remove Secretary for the Day
+        </button>
+      ) : null}
+
+      {actionMessage ? (
+        <div className="clinic-day-secretary-message" role="status">
+          {actionMessage}
+        </div>
+      ) : null}
+    </aside>
   );
 }
 
@@ -65,217 +296,120 @@ export function ClinicStaffView({
   serviceDate: string;
   onServiceDateChange: (value: string) => void;
   onOperatingSecretaryAction?: (
-    action: OperatingSecretaryAction,
+    action: DaySecretaryAction,
   ) => void | Promise<void>;
   actionPending?: boolean;
   actionMessage?: string;
 }) {
-  const candidates = useMemo(
-    () =>
-      data.staffAssignments.filter(
-        (staff) => staff.operationallyReady && !staff.isOperating,
-      ),
-    [data.staffAssignments],
-  );
-  const [selectedUserId, setSelectedUserId] = useState(
-    candidates[0]?.userId ?? '',
-  );
-
-  useEffect(() => {
-    if (!candidates.some((staff) => staff.userId === selectedUserId)) {
-      setSelectedUserId(candidates[0]?.userId ?? '');
-    }
-  }, [candidates, selectedUserId]);
-
-  const status = data.clinicDay?.status ?? 'NOT_STARTED';
-  const terminal = status === 'CLOSED' || status === 'CANCELLED';
-  const hasOperatingSecretary = data.operatingSecretary !== null;
-  const canReplace = hasOperatingSecretary && status === 'STARTED';
-  const canAssign = !hasOperatingSecretary && !terminal;
-  const canClear = hasOperatingSecretary && !terminal && data.clinicDay !== null;
-
-  function submitAssignment() {
-    if (!selectedUserId || !onOperatingSecretaryAction) return;
-    if (canReplace && data.clinicDay) {
-      void onOperatingSecretaryAction({
-        type: 'REPLACE',
-        clinicDayId: data.clinicDay.id,
-        userId: selectedUserId,
-      });
-      return;
-    }
-    if (canAssign) {
-      void onOperatingSecretaryAction({ type: 'ASSIGN', userId: selectedUserId });
-    }
-  }
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const matchingStaff = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return data.staffAssignments;
+    return data.staffAssignments.filter((staff) =>
+      `${staff.name} ${staff.email}`.toLowerCase().includes(query),
+    );
+  }, [data.staffAssignments, search]);
+  const activeCount = data.staffAssignments.filter(
+    (staff) => staff.assignmentActive && staff.accountStatus === 'ACTIVE',
+  ).length;
+  const inactiveCount = data.staffAssignments.length - activeCount;
 
   return (
-    <div className="ops-staff">
-      <div className="ops-summary-strip">
-        <ServiceDateControl
-          compact
-          value={serviceDate}
-          onChange={onServiceDateChange}
-        />
-        <div>
-          <span>
-            <small>Regular Secretary</small>
-            <strong>{data.regularSecretary?.name ?? 'Not assigned'}</strong>
-          </span>
-        </div>
-        <div>
-          <span>
-            <small>Operating Secretary</small>
-            <strong>{data.operatingSecretary?.name ?? 'Not assigned'}</strong>
-          </span>
-        </div>
-        <div>
-          <span>
-            <small>Clinic Day</small>
-            <strong>{status.replaceAll('_', ' ')}</strong>
-          </span>
-        </div>
-      </div>
-
-      <div className="ops-appointment-layout">
-        <main>
-          <article className="ops-card">
-            <h3>Current Regular Secretary</h3>
-            <p>
-              Location-wide regular assignment. This does not automatically
-              grant live-day Operating Secretary authority.
-            </p>
-            <StaffIdentity staff={data.regularSecretary} />
-          </article>
-
-          <article className="ops-card">
-            <h3>Operating Secretary for {formatServiceDate(serviceDate, true)}</h3>
-            <p>
-              Service-date authority from the Clinic Day. Changing this role is
-              an authorization handoff and does not restart the clinic or alter
-              queue order.
-            </p>
-            <StaffIdentity staff={data.operatingSecretary} />
-          </article>
-        </main>
-
-        <aside>
-          <article className="ops-card">
-            <h3>Practice Staff Assignments ({data.staffAssignments.length})</h3>
-            <p>
-              These records show location assignment only. Assignment alone is
-              not Operating Secretary authority for this service date.
-            </p>
-            {data.staffAssignments.length ? (
-              <ul className="ops-summary-list">
-                {data.staffAssignments.map((staff) => (
-                  <li key={staff.practiceStaffId}>
-                    <span>
-                      <strong>{staff.name}</strong>
-                      <small>{staff.email}</small>
-                    </span>
-                    <span>
-                      {staff.isRegular ? 'Regular ' : ''}
-                      {staff.isOperating ? 'Operating ' : ''}
-                      {!staff.isRegular && !staff.isOperating
-                        ? 'Assigned'
-                        : ''}
-                      {!staff.assignmentActive ? ' · Inactive' : ''}
-                      {staff.assignmentActive && !staff.operationallyReady
-                        ? ' · Not ready'
-                        : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>No PracticeStaff assignments exist for this clinic.</p>
-            )}
-          </article>
-        </aside>
-      </div>
-
-      <article className="ops-card">
-        <h3>Operating Secretary Control</h3>
-        {terminal ? (
-          <p>A terminal Clinic Day cannot change Operating Secretary authority.</p>
-        ) : null}
-        {!terminal && hasOperatingSecretary && status !== 'STARTED' ? (
-          <p>
-            Before the clinic starts, clear the existing Operating Secretary
-            before assigning a different one. Mid-day replacement becomes
-            available after START CLINIC.
-          </p>
-        ) : null}
-        {!terminal && (canAssign || canReplace) ? (
+    <div className={`clinic-staff-shell${drawerOpen ? ' has-drawer' : ''}`}>
+      <main className="clinic-staff-main">
+        <div className="clinic-staff-intro">
           <div>
-            <label htmlFor="operating-secretary-candidate">
-              {canReplace
-                ? 'Replacement Operating Secretary'
-                : 'Operating Secretary'}
-            </label>
-            <select
-              id="operating-secretary-candidate"
-              value={selectedUserId}
-              onChange={(event) => setSelectedUserId(event.target.value)}
-              disabled={actionPending || candidates.length === 0}
-            >
-              {candidates.length === 0 ? (
-                <option value="">No operationally-ready Secretary available</option>
-              ) : null}
-              {candidates.map((staff) => (
-                <option key={staff.practiceStaffId} value={staff.userId}>
-                  {staff.name}{staff.isRegular ? ' · Regular Secretary' : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="ops-action is-blue"
-              disabled={
-                actionPending ||
-                !selectedUserId ||
-                candidates.length === 0 ||
-                !onOperatingSecretaryAction
-              }
-              onClick={submitAssignment}
-            >
-              {actionPending
-                ? 'UPDATING…'
-                : canReplace
-                  ? 'REPLACE OPERATING SECRETARY'
-                  : 'ASSIGN OPERATING SECRETARY'}
-            </button>
+            <h2>Staff</h2>
+            <p>Manage the Secretaries assigned to {data.clinic.name ?? 'this clinic'}.</p>
           </div>
-        ) : null}
-        {canClear ? (
-          <button
-            type="button"
-            className="ops-action is-outline"
-            disabled={actionPending || !onOperatingSecretaryAction}
-            onClick={() =>
-              data.clinicDay &&
-              void onOperatingSecretaryAction?.({
-                type: 'CLEAR',
-                clinicDayId: data.clinicDay.id,
-              })
-            }
-          >
-            CLEAR OPERATING SECRETARY
-          </button>
-        ) : null}
-        {!terminal && !hasOperatingSecretary && candidates.length === 0 ? (
-          <p>
-            No operationally-ready PracticeStaff Secretary is available for
-            this clinic.
-          </p>
-        ) : null}
-        {actionMessage ? (
-          <div className="clinic-local-notice" role="status">
-            {actionMessage}
+        </div>
+
+        <SecretaryForDayPanel
+          data={data}
+          serviceDate={serviceDate}
+          onServiceDateChange={onServiceDateChange}
+          onOpenDrawer={() => setDrawerOpen(true)}
+        />
+
+        <article className="clinic-staff-list-card">
+          <div className="clinic-staff-list-toolbar">
+            <div>
+              <strong>Clinic Secretaries ({data.staffAssignments.length})</strong>
+              <span>Regular clinic assignments and access status</span>
+            </div>
+            <input
+              type="search"
+              placeholder="Search secretary by name or email…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              aria-label="Search clinic secretaries"
+            />
           </div>
-        ) : null}
-      </article>
+
+          <div className="clinic-staff-table-head" aria-hidden="true">
+            <span>Secretary</span>
+            <span>Role at this Clinic</span>
+            <span>Status</span>
+            <span>Assigned Since</span>
+          </div>
+
+          {matchingStaff.length ? (
+            matchingStaff.map((staff) => (
+              <div className="clinic-staff-table-row" key={staff.practiceStaffId}>
+                <div className="clinic-staff-person">
+                  <b>{initials(staff.name)}</b>
+                  <span>
+                    <strong>{staff.name}</strong>
+                    <small>{staff.email}</small>
+                  </span>
+                </div>
+                <div className="clinic-staff-role">
+                  <span>{staff.isRegular ? 'Clinic Secretary' : 'Assigned Secretary'}</span>
+                  {staff.isOperating ? <em>Secretary for this day</em> : null}
+                </div>
+                <StaffStatus staff={staff} />
+                <span className="clinic-staff-assigned-at">
+                  {formatAssignedAt(staff.assignedAt)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="clinic-staff-empty">No Secretaries match this search.</div>
+          )}
+
+          <div className="clinic-staff-access-summary">
+            <div className="is-active">
+              <strong>{activeCount}</strong>
+              <span>Active Secretaries</span>
+              <small>Can access this clinic according to their assigned role</small>
+            </div>
+            <div>
+              <strong>{inactiveCount}</strong>
+              <span>Inactive Secretaries</span>
+              <small>Assignment or account access is inactive</small>
+            </div>
+            <div className="is-day">
+              <strong>{data.operatingSecretary ? '1' : '0'}</strong>
+              <span>Secretary for the Day</span>
+              <small>{data.operatingSecretary?.name ?? 'Doctor handling this clinic day'}</small>
+            </div>
+          </div>
+        </article>
+      </main>
+
+      {drawerOpen ? (
+        <DaySecretaryDrawer
+          data={data}
+          serviceDate={serviceDate}
+          actionPending={actionPending}
+          actionMessage={actionMessage}
+          onClose={() => setDrawerOpen(false)}
+          onAction={
+            onOperatingSecretaryAction ?? (() => Promise.resolve())
+          }
+        />
+      ) : null}
     </div>
   );
 }
@@ -324,9 +458,7 @@ export function AuthoritativeClinicStaffTab({
     };
   }, [clinicId, serviceDate, revision]);
 
-  async function handleOperatingSecretaryAction(
-    action: OperatingSecretaryAction,
-  ) {
+  async function handleDaySecretaryAction(action: DaySecretaryAction) {
     setActionPending(true);
     setActionMessage('');
     try {
@@ -340,7 +472,7 @@ export function AuthoritativeClinicStaffTab({
             userId: action.userId,
           },
         });
-        setActionMessage('Operating Secretary assigned for this service date.');
+        setActionMessage('Secretary assigned for this clinic day.');
       } else if (action.type === 'REPLACE') {
         await apiRequest('/clinic-days/substitute-secretary/replace', {
           method: 'POST',
@@ -351,7 +483,7 @@ export function AuthoritativeClinicStaffTab({
           },
         });
         setActionMessage(
-          'Operating Secretary replaced. Clinic runtime and queue order were preserved.',
+          'Secretary for the day changed. Clinic progress and queue order were preserved.',
         );
       } else {
         await apiRequest('/clinic-days/substitute-secretary/end', {
@@ -359,7 +491,7 @@ export function AuthoritativeClinicStaffTab({
           headers: { 'Idempotency-Key': crypto.randomUUID() },
           body: { clinicDayId: action.clinicDayId },
         });
-        setActionMessage('Operating Secretary cleared. The Doctor remains in control.');
+        setActionMessage('Secretary for the day removed. The Doctor remains in control.');
       }
       setRevision((current) => current + 1);
       window.dispatchEvent(new Event('clinic-operations-refresh'));
@@ -367,7 +499,7 @@ export function AuthoritativeClinicStaffTab({
       setActionMessage(
         cause instanceof Error
           ? cause.message
-          : 'Unable to change Operating Secretary authority.',
+          : 'Unable to change the Secretary for this clinic day.',
       );
     } finally {
       setActionPending(false);
@@ -398,7 +530,7 @@ export function AuthoritativeClinicStaffTab({
       data={data}
       serviceDate={serviceDate}
       onServiceDateChange={onServiceDateChange}
-      onOperatingSecretaryAction={handleOperatingSecretaryAction}
+      onOperatingSecretaryAction={handleDaySecretaryAction}
       actionPending={actionPending}
       actionMessage={actionMessage}
     />
