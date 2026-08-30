@@ -3,11 +3,52 @@ import { OperationsIcon, type OperationsIconName } from './OperationsIcon';
 
 export type QueueDrawerMode = 'walkin' | 'adjust' | 'delay';
 type AdjustFlow = 'move' | 'return' | 'same-day' | 'correct';
-export type QueueDrawerPatient = { id: string | number; queue: string; name: string; service: string; status: string };
+export type QueueDrawerPatient = {
+  id: string | number;
+  queue: string;
+  name: string;
+  service: string;
+  status: string;
+};
+export type QueueDrawerBookingConfiguration = {
+  services: Array<{ id: string; name: string; durationMinutes: number }>;
+  bookingQuestions: Array<{
+    id: string;
+    questionText: string;
+    type: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SINGLE_SELECT';
+    isRequired: boolean;
+    selectOptions: Array<{ value: string; label?: string }> | null;
+  }>;
+};
 export type QueueDrawerCommand =
-  | { type: 'STAFF_REINSERT'; appointmentId: string | number; afterAppointmentId?: string | number }
+  | {
+      type: 'STAFF_REINSERT';
+      appointmentId: string | number;
+      afterAppointmentId?: string | number;
+    }
   | { type: 'UNDO_QUEUE' }
-  | { type: 'WALK_IN' };
+  | {
+      type: 'WALK_IN';
+      firstName: string;
+      lastName: string;
+      mobileNumber: string;
+      existingPatientResponse: 'YES' | 'NO' | 'UNSURE';
+      selectedServiceIds: string[];
+      answers: Array<{
+        bookingQuestionId: string;
+        answerText?: string;
+        answerNumber?: number;
+        answerBoolean?: boolean;
+        selectedOptionValue?: string;
+      }>;
+    }
+  | {
+      type: 'OPERATIONAL_NOTICE';
+      kind: 'DELAYED_OPENING' | 'SERVING_BREAK';
+      reason: string;
+      message?: string;
+      expectedResumeAt: string;
+    };
 
 type Props = {
   mode: QueueDrawerMode;
@@ -15,6 +56,9 @@ type Props = {
   onComplete: (message: string) => void;
   patients?: QueueDrawerPatient[];
   onQueueCommand?: (command: QueueDrawerCommand) => void | Promise<void>;
+  bookingConfiguration?: QueueDrawerBookingConfiguration | null;
+  serviceDate?: string;
+  onRequestWalkIn?: () => void;
 };
 
 const services = [
@@ -187,8 +231,100 @@ function SuccessState({
   );
 }
 
-function WalkInDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
+function WalkInDrawer({
+  onClose,
+  onComplete,
+  onQueueCommand,
+  bookingConfiguration,
+  serviceDate,
+}: Omit<Props, 'mode'>) {
   const [done, setDone] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [existingPatientResponse, setExistingPatientResponse] = useState<
+    'YES' | 'NO' | 'UNSURE'
+  >('UNSURE');
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [answerValues, setAnswerValues] = useState<
+    Record<string, string | boolean>
+  >({});
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  async function submit() {
+    if (
+      !firstName.trim() ||
+      !lastName.trim() ||
+      !mobileNumber.trim() ||
+      selectedServiceIds.length === 0
+    ) {
+      setError(
+        'Complete the patient name, mobile number, and select at least one service.',
+      );
+      return;
+    }
+    const questions = bookingConfiguration?.bookingQuestions ?? [];
+    if (
+      questions.some(
+        (question) =>
+          question.isRequired &&
+          (answerValues[question.id] === undefined ||
+            answerValues[question.id] === ''),
+      )
+    ) {
+      setError('Please answer all required booking questions.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      await onQueueCommand?.({
+        type: 'WALK_IN',
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        mobileNumber: mobileNumber.trim(),
+        existingPatientResponse,
+        selectedServiceIds,
+        answers: questions.flatMap<{
+          bookingQuestionId: string;
+          answerText?: string;
+          answerNumber?: number;
+          answerBoolean?: boolean;
+          selectedOptionValue?: string;
+        }>((question) => {
+          const value = answerValues[question.id];
+          if (value === undefined || value === '') return [];
+          if (question.type === 'BOOLEAN')
+            return [
+              { bookingQuestionId: question.id, answerBoolean: Boolean(value) },
+            ];
+          if (question.type === 'NUMBER')
+            return [
+              { bookingQuestionId: question.id, answerNumber: Number(value) },
+            ];
+          if (question.type === 'SINGLE_SELECT')
+            return [
+              {
+                bookingQuestionId: question.id,
+                selectedOptionValue: String(value),
+              },
+            ];
+          return [
+            { bookingQuestionId: question.id, answerText: String(value) },
+          ];
+        }),
+      });
+      setDone(true);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Unable to add this patient to the queue.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
   return (
     <aside className="queue-action-drawer">
       {' '}
@@ -201,7 +337,7 @@ function WalkInDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
       {done ? (
         <SuccessState
           title="Patient added to queue"
-          message="Angela Reyes was added as queue #18 with General Consultation."
+          message={`${firstName} ${lastName} was added to the queue.`}
           onClose={() => {
             onComplete('Walk-in patient added to the queue.');
             onClose();
@@ -210,10 +346,131 @@ function WalkInDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
       ) : (
         <div className="queue-drawer-body">
           <div className="queue-date-banner">
-            ▣ Service Date: <strong>Tue, Aug 25, 2026</strong>
+            ▣ Service Date: <strong>{serviceDate ?? 'Today'}</strong>
           </div>
-          <PatientFields />
-          <ServiceFields />
+          <section className="queue-patient-fields">
+            <h3>Patient name</h3>
+            <label>
+              First name <em>*</em>
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+              />
+            </label>
+            <label>
+              Last name <em>*</em>
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+              />
+            </label>
+          </section>
+          <label className="queue-full-field">
+            Mobile number <em>*</em>
+            <input
+              value={mobileNumber}
+              onChange={(event) => setMobileNumber(event.target.value)}
+              placeholder="0917 123 4567"
+            />
+          </label>
+          <label className="queue-full-field">
+            Has this patient visited before?
+            <select
+              value={existingPatientResponse}
+              onChange={(event) =>
+                setExistingPatientResponse(
+                  event.target.value as 'YES' | 'NO' | 'UNSURE',
+                )
+              }
+            >
+              <option value="YES">Yes</option>
+              <option value="NO">No</option>
+              <option value="UNSURE">Unsure</option>
+            </select>
+          </label>
+          <fieldset className="queue-service-field">
+            <legend>
+              Select Service(s) <em>*</em>
+            </legend>
+            {(bookingConfiguration?.services ?? []).map((service) => (
+              <label key={service.id}>
+                <input
+                  type="checkbox"
+                  checked={selectedServiceIds.includes(service.id)}
+                  onChange={() =>
+                    setSelectedServiceIds((current) =>
+                      current.includes(service.id)
+                        ? current.filter((id) => id !== service.id)
+                        : current.length < 3
+                          ? [...current, service.id]
+                          : current,
+                    )
+                  }
+                />
+                <span>{service.name}</span>
+                <small>Est. {service.durationMinutes} min</small>
+              </label>
+            ))}
+          </fieldset>
+          <fieldset className="queue-question-field">
+            <legend>Booking Questions</legend>
+            {(bookingConfiguration?.bookingQuestions ?? []).map(
+              (question, index) => (
+                <label key={question.id}>
+                  {index + 1}. {question.questionText}{' '}
+                  {question.isRequired ? <em>*</em> : null}
+                  {question.type === 'BOOLEAN' ? (
+                    <select
+                      value={String(answerValues[question.id] ?? '')}
+                      onChange={(event) =>
+                        setAnswerValues((current) => ({
+                          ...current,
+                          [question.id]: event.target.value === 'true',
+                        }))
+                      }
+                    >
+                      <option value="">Select</option>
+                      <option value="true">Yes</option>
+                      <option value="false">No</option>
+                    </select>
+                  ) : question.type === 'SINGLE_SELECT' ? (
+                    <select
+                      value={String(answerValues[question.id] ?? '')}
+                      onChange={(event) =>
+                        setAnswerValues((current) => ({
+                          ...current,
+                          [question.id]: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Select</option>
+                      {(question.selectOptions ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label ?? option.value}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={question.type === 'NUMBER' ? 'number' : 'text'}
+                      value={String(answerValues[question.id] ?? '')}
+                      onChange={(event) =>
+                        setAnswerValues((current) => ({
+                          ...current,
+                          [question.id]: event.target.value,
+                        }))
+                      }
+                    />
+                  )}
+                </label>
+              ),
+            )}
+          </fieldset>
+          {error ? (
+            <div className="queue-drawer-info is-error" role="alert">
+              {error}
+            </div>
+          ) : null}
           <div className="queue-drawer-info">
             ⓘ The appointment will be added to today’s queue with the next
             available queue number.
@@ -224,7 +481,8 @@ function WalkInDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
         <DrawerFooter
           onClose={onClose}
           primary="ADD TO QUEUE"
-          onPrimary={() => setDone(true)}
+          onPrimary={() => void submit()}
+          disabled={submitting || !bookingConfiguration}
         />
       ) : null}
     </aside>
@@ -268,25 +526,51 @@ const adjustChoices: Array<{
   },
 ];
 
-function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand }: Omit<Props, 'mode'>) {
+function AdjustQueueDrawer({
+  onClose,
+  onComplete,
+  patients = [],
+  onQueueCommand,
+  onRequestWalkIn,
+}: Omit<Props, 'mode'>) {
   const [flow, setFlow] = useState<AdjustFlow | null>(null);
   const [step, setStep] = useState(1);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | number | null>(null);
-  const [afterAppointmentId, setAfterAppointmentId] = useState<string | number | undefined>();
+  const [selectedPatientId, setSelectedPatientId] = useState<
+    string | number | null
+  >(null);
+  const [afterAppointmentId, setAfterAppointmentId] = useState<
+    string | number | undefined
+  >();
   const [error, setError] = useState('');
   const selected = adjustChoices.find((choice) => choice.id === flow);
-  const waitingPatients = patients.filter((patient) => patient.status === 'WAITING');
-  const absentPatients = patients.filter((patient) => patient.status === 'TEMPORARILY ABSENT');
-  const selectedPatient = patients.find((patient) => patient.id === selectedPatientId);
+  const waitingPatients = patients.filter(
+    (patient) => patient.status === 'WAITING',
+  );
+  const absentPatients = patients.filter(
+    (patient) => patient.status === 'TEMPORARILY ABSENT',
+  );
+  const selectedPatient = patients.find(
+    (patient) => patient.id === selectedPatientId,
+  );
   async function finish() {
     try {
       setError('');
       if (flow === 'correct') await onQueueCommand?.({ type: 'UNDO_QUEUE' });
-      else if (flow === 'same-day') await onQueueCommand?.({ type: 'WALK_IN' });
-      else if (selectedPatientId !== null) await onQueueCommand?.({ type: 'STAFF_REINSERT', appointmentId: selectedPatientId, afterAppointmentId: flow === 'move' ? afterAppointmentId : undefined });
+      else if (flow === 'same-day')
+        throw new Error('Use Add Walk-in to enter the patient details.');
+      else if (selectedPatientId !== null)
+        await onQueueCommand?.({
+          type: 'STAFF_REINSERT',
+          appointmentId: selectedPatientId,
+          afterAppointmentId: flow === 'move' ? afterAppointmentId : undefined,
+        });
       setStep(3);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to update the queue.');
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to update the queue.',
+      );
     }
   }
   return (
@@ -308,7 +592,23 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
                   className={`is-${choice.tone}`}
                   type="button"
                   key={choice.id}
-                  onClick={() => { setFlow(choice.id); setSelectedPatientId(choice.id === 'return' ? (absentPatients[0]?.id ?? null) : choice.id === 'move' ? (waitingPatients[1]?.id ?? waitingPatients[0]?.id ?? null) : null); setAfterAppointmentId(waitingPatients[0]?.id); }}
+                  onClick={() => {
+                    if (choice.id === 'same-day') {
+                      onRequestWalkIn?.();
+                      return;
+                    }
+                    setFlow(choice.id);
+                    setSelectedPatientId(
+                      choice.id === 'return'
+                        ? (absentPatients[0]?.id ?? null)
+                        : choice.id === 'move'
+                          ? (waitingPatients[1]?.id ??
+                            waitingPatients[0]?.id ??
+                            null)
+                          : null,
+                    );
+                    setAfterAppointmentId(waitingPatients[0]?.id);
+                  }}
                 >
                   <span>{choice.icon}</span>
                   <div>
@@ -337,8 +637,26 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
             ) : flow === 'return' ? (
               <div className="queue-select-list">
                 <label>Temporarily absent ({absentPatients.length})</label>
-                {absentPatients.map((patient) => <button type="button" className={selectedPatientId === patient.id ? 'is-selected' : ''} key={patient.id} onClick={() => setSelectedPatientId(patient.id)}><b>{patient.queue}</b><span><strong>{patient.name}</strong><small>{patient.service}</small></span>{selectedPatientId === patient.id ? '✓' : 'SELECT'}</button>)}
-                {!absentPatients.length ? <p>No temporarily absent patients.</p> : null}
+                {absentPatients.map((patient) => (
+                  <button
+                    type="button"
+                    className={
+                      selectedPatientId === patient.id ? 'is-selected' : ''
+                    }
+                    key={patient.id}
+                    onClick={() => setSelectedPatientId(patient.id)}
+                  >
+                    <b>{patient.queue}</b>
+                    <span>
+                      <strong>{patient.name}</strong>
+                      <small>{patient.service}</small>
+                    </span>
+                    {selectedPatientId === patient.id ? '✓' : 'SELECT'}
+                  </button>
+                ))}
+                {!absentPatients.length ? (
+                  <p>No temporarily absent patients.</p>
+                ) : null}
               </div>
             ) : flow === 'correct' ? (
               <>
@@ -366,7 +684,9 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
                 {waitingPatients.map((patient) => (
                   <button
                     type="button"
-                    className={selectedPatientId === patient.id ? 'is-selected' : ''}
+                    className={
+                      selectedPatientId === patient.id ? 'is-selected' : ''
+                    }
                     key={patient.id}
                     onClick={() => setSelectedPatientId(patient.id)}
                   >
@@ -403,7 +723,30 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
                     ? 'Angela Reyes will receive the next available position'
                     : 'Restore #07 Pedro Reyes as Now Serving'}
             </strong>
-            {flow === 'move' ? <label className="queue-full-field">Place after<select value={afterAppointmentId === undefined ? '' : String(afterAppointmentId)} onChange={(event) => setAfterAppointmentId(event.target.value || undefined)}><option value="">Recommended protected position</option>{waitingPatients.filter((patient) => patient.id !== selectedPatientId).map((patient) => <option key={patient.id} value={String(patient.id)}>{patient.queue} {patient.name}</option>)}</select></label> : null}
+            {flow === 'move' ? (
+              <label className="queue-full-field">
+                Place after
+                <select
+                  value={
+                    afterAppointmentId === undefined
+                      ? ''
+                      : String(afterAppointmentId)
+                  }
+                  onChange={(event) =>
+                    setAfterAppointmentId(event.target.value || undefined)
+                  }
+                >
+                  <option value="">Recommended protected position</option>
+                  {waitingPatients
+                    .filter((patient) => patient.id !== selectedPatientId)
+                    .map((patient) => (
+                      <option key={patient.id} value={String(patient.id)}>
+                        {patient.queue} {patient.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
             <p>
               Queue numbers will not change. This action will be reflected in
               the queue immediately.
@@ -421,7 +764,11 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
           />
         ) : null}
       </div>
-      {error ? <div className="queue-drawer-info is-error" role="alert">{error}</div> : null}
+      {error ? (
+        <div className="queue-drawer-info is-error" role="alert">
+          {error}
+        </div>
+      ) : null}
       {!flow ? (
         <DrawerFooter
           onClose={onClose}
@@ -433,8 +780,10 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
         <DrawerFooter
           onClose={onClose}
           primary={step === 1 ? 'REVIEW' : 'CONFIRM'}
-          onPrimary={() => step === 1 ? setStep(2) : void finish()}
-          disabled={(flow === 'move' || flow === 'return') && selectedPatientId === null}
+          onPrimary={() => (step === 1 ? setStep(2) : void finish())}
+          disabled={
+            (flow === 'move' || flow === 'return') && selectedPatientId === null
+          }
           back={() => (step === 1 ? setFlow(null) : setStep(1))}
         />
       ) : null}
@@ -442,9 +791,19 @@ function AdjustQueueDrawer({ onClose, onComplete, patients = [], onQueueCommand 
   );
 }
 
-function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
+function DelayDrawer({
+  onClose,
+  onComplete,
+  onQueueCommand,
+}: Omit<Props, 'mode'>) {
   const [kind, setKind] = useState<'delay' | 'break'>('break');
   const [step, setStep] = useState(1);
+  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [reason, setReason] = useState('Lunch break');
+  const [message, setMessage] = useState(
+    'The doctor is taking a short break. Serving will resume shortly.',
+  );
+  const [error, setError] = useState('');
   const title =
     kind === 'delay' ? 'Delay clinic opening' : 'Pause patient serving';
   const timeLabel =
@@ -460,13 +819,25 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
       <div className="queue-delay-switch">
         <button
           className={kind === 'delay' ? 'is-active' : ''}
-          onClick={() => setKind('delay')}
+          onClick={() => {
+            setKind('delay');
+            setReason('Doctor delayed');
+            setMessage(
+              'The doctor is running late this morning. Thank you for your patience.',
+            );
+          }}
         >
           Delay opening
         </button>
         <button
           className={kind === 'break' ? 'is-active' : ''}
-          onClick={() => setKind('break')}
+          onClick={() => {
+            setKind('break');
+            setReason('Lunch break');
+            setMessage(
+              'The doctor is taking a short break. Serving will resume shortly.',
+            );
+          }}
         >
           Take a break
         </button>
@@ -487,21 +858,22 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
                   : 'Expected resume time'}{' '}
                 <em>*</em>
               </legend>
-              {['15 min', '30 min', '45 min', '1 hour'].map((value) => (
+              {[15, 30, 45, 60].map((minutes) => (
                 <button
-                  className={value === '30 min' ? 'is-active' : ''}
-                  key={value}
+                  type="button"
+                  className={minutes === durationMinutes ? 'is-active' : ''}
+                  key={minutes}
+                  onClick={() => setDurationMinutes(minutes)}
                 >
-                  {value}
+                  {minutes === 60 ? '1 hour' : `${minutes} min`}
                 </button>
               ))}
             </fieldset>
             <label className="queue-full-field">
               Reason for {kind}
               <select
-                defaultValue={
-                  kind === 'delay' ? 'Doctor delayed' : 'Lunch break'
-                }
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
               >
                 <option>Doctor delayed</option>
                 <option>Lunch break</option>
@@ -511,11 +883,8 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
             <label className="queue-full-field">
               Message to patients (optional)
               <textarea
-                defaultValue={
-                  kind === 'delay'
-                    ? 'The doctor is running late this morning. Thank you for your patience.'
-                    : 'The doctor is taking a short break. Serving will resume shortly.'
-                }
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
               />
             </label>
             <div className="queue-patient-preview">
@@ -542,9 +911,7 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
             </div>
             <div className="queue-review-detail">
               <span>Reason</span>
-              <strong>
-                {kind === 'delay' ? 'Doctor delayed' : 'Lunch break'}
-              </strong>
+              <strong>{reason}</strong>
             </div>
             <div className="queue-review-detail">
               <span>Patient notice</span>
@@ -558,6 +925,11 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
             </p>
           </div>
         ) : null}
+        {error ? (
+          <div className="queue-drawer-info is-error" role="alert">
+            {error}
+          </div>
+        ) : null}
         {step === 3 ? (
           <SuccessState
             title={
@@ -565,7 +937,7 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
                 ? 'The delay has been set'
                 : 'The break has started'
             }
-            message="Patients will be notified when backend messaging is connected."
+            message="The notice is now visible in the patient queue view."
             onClose={() => {
               onComplete(
                 kind === 'delay'
@@ -587,7 +959,29 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
                 : 'START BREAK'
               : 'CONFIRM'
           }
-          onPrimary={() => setStep((current) => current + 1)}
+          onPrimary={() => {
+            if (step === 1) return setStep(2);
+            setError('');
+            void Promise.resolve(
+              onQueueCommand?.({
+                type: 'OPERATIONAL_NOTICE',
+                kind: kind === 'delay' ? 'DELAYED_OPENING' : 'SERVING_BREAK',
+                reason,
+                message: message.trim() || undefined,
+                expectedResumeAt: new Date(
+                  Date.now() + durationMinutes * 60_000,
+                ).toISOString(),
+              }),
+            )
+              .then(() => setStep(3))
+              .catch((cause: unknown) =>
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : 'Unable to publish the clinic notice.',
+                ),
+              );
+          }}
           back={step === 2 ? () => setStep(1) : undefined}
         />
       ) : null}
@@ -596,10 +990,7 @@ function DelayDrawer({ onClose, onComplete }: Omit<Props, 'mode'>) {
 }
 
 export function QueueActionDrawer(props: Props) {
-  if (props.mode === 'walkin')
-    return (
-      <WalkInDrawer onClose={props.onClose} onComplete={props.onComplete} />
-    );
+  if (props.mode === 'walkin') return <WalkInDrawer {...props} />;
   if (props.mode === 'adjust')
     return (
       <AdjustQueueDrawer
@@ -609,5 +1000,5 @@ export function QueueActionDrawer(props: Props) {
         onQueueCommand={props.onQueueCommand}
       />
     );
-  return <DelayDrawer onClose={props.onClose} onComplete={props.onComplete} />;
+  return <DelayDrawer {...props} />;
 }

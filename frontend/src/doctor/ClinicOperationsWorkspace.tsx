@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react';
-import { QueueActionDrawer, type QueueDrawerCommand, type QueueDrawerMode } from './QueueActionDrawer';
+import {
+  QueueActionDrawer,
+  type QueueDrawerBookingConfiguration,
+  type QueueDrawerCommand,
+  type QueueDrawerMode,
+} from './QueueActionDrawer';
 import {
   AppointmentDetailsDrawer,
   AppointmentReportPreview,
@@ -21,12 +26,27 @@ type PatientStatus =
   | 'CANCELLED';
 
 export type ClinicOperationsEvent =
-  | { type: 'CALL_NEXT'; patientId: string | number; patientOutcome: 'COMPLETED' | 'OUT_FOR_PROCEDURE' | 'NOW_SERVING' }
+  | {
+      type: 'CALL_NEXT';
+      patientId: string | number;
+      patientOutcome: 'COMPLETED' | 'OUT_FOR_PROCEDURE' | 'NOW_SERVING';
+    }
   | { type: 'COMPLETE_CURRENT'; patientId: string | number }
   | { type: 'RETURN_TO_QUEUE'; patientId: string | number }
-  | { type: 'STAFF_REINSERT'; patientId: string | number; afterPatientId?: string | number }
+  | {
+      type: 'STAFF_REINSERT';
+      patientId: string | number;
+      afterPatientId?: string | number;
+    }
   | { type: 'UNDO_QUEUE' }
-  | { type: 'ADD_WALK_IN' }
+  | ({ type: 'ADD_WALK_IN' } & Omit<
+      Extract<QueueDrawerCommand, { type: 'WALK_IN' }>,
+      'type'
+    >)
+  | ({ type: 'OPERATIONAL_NOTICE' } & Omit<
+      Extract<QueueDrawerCommand, { type: 'OPERATIONAL_NOTICE' }>,
+      'type'
+    >)
   | { type: 'OPEN_ASSIGN_SECRETARY' }
   | { type: 'GENERATE_PDF' }
   | { type: 'PLACEHOLDER_ACTION'; label: string };
@@ -635,21 +655,48 @@ function QueueTab({
   onLocalAction,
   serviceDate,
   onServiceDateChange,
+  bookingConfiguration,
 }: {
   patients: Patient[];
   onLocalAction: (event: ClinicOperationsEvent) => void | Promise<void>;
+  bookingConfiguration?: QueueDrawerBookingConfiguration | null;
 } & ServiceDateProps) {
   const [drawer, setDrawer] = useState<QueueDrawerMode | null>(null);
-  const [patientOutcome, setPatientOutcome] = useState<'COMPLETED' | 'OUT_FOR_PROCEDURE' | 'NOW_SERVING'>('COMPLETED');
+  const [patientOutcome, setPatientOutcome] = useState<
+    'COMPLETED' | 'OUT_FOR_PROCEDURE' | 'NOW_SERVING'
+  >('COMPLETED');
   const current = patients.find((p) => p.status === 'NOW SERVING')!;
   const next = patients.find((p) => p.status === 'WAITING')!;
   const waiting = patients.filter((p) => p.status === 'WAITING');
   const absent = patients.filter((p) => p.status === 'TEMPORARILY ABSENT');
   const procedure = patients.filter((p) => p.status === 'OUT FOR PROCEDURE');
   function handleDrawerCommand(command: QueueDrawerCommand) {
-    if (command.type === 'STAFF_REINSERT') return onLocalAction({ type: 'STAFF_REINSERT', patientId: command.appointmentId, afterPatientId: command.afterAppointmentId });
-    if (command.type === 'UNDO_QUEUE') return onLocalAction({ type: 'UNDO_QUEUE' });
-    return onLocalAction({ type: 'ADD_WALK_IN' });
+    if (command.type === 'STAFF_REINSERT')
+      return onLocalAction({
+        type: 'STAFF_REINSERT',
+        patientId: command.appointmentId,
+        afterPatientId: command.afterAppointmentId,
+      });
+    if (command.type === 'UNDO_QUEUE')
+      return onLocalAction({ type: 'UNDO_QUEUE' });
+    if (command.type === 'WALK_IN') {
+      return onLocalAction({
+        type: 'ADD_WALK_IN',
+        firstName: command.firstName,
+        lastName: command.lastName,
+        mobileNumber: command.mobileNumber,
+        existingPatientResponse: command.existingPatientResponse,
+        selectedServiceIds: command.selectedServiceIds,
+        answers: command.answers,
+      });
+    }
+    return onLocalAction({
+      type: 'OPERATIONAL_NOTICE',
+      kind: command.kind,
+      reason: command.reason,
+      message: command.message,
+      expectedResumeAt: command.expectedResumeAt,
+    });
   }
   return (
     <div className="ops-queue">
@@ -845,7 +892,11 @@ function QueueTab({
         <ActionButton
           variant="green"
           onClick={() =>
-            onLocalAction({ type: 'CALL_NEXT', patientId: next.id, patientOutcome })
+            onLocalAction({
+              type: 'CALL_NEXT',
+              patientId: next.id,
+              patientOutcome,
+            })
           }
         >
           <ActionLabel icon="play">CALL NEXT</ActionLabel>
@@ -861,8 +912,19 @@ function QueueTab({
         <QueueActionDrawer
           mode={drawer}
           onClose={() => setDrawer(null)}
-          patients={patients.map(({ id, queue: queueNumber, name, service, status }) => ({ id, queue: queueNumber, name, service, status }))}
+          patients={patients.map(
+            ({ id, queue: queueNumber, name, service, status }) => ({
+              id,
+              queue: queueNumber,
+              name,
+              service,
+              status,
+            }),
+          )}
           onQueueCommand={handleDrawerCommand}
+          bookingConfiguration={bookingConfiguration}
+          serviceDate={serviceDate}
+          onRequestWalkIn={() => setDrawer('walkin')}
           onComplete={(message) =>
             onLocalAction({ type: 'PLACEHOLDER_ACTION', label: message })
           }
@@ -1276,6 +1338,7 @@ export function ClinicOperationsWorkspace({
   queueLoading = false,
   queueError = '',
   onOverviewServiceDateChange,
+  bookingConfiguration,
 }: {
   clinic: { name: string; address: string; timeZone: string };
   onBack: () => void;
@@ -1287,6 +1350,7 @@ export function ClinicOperationsWorkspace({
   queueLoading?: boolean;
   queueError?: string;
   onOverviewServiceDateChange?: (serviceDate: string) => void;
+  bookingConfiguration?: QueueDrawerBookingConfiguration | null;
 }) {
   const [tab, setTab] = useState<OperationsTab>('overview');
   const [serviceDate, setServiceDate] = useState('2026-08-25');
@@ -1339,7 +1403,11 @@ export function ClinicOperationsWorkspace({
     try {
       await onEvent?.(event);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Unable to update clinic operations.');
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update clinic operations.',
+      );
       return;
     }
     if (event.type === 'CALL_NEXT') {
@@ -1375,7 +1443,13 @@ export function ClinicOperationsWorkspace({
     } else if (event.type === 'UNDO_QUEUE') {
       setNotice('The latest Call Next operation was corrected.');
     } else if (event.type === 'ADD_WALK_IN') {
-      setNotice('Walk-in creation requires the staff-assisted booking API.');
+      setNotice('Walk-in patient added to the queue.');
+    } else if (event.type === 'OPERATIONAL_NOTICE') {
+      setNotice(
+        event.kind === 'DELAYED_OPENING'
+          ? 'Clinic opening delay published.'
+          : 'Clinic break notice published.',
+      );
     } else if (event.type === 'GENERATE_PDF')
       setNotice('PDF generation is ready for backend connection.');
     else if (event.type === 'PLACEHOLDER_ACTION')
@@ -1460,21 +1534,44 @@ export function ClinicOperationsWorkspace({
         </div>
       ) : null}
       {tab === 'queue' && queueLoading ? (
-        <div className="ops-workspace-state" role="status">Loading queue…</div>
+        <div className="ops-workspace-state" role="status">
+          Loading queue…
+        </div>
       ) : null}
       {tab === 'queue' && queueError ? (
-        <div className="ops-workspace-state is-error" role="alert"><strong>Unable to load the queue.</strong><span>{queueError}</span></div>
+        <div className="ops-workspace-state is-error" role="alert">
+          <strong>Unable to load the queue.</strong>
+          <span>{queueError}</span>
+        </div>
       ) : null}
-      {tab === 'queue' && !queueLoading && !queueError && (!queue || (patients.some((patient) => patient.status === 'NOW SERVING') && patients.some((patient) => patient.status === 'WAITING'))) ? (
+      {tab === 'queue' &&
+      !queueLoading &&
+      !queueError &&
+      (!queue ||
+        (patients.some((patient) => patient.status === 'NOW SERVING') &&
+          patients.some((patient) => patient.status === 'WAITING'))) ? (
         <QueueTab
           patients={patients}
           onLocalAction={handleEvent}
           serviceDate={serviceDate}
           onServiceDateChange={changeServiceDate}
+          bookingConfiguration={bookingConfiguration}
         />
       ) : null}
-      {tab === 'queue' && queue && !queueLoading && !queueError && (!patients.some((patient) => patient.status === 'NOW SERVING') || !patients.some((patient) => patient.status === 'WAITING')) ? (
-        <div className="ops-workspace-state"><strong>No active serving sequence</strong><span>{queue.clinicDay?.status === 'STARTED' ? 'The queue currently has no patient ready to call.' : 'Start the clinic day before serving patients.'}</span></div>
+      {tab === 'queue' &&
+      queue &&
+      !queueLoading &&
+      !queueError &&
+      (!patients.some((patient) => patient.status === 'NOW SERVING') ||
+        !patients.some((patient) => patient.status === 'WAITING')) ? (
+        <div className="ops-workspace-state">
+          <strong>No active serving sequence</strong>
+          <span>
+            {queue.clinicDay?.status === 'STARTED'
+              ? 'The queue currently has no patient ready to call.'
+              : 'Start the clinic day before serving patients.'}
+          </span>
+        </div>
       ) : null}
       {tab === 'appointments' ? (
         <AppointmentsTab

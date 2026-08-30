@@ -209,6 +209,8 @@ enum NotificationAttemptOutcome {
 enum CommandType {
   CONVERT_BOOKING_DRAFT
   CREATE_STAFF_APPOINTMENT
+  START_CLINIC_DAY_OPERATIONAL_NOTICE
+  END_CLINIC_DAY_OPERATIONAL_NOTICE
   START_CLINIC
   NEXT_PATIENT
   SELF_SERVICE_REINSERTION
@@ -258,6 +260,16 @@ enum CommandType {
   SYSTEM_ADMIN_COMPLETE_REFUND
   SYSTEM_ADMIN_FAIL_REFUND
   DOCTOR_RECOVER_SUBSCRIPTION_CREDIT
+}
+
+enum ClinicDayOperationalNoticeKind {
+  DELAYED_OPENING
+  SERVING_BREAK
+}
+
+enum ClinicDayOperationalNoticeStatus {
+  ACTIVE
+  ENDED
 }
 
 enum SubscriptionPurchaseStatus {
@@ -470,6 +482,8 @@ model User {
   queueEvents                      QueueEvent[]
   cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
   clinicDayOperatingStaffAudits    ClinicDayOperatingStaffAudit[]       @relation("ClinicDayOperatingStaffAuditActor")
+  clinicDayOperationalNoticesCreated ClinicDayOperationalNotice[]       @relation("ClinicDayOperationalNoticeCreatedBy")
+  clinicDayOperationalNoticesEnded   ClinicDayOperationalNotice[]       @relation("ClinicDayOperationalNoticeEndedBy")
   userSessions                     UserSession[]
   emailVerifications               EmailVerification[]
   passwordResets                   PasswordReset[]
@@ -756,6 +770,7 @@ model PracticeLocation {
   bookingGroups                 BookingGroup[]
   clinicDays                    ClinicDay[]
   clinicDayOperatingStaffAudits ClinicDayOperatingStaffAudit[]
+  clinicDayOperationalNotices   ClinicDayOperationalNotice[]
   queueCounters                 QueueCounter[]
   queueEvents                   QueueEvent[]
   bookingQuestions              BookingQuestion[]
@@ -1811,11 +1826,39 @@ model ClinicDay {
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   operatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingPracticeStaff", fields: [operatingPracticeStaffId], references: [id], onDelete: Restrict)
   operatingStaffAudits ClinicDayOperatingStaffAudit[]
+  operationalNotices  ClinicDayOperationalNotice[]
   cancelledByUser User? @relation("ClinicDayCancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
   @@unique([practiceLocationId, serviceDate])
   @@index([status, serviceDate])
   @@index([operatingPracticeStaffId, serviceDate])
+}
+
+model ClinicDayOperationalNotice {
+  id String @id @default(uuid())
+  clinicDayId        String
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+  kind   ClinicDayOperationalNoticeKind
+  status ClinicDayOperationalNoticeStatus @default(ACTIVE)
+  reason  String @db.VarChar(120)
+  message String? @db.VarChar(500)
+  startsAt        DateTime  @db.Timestamptz(3)
+  expectedResumeAt DateTime @db.Timestamptz(3)
+  endedAt          DateTime? @db.Timestamptz(3)
+  createdByUserId String
+  endedByUserId   String?
+  activeNoticeKey String? @unique @db.VarChar(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  clinicDay        ClinicDay        @relation(fields: [clinicDayId], references: [id], onDelete: Restrict)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  createdByUser User  @relation("ClinicDayOperationalNoticeCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  endedByUser   User? @relation("ClinicDayOperationalNoticeEndedBy", fields: [endedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([practiceLocationId, serviceDate, status])
+  @@index([clinicDayId, createdAt])
 }
 
 model ClinicDayOperatingStaffAudit {
