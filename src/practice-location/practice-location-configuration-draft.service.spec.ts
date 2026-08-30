@@ -141,14 +141,14 @@ describe('PracticeLocationConfigurationDraftService', () => {
       transactionMock.doctorPracticeScheduleDraft.upsert.mock.calls,
     );
     expect(serializedScheduleDraftCalls).toContain(
-      '\"practiceLocationId\":\"location-1\"',
+      '"practiceLocationId":"location-1"',
     );
     expect(serializedScheduleDraftCalls).toContain(
-      '\"name\":\"Draft Clinic Name\"',
+      '"name":"Draft Clinic Name"',
     );
-    expect(serializedScheduleDraftCalls).toContain('\"shortCode\":\"NORTH\"');
+    expect(serializedScheduleDraftCalls).toContain('"shortCode":"NORTH"');
     expect(serializedScheduleDraftCalls).toContain(
-      '\"timeZone\":\"Asia/Manila\"',
+      '"timeZone":"Asia/Manila"',
     );
     expect(
       transactionMock.doctorPracticeConfigurationDraftService.createMany,
@@ -168,12 +168,12 @@ describe('PracticeLocationConfigurationDraftService', () => {
         .mock.calls,
     );
     expect(serializedQuestionCreateCalls).toContain(
-      '\"effectiveBookingQuestionId\":\"question-1\"',
+      '"effectiveBookingQuestionId":"question-1"',
     );
     expect(serializedQuestionCreateCalls).toContain(
-      '\"questionText\":\"Draft question?\"',
+      '"questionText":"Draft question?"',
     );
-    expect(serializedQuestionCreateCalls).toContain('\"displayOrder\":0');
+    expect(serializedQuestionCreateCalls).toContain('"displayOrder":0');
   });
 
   it('stores Single Choice options in an ACTIVE clinic draft with stable values and labels', async () => {
@@ -241,13 +241,13 @@ describe('PracticeLocationConfigurationDraftService', () => {
     const serializedLocationUpdateCalls = JSON.stringify(
       transactionMock.practiceLocation.update.mock.calls,
     );
-    expect(serializedLocationUpdateCalls).toContain('\"id\":\"location-1\"');
+    expect(serializedLocationUpdateCalls).toContain('"id":"location-1"');
     expect(serializedLocationUpdateCalls).toContain(
-      '\"name\":\"Draft Clinic Name\"',
+      '"name":"Draft Clinic Name"',
     );
-    expect(serializedLocationUpdateCalls).toContain('\"shortCode\":\"NORTH\"');
+    expect(serializedLocationUpdateCalls).toContain('"shortCode":"NORTH"');
     expect(serializedLocationUpdateCalls).toContain(
-      '\"clinicEmail\":\"draft@example.com\"',
+      '"clinicEmail":"draft@example.com"',
     );
     expect(transactionMock.practiceSchedule.upsert).toHaveBeenCalledTimes(7);
     expect(
