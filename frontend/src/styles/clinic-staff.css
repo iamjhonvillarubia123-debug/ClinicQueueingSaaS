@@ -1,198 +1,567 @@
-.ops-staff {
+.clinic-staff-shell {
   display: grid;
-  gap: 14px;
+  min-height: 520px;
 }
 
-.ops-staff .ops-summary-strip {
-  grid-template-columns: minmax(230px, 1.35fr) repeat(3, minmax(150px, 1fr));
-  margin-bottom: 0;
+.clinic-staff-shell.has-drawer {
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 20px;
 }
 
-.ops-staff .ops-summary-strip > div {
-  min-width: 0;
-}
-
-.ops-staff .ops-summary-strip strong {
-  overflow-wrap: anywhere;
-}
-
-.ops-staff .ops-appointment-layout {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-  gap: 14px;
-  margin-top: 0;
-  align-items: start;
-}
-
-.ops-staff .ops-appointment-layout > main {
+.clinic-staff-main {
   display: grid;
   gap: 14px;
   min-width: 0;
 }
 
-.ops-staff .ops-appointment-layout > main > .ops-card,
-.ops-staff > .ops-card {
-  padding: 20px;
+.clinic-staff-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
 }
 
-.ops-staff .ops-card h3 {
+.clinic-staff-intro h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.clinic-staff-intro p {
+  margin: 5px 0 0;
+  color: #586270;
+  font-size: 12px;
+}
+
+.clinic-day-secretary-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.15fr) minmax(220px, 1fr) minmax(200px, .85fr) auto;
+  gap: 0;
+  align-items: stretch;
+  border: 1px solid #dce2e8;
+  border-radius: 9px;
+  background: #fff;
+  overflow: visible;
+}
+
+.clinic-day-secretary-panel > div {
+  min-width: 0;
+  padding: 16px 18px;
+  border-right: 1px solid #e2e6ea;
+}
+
+.clinic-day-secretary-date {
+  display: grid;
+  align-content: center;
+}
+
+.clinic-day-secretary-copy,
+.clinic-day-secretary-context {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+}
+
+.clinic-day-secretary-copy small,
+.clinic-day-secretary-context small {
+  color: #596374;
+  font-size: 10px;
+}
+
+.clinic-day-secretary-copy strong,
+.clinic-day-secretary-context strong {
+  font-size: 14px;
   line-height: 1.35;
 }
 
-.ops-staff .ops-card > p {
-  margin: 8px 0 0;
-  color: #596374;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.ops-staff .ops-appointment-layout > main > .ops-card > div {
-  display: grid;
-  gap: 4px;
-  margin-top: 16px;
-  min-width: 0;
-}
-
-.ops-staff .ops-appointment-layout > main > .ops-card > div > strong {
-  font-size: 14px;
+.clinic-day-secretary-copy span,
+.clinic-day-secretary-context span {
+  color: #66717f;
+  font-size: 10px;
   line-height: 1.4;
 }
 
-.ops-staff .ops-appointment-layout > main > .ops-card > div > small {
-  display: block;
-  color: #596374;
+.clinic-staff-primary-button,
+.clinic-staff-secondary-button {
+  min-height: 40px;
+  border-radius: 7px;
+  padding: 0 16px;
   font-size: 11px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
+  font-weight: 750;
 }
 
-.ops-staff .ops-appointment-layout > aside {
+.clinic-staff-primary-button {
+  align-self: center;
+  margin: 16px;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+}
+
+.clinic-staff-primary-button:disabled,
+.clinic-staff-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.clinic-staff-primary-button.is-full,
+.clinic-staff-secondary-button.is-full {
+  width: 100%;
+  margin: 0;
+}
+
+.clinic-staff-secondary-button {
+  border: 1px solid #cfd6de;
+  background: #fff;
+  color: #111;
+}
+
+.clinic-staff-list-card {
+  overflow: hidden;
+  border: 1px solid #dce2e8;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.clinic-staff-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e3e7eb;
+}
+
+.clinic-staff-list-toolbar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.clinic-staff-list-toolbar strong {
+  font-size: 13px;
+}
+
+.clinic-staff-list-toolbar span {
+  color: #66717f;
+  font-size: 10px;
+}
+
+.clinic-staff-list-toolbar input {
+  width: min(300px, 42%);
+  min-height: 36px;
+  border: 1px solid #d1d8df;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #fff;
+  font-size: 11px;
+}
+
+.clinic-staff-table-head,
+.clinic-staff-table-row {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.45fr) minmax(180px, 1fr) 130px minmax(155px, .9fr);
+  gap: 18px;
+  align-items: center;
+  padding: 12px 18px;
+}
+
+.clinic-staff-table-head {
+  color: #53606e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.clinic-staff-table-row {
+  border-top: 1px solid #e7eaed;
+  font-size: 11px;
+}
+
+.clinic-staff-person {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
   min-width: 0;
 }
 
-.ops-staff .ops-appointment-layout > aside > .ops-card {
-  padding: 20px;
-}
-
-.ops-staff .ops-summary-list {
-  margin-top: 16px;
-  gap: 0;
-}
-
-.ops-staff .ops-summary-list li {
+.clinic-staff-person > b {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: start;
-  padding: 12px 0;
-  border-top: 1px solid #e5e9ed;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f0f1f2;
+  font-size: 11px;
 }
 
-.ops-staff .ops-summary-list li:first-child {
-  border-top: 0;
-}
-
-.ops-staff .ops-summary-list li > span:first-child {
+.clinic-staff-person > span,
+.clinic-staff-role {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.ops-staff .ops-summary-list li > span:first-child strong {
+.clinic-staff-person strong {
   font-size: 12px;
-  line-height: 1.4;
 }
 
-.ops-staff .ops-summary-list li > span:first-child small {
-  color: #596374;
-  line-height: 1.4;
+.clinic-staff-person small {
+  color: #5e6875;
   overflow-wrap: anywhere;
 }
 
-.ops-staff .ops-summary-list li > span:last-child {
-  max-width: 130px;
-  text-align: right;
+.clinic-staff-role em {
+  justify-self: start;
+  border-radius: 10px;
+  padding: 3px 7px;
+  background: #eef5ff;
+  color: #1264e9;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.clinic-staff-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
   font-weight: 700;
-  line-height: 1.4;
 }
 
-.ops-staff > .ops-card > div {
+.clinic-staff-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #aab2bb;
+}
+
+.clinic-staff-status.is-active {
+  color: #168337;
+}
+
+.clinic-staff-status.is-active i {
+  background: #19a343;
+}
+
+.clinic-staff-status.is-inactive {
+  color: #69737e;
+}
+
+.clinic-staff-assigned-at {
+  color: #495462;
+  line-height: 1.45;
+}
+
+.clinic-staff-empty {
+  padding: 28px 18px;
+  border-top: 1px solid #e7eaed;
+  color: #69737e;
+  font-size: 11px;
+}
+
+.clinic-staff-access-summary {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto;
-  gap: 12px;
-  align-items: end;
-  margin-top: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #e2e6ea;
 }
 
-.ops-staff > .ops-card label {
-  display: block;
-  margin-bottom: 6px;
+.clinic-staff-access-summary > div {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  padding: 13px 15px;
+  border: 1px solid #dce2e8;
+  border-radius: 7px;
+  background: #f7f8f9;
+}
+
+.clinic-staff-access-summary > div.is-active {
+  border-color: #d7eadc;
+  background: #f1faf3;
+}
+
+.clinic-staff-access-summary > div.is-day {
+  border-color: #dce2f6;
+  background: #f5f7ff;
+}
+
+.clinic-staff-access-summary strong {
+  font-size: 23px;
+}
+
+.clinic-staff-access-summary span {
   font-size: 11px;
   font-weight: 700;
 }
 
-.ops-staff > .ops-card select {
-  width: 100%;
-  min-height: 40px;
-  border: 1px solid #cfd6de;
-  border-radius: 7px;
-  padding: 0 10px;
+.clinic-staff-access-summary small {
+  color: #606b78;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.clinic-day-secretary-drawer {
+  position: relative;
+  min-height: 520px;
+  padding: 26px;
+  border-left: 1px solid #dce2e8;
   background: #fff;
 }
 
-.ops-staff > .ops-card .ops-action {
-  margin-top: 12px;
+.clinic-day-secretary-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: #fff;
+  font-size: 22px;
 }
 
-.ops-staff > .ops-card > div .ops-action {
-  margin-top: 0;
+.clinic-day-secretary-drawer > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding-right: 32px;
 }
 
-@media (max-width: 1100px) {
-  .ops-staff .ops-summary-strip {
+.clinic-drawer-step {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #5f43d4;
+  border-radius: 50%;
+  color: #5f43d4;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.clinic-day-secretary-drawer h2 {
+  margin: 1px 0 3px;
+  font-size: 18px;
+}
+
+.clinic-day-secretary-drawer header p {
+  margin: 0;
+  color: #5f6976;
+  font-size: 11px;
+}
+
+.clinic-day-secretary-explainer,
+.clinic-day-secretary-current,
+.clinic-day-secretary-note,
+.clinic-day-secretary-message {
+  margin-top: 18px;
+  border: 1px solid #dde3e8;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.clinic-day-secretary-explainer strong,
+.clinic-day-secretary-current strong {
+  font-size: 12px;
+}
+
+.clinic-day-secretary-explainer p {
+  margin: 6px 0 0;
+  color: #596574;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.clinic-day-secretary-current {
+  display: grid;
+  gap: 4px;
+  background: #f8f9fa;
+}
+
+.clinic-day-secretary-current small,
+.clinic-day-secretary-current span {
+  color: #64707d;
+  font-size: 10px;
+}
+
+.clinic-day-secretary-note {
+  border-color: #e4defb;
+  background: #f7f5ff;
+  color: #4e456b;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.clinic-day-secretary-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.clinic-day-secretary-options h3 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+
+.clinic-day-secretary-option {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 18px;
+  gap: 11px;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d9dfe5;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+}
+
+.clinic-day-secretary-option.is-selected {
+  border-color: #111;
+  box-shadow: inset 0 0 0 1px #111;
+}
+
+.clinic-day-secretary-option > b {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f0f1f2;
+  font-size: 10px;
+}
+
+.clinic-day-secretary-option > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.clinic-day-secretary-option strong {
+  font-size: 11px;
+}
+
+.clinic-day-secretary-option small {
+  color: #5c6672;
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+
+.clinic-day-secretary-option em {
+  justify-self: start;
+  border-radius: 9px;
+  padding: 2px 6px;
+  background: #e9f7ed;
+  color: #168337;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.clinic-day-secretary-option > i {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #aeb7c1;
+  border-radius: 50%;
+}
+
+.clinic-day-secretary-option.is-selected > i {
+  border: 4px solid #111;
+}
+
+.clinic-day-secretary-empty {
+  margin: 0;
+  color: #66717f;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.clinic-day-secretary-drawer > .clinic-staff-secondary-button {
+  margin-top: 10px;
+}
+
+.clinic-day-secretary-message {
+  border-color: #cfe0fa;
+  background: #f3f7ff;
+  color: #165bbf;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  .clinic-staff-shell.has-drawer {
+    grid-template-columns: 1fr;
+  }
+
+  .clinic-day-secretary-drawer {
+    border-top: 1px solid #dce2e8;
+    border-left: 0;
+  }
+
+  .clinic-day-secretary-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ops-staff .ops-summary-strip > div:nth-child(2) {
+  .clinic-day-secretary-panel > div:nth-child(2) {
     border-right: 0;
   }
 
-  .ops-staff .ops-summary-strip > div:nth-child(n + 3) {
-    margin-top: 14px;
+  .clinic-day-secretary-panel > div:nth-child(n + 3) {
+    border-top: 1px solid #e2e6ea;
   }
 
-  .ops-staff .ops-appointment-layout {
+  .clinic-staff-primary-button {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 820px) {
+  .clinic-staff-table-head {
+    display: none;
+  }
+
+  .clinic-staff-table-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .clinic-staff-list-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .clinic-staff-list-toolbar input {
+    width: 100%;
+  }
+
+  .clinic-staff-access-summary {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 720px) {
-  .ops-staff .ops-summary-strip {
+@media (max-width: 620px) {
+  .clinic-day-secretary-panel,
+  .clinic-staff-table-row {
     grid-template-columns: 1fr;
   }
 
-  .ops-staff .ops-summary-strip > div {
-    padding: 12px 4px;
+  .clinic-day-secretary-panel > div {
+    border-top: 1px solid #e2e6ea;
     border-right: 0;
-    border-top: 1px solid #dfe3e8;
   }
 
-  .ops-staff .ops-summary-strip > div:first-of-type {
+  .clinic-day-secretary-panel > div:first-child {
     border-top: 0;
   }
 
-  .ops-staff .ops-summary-list li {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .clinic-staff-primary-button {
+    justify-self: stretch;
+    margin: 14px;
   }
 
-  .ops-staff .ops-summary-list li > span:last-child {
-    max-width: none;
-    text-align: left;
-  }
-
-  .ops-staff > .ops-card > div {
-    grid-template-columns: 1fr;
-    align-items: stretch;
+  .clinic-day-secretary-drawer {
+    padding: 22px 16px;
   }
 }
