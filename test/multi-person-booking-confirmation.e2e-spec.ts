@@ -141,10 +141,7 @@ describe('Multi-person booking confirmation (e2e)', () => {
     expect(replay.status).toBe(201);
     expect(replay.body).toMatchObject({
       bookingGroup: {
-        appointments: [
-          { queueNumber: 1 },
-          { queueNumber: 2 },
-        ],
+        appointments: [{ queueNumber: 1 }, { queueNumber: 2 }],
       },
       bookingGroupAccessToken: null,
       replayed: true,
