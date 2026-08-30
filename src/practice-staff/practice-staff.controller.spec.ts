@@ -1,13 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthenticationService } from '../auth/authentication.service';
+import { ClinicSecretaryAuthorityService } from './clinic-secretary-authority.service';
 import { PracticeStaffController } from './practice-staff.controller';
-import { PracticeStaffService } from './practice-staff.service';
 
 describe('PracticeStaffController', () => {
   let controller: PracticeStaffController;
 
-  const practiceStaffServiceMock = {};
+  const clinicSecretaryAuthorityServiceMock = {};
   const authenticationServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue(undefined),
@@ -18,8 +18,8 @@ describe('PracticeStaffController', () => {
       controllers: [PracticeStaffController],
       providers: [
         {
-          provide: PracticeStaffService,
-          useValue: practiceStaffServiceMock,
+          provide: ClinicSecretaryAuthorityService,
+          useValue: clinicSecretaryAuthorityServiceMock,
         },
         {
           provide: AuthenticationService,
