@@ -32,6 +32,7 @@ import { PracticeLocationConfigurationDraftService } from './practice-location-c
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
+import { PracticeLocationOperationsContextService } from './practice-location-operations-context.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationService } from './practice-location.service';
@@ -49,10 +50,23 @@ export class PracticeLocationController {
     private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
     private readonly practiceLocationDraftScheduleService: PracticeLocationDraftScheduleService,
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
+    private readonly practiceLocationOperationsContextService: PracticeLocationOperationsContextService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
     private readonly practiceSchedulePreflightService: PracticeSchedulePreflightService,
     private readonly practiceLocationOperationsService: PracticeLocationOperationsService,
   ) {}
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/context')
+  operationsContext(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsContextService.getContext(
+      request.user.userId,
+      practiceLocationId,
+    );
+  }
 
   @UseGuards(SessionAuthGuard)
   @Get(':practiceLocationId/operations/overview')
