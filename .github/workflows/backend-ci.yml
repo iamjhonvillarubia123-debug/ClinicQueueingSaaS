@@ -54,6 +54,8 @@ jobs:
           npx eslint
           src/practice-location/practice-location-operations.service.ts
           src/practice-location/practice-location-operations-context.service.ts
+          src/practice-location/practice-location-staff-read.service.ts
+          src/practice-location/practice-location-staff.controller.ts
           src/practice-location/practice-location.controller.ts
           src/practice-location/practice-location.module.ts
       - name: Lint Open Clinic operations tests
@@ -61,6 +63,7 @@ jobs:
           npx eslint
           src/practice-location/practice-location-operations.service.spec.ts
           src/practice-location/practice-location-operations-context.service.spec.ts
+          src/practice-location/practice-location-staff-read.service.spec.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
@@ -83,4 +86,5 @@ jobs:
           practice-location-protected-activation.service.spec.ts
           practice-location-operations.service.spec.ts
           practice-location-operations-context.service.spec.ts
+          practice-location-staff-read.service.spec.ts
       - run: npm run build
