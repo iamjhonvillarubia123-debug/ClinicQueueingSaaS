@@ -37,7 +37,9 @@ describe('PracticeLocationController', () => {
   };
   const practiceLocationDraftScheduleServiceMock = {};
   const practiceLocationLifecycleServiceMock = {};
-  const practiceLocationOperationsContextServiceMock = { getContext: jest.fn() };
+  const practiceLocationOperationsContextServiceMock = {
+    getContext: jest.fn(),
+  };
   const practiceLocationPermanentDeleteServiceMock = {};
   const practiceSchedulePreflightServiceMock = {};
   const practiceLocationOperationsServiceMock = { getOverview: jest.fn() };

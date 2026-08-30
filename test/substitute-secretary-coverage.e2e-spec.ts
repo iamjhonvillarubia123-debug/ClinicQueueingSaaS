@@ -75,6 +75,10 @@ describe('Substitute Secretary coverage controls (e2e)', () => {
       toServiceDate: '2026-09-12',
     };
     const first = await service.create(doctorUserId, request, `range-${scope}`);
+    const coverageId = first.coverageId;
+    if (!coverageId) {
+      throw new Error('Substitute coverage result was incomplete.');
+    }
     const replay = await service.create(
       doctorUserId,
       request,
@@ -84,11 +88,11 @@ describe('Substitute Secretary coverage controls (e2e)', () => {
     expect(replay).toEqual({
       created: true,
       replayed: true,
-      coverageId: first.coverageId,
+      coverageId,
     });
     const [dates, clinicDays, coverages] = await Promise.all([
       prisma.substituteSecretaryCoverageDate.findMany({
-        where: { coverageId: first.coverageId },
+        where: { coverageId },
         orderBy: { serviceDate: 'asc' },
       }),
       prisma.clinicDay.count({
@@ -101,7 +105,7 @@ describe('Substitute Secretary coverage controls (e2e)', () => {
         },
       }),
       prisma.substituteSecretaryCoverage.count({
-        where: { id: first.coverageId },
+        where: { id: coverageId },
       }),
     ]);
     expect(
@@ -166,10 +170,14 @@ describe('Substitute Secretary coverage controls (e2e)', () => {
       },
       `replace-source-${scope}`,
     );
+    const originalCoverageId = original.coverageId;
+    if (!originalCoverageId) {
+      throw new Error('Original substitute coverage result was incomplete.');
+    }
     const replacement = await service.replace(
       doctorUserId,
       {
-        coverageId: original.coverageId,
+        coverageId: originalCoverageId,
         userId: secondSecretaryUserId,
         coverageMode: SubstituteSecretaryCoverageMode.DATE_RANGE,
         fromServiceDate: '2026-09-25',
@@ -177,37 +185,41 @@ describe('Substitute Secretary coverage controls (e2e)', () => {
       },
       `replace-${scope}`,
     );
+    const replacementCoverageId = replacement.coverageId;
+    if (!replacementCoverageId) {
+      throw new Error('Replacement substitute coverage result was incomplete.');
+    }
 
     const [oldCoverage, newCoverage, activeDates] = await Promise.all([
       prisma.substituteSecretaryCoverage.findUniqueOrThrow({
-        where: { id: original.coverageId },
+        where: { id: originalCoverageId },
       }),
       prisma.substituteSecretaryCoverage.findUniqueOrThrow({
-        where: { id: replacement.coverageId },
+        where: { id: replacementCoverageId },
       }),
       prisma.substituteSecretaryCoverageDate.count({
-        where: { coverageId: replacement.coverageId, status: 'ACTIVE' },
+        where: { coverageId: replacementCoverageId, status: 'ACTIVE' },
       }),
     ]);
     expect(oldCoverage.status).toBe('SUPERSEDED');
-    expect(newCoverage.supersedesCoverageId).toBe(original.coverageId);
+    expect(newCoverage.supersedesCoverageId).toBe(originalCoverageId);
     expect(activeDates).toBe(2);
 
     const cancelled = await service.cancel(
       doctorUserId,
-      { coverageId: replacement.coverageId },
+      { coverageId: replacementCoverageId },
       `cancel-${scope}`,
     );
     expect(cancelled.cancelled).toBe(true);
     expect(
       await prisma.substituteSecretaryCoverageDate.count({
-        where: { coverageId: replacement.coverageId, status: 'ACTIVE' },
+        where: { coverageId: replacementCoverageId, status: 'ACTIVE' },
       }),
     ).toBe(0);
     expect(
       (
         await prisma.substituteSecretaryCoverage.findUniqueOrThrow({
-          where: { id: replacement.coverageId },
+          where: { id: replacementCoverageId },
         })
       ).status,
     ).toBe('CANCELLED');

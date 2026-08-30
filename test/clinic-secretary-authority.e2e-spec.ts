@@ -135,14 +135,18 @@ describe('Clinic Secretary authority bundles (e2e)', () => {
       },
       `assign-${scope}`,
     );
+    const practiceStaffId = result.practiceStaffId;
+    if (!practiceStaffId) {
+      throw new Error('Clinic Secretary assignment result was incomplete.');
+    }
 
     const [storedBundles, capabilities] = await Promise.all([
       prisma.practiceStaffAuthorityBundle.findMany({
-        where: { practiceStaffId: result.practiceStaffId, status: 'ACTIVE' },
+        where: { practiceStaffId, status: 'ACTIVE' },
         orderBy: { bundleType: 'asc' },
       }),
       prisma.practiceStaffCapability.findMany({
-        where: { practiceStaffId: result.practiceStaffId, status: 'ACTIVE' },
+        where: { practiceStaffId, status: 'ACTIVE' },
       }),
     ]);
     expect(storedBundles.map((item) => item.bundleType).sort()).toEqual(
