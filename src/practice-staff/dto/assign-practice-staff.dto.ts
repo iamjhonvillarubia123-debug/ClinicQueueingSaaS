@@ -22,5 +22,5 @@ export class AssignPracticeStaffDto {
   @ArrayNotEmpty()
   @ArrayUnique()
   @IsEnum(ClinicSecretaryAuthorityBundle, { each: true })
-  authorityBundles!: ClinicSecretaryAuthorityBundle[];
+  authorityBundles?: ClinicSecretaryAuthorityBundle[];
 }
