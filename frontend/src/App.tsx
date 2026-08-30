@@ -21,6 +21,7 @@ import {
   DoctorWorkspacePlaceholder,
   DoctorWorkspaceShell,
 } from './doctor/DoctorWorkspace';
+import { GlobalSecretariesPage } from './doctor/GlobalSecretariesPage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
@@ -281,12 +282,7 @@ export function App() {
             />
             <Route
               path="/app/secretaries"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Secretaries"
-                  description="Secretary invitations, assignments, and governance will be connected here in its approved workflow slice."
-                />
-              }
+              element={<GlobalSecretariesPage />}
             />
             <Route
               path="/app/settings"
