@@ -7,6 +7,7 @@ import { PracticeLocationConfigurationDraftService } from './practice-location-c
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
 import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
+import { PracticeLocationOperationsContextService } from './practice-location-operations-context.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
 import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationController } from './practice-location.controller';
@@ -36,6 +37,7 @@ describe('PracticeLocationController', () => {
   };
   const practiceLocationDraftScheduleServiceMock = {};
   const practiceLocationLifecycleServiceMock = {};
+  const practiceLocationOperationsContextServiceMock = { getContext: jest.fn() };
   const practiceLocationPermanentDeleteServiceMock = {};
   const practiceSchedulePreflightServiceMock = {};
   const practiceLocationOperationsServiceMock = { getOverview: jest.fn() };
@@ -98,6 +100,10 @@ describe('PracticeLocationController', () => {
           useValue: practiceLocationLifecycleServiceMock,
         },
         {
+          provide: PracticeLocationOperationsContextService,
+          useValue: practiceLocationOperationsContextServiceMock,
+        },
+        {
           provide: PracticeLocationPermanentDeleteService,
           useValue: practiceLocationPermanentDeleteServiceMock,
         },
@@ -127,6 +133,21 @@ describe('PracticeLocationController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('delegates authoritative clinic-local service date context', async () => {
+    const request = { user: { userId: 'doctor-1' } };
+    practiceLocationOperationsContextServiceMock.getContext.mockResolvedValue({
+      practiceLocationId: 'location-1',
+      timeZone: 'Asia/Manila',
+      currentServiceDate: '2026-08-31',
+    });
+
+    await controller.operationsContext('location-1', request as never);
+
+    expect(
+      practiceLocationOperationsContextServiceMock.getContext,
+    ).toHaveBeenCalledWith('doctor-1', 'location-1');
   });
 
   it('delegates whole clinic configuration draft saves to the Doctor draft service', async () => {
