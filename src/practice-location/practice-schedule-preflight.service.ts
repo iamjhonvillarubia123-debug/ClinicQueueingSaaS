@@ -4,10 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  PracticeLocationLifecycleStatus,
-  Prisma,
-} from '../../generated/prisma/client';
+import { PracticeLocationLifecycleStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ValidatePracticeScheduleDto } from './dto/validate-practice-schedule.dto';
