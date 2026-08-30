@@ -6,7 +6,8 @@ type StaffFilter = 'ALL' | 'ACTIVE' | 'DISABLED' | 'PENDING';
 export type SubstituteCoverage = { id: string; coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE'; fromServiceDate: string; toServiceDate: string; status: 'ACTIVE' | 'CANCELLED' | 'SUPERSEDED'; createdAt: string; endedAt: string | null };
 export type ClinicStaffAssignment = { practiceStaffId: string; userId: string; name: string; email: string; mobileNumber: string; assignmentActive: boolean; operationallyReady: boolean; isClinicSecretary: boolean; assignedAt: string; deactivatedAt: string | null; updatedAt: string; authorityBundles: string[]; substituteCoverages: SubstituteCoverage[] };
 export type StaffCandidate = { userId: string; name: string; email: string; mobileNumber: string };
-export type AuthoritativeClinicStaff = { clinic: { id: string; name: string | null }; staffAssignments: ClinicStaffAssignment[]; candidates: StaffCandidate[] };
+export type PendingStaffInvitation = { invitationId: string; name: string; email: string; mobileNumber: string; status: 'PENDING'; invitedAt: string; expiresAt: string };
+export type AuthoritativeClinicStaff = { clinic: { id: string; name: string | null }; staffAssignments: ClinicStaffAssignment[]; candidates: StaffCandidate[]; pendingInvitations: PendingStaffInvitation[] };
 
 function initials(name: string) {
   return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || '?';
@@ -39,7 +40,7 @@ export function ClinicStaffView({ data, onAssign }: { data: AuthoritativeClinicS
     { id: 'ALL', label: 'All', count: data.staffAssignments.length },
     { id: 'ACTIVE', label: 'Active', count: active.length },
     { id: 'DISABLED', label: 'Disabled', count: disabled.length },
-    { id: 'PENDING', label: 'Pending Invitations', count: 0 },
+    { id: 'PENDING', label: 'Pending Invitations', count: data.pendingInvitations.length },
   ];
 
   return <section className="clinic-staff-main" aria-labelledby="clinic-staff-title">
@@ -47,7 +48,9 @@ export function ClinicStaffView({ data, onAssign }: { data: AuthoritativeClinicS
     <article className="clinic-staff-list-card">
       <nav className="clinic-staff-filters" aria-label="Staff status filters">{filters.map((item) => <button type="button" key={item.id} className={filter === item.id ? 'is-active' : ''} onClick={() => setFilter(item.id)}>{item.label} ({item.count})</button>)}</nav>
       <div className="clinic-staff-table-head" aria-hidden="true"><span>Secretary</span><span>Clinic</span><span>Status</span><span>Assigned Since</span><span>Role</span><span>Actions</span></div>
-      {filtered.length ? filtered.map((staff) => <div className="clinic-staff-table-row" key={staff.practiceStaffId}>
+      {filter === 'PENDING' && data.pendingInvitations.length ? data.pendingInvitations.map((invitation) => <div className="clinic-staff-table-row is-invitation" key={invitation.invitationId}>
+        <div className="clinic-staff-person"><b>{initials(invitation.name)}</b><span><strong>{invitation.name}</strong><small>{invitation.email}</small><small>{invitation.mobileNumber}</small></span></div><span>{data.clinic.name ?? '—'}</span><span className="clinic-staff-status is-pending"><i aria-hidden="true" />Pending Invitation</span><span className="clinic-staff-assigned-at">{formatAssignedAt(invitation.invitedAt)}</span><span>—</span><span className="clinic-staff-actions"><button type="button" aria-label={`More actions for ${invitation.name}`}>•••</button></span>
+      </div>) : filtered.length ? filtered.map((staff) => <div className="clinic-staff-table-row" key={staff.practiceStaffId}>
         <div className="clinic-staff-person"><b>{initials(staff.name)}</b><span><strong>{staff.name}</strong><small>{staff.email}</small><small>{staff.mobileNumber}</small></span></div>
         <span>{data.clinic.name ?? '—'}</span>
         <span className={`clinic-staff-status ${staff.operationallyReady ? 'is-active' : 'is-disabled'}`}><i aria-hidden="true" />{staff.operationallyReady ? 'Active' : 'Disabled (at this clinic)'}</span>
@@ -59,7 +62,7 @@ export function ClinicStaffView({ data, onAssign }: { data: AuthoritativeClinicS
     <div className="clinic-staff-access-summary">
       <div className="is-active"><strong>{active.length}</strong><span>Active Clinic Secretary</span><small>Currently assigned to {data.clinic.name ?? 'this clinic'}.</small></div>
       <div className="is-disabled"><strong>{disabled.length}</strong><span>Disabled (at this clinic)</span><small>Assignments ended at this clinic.</small></div>
-      <div className="is-pending"><strong>0</strong><span>Pending Invitations</span><small>Invitations sent and awaiting acceptance.</small></div>
+      <div className="is-pending"><strong>{data.pendingInvitations.length}</strong><span>Pending Invitations</span><small>Invitations sent and awaiting acceptance.</small></div>
       <div className="is-substitute"><strong>{substitutes.length}</strong><span>Substitute Coverage</span><small>Active date-based coverage assignments.</small></div>
     </div>
   </section>;
@@ -89,12 +92,12 @@ export function AuthoritativeClinicStaffTab({ clinicId }: { clinicId: string }) 
           method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
           body: { practiceLocationId: clinicId, userId: command.userId, authorityBundles: command.authorityBundles, ...(replacing ? { password: command.password } : {}) },
         });
-      } else {
+      } else if (command.role === 'SUBSTITUTE_SECRETARY') {
         await apiRequest('/practice-staff/substitute-coverage/create', {
           method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
           body: { practiceLocationId: clinicId, userId: command.userId, coverageMode: command.coverageMode, fromServiceDate: command.fromServiceDate, toServiceDate: command.toServiceDate },
         });
-      }
+      } else await apiRequest('/practice-staff/invitations', { method: 'POST', body: { practiceLocationId: clinicId, firstName: command.firstName, lastName: command.lastName, email: command.email, mobileNumber: command.mobileNumber } });
       setMessage('Assignment successful.');
       setRevision((value) => value + 1);
     } catch (cause) {
