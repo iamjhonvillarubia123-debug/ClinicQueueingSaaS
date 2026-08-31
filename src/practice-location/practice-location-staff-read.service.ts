@@ -82,9 +82,14 @@ export class PracticeLocationStaffReadService {
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
         emailVerifiedAt: { not: null },
-        practiceStaffAssignments: {
-          some: { practiceLocation: { doctorProfile: { userId } } },
-        },
+        OR: [
+          {
+            practiceStaffAssignments: {
+              some: { practiceLocation: { doctorProfile: { userId } } },
+            },
+          },
+          { secretaryInvitationAccepted: { practiceLocationId } },
+        ],
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: {

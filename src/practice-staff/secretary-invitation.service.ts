@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -12,6 +13,7 @@ import {
   SecretaryInvitationStatus,
 } from '../../generated/prisma/client';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
+import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSecretaryInvitationDto } from './dto/create-secretary-invitation.dto';
 
@@ -24,6 +26,7 @@ export class SecretaryInvitationService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly payload: ProtectedAccountPayloadService,
+    private readonly passwords: PasswordSecurityService,
   ) {}
 
   async create(actorUserId: string, dto: CreateSecretaryInvitationDto) {
@@ -107,6 +110,115 @@ export class SecretaryInvitationService {
       status: invitation.status,
       expiresAt: invitation.expiresAt,
     };
+  }
+
+  async preview(token: string) {
+    const invitation = await this.prisma.secretaryInvitation.findFirst({
+      where: {
+        tokenHash: this.sha256(token),
+        status: SecretaryInvitationStatus.PENDING,
+      },
+      select: {
+        firstName: true,
+        lastName: true,
+        normalizedEmail: true,
+        expiresAt: true,
+        practiceLocation: { select: { name: true } },
+      },
+    });
+    if (!invitation || invitation.expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException('Invalid or expired Secretary invitation.');
+    }
+    return {
+      name: `${invitation.firstName} ${invitation.lastName}`.trim(),
+      email: invitation.normalizedEmail,
+      clinicName: invitation.practiceLocation.name,
+      expiresAt: invitation.expiresAt,
+    };
+  }
+
+  async accept(token: string, password: string) {
+    const tokenHash = this.sha256(token);
+    const passwordHash = await this.passwords.hash(password);
+    const outcome = await this.prisma.$transaction(async (transaction) => {
+      const rows = await transaction.$queryRaw<Array<{ id: string }>>`
+        SELECT "id" FROM "SecretaryInvitation"
+        WHERE "tokenHash" = ${tokenHash}
+        LIMIT 1 FOR UPDATE
+      `;
+      if (!rows[0]) return 'invalid' as const;
+      const invitation = await transaction.secretaryInvitation.findUnique({
+        where: { id: rows[0].id },
+        include: { notificationOutbox: true },
+      });
+      if (
+        !invitation ||
+        invitation.status !== SecretaryInvitationStatus.PENDING ||
+        invitation.tokenHash !== tokenHash ||
+        !invitation.activeInvitationKey
+      )
+        return 'invalid' as const;
+      const now = new Date();
+      if (invitation.expiresAt.getTime() <= now.getTime()) {
+        await transaction.secretaryInvitation.update({
+          where: { id: invitation.id },
+          data: {
+            status: SecretaryInvitationStatus.EXPIRED,
+            tokenHash: null,
+            activeInvitationKey: null,
+          },
+        });
+        return 'expired' as const;
+      }
+      const existing = await transaction.user.findFirst({
+        where: { email: invitation.normalizedEmail },
+        select: { id: true },
+      });
+      if (existing) return 'existing' as const;
+      const user = await transaction.user.create({
+        data: {
+          email: invitation.normalizedEmail,
+          firstName: invitation.firstName,
+          lastName: invitation.lastName,
+          mobileNumber: invitation.mobileNumber,
+          passwordHash,
+          role: 'SECRETARY',
+          accountStatus: 'ACTIVE',
+          emailVerifiedAt: now,
+        },
+      });
+      await transaction.secretaryInvitation.update({
+        where: { id: invitation.id },
+        data: {
+          status: SecretaryInvitationStatus.ACCEPTED,
+          acceptedAt: now,
+          acceptedUserId: user.id,
+          tokenHash: null,
+          activeInvitationKey: null,
+        },
+      });
+      if (
+        invitation.notificationOutbox?.status ===
+        NotificationOutboxStatus.PENDING
+      ) {
+        await transaction.notificationOutbox.update({
+          where: { id: invitation.notificationOutbox.id },
+          data: {
+            status: NotificationOutboxStatus.CANCELLED,
+            cancelledAt: now,
+          },
+        });
+      }
+      return 'accepted' as const;
+    });
+    if (outcome !== 'accepted') {
+      throw new BadRequestException(
+        outcome === 'existing'
+          ? 'An account already exists for this email. Sign in instead.'
+          : 'Invalid or expired Secretary invitation.',
+      );
+    }
+    return { accepted: true };
   }
 
   private publicAppBaseUrl() {

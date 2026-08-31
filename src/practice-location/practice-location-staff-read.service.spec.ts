@@ -94,11 +94,16 @@ describe('PracticeLocationStaffReadService', () => {
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
           emailVerifiedAt: { not: null },
-          practiceStaffAssignments: {
-            some: {
-              practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
+          OR: expect.arrayContaining([
+            {
+              practiceStaffAssignments: {
+                some: {
+                  practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
+                },
+              },
             },
-          },
+            { secretaryInvitationAccepted: { practiceLocationId: 'clinic-1' } },
+          ]),
         }),
       }),
     );
