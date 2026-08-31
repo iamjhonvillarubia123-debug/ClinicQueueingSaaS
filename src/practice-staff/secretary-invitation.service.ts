@@ -42,11 +42,15 @@ export class SecretaryInvitationService {
       throw new NotFoundException('Practice location was not found.');
     const existingUser = await this.prisma.user.findFirst({
       where: { email: normalizedEmail },
-      select: { id: true },
+      select: { id: true, role: true },
     });
+    if (existingUser?.role === 'SECRETARY')
+      throw new ConflictException(
+        'This email already has a Secretary account. Assign the existing Secretary instead.',
+      );
     if (existingUser)
       throw new ConflictException(
-        'This email already has an account. Assign the existing Secretary instead.',
+        'This email is already used by an account with an incompatible role.',
       );
     const activeInvitationKey = this.sha256(
       `${location.id}:${normalizedEmail}`,
