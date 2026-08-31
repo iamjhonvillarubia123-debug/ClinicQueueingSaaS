@@ -1,10 +1,17 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { CreateAccountPage } from './CreateAccountPage';
 
-afterEach(() => cleanup());
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('approved create account UI', () => {
   it('shows the shared Doctor and Secretary registration choices', () => {
@@ -32,7 +39,13 @@ describe('approved create account UI', () => {
     expect(screen.queryByText(/PracticeLocation/i)).not.toBeInTheDocument();
   });
 
-  it('moves a completed form to the approved check-email UI without calling backend registration', async () => {
+  it('registers the selected role and moves to the approved check-email UI', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      userId: 'user-1',
+      role: 'SECRETARY',
+      emailVerificationRequired: true,
+      emailVerificationExpiresAt: '2026-09-01T00:00:00.000Z',
+    }));
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/register']}>
@@ -54,6 +67,10 @@ describe('approved create account UI', () => {
     await user.click(screen.getByRole('button', { name: 'Create account' }));
 
     expect(await screen.findByText('Check email destination')).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/register');
+    expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
+    expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('"role":"SECRETARY"');
+    expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain('PracticeStaff');
   });
 
   it('preserves the approved authentication branding panel content', () => {
