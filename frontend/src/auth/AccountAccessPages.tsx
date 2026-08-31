@@ -2,6 +2,21 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 
+type EmailVerificationResult = { verified: true; role: 'DOCTOR' | 'SECRETARY' };
+const emailVerificationRequests = new Map<string, Promise<EmailVerificationResult>>();
+
+function verifyEmailToken(token: string): Promise<EmailVerificationResult> {
+  const pending = emailVerificationRequests.get(token);
+  if (pending) return pending;
+  const request = apiRequest<EmailVerificationResult>('/auth/verify-email', { method: 'POST', body: { token } });
+  emailVerificationRequests.set(token, request);
+  void request.then(
+    () => emailVerificationRequests.delete(token),
+    () => emailVerificationRequests.delete(token),
+  );
+  return request;
+}
+
 function messageFor(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
@@ -116,7 +131,7 @@ export function VerifyEmailPage() {
   useEffect(() => {
     if (!token) return;
     let active = true;
-    void apiRequest<{ verified: true; role: 'DOCTOR' | 'SECRETARY' }>('/auth/verify-email', { method: 'POST', body: { token } })
+    void verifyEmailToken(token)
       .then((result) => {
         if (!active) return;
         navigate(`/registration/account-ready?role=${result.role}`, { replace: true });

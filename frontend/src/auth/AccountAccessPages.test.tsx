@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -67,15 +68,18 @@ describe('F6 account access journeys', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ verified: true, role: 'SECRETARY' }));
 
     render(
-      <MemoryRouter initialEntries={['/verify-email?token=verify-token']}>
-        <Routes>
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/registration/account-ready" element={<div>Account ready destination</div>} />
-        </Routes>
-      </MemoryRouter>,
+      <StrictMode>
+        <MemoryRouter initialEntries={['/verify-email?token=verify-token']}>
+          <Routes>
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/registration/account-ready" element={<div>Account ready destination</div>} />
+          </Routes>
+        </MemoryRouter>
+      </StrictMode>,
     );
 
     expect(await screen.findByText('Account ready destination')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('verify-token');
   });
 
