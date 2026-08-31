@@ -1,15 +1,12 @@
-import { FormEvent, useState } from 'react';
 import {
   Link,
   Navigate,
   Outlet,
   Route,
   Routes,
-  useLocation,
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { ApiError } from './api/client';
 import {
   DoctorRegistrationPage,
   ForgotPasswordPage,
@@ -24,6 +21,7 @@ import {
 } from './auth/AccountLifecyclePages';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
+import { LoginPage } from './auth/LoginPage';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
@@ -58,97 +56,6 @@ function LandingPage() {
           Open a Doctor or clinic public link to view practice information and
           begin booking.
         </p>
-      </section>
-    </main>
-  );
-}
-
-function LoginPage() {
-  const { status, login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  if (status === 'authenticated') return <Navigate to="/app" replace />;
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError('');
-    setSubmitting(true);
-    try {
-      await login(email, password);
-      const from = (location.state as { from?: string } | null)?.from;
-      navigate(from || '/app', { replace: true });
-    } catch (caught) {
-      setError(
-        caught instanceof ApiError
-          ? caught.message
-          : 'Unable to sign in. Please try again.',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <main className="auth-page">
-      <section className="auth-panel" aria-labelledby="signin-heading">
-        <Link className="brand" to="/">
-          Clinic Queueing
-        </Link>
-        <div className="auth-heading">
-          <h1 id="signin-heading">Sign in</h1>
-          <p>For doctors, secretaries, and authorized system staff.</p>
-        </div>
-        <form className="stack" onSubmit={submit} noValidate>
-          <label>
-            Email
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          {error ? (
-            <div className="form-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-          <button
-            className="primary"
-            type="submit"
-            disabled={submitting || !email || !password}
-          >
-            {submitting ? 'Signing in…' : 'Continue'}
-          </button>
-          <Link className="quiet-link auth-center-link" to="/forgot-password">
-            Forgot password?
-          </Link>
-          <Link className="quiet-link auth-center-link" to="/account/reactivate">
-            Reactivate disabled account
-          </Link>
-        </form>
-        <div className="auth-registration-entry">
-          <span>Doctor without an account?</span>
-          <Link className="secondary-action" to="/register/doctor">
-            Create doctor account
-          </Link>
-        </div>
       </section>
     </main>
   );
