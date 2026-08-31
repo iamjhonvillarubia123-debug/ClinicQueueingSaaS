@@ -61,7 +61,7 @@ export class EmailVerificationService {
     });
 
     const verificationUrl = this.buildVerificationUrl(token);
-    const messageBody = `Verify your Clinic Queueing SaaS Doctor account: ${verificationUrl}`;
+    const messageBody = `Verify your Clinic Queueing SaaS account: ${verificationUrl}`;
     const deliveryIdentityKey = this.sha256(
       `${NotificationType.DOCTOR_EMAIL_VERIFICATION}:${emailVerification.id}`,
     );
@@ -83,7 +83,7 @@ export class EmailVerificationService {
           messageBody,
           `${EMAIL_PAYLOAD_PURPOSE}:message`,
         ),
-        providerIdempotencyKey: `doctor-email-verification:${emailVerification.id}`,
+        providerIdempotencyKey: `account-email-verification:${emailVerification.id}`,
         nextAttemptAt: createdAt,
         expiresAt,
       },
@@ -124,14 +124,7 @@ export class EmailVerificationService {
         },
       });
 
-      if (
-        !user ||
-        user.role !== UserRole.DOCTOR ||
-        user.accountStatus !== UserAccountStatus.ACTIVE ||
-        user.administrativeRestrictionStatus !==
-          AdministrativeRestrictionStatus.NONE ||
-        user.emailVerifiedAt !== null
-      ) {
+      if (!user || !this.isEligibleForVerification(user)) {
         return;
       }
 
@@ -195,7 +188,7 @@ export class EmailVerificationService {
     return { accepted: true };
   }
 
-  async verify(token: string): Promise<{ verified: true }> {
+  async verify(token: string): Promise<{ verified: true; role: UserRole.DOCTOR | UserRole.SECRETARY }> {
     const tokenHash = this.sha256(token);
 
     const outcome = await this.prisma.$transaction(async (transaction) => {
@@ -208,7 +201,7 @@ export class EmailVerificationService {
       `;
 
       const row = rows[0];
-      if (!row) return 'invalid' as const;
+      if (!row) return { status: 'invalid' as const };
 
       const verification = await transaction.emailVerification.findUnique({
         where: { id: row.id },
@@ -221,7 +214,7 @@ export class EmailVerificationService {
         verification.tokenHash !== tokenHash ||
         verification.activeVerificationKey === null
       ) {
-        return 'invalid' as const;
+        return { status: 'invalid' as const };
       }
 
       const now = new Date();
@@ -249,17 +242,11 @@ export class EmailVerificationService {
           });
         }
 
-        return 'expired' as const;
+        return { status: 'expired' as const };
       }
 
-      if (
-        verification.user.role !== UserRole.DOCTOR ||
-        verification.user.accountStatus !== UserAccountStatus.ACTIVE ||
-        verification.user.administrativeRestrictionStatus !==
-          AdministrativeRestrictionStatus.NONE ||
-        verification.user.emailVerifiedAt !== null
-      ) {
-        return 'invalid' as const;
+      if (!this.isEligibleForVerification(verification.user)) {
+        return { status: 'invalid' as const };
       }
 
       await transaction.user.update({
@@ -290,14 +277,41 @@ export class EmailVerificationService {
         });
       }
 
-      return 'verified' as const;
+      return {
+        status: 'verified' as const,
+        role: verification.user.role as UserRole.DOCTOR | UserRole.SECRETARY,
+      };
     });
 
-    if (outcome !== 'verified') {
+    if (outcome.status !== 'verified') {
       throw new BadRequestException('Invalid or expired verification link.');
     }
 
-    return { verified: true };
+    return { verified: true, role: outcome.role };
+  }
+
+  private isEligibleForVerification(user: {
+    role: UserRole;
+    accountStatus: UserAccountStatus;
+    administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+    emailVerifiedAt: Date | null;
+  }): user is typeof user & { role: UserRole.DOCTOR | UserRole.SECRETARY } {
+    if (
+      user.role !== UserRole.DOCTOR &&
+      user.role !== UserRole.SECRETARY
+    ) {
+      return false;
+    }
+    if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
+    if (user.emailVerifiedAt !== null) return false;
+    if (
+      user.role === UserRole.DOCTOR &&
+      user.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
+    ) {
+      return false;
+    }
+    return true;
   }
 
   private verificationIssuanceLimit15Minutes(): number {
