@@ -9,3 +9,4 @@
 @media(max-height:950px) and (min-width:801px){.sign-in-brand-panel{padding-top:48px}.sign-in-auth-panel{padding-bottom:82px}}
 @media(max-width:800px){.sign-in-footer{position:static;order:3;margin:0;padding:28px 16px;box-sizing:border-box}.sign-in-account-entry{flex-wrap:wrap}.sign-in-auth-panel{padding-bottom:38px}}
 @media(min-width:801px){.clinic-illustration{left:48px;bottom:0;width:calc(100% - 78px);max-height:305px;color:#a9b0ba;opacity:.92}}
+@media(min-width:801px){img.clinic-illustration{width:min(calc(100% - 78px),652px);height:auto;max-height:none;object-fit:contain;object-position:left bottom;color:initial;opacity:1;mix-blend-mode:multiply}}

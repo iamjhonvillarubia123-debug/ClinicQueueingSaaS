@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
+import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 import { useAuth } from './AuthContext';
 
 function Icon({ name }: { name: 'brand' | 'calendar' | 'chart' | 'shield' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'globe' }) {
@@ -16,29 +17,6 @@ function Icon({ name }: { name: 'brand' | 'calendar' | 'chart' | 'shield' | 'mai
     globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9S14.5 18.5 12 21M12 3C9.5 5.5 8.5 8.5 8.5 12S9.5 18.5 12 21" /></>,
   };
   return <svg className="sign-in-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
-}
-
-function ClinicIllustration() {
-  return <svg className="clinic-illustration" viewBox="0 0 680 330" aria-hidden="true">
-    <g fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M285 279V58L602 15v264M602 15v264H666" />
-      <circle cx="182" cy="81" r="23" /><path d="M182 62v20l11 8M182 58v4M205 81h-4M182 104v-4M159 81h4" />
-
-      <path d="M43 277h42l-5 33H49zM64 277V139" />
-      <path d="M64 176C39 159 34 135 43 124c21 5 30 22 21 52M65 158c9-30 28-47 43-44 3 22-11 43-43 62M64 211c-25-18-45-18-56-8 9 20 28 27 56 23M65 218c20-22 41-25 54-16-7 20-27 31-54 31M63 144c-13-23-10-43 1-51 16 11 19 28 0 51" />
-
-      <path d="M100 267h157M107 267l-7-67M253 267l8-67M116 200h43c8 0 13 5 14 13l5 42h-69l-5-42c-1-8 4-13 12-13zM171 200h43c8 0 13 5 14 13l5 42h-55l-5-42c-1-8 4-13 12-13zM226 200h28c8 0 13 5 14 13l5 32c1 7-3 10-10 10h-30l-5-42c-1-8 4-13 12-13zM109 255h158M122 267v22M244 267v22" />
-
-      <path d="M248 220h249v10H248zM255 230h235v69l-53 13-182-13zM437 230v82M268 238v54" />
-      <path d="M287 220v-37h57v37M297 154h56l-5 52h-46zM325 206v14M306 220h39M309 164h31" />
-
-      <rect x="404" y="82" width="80" height="58" rx="2" /><rect x="410" y="88" width="68" height="46" rx="1" />
-      <path d="M432 220v-18h27v18M440 202v-18M451 202v-18M439 188c-8-7-7-15-3-19 8 2 11 8 7 18M448 187c2-10 9-16 15-15 1 8-4 14-15 18" />
-
-      <path d="M516 279V65h62v214M523 73h48v206M568 174h2M576 279h19" />
-    </g>
-    <g fill="currentColor" textAnchor="middle"><text x="444" y="103" fontSize="7">NOW SERVING</text><text x="444" y="125" fontSize="21" fontWeight="700">#06</text><text x="547" y="111" fontSize="6">CONSULTATION</text></g>
-  </svg>;
 }
 
 export function LoginPage() {
@@ -91,7 +69,7 @@ export function LoginPage() {
           <li><span><Icon name="shield" /></span><div><strong>Secure &amp; Reliable</strong><p>Your data is secure and accessible anytime.</p></div></li>
         </ul>
       </div>
-      <ClinicIllustration />
+      <img className="clinic-illustration" src={clinicWaitingRoom} alt="" aria-hidden="true" decoding="async" />
     </section>
 
     <section className="sign-in-auth-panel">
