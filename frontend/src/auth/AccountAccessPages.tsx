@@ -104,22 +104,22 @@ export function DoctorRegistrationPage() {
 }
 
 export function VerifyEmailPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token')?.trim() ?? '';
   const initialEmail = searchParams.get('email')?.trim() ?? '';
   const [email, setEmail] = useState(initialEmail);
-  const [state, setState] = useState<'idle' | 'verifying' | 'verified' | 'error'>(token ? 'verifying' : 'idle');
+  const [state, setState] = useState<'idle' | 'verifying' | 'error'>(token ? 'verifying' : 'idle');
   const [message, setMessage] = useState(token ? 'Verifying your email…' : 'Open the verification link sent to your email address.');
   const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (!token) return;
     let active = true;
-    void apiRequest('/auth/verify-email', { method: 'POST', body: { token } })
-      .then(() => {
+    void apiRequest<{ verified: true; role: 'DOCTOR' | 'SECRETARY' }>('/auth/verify-email', { method: 'POST', body: { token } })
+      .then((result) => {
         if (!active) return;
-        setState('verified');
-        setMessage('Your email is verified. You can now sign in.');
+        navigate(`/registration/account-ready?role=${result.role}`, { replace: true });
       })
       .catch((caught) => {
         if (!active) return;
@@ -127,7 +127,7 @@ export function VerifyEmailPage() {
         setMessage(messageFor(caught, 'This verification link is invalid or no longer available.'));
       });
     return () => { active = false; };
-  }, [token]);
+  }, [navigate, token]);
 
   async function resend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -149,11 +149,10 @@ export function VerifyEmailPage() {
     <AccountFrame>
       <div className="auth-heading">
         <p className="eyebrow">Email verification</p>
-        <h1>{state === 'verified' ? 'Email verified' : 'Verify your email'}</h1>
+        <h1>Verify your email</h1>
         <p role="status">{message}</p>
       </div>
-      {state === 'verified' ? <Link className="primary-action auth-full-action" to="/login">Continue to sign in</Link> : null}
-      {state !== 'verified' && state !== 'verifying' ? (
+      {state !== 'verifying' ? (
         <form className="stack" onSubmit={resend}>
           <label>Email<input type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
           <button className="secondary" type="submit" disabled={resending || !email.trim()}>{resending ? 'Sending…' : 'Send a new verification email'}</button>
