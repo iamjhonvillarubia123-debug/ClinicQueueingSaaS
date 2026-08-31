@@ -7,6 +7,7 @@ import './styles/global.css';
 import './styles/account-lifecycle.css';
 import './styles/sign-in.css';
 import './styles/password-recovery.css';
+import './styles/reactivate-account.css';
 import './styles/create-account.css';
 import './styles/post-registration.css';
 import './styles/patient.css';

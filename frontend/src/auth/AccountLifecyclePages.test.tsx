@@ -49,9 +49,9 @@ describe('F5 staff account lifecycle', () => {
     const user = userEvent.setup();
     render(<MemoryRouter initialEntries={['/account/reactivate?role=DOCTOR']}><ReactivateAccountPage /></MemoryRouter>);
 
-    await user.type(screen.getByLabelText('Email'), 'doctor@example.com');
-    await user.type(screen.getByLabelText('Password'), 'secret-password');
-    await user.click(screen.getByRole('button', { name: 'Reactivate Doctor account' }));
+    await user.type(screen.getByLabelText('Email address'), 'doctor@example.com');
+    await user.type(screen.getByLabelText('Current password'), 'secret-password');
+    await user.click(screen.getByRole('button', { name: 'Reactivate account' }));
 
     expect(await screen.findByRole('heading', { name: 'Account reactivated.' })).toBeInTheDocument();
     expect(screen.getByText(/does not sign you in/i)).toBeInTheDocument();
@@ -59,6 +59,24 @@ describe('F5 staff account lifecycle', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain('/doctor/account/reactivate');
     expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
+  });
+
+  it('requires an explicit role when reactivation is opened from sign in', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ reactivated: true, replayed: false }));
+    const user = userEvent.setup();
+    render(<MemoryRouter><ReactivateAccountPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText('Email address'), 'secretary@example.com');
+    await user.type(screen.getByLabelText('Current password'), 'secret-password');
+    const reactivateButton = screen.getByRole('button', { name: 'Reactivate account' });
+    expect(reactivateButton).toBeDisabled();
+
+    await user.click(screen.getByRole('radio', { name: /Secretary/ }));
+    expect(reactivateButton).toBeEnabled();
+    await user.click(reactivateButton);
+
+    expect(await screen.findByText(/A Doctor must assign you again/)).toBeInTheDocument();
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/secretary/account/reactivate');
   });
 
   it('requires explicit irreversible confirmation and clears stale auth state after permanent closure', async () => {
