@@ -38,9 +38,8 @@ export class PracticeLocationStaffReadService {
               },
             },
             authorityBundles: {
-              where: { status: 'ACTIVE' },
               orderBy: { grantedAt: 'asc' },
-              select: { bundleType: true },
+              select: { bundleType: true, status: true },
             },
             substituteSecretaryCoverages: {
               orderBy: { createdAt: 'desc' },
@@ -118,12 +117,22 @@ export class PracticeLocationStaffReadService {
           assignment.user.emailVerifiedAt !== null,
         isClinicSecretary:
           assignment.id === location.currentRegularPracticeStaffId,
+        assignmentType:
+          assignment.id === location.currentRegularPracticeStaffId ||
+          assignment.authorityBundles.length > 0
+            ? 'CLINIC_SECRETARY'
+            : 'SUBSTITUTE_SECRETARY',
         assignedAt: assignment.activatedAt,
         deactivatedAt: assignment.deactivatedAt,
         updatedAt: assignment.updatedAt,
-        authorityBundles: assignment.authorityBundles.map(
-          ({ bundleType }) => bundleType,
-        ),
+        authorityBundles: assignment.authorityBundles
+          .filter(({ status }) => status === 'ACTIVE')
+          .map(({ bundleType }) => bundleType),
+        previousAuthorityBundles: [
+          ...new Set(
+            assignment.authorityBundles.map(({ bundleType }) => bundleType),
+          ),
+        ],
         substituteCoverages: assignment.substituteSecretaryCoverages,
       })),
       candidates: candidates.map((candidate) => ({

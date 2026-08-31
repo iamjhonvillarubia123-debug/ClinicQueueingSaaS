@@ -37,7 +37,12 @@ describe('PracticeLocationStaffReadService', () => {
             accountStatus: 'ACTIVE',
             emailVerifiedAt: activatedAt,
           },
-          authorityBundles: [{ bundleType: 'QUEUE_CLINIC_DAY_OPERATIONS' }],
+          authorityBundles: [
+            {
+              bundleType: 'QUEUE_CLINIC_DAY_OPERATIONS',
+              status: 'ACTIVE',
+            },
+          ],
           substituteSecretaryCoverages: [],
         },
       ],
