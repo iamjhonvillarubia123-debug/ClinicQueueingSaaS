@@ -9,6 +9,8 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '../../generated/prisma/client';
+import { AccountRegistrationService } from '../auth/account-registration.service';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
@@ -30,6 +32,7 @@ import { UpdateDoctorAccountSettingsDto } from './dto/update-doctor-account-sett
 @Controller('doctor')
 export class DoctorController {
   constructor(
+    private readonly accountRegistrationService: AccountRegistrationService,
     private readonly doctorService: DoctorService,
     private readonly doctorLifecycleService: DoctorLifecycleService,
     private readonly doctorDefaultsService: DoctorDefaultsService,
@@ -44,8 +47,15 @@ export class DoctorController {
     subject: { kind: 'NONE' },
   })
   @Post('register')
-  async register(@Body() registerDoctorDto: RegisterDoctorDto) {
-    return this.doctorService.registerDoctor(registerDoctorDto);
+  register(@Body() registerDoctorDto: RegisterDoctorDto) {
+    return this.accountRegistrationService.register({
+      firstName: registerDoctorDto.firstName,
+      lastName: registerDoctorDto.lastName,
+      email: registerDoctorDto.email,
+      mobileNumber: registerDoctorDto.mobileNumber,
+      password: registerDoctorDto.password,
+      role: UserRole.DOCTOR,
+    });
   }
 
   @UseGuards(SessionAuthGuard)
@@ -91,52 +101,24 @@ export class DoctorController {
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/services')
-  createServiceTemplate(
+  saveServiceTemplate(
     @Request() request: AuthenticatedRequest,
     @Body() dto: SaveDoctorServiceTemplateDto,
   ) {
-    return this.doctorDefaultsService.createServiceTemplate(
+    return this.doctorDefaultsService.saveServiceTemplate(
       request.user.userId,
-      dto,
-    );
-  }
-
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
-  @Patch('defaults/services/:templateId')
-  updateServiceTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Param('templateId') templateId: string,
-    @Body() dto: SaveDoctorServiceTemplateDto,
-  ) {
-    return this.doctorDefaultsService.updateServiceTemplate(
-      request.user.userId,
-      templateId,
       dto,
     );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/booking-questions')
-  createBookingQuestionTemplate(
+  saveBookingQuestionTemplate(
     @Request() request: AuthenticatedRequest,
     @Body() dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    return this.doctorDefaultsService.createBookingQuestionTemplate(
+    return this.doctorDefaultsService.saveBookingQuestionTemplate(
       request.user.userId,
-      dto,
-    );
-  }
-
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
-  @Patch('defaults/booking-questions/:templateId')
-  updateBookingQuestionTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Param('templateId') templateId: string,
-    @Body() dto: SaveDoctorBookingQuestionTemplateDto,
-  ) {
-    return this.doctorDefaultsService.updateBookingQuestionTemplate(
-      request.user.userId,
-      templateId,
       dto,
     );
   }
@@ -146,12 +128,10 @@ export class DoctorController {
   applyDefaults(
     @Request() request: AuthenticatedRequest,
     @Body() dto: ApplyDoctorDefaultsDto,
-    @Headers('idempotency-key') idempotencyKey: string,
   ) {
     return this.doctorDefaultsApplyService.apply(
       request.user.userId,
       dto,
-      idempotencyKey,
     );
   }
 
@@ -159,7 +139,7 @@ export class DoctorController {
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
-    @Headers('idempotency-key') idempotencyKey: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ) {
     return this.doctorLifecycleService.disable(
       request.user.userId,
@@ -167,40 +147,40 @@ export class DoctorController {
     );
   }
 
-  @RateLimit({
-    id: 'doctor-reactivate',
-    limit: 10,
-    windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
-  })
   @Post('account/reactivate')
-  reactivateAccount(
-    @Body() dto: ReactivateDoctorDto,
-    @Headers('idempotency-key') idempotencyKey: string,
+  reactivateAccount(@Body() dto: ReactivateDoctorDto) {
+    return this.doctorLifecycleService.reactivate(dto);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('account/permanently-delete')
+  permanentlyDeleteAccount(
+    @Request() request: AuthenticatedRequest,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() dto: PermanentlyDeleteDoctorDto,
   ) {
-    return this.doctorLifecycleService.reactivate(
-      dto.email,
-      dto.password,
+    return this.doctorLifecycleService.permanentlyDelete(
+      request.user.userId,
+      dto,
       idempotencyKey,
     );
   }
 
-  @RateLimit({
-    id: 'doctor-permanent-delete',
-    limit: 10,
-    windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
-  })
-  @Post('account/permanent-delete')
-  permanentlyDeleteAccount(
-    @Body() dto: PermanentlyDeleteDoctorDto,
-    @Headers('idempotency-key') idempotencyKey: string,
+  @UseGuards(SessionAuthGuard)
+  @Get('account')
+  getAccount(@Request() request: AuthenticatedRequest) {
+    return this.doctorLifecycleService.getAccount(request.user.userId);
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get('defaults/services/:templateId')
+  getServiceTemplate(
+    @Request() request: AuthenticatedRequest,
+    @Param('templateId') templateId: string,
   ) {
-    return this.doctorLifecycleService.permanentlyDelete(
-      dto.email,
-      dto.password,
-      dto.confirmPermanentDelete,
-      idempotencyKey,
+    return this.doctorDefaultsService.getServiceTemplate(
+      request.user.userId,
+      templateId,
     );
   }
 }
