@@ -8,10 +8,9 @@ import {
   useParams,
 } from 'react-router-dom';
 import {
-  ForgotPasswordPage,
-  ResetPasswordPage,
   VerifyEmailPage,
 } from './auth/AccountAccessPages';
+import { ForgotPasswordPage, ResetPasswordPage } from './auth/PasswordRecoveryPages';
 import {
   AccountSecurityPage,
   DisabledAccountPage,

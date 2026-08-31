@@ -3,7 +3,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { DoctorRegistrationPage, ForgotPasswordPage, ResetPasswordPage, VerifyEmailPage } from './AccountAccessPages';
+import { DoctorRegistrationPage, VerifyEmailPage } from './AccountAccessPages';
+import { ForgotPasswordPage, ResetPasswordPage } from './PasswordRecoveryPages';
 
 const refreshMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('./AuthContext', () => ({ useAuth: () => ({ refresh: refreshMock }) }));
@@ -61,10 +62,11 @@ describe('F6 account access journeys', () => {
     const user = userEvent.setup();
 
     render(<MemoryRouter><ForgotPasswordPage /></MemoryRouter>);
-    await user.type(screen.getByLabelText('Email'), 'unknown@example.com');
+    await user.type(screen.getByLabelText('Email address'), 'unknown@example.com');
     await user.click(screen.getByRole('button', { name: 'Send reset link' }));
 
-    expect(await screen.findByText(/If an eligible account uses that email/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBeInTheDocument();
+    expect(screen.getByText('unknown@example.com')).toBeInTheDocument();
     expect(screen.queryByText(/account exists/i)).not.toBeInTheDocument();
   });
 
@@ -98,11 +100,29 @@ describe('F6 account access journeys', () => {
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText('New password'), 'one');
-    await user.type(screen.getByLabelText('Confirm new password'), 'two');
-    await user.click(screen.getByRole('button', { name: 'Change password' }));
+    await user.type(screen.getByLabelText('New password'), 'Valid1!Password');
+    await user.type(screen.getByLabelText('Confirm new password'), 'Valid2!Password');
 
     expect(screen.getByRole('alert')).toHaveTextContent('Passwords do not match.');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('consumes a valid reset token and shows the approved completion state', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ reset: true }));
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/reset-password?token=reset-token']}>
+        <Routes><Route path="/reset-password" element={<ResetPasswordPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText('New password'), 'Valid1!Password');
+    await user.type(screen.getByLabelText('Confirm new password'), 'Valid1!Password');
+    await user.click(screen.getByRole('button', { name: 'Update password' }));
+
+    expect(await screen.findByRole('heading', { name: 'Password updated!' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to sign in' })).toHaveAttribute('href', '/login');
+    expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('reset-token');
   });
 });
