@@ -46,7 +46,7 @@ describe('ClinicStaffView', () => {
     expect(screen.queryByText('Set Authority Bundles')).not.toBeInTheDocument();
     expect(screen.queryByText(/Cancel Clinic Day/i)).not.toBeInTheDocument();
   });
-  it('collects invitation details without asking the Doctor for a password', async () => {
+  it('collects an invited Clinic Secretary role, authority, and replacement confirmation', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<StaffAssignmentDrawer data={staff} pending={false} message="" onClose={() => undefined} onSubmit={onSubmit} />);
@@ -55,9 +55,25 @@ describe('ClinicStaffView', () => {
     await user.type(screen.getByLabelText('Last Name'), 'Dela Cruz');
     await user.type(screen.getByLabelText('Email Address'), 'anna@example.test');
     await user.type(screen.getByLabelText('Mobile Number'), '09181112222');
-    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Set Assignment Type' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Set Authority Bundles' })).toBeInTheDocument();
+    expect(screen.getByText(/will replace Maria Santos/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/password/i), 'Doctor password');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
-    expect(onSubmit).toHaveBeenCalledWith({ role: 'INVITE_NEW', firstName: 'Anna', lastName: 'Dela Cruz', email: 'anna@example.test', mobileNumber: '09181112222' });
+    expect(onSubmit).toHaveBeenCalledWith({ role: 'INVITE_NEW', firstName: 'Anna', lastName: 'Dela Cruz', email: 'anna@example.test', mobileNumber: '09181112222', assignmentType: 'CLINIC_SECRETARY', authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'], password: 'Doctor password' });
+  });
+  it('shows pending invitations in both All and Pending Invitations', async () => {
+    const user = userEvent.setup();
+    const withInvitation: AuthoritativeClinicStaff = { ...staff, pendingInvitations: [{ invitationId: 'invite-1', name: 'Anna Dela Cruz', email: 'anna@example.test', mobileNumber: '09181112222', status: 'PENDING', assignmentType: 'CLINIC_SECRETARY', authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'], coverageMode: null, fromServiceDate: null, toServiceDate: null, invitedAt: '2026-08-31T10:00:00.000Z', expiresAt: '2026-09-07T10:00:00.000Z' }] };
+    render(<ClinicStaffView data={withInvitation} />);
+    expect(screen.getByRole('button', { name: 'All (3)' })).toBeInTheDocument();
+    expect(screen.getByText('Anna Dela Cruz')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Pending Invitations (1)' }));
+    expect(screen.getByText('Anna Dela Cruz')).toBeInTheDocument();
+    expect(screen.queryByText('Maria Santos')).not.toBeInTheDocument();
   });
   it('uses clickable pen and trash actions with no three-dot menu', async () => {
     const user = userEvent.setup(); const onEdit = vi.fn(); const onRemove = vi.fn();

@@ -7,7 +7,7 @@ type StaffFilter = 'ALL' | 'ACTIVE' | 'DISABLED' | 'PENDING';
 export type SubstituteCoverage = { id: string; coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE'; fromServiceDate: string; toServiceDate: string; status: 'ACTIVE' | 'CANCELLED' | 'SUPERSEDED'; createdAt: string; endedAt: string | null };
 export type ClinicStaffAssignment = { practiceStaffId: string; userId: string; name: string; email: string; mobileNumber: string; assignmentActive: boolean; operationallyReady: boolean; isClinicSecretary: boolean; assignmentType: 'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY'; assignedAt: string; deactivatedAt: string | null; updatedAt: string; authorityBundles: string[]; previousAuthorityBundles: string[]; substituteCoverages: SubstituteCoverage[] };
 export type StaffCandidate = { userId: string; name: string; email: string; mobileNumber: string };
-export type PendingStaffInvitation = { invitationId: string; name: string; email: string; mobileNumber: string; status: 'PENDING'; invitedAt: string; expiresAt: string };
+export type PendingStaffInvitation = { invitationId: string; name: string; email: string; mobileNumber: string; status: 'PENDING'; assignmentType: 'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY'; authorityBundles: string[]; coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE' | null; fromServiceDate: string | null; toServiceDate: string | null; invitedAt: string; expiresAt: string };
 export type AuthoritativeClinicStaff = { clinic: { id: string; name: string | null }; staffAssignments: ClinicStaffAssignment[]; candidates: StaffCandidate[]; pendingInvitations: PendingStaffInvitation[] };
 
 function initials(name: string) {
@@ -41,7 +41,7 @@ export function ClinicStaffView({ data, onAssign, onEdit, onRemove }: { data: Au
     return data.staffAssignments;
   }, [active, data.staffAssignments, disabled, filter]);
   const filters: Array<{ id: StaffFilter; label: string; count: number }> = [
-    { id: 'ALL', label: 'All', count: data.staffAssignments.length },
+    { id: 'ALL', label: 'All', count: data.staffAssignments.length + data.pendingInvitations.length },
     { id: 'ACTIVE', label: 'Active', count: active.length },
     { id: 'DISABLED', label: 'Disabled', count: disabled.length },
     { id: 'PENDING', label: 'Pending Invitations', count: data.pendingInvitations.length },
@@ -52,16 +52,18 @@ export function ClinicStaffView({ data, onAssign, onEdit, onRemove }: { data: Au
     <article className="clinic-staff-list-card">
       <nav className="clinic-staff-filters" aria-label="Staff status filters">{filters.map((item) => <button type="button" key={item.id} className={filter === item.id ? 'is-active' : ''} onClick={() => setFilter(item.id)}>{item.label} ({item.count})</button>)}</nav>
       <div className="clinic-staff-table-head" aria-hidden="true"><span>Secretary</span><span>Clinic</span><span>Status</span><span>Assigned Since</span><span>Role</span><span>Actions</span></div>
-      {filter === 'PENDING' && data.pendingInvitations.length ? data.pendingInvitations.map((invitation) => <div className="clinic-staff-table-row is-invitation" key={invitation.invitationId}>
-        <div className="clinic-staff-person"><b>{initials(invitation.name)}</b><span><strong>{invitation.name}</strong><small>{invitation.email}</small><small>{invitation.mobileNumber}</small></span></div><span>{data.clinic.name ?? '—'}</span><span className="clinic-staff-status is-pending"><i aria-hidden="true" />Pending Invitation</span><span className="clinic-staff-assigned-at">{formatAssignedAt(invitation.invitedAt)}</span><span>—</span><span aria-label="No invitation actions">—</span>
-      </div>) : filtered.length ? filtered.map((staff) => <div className="clinic-staff-table-row" key={staff.practiceStaffId}>
+      {(filter === 'ALL' || filter === 'PENDING') ? data.pendingInvitations.map((invitation) => <div className="clinic-staff-table-row is-invitation" key={invitation.invitationId}>
+        <div className="clinic-staff-person"><b>{initials(invitation.name)}</b><span><strong>{invitation.name}</strong><small>{invitation.email}</small><small>{invitation.mobileNumber}</small></span></div><span>{data.clinic.name ?? '—'}</span><span className="clinic-staff-status is-pending"><i aria-hidden="true" />Pending Invitation</span><span className="clinic-staff-assigned-at">Invited {formatAssignedAt(invitation.invitedAt)}</span><span className={`clinic-staff-role ${invitation.assignmentType === 'CLINIC_SECRETARY' ? 'is-clinic' : 'is-substitute'}`}>{invitation.assignmentType === 'CLINIC_SECRETARY' ? 'Clinic Secretary' : 'Substitute Secretary'}</span><span aria-label="No invitation actions">—</span>
+      </div>) : null}
+      {filter !== 'PENDING' ? filtered.map((staff) => <div className="clinic-staff-table-row" key={staff.practiceStaffId}>
         <div className="clinic-staff-person"><b>{initials(staff.name)}</b><span><strong>{staff.name}</strong><small>{staff.email}</small><small>{staff.mobileNumber}</small></span></div>
         <span>{data.clinic.name ?? '—'}</span>
         <span className={`clinic-staff-status ${staff.operationallyReady ? 'is-active' : 'is-disabled'}`}><i aria-hidden="true" />{staff.operationallyReady ? 'Active' : 'Disabled (at this clinic)'}</span>
         <span className="clinic-staff-assigned-at">{formatAssignedAt(staff.assignedAt)}</span>
         <span className={`clinic-staff-role ${staff.assignmentType === 'CLINIC_SECRETARY' ? 'is-clinic' : 'is-substitute'}`}>{staff.assignmentType === 'CLINIC_SECRETARY' ? 'Clinic Secretary' : 'Substitute Secretary'} {staff.isClinicSecretary ? <span aria-label="Clinic Secretary">♛</span> : null}</span>
         <span className="clinic-staff-actions"><button type="button" aria-label={`Edit ${staff.name}`} onClick={() => onEdit?.(staff)}><EditIcon /></button><button type="button" aria-label={`Remove ${staff.name}`} onClick={() => onRemove?.(staff)}><TrashIcon /></button></span>
-      </div>) : <div className="clinic-staff-empty">{filter === 'PENDING' ? 'No pending invitations.' : `No ${filter.toLowerCase()} Secretaries.`}</div>}
+      </div>) : null}
+      {((filter === 'PENDING' && data.pendingInvitations.length === 0) || (filter !== 'PENDING' && filtered.length === 0 && (filter !== 'ALL' || data.pendingInvitations.length === 0))) ? <div className="clinic-staff-empty">{filter === 'PENDING' ? 'No pending invitations.' : `No ${filter.toLowerCase()} Secretaries.`}</div> : null}
     </article>
     <div className="clinic-staff-access-summary">
       <div className="is-active"><strong>{active.length}</strong><span>Active Clinic Secretary</span><small>Currently assigned to {data.clinic.name ?? 'this clinic'}.</small></div>
@@ -102,8 +104,8 @@ export function AuthoritativeClinicStaffTab({ clinicId }: { clinicId: string }) 
           method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() },
           body: { practiceLocationId: clinicId, userId: command.userId, coverageMode: command.coverageMode, fromServiceDate: command.fromServiceDate, toServiceDate: command.toServiceDate },
         });
-      } else await apiRequest('/practice-staff/invitations', { method: 'POST', body: { practiceLocationId: clinicId, firstName: command.firstName, lastName: command.lastName, email: command.email, mobileNumber: command.mobileNumber } });
-      setMessage('Assignment successful.');
+      } else await apiRequest('/practice-staff/invitations', { method: 'POST', body: { practiceLocationId: clinicId, firstName: command.firstName, lastName: command.lastName, email: command.email, mobileNumber: command.mobileNumber, assignmentType: command.assignmentType, ...(command.assignmentType === 'CLINIC_SECRETARY' ? { authorityBundles: command.authorityBundles, password: command.password } : { coverageMode: command.coverageMode, fromServiceDate: command.fromServiceDate, toServiceDate: command.toServiceDate }) } });
+      setMessage(command.role === 'INVITE_NEW' ? 'Invitation sent successfully.' : 'Assignment successful.');
       setRevision((value) => value + 1);
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Unable to assign this Secretary.');

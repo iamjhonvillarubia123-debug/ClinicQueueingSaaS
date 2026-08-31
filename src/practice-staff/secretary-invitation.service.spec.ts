@@ -19,7 +19,7 @@ describe('SecretaryInvitationService', () => {
   };
   const prisma = {
     practiceLocation: { findFirst: jest.fn() },
-    user: { findFirst: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn() },
     secretaryInvitation: { findUnique: jest.fn(), findFirst: jest.fn() },
     $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
       callback(transaction),
@@ -50,6 +50,8 @@ describe('SecretaryInvitationService', () => {
         lastName: 'Reyes',
         email: 'jane@example.test',
         mobileNumber: '09183334444',
+        assignmentType: 'CLINIC_SECRETARY',
+        authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -67,6 +69,8 @@ describe('SecretaryInvitationService', () => {
         lastName: 'Reyes',
         email: 'JANE@example.test',
         mobileNumber: '09183334444',
+        assignmentType: 'CLINIC_SECRETARY',
+        authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
@@ -90,6 +94,8 @@ describe('SecretaryInvitationService', () => {
       lastName: ' Reyes ',
       email: 'JANE@example.test',
       mobileNumber: '09183334444',
+      assignmentType: 'CLINIC_SECRETARY',
+      authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
     });
     expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -97,6 +103,8 @@ describe('SecretaryInvitationService', () => {
         firstName: 'Jane',
         lastName: 'Reyes',
         status: 'PENDING',
+        requestedAssignmentType: 'CLINIC_SECRETARY',
+        requestedAuthorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }) as unknown,
     });
     expect(transaction.notificationOutbox.create).toHaveBeenCalledWith({
