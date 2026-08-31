@@ -9,11 +9,13 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
+import { AccountRegistrationService } from './account-registration.service';
 import { AuthService } from './auth.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordResetService } from './password-reset.service';
 import { ConsumePasswordResetDto } from './dto/consume-password-reset.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterAccountDto } from './dto/register-account.dto';
 import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
 import { ResendEmailVerificationDto } from './dto/resend-email-verification.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -29,10 +31,22 @@ import type { AuthenticatedRequest } from './types/authenticated-request';
 @Controller('auth')
 export class AuthController {
   constructor(
+    private readonly accountRegistrationService: AccountRegistrationService,
     private readonly authService: AuthService,
     private readonly emailVerificationService: EmailVerificationService,
     private readonly passwordResetService: PasswordResetService,
   ) {}
+
+  @RateLimit({
+    id: 'auth-register',
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
+  @Post('register')
+  register(@Body() dto: RegisterAccountDto) {
+    return this.accountRegistrationService.register(dto);
+  }
 
   @RateLimit({
     id: 'auth-login',
