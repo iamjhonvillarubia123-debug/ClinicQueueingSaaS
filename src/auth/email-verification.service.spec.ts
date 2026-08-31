@@ -136,90 +136,93 @@ describe('EmailVerificationService', () => {
     expect(result.expiresAt).toEqual(verificationData.expiresAt);
   });
 
-  it('verifies once, uses one timestamp, clears bearer material, and creates no session', async () => {
-    const userUpdate = jest.fn();
-    const verificationUpdate = jest.fn();
-    const outboxUpdate = jest.fn();
-    const userSessionCreate = jest.fn();
-    const token = 'single-use-token';
-    const tokenHash = createHash('sha256').update(token).digest('hex');
+  it.each([UserRole.DOCTOR, UserRole.SECRETARY])(
+    'verifies one eligible %s account without creating a session',
+    async (role) => {
+      const userUpdate = jest.fn();
+      const verificationUpdate = jest.fn();
+      const outboxUpdate = jest.fn();
+      const userSessionCreate = jest.fn();
+      const token = `single-use-token-${role}`;
+      const tokenHash = createHash('sha256').update(token).digest('hex');
 
-    const transaction = {
-      $queryRaw: jest.fn().mockResolvedValue([{ id: 'verification-1' }]),
-      emailVerification: {
-        findUnique: jest.fn().mockResolvedValue({
-          id: 'verification-1',
-          userId: 'user-1',
-          tokenHash,
-          activeVerificationKey: 'a'.repeat(64),
-          status: EmailVerificationStatus.PENDING,
-          expiresAt: new Date(Date.now() + 60_000),
-          user: {
-            id: 'user-1',
-            role: UserRole.DOCTOR,
-            accountStatus: UserAccountStatus.ACTIVE,
-            administrativeRestrictionStatus:
-              AdministrativeRestrictionStatus.NONE,
-            emailVerifiedAt: null,
-          },
-          notificationOutbox: {
-            id: 'outbox-1',
-            status: NotificationOutboxStatus.PENDING,
-          },
-        }),
-        update: verificationUpdate,
-      },
-      user: { update: userUpdate },
-      notificationOutbox: { update: outboxUpdate },
-      userSession: { create: userSessionCreate },
-    };
-    const prisma = {
-      $transaction: jest.fn(
-        (callback: (tx: typeof transaction) => Promise<unknown>) =>
-          callback(transaction),
-      ),
-    } as unknown as PrismaService;
-
-    const service = new EmailVerificationService(
-      prisma,
-      configService,
-      protectedPayloadService,
-    );
-
-    await expect(service.verify(token)).resolves.toEqual({ verified: true });
-
-    const userUpdateCalls = userUpdate.mock.calls as unknown as Array<
-      [{ data: { emailVerifiedAt: Date } }]
-    >;
-    const verificationUpdateCalls = verificationUpdate.mock
-      .calls as unknown as Array<
-      [
-        {
-          data: {
-            status: EmailVerificationStatus;
-            verifiedAt: Date;
-            tokenHash: null;
-            activeVerificationKey: null;
-          };
+      const transaction = {
+        $queryRaw: jest.fn().mockResolvedValue([{ id: 'verification-1' }]),
+        emailVerification: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'verification-1',
+            userId: 'user-1',
+            tokenHash,
+            activeVerificationKey: 'a'.repeat(64),
+            status: EmailVerificationStatus.PENDING,
+            expiresAt: new Date(Date.now() + 60_000),
+            user: {
+              id: 'user-1',
+              role,
+              accountStatus: UserAccountStatus.ACTIVE,
+              administrativeRestrictionStatus:
+                AdministrativeRestrictionStatus.NONE,
+              emailVerifiedAt: null,
+            },
+            notificationOutbox: {
+              id: 'outbox-1',
+              status: NotificationOutboxStatus.PENDING,
+            },
+          }),
+          update: verificationUpdate,
         },
-      ]
-    >;
-    const outboxUpdateCalls = outboxUpdate.mock.calls as unknown as Array<
-      [{ data: { status: NotificationOutboxStatus } }]
-    >;
+        user: { update: userUpdate },
+        notificationOutbox: { update: outboxUpdate },
+        userSession: { create: userSessionCreate },
+      };
+      const prisma = {
+        $transaction: jest.fn(
+          (callback: (tx: typeof transaction) => Promise<unknown>) =>
+            callback(transaction),
+        ),
+      } as unknown as PrismaService;
 
-    const emailVerifiedAt = userUpdateCalls[0][0].data.emailVerifiedAt;
-    const verificationData = verificationUpdateCalls[0][0].data;
+      const service = new EmailVerificationService(
+        prisma,
+        configService,
+        protectedPayloadService,
+      );
 
-    expect(verificationData.status).toBe(EmailVerificationStatus.VERIFIED);
-    expect(verificationData.verifiedAt).toBe(emailVerifiedAt);
-    expect(verificationData.tokenHash).toBeNull();
-    expect(verificationData.activeVerificationKey).toBeNull();
-    expect(outboxUpdateCalls[0][0].data.status).toBe(
-      NotificationOutboxStatus.CANCELLED,
-    );
-    expect(userSessionCreate).not.toHaveBeenCalled();
-  });
+      await expect(service.verify(token)).resolves.toEqual({ verified: true, role });
+
+      const userUpdateCalls = userUpdate.mock.calls as unknown as Array<
+        [{ data: { emailVerifiedAt: Date } }]
+      >;
+      const verificationUpdateCalls = verificationUpdate.mock
+        .calls as unknown as Array<
+        [
+          {
+            data: {
+              status: EmailVerificationStatus;
+              verifiedAt: Date;
+              tokenHash: null;
+              activeVerificationKey: null;
+            };
+          },
+        ]
+      >;
+      const outboxUpdateCalls = outboxUpdate.mock.calls as unknown as Array<
+        [{ data: { status: NotificationOutboxStatus } }]
+      >;
+
+      const emailVerifiedAt = userUpdateCalls[0][0].data.emailVerifiedAt;
+      const verificationData = verificationUpdateCalls[0][0].data;
+
+      expect(verificationData.status).toBe(EmailVerificationStatus.VERIFIED);
+      expect(verificationData.verifiedAt).toBe(emailVerifiedAt);
+      expect(verificationData.tokenHash).toBeNull();
+      expect(verificationData.activeVerificationKey).toBeNull();
+      expect(outboxUpdateCalls[0][0].data.status).toBe(
+        NotificationOutboxStatus.CANCELLED,
+      );
+      expect(userSessionCreate).not.toHaveBeenCalled();
+    },
+  );
 
   it('expires an elapsed verification and rejects the link without verifying the user', async () => {
     const userUpdate = jest.fn();
@@ -309,8 +312,8 @@ describe('EmailVerificationService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue({
           id: 'user-1',
-          email: 'doctor@example.com',
-          role: UserRole.DOCTOR,
+          email: 'secretary@example.com',
+          role: UserRole.SECRETARY,
           accountStatus: UserAccountStatus.ACTIVE,
           administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
           emailVerifiedAt: null,
@@ -346,7 +349,7 @@ describe('EmailVerificationService', () => {
       protectedPayloadService,
     );
 
-    await expect(service.resend(' Doctor@Example.com ')).resolves.toEqual({
+    await expect(service.resend(' Secretary@Example.com ')).resolves.toEqual({
       accepted: true,
     });
     expect(transaction.$executeRaw).toHaveBeenCalledTimes(1);
