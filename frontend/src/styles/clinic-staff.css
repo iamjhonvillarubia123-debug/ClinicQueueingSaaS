@@ -330,6 +330,9 @@
   border-radius: 5px;
   background: transparent;
 }
+.clinic-staff-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.clinic-staff-actions button:hover { background: #f1f4f7; }
+.clinic-staff-actions button:last-child:hover { background: #fff1f1; color: #a32222; }
 
 .clinic-staff-assigned-at {
   color: #495462;
@@ -701,6 +704,9 @@
 .staff-invite-fields { display: grid; gap: 10px; }
 .staff-invite-fields label { display: grid; gap: 5px; color: #46515f; font-size: 9px; }
 .staff-invite-fields input { min-height: 36px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 9px; }
+.staff-action-copy { color: #526071; font-size: 10px; line-height: 1.5; }
+.staff-password-field { display: grid; gap: 6px; margin-top: 14px; color: #46515f; font-size: 9px; font-weight: 650; }
+.staff-password-field input { min-height: 36px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 9px; }
 .staff-review { display: grid; gap: 0; border: 1px solid #dce2e8; border-radius: 7px; }
 .staff-review div { display: grid; grid-template-columns: 115px 1fr; gap: 8px; padding: 10px; border-bottom: 1px solid #e7ebef; font-size: 9px; }
 .staff-review div:last-child { border-bottom: 0; }

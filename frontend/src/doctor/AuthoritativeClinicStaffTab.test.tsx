@@ -3,10 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClinicStaffView, type AuthoritativeClinicStaff } from './AuthoritativeClinicStaffTab';
 import { StaffAssignmentDrawer } from './StaffAssignmentDrawer';
+import { StaffActionDrawer } from './StaffActionDrawer';
 
 const staff: AuthoritativeClinicStaff = { clinic: { id: 'clinic-1', name: 'North Clinic' }, candidates: [{ userId: 'candidate-1', name: 'Jane Reyes', email: 'jane@example.test', mobileNumber: '09183334444' }], pendingInvitations: [], staffAssignments: [
-  { practiceStaffId: 'staff-regular', userId: 'user-regular', name: 'Maria Santos', email: 'maria@example.test', mobileNumber: '09172223333', assignmentActive: true, operationallyReady: true, isClinicSecretary: true, assignedAt: '2026-08-24T10:02:00.000Z', deactivatedAt: null, updatedAt: '2026-08-24T10:02:00.000Z', authorityBundles: ['QUEUE_CLINIC_DAY_OPERATIONS'], substituteCoverages: [] },
-  { practiceStaffId: 'staff-disabled', userId: 'user-disabled', name: 'Carla Castillo', email: 'carla@example.test', mobileNumber: '09188889999', assignmentActive: false, operationallyReady: false, isClinicSecretary: false, assignedAt: '2026-08-20T08:00:00.000Z', deactivatedAt: '2026-08-25T08:00:00.000Z', updatedAt: '2026-08-25T08:00:00.000Z', authorityBundles: [], substituteCoverages: [] },
+  { practiceStaffId: 'staff-regular', userId: 'user-regular', name: 'Maria Santos', email: 'maria@example.test', mobileNumber: '09172223333', assignmentActive: true, operationallyReady: true, isClinicSecretary: true, assignmentType: 'CLINIC_SECRETARY', assignedAt: '2026-08-24T10:02:00.000Z', deactivatedAt: null, updatedAt: '2026-08-24T10:02:00.000Z', authorityBundles: ['QUEUE_CLINIC_DAY_OPERATIONS'], previousAuthorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'], substituteCoverages: [] },
+  { practiceStaffId: 'staff-disabled', userId: 'user-disabled', name: 'Carla Castillo', email: 'carla@example.test', mobileNumber: '09188889999', assignmentActive: false, operationallyReady: false, isClinicSecretary: false, assignmentType: 'CLINIC_SECRETARY', assignedAt: '2026-08-20T08:00:00.000Z', deactivatedAt: '2026-08-25T08:00:00.000Z', updatedAt: '2026-08-25T08:00:00.000Z', authorityBundles: [], previousAuthorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'], substituteCoverages: [] },
 ] };
 afterEach(cleanup);
 
@@ -57,5 +58,23 @@ describe('ClinicStaffView', () => {
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
     expect(onSubmit).toHaveBeenCalledWith({ role: 'INVITE_NEW', firstName: 'Anna', lastName: 'Dela Cruz', email: 'anna@example.test', mobileNumber: '09181112222' });
+  });
+  it('uses clickable pen and trash actions with no three-dot menu', async () => {
+    const user = userEvent.setup(); const onEdit = vi.fn(); const onRemove = vi.fn();
+    render(<ClinicStaffView data={staff} onEdit={onEdit} onRemove={onRemove} />);
+    await user.click(screen.getByRole('button', { name: 'Edit Maria Santos' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Maria Santos' }));
+    expect(onEdit).toHaveBeenCalledWith(staff.staffAssignments[0]); expect(onRemove).toHaveBeenCalledWith(staff.staffAssignments[0]); expect(screen.queryByRole('button', { name: /More actions/i })).not.toBeInTheDocument();
+  });
+  it('requires the Doctor password and shows the clinic-only warning before disabling', () => {
+    render(<StaffActionDrawer staff={staff.staffAssignments[0]} mode="EDIT" replacementRequired={false} pending={false} message="" clinicName="North Clinic" onClose={() => undefined} onSubmit={() => undefined} />);
+    expect(screen.getByText(/account and assignments at other clinics remain unaffected/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/current password/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disable at this clinic' })).toBeDisabled();
+  });
+  it('preserves disabled history when the trash action cannot erase an ended assignment', () => {
+    render(<StaffActionDrawer staff={staff.staffAssignments[1]} mode="REMOVE" replacementRequired={false} pending={false} message="" clinicName="North Clinic" onClose={() => undefined} onSubmit={() => undefined} />);
+    expect(screen.getByText(/retained for required clinic history/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove Assignment' })).not.toBeInTheDocument();
   });
 });
