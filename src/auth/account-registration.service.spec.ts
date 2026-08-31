@@ -9,6 +9,8 @@ import { AccountRegistrationService } from './account-registration.service';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordSecurityService } from './security/password-security.service';
 
+const publicRoles = [UserRole.DOCTOR, UserRole.SECRETARY] as const;
+
 describe('AccountRegistrationService', () => {
   const mobileNumberService = {
     normalize: jest.fn().mockReturnValue({ canonical: '+639171234567' }),
@@ -23,7 +25,7 @@ describe('AccountRegistrationService', () => {
     }),
   } as unknown as EmailVerificationService;
 
-  function buildService(role: UserRole.DOCTOR | UserRole.SECRETARY) {
+  function buildService(role: (typeof publicRoles)[number]) {
     const userCreate = jest.fn().mockResolvedValue({ id: 'user-1', role });
     const transaction = { user: { create: userCreate } };
     const prisma = {
@@ -47,7 +49,7 @@ describe('AccountRegistrationService', () => {
     };
   }
 
-  it.each([UserRole.DOCTOR, UserRole.SECRETARY])(
+  it.each(publicRoles)(
     'creates a %s User without clinic authority and requires email verification',
     async (role) => {
       const { service, userCreate, transaction } = buildService(role);
