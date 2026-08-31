@@ -6,7 +6,7 @@ type IconName = 'brand' | 'calendar' | 'chart' | 'shield' | 'lock' | 'globe' | '
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
-    brand: <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" />,
+    brand: <path d="M9 3h6v6h6v6H9v-6H3V9h6z" />,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M8 14h2M14 14h2M8 18h2" /></>,
     chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20V7M2 20h22" />,
     shield: <path d="M12 2 4 5v6c0 5.4 3.4 9.3 8 11 4.6-1.7 8-5.6 8-11V5zM12 7v10M8 11l4 4 4-4" />,
@@ -102,7 +102,7 @@ export function DoctorOnboardingPage() {
           <div><span><Icon name="building" /></span><p><strong>Create your clinic</strong><small>Set up your practice location</small></p></div>
           <div><span><Icon name="settings" /></span><p><strong>Configure settings</strong><small>Set your clinic preferences</small></p></div>
         </div>
-        <button className="registration-primary-action" type="button">Start setup</button>
+        <Link className="registration-primary-action" to="/app/settings">Start setup</Link>
       </section>
     </JourneyFrame>
   );
@@ -124,6 +124,7 @@ export function SecretaryNoAssignmentsPage() {
           <div><span><Icon name="calendar" /></span><p>Once assigned, you can manage appointments and queues</p></div>
           <div><span><Icon name="building" /></span><p>You can work with multiple clinics</p></div>
         </div>
+        <Link className="registration-primary-action" to="/app/secretary/settings">Continue to settings</Link>
       </section>
     </JourneyFrame>
   );
