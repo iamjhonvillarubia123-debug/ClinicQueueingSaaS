@@ -19,6 +19,7 @@ import {
   PermanentCloseAccountPage,
   ReactivateAccountPage,
 } from './auth/AccountLifecyclePages';
+import { CreateAccountPage } from './auth/CreateAccountPage';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { LoginPage } from './auth/LoginPage';
@@ -189,6 +190,7 @@ export function App() {
         element={<PatientBookingGroupPage />}
       />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<CreateAccountPage />} />
       <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
