@@ -24,7 +24,8 @@ describe('approved sign-in experience', () => {
     expect(screen.getByRole('link', { name: 'Reactivate a disabled account' })).toHaveAttribute('href', '/account/reactivate');
     expect(screen.getByText(/Secretary\? Use the invitation sent by your Doctor/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /create secretary/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign in with google/i })).toBeDisabled();
+    expect(screen.getByText(/Google sign-in is coming soon/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/remember me/i)).not.toBeInTheDocument();
   });
 

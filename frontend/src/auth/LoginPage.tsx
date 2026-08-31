@@ -21,13 +21,15 @@ function Icon({ name }: { name: 'brand' | 'calendar' | 'chart' | 'shield' | 'mai
 function ClinicIllustration() {
   return <svg className="clinic-illustration" viewBox="0 0 600 265" aria-hidden="true">
     <g fill="none" stroke="currentColor" strokeWidth="1.4">
-      <path d="M250 240V70l285-42v212M340 240v-72h105v72M470 240V82h47v158M478 96h30M478 108h30" />
-      <path d="M220 186h236v54H220zM245 161h54v25M260 139h58v47M271 148h36" />
-      <rect x="349" y="93" width="82" height="50" /><path d="M357 100h66v35M378 116h25" />
+      <path d="M248 240V62l292-44v222M467 240V72h56v168M478 86h34M478 99h34M511 155v2" />
+      <path d="M216 186h246v54H216zM239 186v-27h92v27M257 139h55v20M268 148h33M330 196v44" />
+      <rect x="350" y="86" width="88" height="57" rx="2" /><path d="M358 94h72v41" />
       <path d="M60 240v-63M60 190c-23-16-26-36-19-45 17 3 27 16 19 45M61 176c10-25 27-35 39-32 0 18-12 34-39 46M60 209c-17-14-34-15-43-8 6 17 21 24 43 23M61 215c16-17 33-20 44-14-4 17-20 27-44 27" />
-      <path d="M41 240h40l-5 25H46zM92 240h128M103 240l-9-56h78l8 56M180 240l-9-56h51l10 56M114 184v-20M190 184v-20" />
+      <path d="M41 240h40l-5 25H46zM92 240h122M99 240l-7-54h64l8 54M160 240l-7-54h61l8 54M111 186v-17M174 186v-17M98 215h117" />
       <circle cx="162" cy="112" r="25" /><path d="M162 91v22l12 8" />
+      <path d="M292 139v-18h24v18M299 121v-7h10v7M369 165h19M378 143v22M405 240v-17M394 223h22" />
     </g>
+    <g fill="currentColor" textAnchor="middle"><text x="394" y="105" fontSize="8">NOW SERVING</text><text x="394" y="126" fontSize="19" fontWeight="700">#06</text><text x="495" y="124" fontSize="7">CONSULTATION</text></g>
   </svg>;
 }
 
@@ -86,6 +88,9 @@ export function LoginPage() {
             <div className="sign-in-help"><Link to="/forgot-password">Forgot password?</Link></div>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
             <button className="sign-in-submit" type="submit" disabled={submitting || !email || !password}>{submitting ? 'Signing in…' : 'Sign in'}</button>
+            <div className="sign-in-divider" aria-hidden="true"><span>or</span></div>
+            <button className="google-sign-in" type="button" disabled aria-describedby="google-coming-soon"><span className="google-mark" aria-hidden="true">G</span>Sign in with Google</button>
+            <span className="google-coming-soon" id="google-coming-soon">Google sign-in is coming soon.</span>
           </form>
         </section>
         <div className="sign-in-account-entry">
@@ -94,7 +99,7 @@ export function LoginPage() {
           <Link className="reactivation-link" to="/account/reactivate">Reactivate a disabled account</Link>
         </div>
       </div>
-      <footer className="sign-in-footer"><p><Icon name="lock" /> Secure <span>•</span> Private <span>•</span> Compliant</p><p>© 2026 Clinic Queueing SaaS. All rights reserved.</p></footer>
+      <footer className="sign-in-footer"><div><p><Icon name="lock" /> Secure <span>•</span> Private <span>•</span> Compliant</p><p>© 2026 Clinic Queueing SaaS. All rights reserved.</p></div></footer>
     </section>
   </main>;
 }
