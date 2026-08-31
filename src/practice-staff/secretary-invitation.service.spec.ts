@@ -1,8 +1,8 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
-import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretaryInvitationService } from './secretary-invitation.service';
 
@@ -15,6 +15,7 @@ describe('SecretaryInvitationService', () => {
     },
     notificationOutbox: { create: jest.fn(), update: jest.fn() },
     user: { findFirst: jest.fn(), create: jest.fn() },
+    practiceStaff: { create: jest.fn() },
     $queryRaw: jest.fn(),
   };
   const prisma = {
@@ -71,19 +72,23 @@ describe('SecretaryInvitationService', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('creates a pending invitation and protected email without a Doctor-set password', async () => {
+  it('creates a pending 72-hour invitation and protected email without a Doctor-set password', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
     });
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.secretaryInvitation.findUnique.mockResolvedValue(null);
-    transaction.secretaryInvitation.create.mockResolvedValue({
-      id: 'invite-1',
-      status: 'PENDING',
-      expiresAt: new Date('2026-09-07T00:00:00.000Z'),
-    });
+    transaction.secretaryInvitation.create.mockImplementation(
+      ({ data }: { data: { expiresAt: Date } }) =>
+        Promise.resolve({
+          id: 'invite-1',
+          status: 'PENDING',
+          expiresAt: data.expiresAt,
+        }),
+    );
     transaction.notificationOutbox.create.mockResolvedValue({ id: 'outbox-1' });
+    const before = Date.now();
     await service.create('doctor-1', {
       practiceLocationId: 'clinic-1',
       firstName: ' Jane ',
@@ -91,19 +96,29 @@ describe('SecretaryInvitationService', () => {
       email: 'JANE@example.test',
       mobileNumber: '09183334444',
     });
-    expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
-      // Jest's asymmetric matcher is intentionally untyped at this boundary.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      data: expect.objectContaining({
+    const call = transaction.secretaryInvitation.create.mock.calls[0][0] as {
+      data: {
+        normalizedEmail: string;
+        firstName: string;
+        lastName: string;
+        status: string;
+        createdAt: Date;
+        expiresAt: Date;
+      };
+    };
+    expect(call.data).toEqual(
+      expect.objectContaining({
         normalizedEmail: 'jane@example.test',
         firstName: 'Jane',
         lastName: 'Reyes',
         status: 'PENDING',
       }),
-    });
+    );
+    expect(call.data.createdAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(call.data.expiresAt.getTime() - call.data.createdAt.getTime()).toBe(
+      72 * 60 * 60 * 1000,
+    );
     expect(transaction.notificationOutbox.create).toHaveBeenCalledWith({
-      // Jest's asymmetric matcher is intentionally untyped at this boundary.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: expect.objectContaining({
         notificationType: 'SECRETARY_INVITATION',
         channel: 'EMAIL',
@@ -116,11 +131,12 @@ describe('SecretaryInvitationService', () => {
     expect(payload.encrypt).toHaveBeenCalledTimes(2);
   });
 
-  it('accepts a valid invitation by creating a verified Secretary account without granting clinic authority', async () => {
+  it('accepts a valid invitation by atomically creating a verified Secretary account and clinic assignment', async () => {
     const token = 'valid-token';
     transaction.$queryRaw.mockResolvedValue([{ id: 'invite-1' }]);
     transaction.secretaryInvitation.findUnique.mockResolvedValue({
       id: 'invite-1',
+      practiceLocationId: 'clinic-1',
       status: 'PENDING',
       tokenHash: createHash('sha256').update(token).digest('hex'),
       activeInvitationKey: 'active-key',
@@ -133,6 +149,7 @@ describe('SecretaryInvitationService', () => {
     });
     transaction.user.findFirst.mockResolvedValue(null);
     transaction.user.create.mockResolvedValue({ id: 'secretary-1' });
+    transaction.practiceStaff.create.mockResolvedValue({ id: 'staff-1' });
     await expect(service.accept(token, 'Secretary password')).resolves.toEqual({
       accepted: true,
     });
@@ -141,6 +158,15 @@ describe('SecretaryInvitationService', () => {
         role: 'SECRETARY',
         emailVerifiedAt: expect.any(Date),
         passwordHash: 'password-hash',
+      }),
+    });
+    expect(transaction.practiceStaff.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'secretary-1',
+        practiceLocationId: 'clinic-1',
+        staffRole: 'SECRETARY',
+        isActive: true,
+        activatedAt: expect.any(Date),
       }),
     });
     expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
@@ -152,6 +178,5 @@ describe('SecretaryInvitationService', () => {
         activeInvitationKey: null,
       }),
     });
-    expect(transaction).not.toHaveProperty('practiceStaff');
   });
 });

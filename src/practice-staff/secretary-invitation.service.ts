@@ -17,7 +17,7 @@ import { PasswordSecurityService } from '../auth/security/password-security.serv
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSecretaryInvitationDto } from './dto/create-secretary-invitation.dto';
 
-const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+const INVITATION_LIFETIME_MS = 72 * 60 * 60 * 1000;
 const PAYLOAD_PURPOSE = 'secretary-invitation';
 
 @Injectable()
@@ -185,6 +185,15 @@ export class SecretaryInvitationService {
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
           emailVerifiedAt: now,
+        },
+      });
+      await transaction.practiceStaff.create({
+        data: {
+          userId: user.id,
+          practiceLocationId: invitation.practiceLocationId,
+          staffRole: 'SECRETARY',
+          isActive: true,
+          activatedAt: now,
         },
       });
       await transaction.secretaryInvitation.update({
