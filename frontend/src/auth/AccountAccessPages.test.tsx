@@ -13,8 +13,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('F5 account access journeys', () => {
-  it('registers a Doctor and moves to the email-verification gate without creating a session', async () => {
+describe('F6 account access journeys', () => {
+  it('registers a Doctor through the legacy route and moves to the email-verification gate without creating a session', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
       userId: 'user-1',
       doctorProfileId: 'doctor-1',
@@ -63,17 +63,19 @@ describe('F5 account access journeys', () => {
     expect(screen.queryByText(/account exists/i)).not.toBeInTheDocument();
   });
 
-  it('consumes an email-verification token from the link and offers sign in', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ verified: true }));
+  it('consumes an email-verification token and moves to the approved role-specific ready state', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ verified: true, role: 'SECRETARY' }));
 
     render(
       <MemoryRouter initialEntries={['/verify-email?token=verify-token']}>
-        <Routes><Route path="/verify-email" element={<VerifyEmailPage />} /></Routes>
+        <Routes>
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/registration/account-ready" element={<div>Account ready destination</div>} />
+        </Routes>
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Email verified' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Continue to sign in' })).toHaveAttribute('href', '/login');
+    expect(await screen.findByText('Account ready destination')).toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('verify-token');
   });
 
