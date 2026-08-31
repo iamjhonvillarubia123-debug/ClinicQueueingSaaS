@@ -8,7 +8,7 @@ const EMAIL_PAYLOAD_PURPOSE = 'doctor-email-verification';
 function assertDevelopmentDatabase(databaseUrl) {
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      'Refusing to reveal an email verification link because NODE_ENV is production.',
+      'Refusing to reveal a protected account link because NODE_ENV is production.',
     );
   }
 
@@ -18,12 +18,12 @@ function assertDevelopmentDatabase(databaseUrl) {
 
   if (!localHosts.has(parsed.hostname)) {
     throw new Error(
-      'Refusing to reveal an email verification link because DATABASE_URL is not local.',
+      'Refusing to reveal a protected account link because DATABASE_URL is not local.',
     );
   }
   if (!/(^|_)dev($|_)/i.test(databaseName)) {
     throw new Error(
-      'Refusing to reveal an email verification link because the database name is not development-scoped.',
+      'Refusing to reveal a protected account link because the database name is not development-scoped.',
     );
   }
 }
@@ -55,7 +55,7 @@ function buildEncryptionContract() {
 
 function decrypt(envelope, expectedPurpose, contract) {
   if (typeof envelope !== 'string') {
-    throw new Error('The verification notification payload is missing.');
+    throw new Error('The protected account notification payload is missing.');
   }
   const parts = envelope.split('.');
   if (parts.length !== 6) {
@@ -84,7 +84,7 @@ function decrypt(envelope, expectedPurpose, contract) {
       decipher.final(),
     ]).toString('utf8');
   } catch {
-    throw new Error('Unable to decrypt the email verification payload.');
+    throw new Error('Unable to decrypt the protected account notification payload.');
   }
 }
 
