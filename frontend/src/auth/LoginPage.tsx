@@ -19,17 +19,25 @@ function Icon({ name }: { name: 'brand' | 'calendar' | 'chart' | 'shield' | 'mai
 }
 
 function ClinicIllustration() {
-  return <svg className="clinic-illustration" viewBox="0 0 600 265" aria-hidden="true">
-    <g fill="none" stroke="currentColor" strokeWidth="1.4">
-      <path d="M248 240V62l292-44v222M467 240V72h56v168M478 86h34M478 99h34M511 155v2" />
-      <path d="M216 186h246v54H216zM239 186v-27h92v27M257 139h55v20M268 148h33M330 196v44" />
-      <rect x="350" y="86" width="88" height="57" rx="2" /><path d="M358 94h72v41" />
-      <path d="M60 240v-63M60 190c-23-16-26-36-19-45 17 3 27 16 19 45M61 176c10-25 27-35 39-32 0 18-12 34-39 46M60 209c-17-14-34-15-43-8 6 17 21 24 43 23M61 215c16-17 33-20 44-14-4 17-20 27-44 27" />
-      <path d="M41 240h40l-5 25H46zM92 240h122M99 240l-7-54h64l8 54M160 240l-7-54h61l8 54M111 186v-17M174 186v-17M98 215h117" />
-      <circle cx="162" cy="112" r="25" /><path d="M162 91v22l12 8" />
-      <path d="M292 139v-18h24v18M299 121v-7h10v7M369 165h19M378 143v22M405 240v-17M394 223h22" />
+  return <svg className="clinic-illustration" viewBox="0 0 680 330" aria-hidden="true">
+    <g fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M285 279V58L602 15v264M602 15v264H666" />
+      <circle cx="182" cy="81" r="23" /><path d="M182 62v20l11 8M182 58v4M205 81h-4M182 104v-4M159 81h4" />
+
+      <path d="M43 277h42l-5 33H49zM64 277V139" />
+      <path d="M64 176C39 159 34 135 43 124c21 5 30 22 21 52M65 158c9-30 28-47 43-44 3 22-11 43-43 62M64 211c-25-18-45-18-56-8 9 20 28 27 56 23M65 218c20-22 41-25 54-16-7 20-27 31-54 31M63 144c-13-23-10-43 1-51 16 11 19 28 0 51" />
+
+      <path d="M100 267h157M107 267l-7-67M253 267l8-67M116 200h43c8 0 13 5 14 13l5 42h-69l-5-42c-1-8 4-13 12-13zM171 200h43c8 0 13 5 14 13l5 42h-55l-5-42c-1-8 4-13 12-13zM226 200h28c8 0 13 5 14 13l5 32c1 7-3 10-10 10h-30l-5-42c-1-8 4-13 12-13zM109 255h158M122 267v22M244 267v22" />
+
+      <path d="M248 220h249v10H248zM255 230h235v69l-53 13-182-13zM437 230v82M268 238v54" />
+      <path d="M287 220v-37h57v37M297 154h56l-5 52h-46zM325 206v14M306 220h39M309 164h31" />
+
+      <rect x="404" y="82" width="80" height="58" rx="2" /><rect x="410" y="88" width="68" height="46" rx="1" />
+      <path d="M432 220v-18h27v18M440 202v-18M451 202v-18M439 188c-8-7-7-15-3-19 8 2 11 8 7 18M448 187c2-10 9-16 15-15 1 8-4 14-15 18" />
+
+      <path d="M516 279V65h62v214M523 73h48v206M568 174h2M576 279h19" />
     </g>
-    <g fill="currentColor" textAnchor="middle"><text x="394" y="105" fontSize="8">NOW SERVING</text><text x="394" y="126" fontSize="19" fontWeight="700">#06</text><text x="495" y="124" fontSize="7">CONSULTATION</text></g>
+    <g fill="currentColor" textAnchor="middle"><text x="444" y="103" fontSize="7">NOW SERVING</text><text x="444" y="125" fontSize="21" fontWeight="700">#06</text><text x="547" y="111" fontSize="6">CONSULTATION</text></g>
   </svg>;
 }
 
