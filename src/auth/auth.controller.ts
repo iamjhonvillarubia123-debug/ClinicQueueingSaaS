@@ -119,8 +119,21 @@ export class AuthController {
   }
 
   @Post('verify-email')
-  verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
-    return this.emailVerificationService.verify(verifyEmailDto.token);
+  async verifyEmail(
+    @Body() verifyEmailDto: VerifyEmailDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.emailVerificationService.verify(
+      verifyEmailDto.token,
+    );
+    response.cookie(SESSION_COOKIE_NAME, result.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: SESSION_COOKIE_MAX_AGE_MS,
+    });
+    return { verified: result.verified, role: result.role };
   }
 
   @UseGuards(SessionAuthGuard)

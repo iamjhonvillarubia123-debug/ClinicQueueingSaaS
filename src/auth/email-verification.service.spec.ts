@@ -188,10 +188,9 @@ describe('EmailVerificationService', () => {
         protectedPayloadService,
       );
 
-      await expect(service.verify(token)).resolves.toEqual({
-        verified: true,
-        role,
-      });
+      const result = await service.verify(token);
+      expect(result).toMatchObject({ verified: true, role });
+      expect(result.sessionToken).toBeTruthy();
 
       const userUpdateCalls = userUpdate.mock.calls as unknown as Array<
         [{ data: { emailVerifiedAt: Date } }]
@@ -223,7 +222,17 @@ describe('EmailVerificationService', () => {
       expect(outboxUpdateCalls[0][0].data.status).toBe(
         NotificationOutboxStatus.CANCELLED,
       );
-      expect(userSessionCreate).not.toHaveBeenCalled();
+      expect(userSessionCreate).toHaveBeenCalledTimes(1);
+      expect(userSessionCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-1',
+          tokenHash: expect.stringMatching(/^[0-9a-f]{64}$/) as unknown,
+          revokedAt: null,
+        }) as unknown,
+      });
+      expect(JSON.stringify(userSessionCreate.mock.calls)).not.toContain(
+        result.sessionToken,
+      );
     },
   );
 

@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DoctorRegistrationPage, ForgotPasswordPage, ResetPasswordPage, VerifyEmailPage } from './AccountAccessPages';
 
+const refreshMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('./AuthContext', () => ({ useAuth: () => ({ refresh: refreshMock }) }));
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
@@ -12,6 +15,7 @@ function jsonResponse(body: unknown, status = 200) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  refreshMock.mockClear();
 });
 
 describe('F6 account access journeys', () => {
@@ -80,6 +84,7 @@ describe('F6 account access journeys', () => {
 
     expect(await screen.findByText('Account ready destination')).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('verify-token');
   });
 

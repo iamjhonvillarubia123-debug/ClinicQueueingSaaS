@@ -14,7 +14,7 @@ describe('AuthController', () => {
   const accountRegistrationServiceMock = { register: jest.fn() };
   const authServiceMock = { login: jest.fn(), logout: jest.fn() };
   const authenticationServiceMock = {};
-  const emailVerificationServiceMock = {};
+  const emailVerificationServiceMock = { verify: jest.fn() };
   const passwordResetServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue('http://localhost:3000'),
@@ -91,5 +91,28 @@ describe('AuthController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('sets the verification session only in an HttpOnly cookie', async () => {
+    emailVerificationServiceMock.verify.mockResolvedValue({
+      verified: true,
+      role: 'DOCTOR',
+      sessionToken: 'verification-session-token',
+    });
+    const cookieMock = jest.fn();
+    const response = { cookie: cookieMock } as unknown as Response;
+
+    const body = await controller.verifyEmail(
+      { token: 'verification-token' },
+      response,
+    );
+
+    expect(cookieMock).toHaveBeenCalledWith(
+      'clinic_session',
+      'verification-session-token',
+      expect.objectContaining({ httpOnly: true, sameSite: 'lax', path: '/' }),
+    );
+    expect(body).toEqual({ verified: true, role: 'DOCTOR' });
+    expect(body).not.toHaveProperty('sessionToken');
   });
 });

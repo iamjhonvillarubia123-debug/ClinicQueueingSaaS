@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { useAuth } from './AuthContext';
 
 type EmailVerificationResult = { verified: true; role: 'DOCTOR' | 'SECRETARY' };
 const emailVerificationRequests = new Map<string, Promise<EmailVerificationResult>>();
@@ -119,6 +120,7 @@ export function DoctorRegistrationPage() {
 }
 
 export function VerifyEmailPage() {
+  const { refresh } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token')?.trim() ?? '';
@@ -132,7 +134,9 @@ export function VerifyEmailPage() {
     if (!token) return;
     let active = true;
     void verifyEmailToken(token)
-      .then((result) => {
+      .then(async (result) => {
+        if (!active) return;
+        await refresh();
         if (!active) return;
         navigate(`/registration/account-ready?role=${result.role}`, { replace: true });
       })
@@ -142,7 +146,7 @@ export function VerifyEmailPage() {
         setMessage(messageFor(caught, 'This verification link is invalid or no longer available.'));
       });
     return () => { active = false; };
-  }, [navigate, token]);
+  }, [navigate, refresh, token]);
 
   async function resend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

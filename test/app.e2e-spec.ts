@@ -183,20 +183,18 @@ describe('AppController (e2e)', () => {
     );
     expect(verifiedRecord?.tokenHash).toBeNull();
     expect(verifiedRecord?.activeVerificationKey).toBeNull();
-    expect(await prisma.userSession.count({ where: { userId } })).toBe(0);
+    expect(await prisma.userSession.count({ where: { userId } })).toBe(1);
 
     await request(app.getHttpServer())
       .post('/auth/verify-email')
       .send({ token })
       .expect(400);
 
-    const login = await request(app.getHttpServer())
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
-
-    expect(login.headers['set-cookie']).toBeDefined();
-    expect(await prisma.userSession.count({ where: { userId } })).toBe(1);
+    const successfulVerification = concurrentVerificationResponses.find(
+      (response) => response.status === 201,
+    );
+    expect(successfulVerification?.headers['set-cookie']).toBeDefined();
+    expect(successfulVerification?.body).not.toHaveProperty('sessionToken');
   });
 
   it('replaces verification generically and serializes concurrent resend to one pending credential', async () => {

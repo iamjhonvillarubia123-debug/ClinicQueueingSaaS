@@ -13,6 +13,12 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
+import {
+  generateSessionToken,
+  hashSessionToken,
+  SESSION_ABSOLUTE_LIFETIME_MS,
+  SESSION_IDLE_LIFETIME_MS,
+} from './security/session-security';
 
 const VERIFICATION_LIFETIME_MS = 24 * 60 * 60 * 1000;
 const EMAIL_PAYLOAD_PURPOSE = 'doctor-email-verification';
@@ -190,10 +196,14 @@ export class EmailVerificationService {
     return { accepted: true };
   }
 
-  async verify(
-    token: string,
-  ): Promise<{ verified: true; role: VerifiableUserRole }> {
+  async verify(token: string): Promise<{
+    verified: true;
+    role: VerifiableUserRole;
+    sessionToken: string;
+  }> {
     const tokenHash = this.sha256(token);
+    const sessionToken = generateSessionToken();
+    const sessionTokenHash = hashSessionToken(sessionToken);
 
     const outcome = await this.prisma.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<Array<{ id: string }>>`
@@ -258,6 +268,17 @@ export class EmailVerificationService {
         data: { emailVerifiedAt: now },
       });
 
+      await transaction.userSession.create({
+        data: {
+          userId: verification.userId,
+          tokenHash: sessionTokenHash,
+          lastSeenAt: now,
+          idleExpiresAt: new Date(now.getTime() + SESSION_IDLE_LIFETIME_MS),
+          expiresAt: new Date(now.getTime() + SESSION_ABSOLUTE_LIFETIME_MS),
+          revokedAt: null,
+        },
+      });
+
       await transaction.emailVerification.update({
         where: { id: verification.id },
         data: {
@@ -291,7 +312,7 @@ export class EmailVerificationService {
       throw new BadRequestException('Invalid or expired verification link.');
     }
 
-    return { verified: true, role: outcome.role };
+    return { verified: true, role: outcome.role, sessionToken };
   }
 
   private isEligibleForVerification(user: {
