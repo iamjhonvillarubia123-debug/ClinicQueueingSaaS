@@ -93,6 +93,7 @@ describe('PracticeLocationStaffReadService', () => {
 
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        // Jest's asymmetric matcher is intentionally untyped at this boundary.
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         where: expect.objectContaining({
           role: 'SECRETARY',

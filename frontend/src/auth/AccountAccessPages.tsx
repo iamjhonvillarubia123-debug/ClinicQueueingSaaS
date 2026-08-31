@@ -17,39 +17,6 @@ function AccountFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AccountRegistrationEntryPage() {
-  const [secretarySelected, setSecretarySelected] = useState(false);
-
-  return (
-    <AccountFrame>
-      <div className="auth-heading account-type-heading">
-        <p className="eyebrow">Create account</p>
-        <h1>Choose your account type</h1>
-        <p>Choose the role you will use in Clinic Queueing.</p>
-      </div>
-      <div className="account-type-options" aria-label="Account type">
-        <Link className="account-type-option" to="/register/doctor">
-          <span className="account-type-icon" aria-hidden="true">+</span>
-          <span><strong>Doctor</strong><small>Create and verify a Doctor account for managing clinics.</small></span>
-          <b aria-hidden="true">›</b>
-        </Link>
-        <button className={`account-type-option ${secretarySelected ? 'is-selected' : ''}`} type="button" onClick={() => setSecretarySelected(true)}>
-          <span className="account-type-icon" aria-hidden="true">S</span>
-          <span><strong>Secretary</strong><small>Complete an account using the secure invitation from your Doctor.</small></span>
-          <b aria-hidden="true">›</b>
-        </button>
-      </div>
-      {secretarySelected ? (
-        <div className="secretary-registration-guidance" role="status">
-          <strong>Open your Doctor invitation</strong>
-          <p>Secretary accounts are created from the secure invitation link sent by a Doctor. Open that link from your email to choose your password and complete your account.</p>
-        </div>
-      ) : null}
-      <Link className="quiet-link auth-center-link auth-spaced-link" to="/login">Back to sign in</Link>
-    </AccountFrame>
-  );
-}
-
 export function DoctorRegistrationPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);

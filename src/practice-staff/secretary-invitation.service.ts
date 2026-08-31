@@ -17,7 +17,7 @@ import { PasswordSecurityService } from '../auth/security/password-security.serv
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSecretaryInvitationDto } from './dto/create-secretary-invitation.dto';
 
-const INVITATION_LIFETIME_MS = 72 * 60 * 60 * 1000;
+const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 const PAYLOAD_PURPOSE = 'secretary-invitation';
 
 @Injectable()
@@ -42,15 +42,11 @@ export class SecretaryInvitationService {
       throw new NotFoundException('Practice location was not found.');
     const existingUser = await this.prisma.user.findFirst({
       where: { email: normalizedEmail },
-      select: { id: true, role: true },
+      select: { id: true },
     });
-    if (existingUser?.role === 'SECRETARY')
-      throw new ConflictException(
-        'This email already has a Secretary account. Assign the existing Secretary instead.',
-      );
     if (existingUser)
       throw new ConflictException(
-        'This email is already used by an account with an incompatible role.',
+        'This email already has an account. Assign the existing Secretary instead.',
       );
     const activeInvitationKey = this.sha256(
       `${location.id}:${normalizedEmail}`,
@@ -189,15 +185,6 @@ export class SecretaryInvitationService {
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
           emailVerifiedAt: now,
-        },
-      });
-      await transaction.practiceStaff.create({
-        data: {
-          userId: user.id,
-          practiceLocationId: invitation.practiceLocationId,
-          staffRole: 'SECRETARY',
-          isActive: true,
-          activatedAt: now,
         },
       });
       await transaction.secretaryInvitation.update({

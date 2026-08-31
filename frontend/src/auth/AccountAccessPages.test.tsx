@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AccountRegistrationEntryPage, DoctorRegistrationPage, ForgotPasswordPage, ResetPasswordPage, VerifyEmailPage } from './AccountAccessPages';
+import { DoctorRegistrationPage, ForgotPasswordPage, ResetPasswordPage, VerifyEmailPage } from './AccountAccessPages';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -14,16 +14,6 @@ afterEach(() => {
 });
 
 describe('F5 account access journeys', () => {
-  it('offers role-aware account entry without exposing public Secretary registration', async () => {
-    const user = userEvent.setup();
-    render(<MemoryRouter><AccountRegistrationEntryPage /></MemoryRouter>);
-
-    expect(screen.getByRole('link', { name: /Doctor/i })).toHaveAttribute('href', '/register/doctor');
-    await user.click(screen.getByRole('button', { name: /Secretary/i }));
-    expect(screen.getByRole('status')).toHaveTextContent(/secure invitation link sent by a Doctor/i);
-    expect(screen.queryByRole('link', { name: /register secretary/i })).not.toBeInTheDocument();
-  });
-
   it('registers a Doctor and moves to the email-verification gate without creating a session', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
       userId: 'user-1',

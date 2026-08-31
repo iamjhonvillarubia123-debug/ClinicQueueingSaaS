@@ -5,7 +5,6 @@ import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import './styles/global.css';
 import './styles/account-lifecycle.css';
-import './styles/account-entry.css';
 import './styles/sign-in.css';
 import './styles/patient.css';
 import './styles/doctor.css';

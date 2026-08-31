@@ -95,7 +95,7 @@ export function LoginPage() {
           </form>
         </section>
         <div className="sign-in-account-entry">
-          <Link to="/register">Create Account</Link><span aria-hidden="true">•</span><Link className="reactivation-link" to="/account/reactivate">Reactivate Account</Link>
+          <Link to="/register/doctor">Create Doctor Account</Link><span aria-hidden="true">•</span><Link className="reactivation-link" to="/account/reactivate">Reactivate Account</Link>
         </div>
       </div>
       </div>
