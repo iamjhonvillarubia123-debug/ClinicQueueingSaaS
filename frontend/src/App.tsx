@@ -40,6 +40,11 @@ import {
 } from './doctor/DoctorWorkspace';
 import { GlobalSecretariesPage } from './doctor/GlobalSecretariesPage';
 import { SecretaryInvitationAcceptancePage } from './secretary/SecretaryInvitationAcceptancePage';
+import {
+  SecretaryOnly,
+  SecretaryWorkspacePlaceholder,
+  SecretaryWorkspaceShell,
+} from './secretary/SecretaryWorkspace';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
@@ -111,22 +116,15 @@ function WorkspaceEntryPage() {
   if (profile?.role === 'DOCTOR') {
     return <Navigate to="/app/overview" replace />;
   }
+  if (profile?.role === 'SECRETARY') {
+    return <Navigate to="/app/secretary" replace />;
+  }
 
-  const copy =
-    profile?.role === 'SECRETARY'
-      ? [
-          'Secretary workspace',
-          'Fast assigned-clinic operations will be built here.',
-        ]
-      : [
-          'System administration',
-          'Restricted administrative operations will remain separate from clinic navigation.',
-        ];
   return (
     <section className="intro">
       <p className="eyebrow">Foundation ready</p>
-      <h1>{copy[0]}</h1>
-      <p>{copy[1]}</p>
+      <h1>System administration</h1>
+      <p>Restricted administrative operations will remain separate from clinic navigation.</p>
     </section>
   );
 }
@@ -202,8 +200,15 @@ export function App() {
             <Route path="/app/clinics/:clinicId/operations" element={<AuthoritativeClinicOperationsRoutePage />} />
             <Route path="/app/calendar" element={<DoctorWorkspacePlaceholder title="Calendar" description="Doctor-wide availability and calendar controls will be placed here after workflow review." />} />
             <Route path="/app/secretaries" element={<GlobalSecretariesPage />} />
-            <Route path="/app/settings" element={<DoctorWorkspacePlaceholder title="Settings" description="Doctor profile, account settings, privacy, and approved configuration areas will be organized here after review." />} />
+            <Route path="/app/settings" element={<DoctorWorkspacePlaceholder title="Settings" description="Doctor profile and account settings will be designed here next." />} />
             <Route path="/app/billing" element={<DoctorWorkspacePlaceholder title="Billing" description="Subscription and financial controls will be connected here when the billing frontend slice is implemented." />} />
+          </Route>
+        </Route>
+
+        <Route element={<SecretaryOnly />}>
+          <Route element={<SecretaryWorkspaceShell />}>
+            <Route path="/app/secretary" element={<SecretaryWorkspacePlaceholder title="Home" description="Your assigned clinics will appear here when a Doctor assigns you as a Secretary." />} />
+            <Route path="/app/secretary/settings" element={<SecretaryWorkspacePlaceholder title="Settings" description="Secretary profile and account settings will be designed here next." />} />
           </Route>
         </Route>
       </Route>
