@@ -3,7 +3,6 @@ import {
   AdministrativeRestrictionStatus,
   Prisma,
   UserAccountStatus,
-  UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
@@ -25,7 +24,9 @@ export class AccountRegistrationService {
     const normalizedEmail = normalizeEmail(dto.email);
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
-    const mobileNumber = this.mobileNumberService.normalize(dto.mobileNumber).canonical;
+    const mobileNumber = this.mobileNumberService.normalize(
+      dto.mobileNumber,
+    ).canonical;
 
     const existingCurrentUser = await this.prisma.user.findFirst({
       where: {
@@ -36,7 +37,9 @@ export class AccountRegistrationService {
     });
 
     if (existingCurrentUser) {
-      throw new ConflictException('A current account already uses this email.');
+      throw new ConflictException(
+        'A current account already uses this email.',
+      );
     }
 
     const passwordHash = await this.passwordSecurityService.hash(dto.password);
@@ -73,12 +76,14 @@ export class AccountRegistrationService {
           emailVerificationExpiresAt: emailVerification.expiresAt,
         };
       });
-    } catch (error) {
+    } catch (error: unknown) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ConflictException('A current account already uses this email.');
+        throw new ConflictException(
+          'A current account already uses this email.',
+        );
       }
       throw error;
     }
