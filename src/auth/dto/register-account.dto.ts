@@ -11,6 +11,10 @@ import { UserRole } from '../../../generated/prisma/client';
 const trimString = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
+export type PublicAccountRole =
+  | typeof UserRole.DOCTOR
+  | typeof UserRole.SECRETARY;
+
 export class RegisterAccountDto {
   @Transform(trimString)
   @IsString()
@@ -41,5 +45,5 @@ export class RegisterAccountDto {
   password!: string;
 
   @IsIn([UserRole.DOCTOR, UserRole.SECRETARY])
-  role!: UserRole.DOCTOR | UserRole.SECRETARY;
+  role!: PublicAccountRole;
 }
