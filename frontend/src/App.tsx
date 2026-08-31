@@ -10,7 +10,6 @@ import {
 import {
   AccountRegistrationEntryPage,
   DoctorRegistrationPage,
-  SecretaryRegistrationPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   VerifyEmailPage,
@@ -167,19 +166,13 @@ export function App() {
         path="/public/practice-locations/:publicIdentifier"
         element={<PracticeLocationPublicPage />}
       />
-      <Route
-        path="/book/:publicIdentifier"
-        element={<IndividualBookingPage />}
-      />
+      <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
       <Route
         path="/book/:publicIdentifier/group"
         element={<MultiPersonBookingPage />}
       />
       <Route path="/booking/access" element={<BookingAccessBootstrapPage />} />
-      <Route
-        path="/recover/:publicIdentifier"
-        element={<BookingRecoveryPage />}
-      />
+      <Route path="/recover/:publicIdentifier" element={<BookingRecoveryPage />} />
       <Route
         path="/recover/appointment/:publicIdentifier"
         element={<LegacyRecoveryRedirect />}
@@ -199,10 +192,6 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<AccountRegistrationEntryPage />} />
       <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
-      <Route
-        path="/register/secretary"
-        element={<SecretaryRegistrationPage />}
-      />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -212,10 +201,7 @@ export function App() {
         path="/account/permanent-close"
         element={<PermanentCloseAccountPage />}
       />
-      <Route
-        path="/secretary-invitations/accept"
-        element={<SecretaryInvitationAcceptancePage />}
-      />
+      <Route path="/secretary-invitations/accept" element={<SecretaryInvitationAcceptancePage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<LegacyShell />}>
