@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AccountRegistrationService } from '../auth/account-registration.service';
 import { AuthenticationService } from '../auth/authentication.service';
 import { DoctorController } from './doctor.controller';
 import { DoctorDataRetentionService } from './doctor-data-retention.service';
@@ -11,6 +12,7 @@ import { DoctorService } from './doctor.service';
 describe('DoctorController', () => {
   let controller: DoctorController;
 
+  const accountRegistrationServiceMock = {};
   const doctorServiceMock = {};
   const doctorLifecycleServiceMock = {};
   const doctorDefaultsServiceMock = {};
@@ -25,6 +27,10 @@ describe('DoctorController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DoctorController],
       providers: [
+        {
+          provide: AccountRegistrationService,
+          useValue: accountRegistrationServiceMock,
+        },
         { provide: DoctorService, useValue: doctorServiceMock },
         {
           provide: DoctorLifecycleService,
