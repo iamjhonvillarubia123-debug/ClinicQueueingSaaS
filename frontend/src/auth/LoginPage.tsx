@@ -59,22 +59,25 @@ export function LoginPage() {
 
   return <main className="sign-in-page">
     <section className="sign-in-brand-panel" aria-label="Clinic Queueing introduction">
-      <Link className="sign-in-brand" to="/" aria-label="Clinic Queueing home"><span><Icon name="brand" /></span><strong>CLINIC QUEUEING<small>SaaS</small></strong></Link>
-      <div className="sign-in-pitch">
-        <h1>Smart queueing.<br />Better patient care.</h1>
-        <p>A queue management system built for clinics<br className="desktop-only" /> to run efficiently and serve patients better.</p>
-        <ul>
-          <li><span><Icon name="calendar" /></span><div><strong>Organize Appointments</strong><p>Manage schedules and appointments with ease.</p></div></li>
-          <li><span><Icon name="chart" /></span><div><strong>Real-time Queue</strong><p>See live queue status and keep patients informed.</p></div></li>
-          <li><span><Icon name="shield" /></span><div><strong>Secure &amp; Reliable</strong><p>Your data is secure and accessible anytime.</p></div></li>
-        </ul>
+      <div className="sign-in-brand-content">
+        <Link className="sign-in-brand" to="/" aria-label="Clinic Queueing home"><span><Icon name="brand" /></span><strong>CLINIC QUEUEING<small>SaaS</small></strong></Link>
+        <div className="sign-in-pitch">
+          <h1>Smart queueing.<br />Better patient care.</h1>
+          <p>A queue management system built for clinics<br className="desktop-only" /> to run efficiently and serve patients better.</p>
+          <ul>
+            <li><span><Icon name="calendar" /></span><div><strong>Organize Appointments</strong><p>Manage schedules and appointments with ease.</p></div></li>
+            <li><span><Icon name="chart" /></span><div><strong>Real-time Queue</strong><p>See live queue status and keep patients informed.</p></div></li>
+            <li><span><Icon name="shield" /></span><div><strong>Secure &amp; Reliable</strong><p>Your data is secure and accessible anytime.</p></div></li>
+          </ul>
+        </div>
+        <img className="clinic-illustration" src={clinicWaitingRoom} alt="" aria-hidden="true" decoding="async" />
       </div>
-      <img className="clinic-illustration" src={clinicWaitingRoom} alt="" aria-hidden="true" decoding="async" />
     </section>
 
     <section className="sign-in-auth-panel">
-      <div className="sign-in-language" aria-label="Language: English"><Icon name="globe" /><span>English</span></div>
-      <div className="sign-in-center">
+      <div className="sign-in-auth-content">
+        <div className="sign-in-language" aria-label="Language: English"><Icon name="globe" /><span>English</span></div>
+        <div className="sign-in-center">
         <section className="sign-in-card" aria-labelledby="signin-heading">
           <header><h2 id="signin-heading">Sign in</h2><p>Welcome back! Please sign in to your account.</p></header>
           <form onSubmit={submit} noValidate>
@@ -94,6 +97,7 @@ export function LoginPage() {
         <div className="sign-in-account-entry">
           <Link to="/register/doctor">Create Doctor Account</Link><span aria-hidden="true">•</span><Link className="reactivation-link" to="/account/reactivate">Reactivate Account</Link>
         </div>
+      </div>
       </div>
     </section>
     <footer className="sign-in-footer"><div><p><Icon name="lock" /> Secure <span>•</span> Private <span>•</span> Compliant</p><p>© 2026 Clinic Queueing SaaS. All rights reserved.</p></div></footer>

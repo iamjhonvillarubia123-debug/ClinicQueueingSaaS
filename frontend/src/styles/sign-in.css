@@ -11,3 +11,5 @@
 @media(min-width:801px){.clinic-illustration{left:48px;bottom:0;width:calc(100% - 78px);max-height:305px;color:#a9b0ba;opacity:.92}}
 @media(min-width:801px){img.clinic-illustration{width:min(calc(100% - 78px),652px);height:auto;max-height:none;object-fit:contain;object-position:left bottom;color:initial;opacity:1;mix-blend-mode:multiply}}
 @media(min-width:801px){.sign-in-pitch{margin-top:100px}.sign-in-pitch>p{margin-top:18px;margin-bottom:38px}.sign-in-pitch ul{gap:22px}img.clinic-illustration{bottom:-34px}}
+@media(min-width:801px){.sign-in-brand-panel,.sign-in-auth-panel{padding:0}.sign-in-brand-content,.sign-in-auth-content{position:absolute;inset:0;width:111.1112%;height:111.1112%;box-sizing:border-box;transform:scale(.9);transform-origin:top left}.sign-in-brand-content{padding:48px clamp(42px,5.2vw,82px);overflow:hidden}.sign-in-auth-content{display:flex;flex-direction:column;padding:38px clamp(36px,6vw,100px) 86px}.sign-in-footer{transform:scale(.9);transform-origin:center bottom}}
+@media(max-width:800px){.sign-in-brand-content,.sign-in-auth-content{display:contents}.sign-in-footer{transform:none}}
