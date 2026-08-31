@@ -12,8 +12,7 @@ const trimString = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
 export type PublicAccountRole =
-  | typeof UserRole.DOCTOR
-  | typeof UserRole.SECRETARY;
+  typeof UserRole.DOCTOR | typeof UserRole.SECRETARY;
 
 export class RegisterAccountDto {
   @Transform(trimString)

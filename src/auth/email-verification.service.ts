@@ -21,9 +21,7 @@ const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_24_HOURS = 10;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-type VerifiableUserRole =
-  | typeof UserRole.DOCTOR
-  | typeof UserRole.SECRETARY;
+type VerifiableUserRole = typeof UserRole.DOCTOR | typeof UserRole.SECRETARY;
 
 export interface CreatedEmailVerification {
   id: string;

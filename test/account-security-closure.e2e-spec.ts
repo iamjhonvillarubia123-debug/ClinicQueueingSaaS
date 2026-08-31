@@ -169,6 +169,7 @@ describe('Account security closure (e2e)', () => {
       .send({
         practiceLocationId: ownLocation.id,
         userId: activeSecretary.id,
+        authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       })
       .expect(201);
 
@@ -179,6 +180,7 @@ describe('Account security closure (e2e)', () => {
       .send({
         practiceLocationId: ownLocation.id,
         userId: disabledSecretary.id,
+        authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
         password,
       })
       .expect(403);
@@ -190,6 +192,7 @@ describe('Account security closure (e2e)', () => {
       .send({
         practiceLocationId: ownLocation.id,
         userId: closedSecretary.id,
+        authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
         password,
       })
       .expect(403);
@@ -201,6 +204,7 @@ describe('Account security closure (e2e)', () => {
       .send({
         practiceLocationId: otherLocation.id,
         userId: activeSecretary.id,
+        authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       })
       .expect(404);
 

@@ -92,23 +92,19 @@ describe('SecretaryInvitationService', () => {
       mobileNumber: '09183334444',
     });
     expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
-      // Jest's asymmetric matcher is intentionally untyped at this boundary.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: expect.objectContaining({
         normalizedEmail: 'jane@example.test',
         firstName: 'Jane',
         lastName: 'Reyes',
         status: 'PENDING',
-      }),
+      }) as unknown,
     });
     expect(transaction.notificationOutbox.create).toHaveBeenCalledWith({
-      // Jest's asymmetric matcher is intentionally untyped at this boundary.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: expect.objectContaining({
         notificationType: 'SECRETARY_INVITATION',
         channel: 'EMAIL',
         secretaryInvitationId: 'invite-1',
-      }),
+      }) as unknown,
     });
     expect(
       JSON.stringify(transaction.secretaryInvitation.create.mock.calls[0]),
@@ -139,9 +135,9 @@ describe('SecretaryInvitationService', () => {
     expect(transaction.user.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         role: 'SECRETARY',
-        emailVerifiedAt: expect.any(Date),
+        emailVerifiedAt: expect.any(Date) as unknown,
         passwordHash: 'password-hash',
-      }),
+      }) as unknown,
     });
     expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
       where: { id: 'invite-1' },
@@ -150,7 +146,7 @@ describe('SecretaryInvitationService', () => {
         acceptedUserId: 'secretary-1',
         tokenHash: null,
         activeInvitationKey: null,
-      }),
+      }) as unknown,
     });
     expect(transaction).not.toHaveProperty('practiceStaff');
   });

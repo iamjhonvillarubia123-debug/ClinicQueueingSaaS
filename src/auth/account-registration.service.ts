@@ -37,9 +37,7 @@ export class AccountRegistrationService {
     });
 
     if (existingCurrentUser) {
-      throw new ConflictException(
-        'A current account already uses this email.',
-      );
+      throw new ConflictException('A current account already uses this email.');
     }
 
     const passwordHash = await this.passwordSecurityService.hash(dto.password);

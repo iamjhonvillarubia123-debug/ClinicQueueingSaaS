@@ -105,7 +105,7 @@ describe('Individual booking confirmation atomicity (e2e)', () => {
           data: {
             appointmentId: appointment.id,
             tokenHash: `${scope.slice(0, 32)}${scope.slice(0, 32)}`,
-            expiresAt: new Date('2026-08-31T00:00:00.000Z'),
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
           },
         });
 

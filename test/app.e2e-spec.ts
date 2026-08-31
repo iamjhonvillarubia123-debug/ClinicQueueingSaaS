@@ -84,23 +84,20 @@ describe('AppController (e2e)', () => {
     const password = 'M2Slice2B-Test-Password-42!';
 
     const registration = await request(app.getHttpServer())
-      .post('/doctor/register')
+      .post('/auth/register')
       .send({
         firstName: 'Jane',
-        middleName: 'Q',
         lastName: 'Doe',
         email,
         mobileNumber: '09171234567',
         password,
-        professionalTitle: 'Dr.',
-        specialization: 'Family Medicine',
-        licenseNumber: `LIC-${unique}`,
+        role: 'DOCTOR',
       })
       .expect(201);
 
     const registrationBody = registration.body as unknown as {
       userId: string;
-      doctorProfileId: string;
+      role: 'DOCTOR';
       emailVerificationRequired: boolean;
       emailVerificationExpiresAt: string;
     };
@@ -108,7 +105,7 @@ describe('AppController (e2e)', () => {
     expect(registrationBody).toEqual(
       expect.objectContaining({
         userId,
-        doctorProfileId: expect.any(String) as unknown,
+        role: 'DOCTOR',
         emailVerificationRequired: true,
         emailVerificationExpiresAt: expect.any(String) as unknown,
       }),
@@ -126,7 +123,7 @@ describe('AppController (e2e)', () => {
 
     expect(user).not.toBeNull();
     expect(user?.emailVerifiedAt).toBeNull();
-    expect(user?.doctorProfile?.accountSettings).not.toBeNull();
+    expect(user?.doctorProfile).toBeNull();
     expect(user?.emailVerifications).toHaveLength(1);
 
     const verification = user?.emailVerifications[0];

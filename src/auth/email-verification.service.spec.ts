@@ -188,7 +188,10 @@ describe('EmailVerificationService', () => {
         protectedPayloadService,
       );
 
-      await expect(service.verify(token)).resolves.toEqual({ verified: true, role });
+      await expect(service.verify(token)).resolves.toEqual({
+        verified: true,
+        role,
+      });
 
       const userUpdateCalls = userUpdate.mock.calls as unknown as Array<
         [{ data: { emailVerifiedAt: Date } }]
