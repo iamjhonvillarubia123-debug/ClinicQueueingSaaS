@@ -12,6 +12,10 @@ import { PasswordSecurityService } from './security/password-security.service';
 const publicRoles = [UserRole.DOCTOR, UserRole.SECRETARY] as const;
 
 describe('AccountRegistrationService', () => {
+  const createInitialVerification = jest.fn().mockResolvedValue({
+    id: 'verification-1',
+    expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+  });
   const mobileNumberService = {
     normalize: jest.fn().mockReturnValue({ canonical: '+639171234567' }),
   } as unknown as MobileNumberService;
@@ -19,21 +23,19 @@ describe('AccountRegistrationService', () => {
     hash: jest.fn().mockResolvedValue('hashed-password'),
   } as unknown as PasswordSecurityService;
   const emailVerificationService = {
-    createInitialVerification: jest.fn().mockResolvedValue({
-      id: 'verification-1',
-      expiresAt: new Date('2026-09-01T00:00:00.000Z'),
-    }),
+    createInitialVerification,
   } as unknown as EmailVerificationService;
 
   function buildService(role: (typeof publicRoles)[number]) {
     const userCreate = jest.fn().mockResolvedValue({ id: 'user-1', role });
     const transaction = { user: { create: userCreate } };
+    const transactionMock = jest.fn(
+      (callback: (tx: typeof transaction) => Promise<unknown>) =>
+        callback(transaction),
+    );
     const prisma = {
       user: { findFirst: jest.fn().mockResolvedValue(null) },
-      $transaction: jest.fn(
-        (callback: (tx: typeof transaction) => Promise<unknown>) =>
-          callback(transaction),
-      ),
+      $transaction: transactionMock,
     } as unknown as PrismaService;
 
     return {
@@ -44,14 +46,15 @@ describe('AccountRegistrationService', () => {
         passwordSecurityService,
       ),
       userCreate,
-      prisma,
       transaction,
+      transactionMock,
     };
   }
 
   it.each(publicRoles)(
     'creates a %s User without clinic authority and requires email verification',
     async (role) => {
+      createInitialVerification.mockClear();
       const { service, userCreate, transaction } = buildService(role);
 
       await expect(
@@ -84,7 +87,7 @@ describe('AccountRegistrationService', () => {
           emailVerifiedAt: null,
         },
       });
-      expect(emailVerificationService.createInitialVerification).toHaveBeenCalledWith(
+      expect(createInitialVerification).toHaveBeenCalledWith(
         transaction,
         'user-1',
         'person@example.com',
@@ -95,9 +98,10 @@ describe('AccountRegistrationService', () => {
   );
 
   it('rejects an email already used by a current account before creating anything', async () => {
+    const transactionMock = jest.fn();
     const prisma = {
       user: { findFirst: jest.fn().mockResolvedValue({ id: 'existing' }) },
-      $transaction: jest.fn(),
+      $transaction: transactionMock,
     } as unknown as PrismaService;
     const service = new AccountRegistrationService(
       prisma,
@@ -116,6 +120,6 @@ describe('AccountRegistrationService', () => {
         role: UserRole.SECRETARY,
       }),
     ).rejects.toThrow('A current account already uses this email.');
-    expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).not.toHaveBeenCalled();
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 });
