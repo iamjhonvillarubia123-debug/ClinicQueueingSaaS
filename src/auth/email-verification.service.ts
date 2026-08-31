@@ -21,6 +21,10 @@ const DEFAULT_VERIFICATION_ISSUANCE_LIMIT_24_HOURS = 10;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
+type VerifiableUserRole =
+  | typeof UserRole.DOCTOR
+  | typeof UserRole.SECRETARY;
+
 export interface CreatedEmailVerification {
   id: string;
   expiresAt: Date;
@@ -188,7 +192,9 @@ export class EmailVerificationService {
     return { accepted: true };
   }
 
-  async verify(token: string): Promise<{ verified: true; role: UserRole.DOCTOR | UserRole.SECRETARY }> {
+  async verify(
+    token: string,
+  ): Promise<{ verified: true; role: VerifiableUserRole }> {
     const tokenHash = this.sha256(token);
 
     const outcome = await this.prisma.$transaction(async (transaction) => {
@@ -279,7 +285,7 @@ export class EmailVerificationService {
 
       return {
         status: 'verified' as const,
-        role: verification.user.role as UserRole.DOCTOR | UserRole.SECRETARY,
+        role: verification.user.role,
       };
     });
 
@@ -295,11 +301,8 @@ export class EmailVerificationService {
     accountStatus: UserAccountStatus;
     administrativeRestrictionStatus: AdministrativeRestrictionStatus;
     emailVerifiedAt: Date | null;
-  }): user is typeof user & { role: UserRole.DOCTOR | UserRole.SECRETARY } {
-    if (
-      user.role !== UserRole.DOCTOR &&
-      user.role !== UserRole.SECRETARY
-    ) {
+  }): user is typeof user & { role: VerifiableUserRole } {
+    if (user.role !== UserRole.DOCTOR && user.role !== UserRole.SECRETARY) {
       return false;
     }
     if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
