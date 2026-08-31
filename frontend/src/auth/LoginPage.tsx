@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
-import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 import { useAuth } from './AuthContext';
 
 function Icon({ name }: { name: 'brand' | 'calendar' | 'chart' | 'shield' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'globe' }) {
@@ -70,7 +69,6 @@ export function LoginPage() {
             <li><span><Icon name="shield" /></span><div><strong>Secure &amp; Reliable</strong><p>Your data is secure and accessible anytime.</p></div></li>
           </ul>
         </div>
-        <img className="clinic-illustration" src={clinicWaitingRoom} alt="" aria-hidden="true" decoding="async" />
       </div>
     </section>
 
