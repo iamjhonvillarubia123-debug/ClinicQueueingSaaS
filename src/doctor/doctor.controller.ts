@@ -101,24 +101,52 @@ export class DoctorController {
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/services')
-  saveServiceTemplate(
+  createServiceTemplate(
     @Request() request: AuthenticatedRequest,
     @Body() dto: SaveDoctorServiceTemplateDto,
   ) {
-    return this.doctorDefaultsService.saveServiceTemplate(
+    return this.doctorDefaultsService.createServiceTemplate(
       request.user.userId,
       dto,
     );
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('defaults/services/:templateId')
+  updateServiceTemplate(
+    @Request() request: AuthenticatedRequest,
+    @Param('templateId') templateId: string,
+    @Body() dto: SaveDoctorServiceTemplateDto,
+  ) {
+    return this.doctorDefaultsService.updateServiceTemplate(
+      request.user.userId,
+      templateId,
+      dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('defaults/booking-questions')
-  saveBookingQuestionTemplate(
+  createBookingQuestionTemplate(
     @Request() request: AuthenticatedRequest,
     @Body() dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    return this.doctorDefaultsService.saveBookingQuestionTemplate(
+    return this.doctorDefaultsService.createBookingQuestionTemplate(
       request.user.userId,
+      dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('defaults/booking-questions/:templateId')
+  updateBookingQuestionTemplate(
+    @Request() request: AuthenticatedRequest,
+    @Param('templateId') templateId: string,
+    @Body() dto: SaveDoctorBookingQuestionTemplateDto,
+  ) {
+    return this.doctorDefaultsService.updateBookingQuestionTemplate(
+      request.user.userId,
+      templateId,
       dto,
     );
   }
@@ -128,10 +156,12 @@ export class DoctorController {
   applyDefaults(
     @Request() request: AuthenticatedRequest,
     @Body() dto: ApplyDoctorDefaultsDto,
+    @Headers('idempotency-key') idempotencyKey: string,
   ) {
     return this.doctorDefaultsApplyService.apply(
       request.user.userId,
       dto,
+      idempotencyKey,
     );
   }
 
@@ -139,7 +169,7 @@ export class DoctorController {
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Headers('idempotency-key') idempotencyKey: string,
   ) {
     return this.doctorLifecycleService.disable(
       request.user.userId,
@@ -147,40 +177,40 @@ export class DoctorController {
     );
   }
 
+  @RateLimit({
+    id: 'doctor-reactivate',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
   @Post('account/reactivate')
-  reactivateAccount(@Body() dto: ReactivateDoctorDto) {
-    return this.doctorLifecycleService.reactivate(dto);
-  }
-
-  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
-  @Post('account/permanently-delete')
-  permanentlyDeleteAccount(
-    @Request() request: AuthenticatedRequest,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @Body() dto: PermanentlyDeleteDoctorDto,
+  reactivateAccount(
+    @Body() dto: ReactivateDoctorDto,
+    @Headers('idempotency-key') idempotencyKey: string,
   ) {
-    return this.doctorLifecycleService.permanentlyDelete(
-      request.user.userId,
-      dto,
+    return this.doctorLifecycleService.reactivate(
+      dto.email,
+      dto.password,
       idempotencyKey,
     );
   }
 
-  @UseGuards(SessionAuthGuard)
-  @Get('account')
-  getAccount(@Request() request: AuthenticatedRequest) {
-    return this.doctorLifecycleService.getAccount(request.user.userId);
-  }
-
-  @UseGuards(SessionAuthGuard)
-  @Get('defaults/services/:templateId')
-  getServiceTemplate(
-    @Request() request: AuthenticatedRequest,
-    @Param('templateId') templateId: string,
+  @RateLimit({
+    id: 'doctor-permanent-delete',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
+  @Post('account/permanent-delete')
+  permanentlyDeleteAccount(
+    @Body() dto: PermanentlyDeleteDoctorDto,
+    @Headers('idempotency-key') idempotencyKey: string,
   ) {
-    return this.doctorDefaultsService.getServiceTemplate(
-      request.user.userId,
-      templateId,
+    return this.doctorLifecycleService.permanentlyDelete(
+      dto.email,
+      dto.password,
+      dto.confirmPermanentDelete,
+      idempotencyKey,
     );
   }
 }
