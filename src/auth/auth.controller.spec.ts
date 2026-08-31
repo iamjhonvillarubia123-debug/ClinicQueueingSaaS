@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AccountRegistrationService } from './account-registration.service';
 import { AuthenticationService } from './authentication.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -10,6 +11,7 @@ import { PasswordResetService } from './password-reset.service';
 describe('AuthController', () => {
   let controller: AuthController;
 
+  const accountRegistrationServiceMock = { register: jest.fn() };
   const authServiceMock = { login: jest.fn(), logout: jest.fn() };
   const authenticationServiceMock = {};
   const emailVerificationServiceMock = {};
@@ -22,6 +24,10 @@ describe('AuthController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
+        {
+          provide: AccountRegistrationService,
+          useValue: accountRegistrationServiceMock,
+        },
         {
           provide: AuthService,
           useValue: authServiceMock,
