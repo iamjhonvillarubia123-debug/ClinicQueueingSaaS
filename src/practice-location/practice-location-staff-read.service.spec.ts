@@ -93,6 +93,7 @@ describe('PracticeLocationStaffReadService', () => {
 
     expect(prisma.user.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         where: expect.objectContaining({
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
@@ -107,7 +108,7 @@ describe('PracticeLocationStaffReadService', () => {
             },
             { secretaryInvitationAccepted: { practiceLocationId: 'clinic-1' } },
           ]),
-        }) as unknown,
+        }),
       }),
     );
     expect(result.candidates).toEqual([
