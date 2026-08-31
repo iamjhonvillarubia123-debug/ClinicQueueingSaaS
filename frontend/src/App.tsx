@@ -22,6 +22,7 @@ import {
   DoctorWorkspaceShell,
 } from './doctor/DoctorWorkspace';
 import { GlobalSecretariesPage } from './doctor/GlobalSecretariesPage';
+import { SecretaryInvitationAcceptancePage } from './secretary/SecretaryInvitationAcceptancePage';
 import { BookingAccessBootstrapPage } from './patient/BookingAccessBootstrapPage';
 import { BookingRecoveryPage } from './patient/BookingRecoveryPage';
 import { PatientAppointmentPage } from './patient/PatientAppointmentPage';
@@ -249,6 +250,7 @@ export function App() {
         element={<PatientBookingGroupPage />}
       />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/secretary-invitations/accept" element={<SecretaryInvitationAcceptancePage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<LegacyShell />}>
