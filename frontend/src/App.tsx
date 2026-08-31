@@ -10,6 +10,18 @@ import {
   useParams,
 } from 'react-router-dom';
 import { ApiError } from './api/client';
+import {
+  DoctorRegistrationPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  VerifyEmailPage,
+} from './auth/AccountAccessPages';
+import {
+  AccountSecurityPage,
+  DisabledAccountPage,
+  PermanentCloseAccountPage,
+  ReactivateAccountPage,
+} from './auth/AccountLifecyclePages';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
@@ -124,7 +136,19 @@ function LoginPage() {
           >
             {submitting ? 'Signing in…' : 'Continue'}
           </button>
+          <Link className="quiet-link auth-center-link" to="/forgot-password">
+            Forgot password?
+          </Link>
+          <Link className="quiet-link auth-center-link" to="/account/reactivate">
+            Reactivate disabled account
+          </Link>
         </form>
+        <div className="auth-registration-entry">
+          <span>Doctor without an account?</span>
+          <Link className="secondary-action" to="/register/doctor">
+            Create doctor account
+          </Link>
+        </div>
       </section>
     </main>
   );
@@ -139,6 +163,9 @@ function LegacyShell() {
     navigate('/login', { replace: true });
   }
 
+  const canManageOwnLifecycle =
+    profile?.role === 'DOCTOR' || profile?.role === 'SECRETARY';
+
   return (
     <div className="shell">
       <header className="appbar">
@@ -147,6 +174,11 @@ function LegacyShell() {
         </Link>
         <div>
           <span className="role">{profile?.role.replace('_', ' ')}</span>
+          {canManageOwnLifecycle ? (
+            <Link className="quiet-link account-nav-link" to="/app/account">
+              Account
+            </Link>
+          ) : null}
           <button className="secondary" onClick={signOut}>
             Sign out
           </button>
@@ -250,11 +282,22 @@ export function App() {
         element={<PatientBookingGroupPage />}
       />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/account/disabled" element={<DisabledAccountPage />} />
+      <Route path="/account/reactivate" element={<ReactivateAccountPage />} />
+      <Route
+        path="/account/permanent-close"
+        element={<PermanentCloseAccountPage />}
+      />
       <Route path="/secretary-invitations/accept" element={<SecretaryInvitationAcceptancePage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<LegacyShell />}>
           <Route path="/app" element={<WorkspaceEntryPage />} />
+          <Route path="/app/account" element={<AccountSecurityPage />} />
         </Route>
 
         <Route element={<DoctorOnly />}>
