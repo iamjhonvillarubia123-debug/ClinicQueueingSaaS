@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { FormEvent, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 
 type AccountType = 'DOCTOR' | 'SECRETARY';
@@ -24,10 +24,33 @@ function Icon({ name }: { name: IconName }) {
 }
 
 export function CreateAccountPage() {
+  const navigate = useNavigate();
   const [accountType, setAccountType] = useState<AccountType>('DOCTOR');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [error, setError] = useState('');
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (!termsAccepted) {
+      setError('Please accept the Terms of Service and Privacy Policy.');
+      return;
+    }
+    const params = new URLSearchParams({ email: email.trim(), role: accountType });
+    navigate(`/registration/check-email?${params.toString()}`);
+  }
 
   return (
     <main className="sign-in-page create-account-page">
@@ -52,55 +75,34 @@ export function CreateAccountPage() {
           <div className="sign-in-language" aria-label="Language: English"><Icon name="globe" /><span>English</span></div>
           <div className="sign-in-center create-account-center">
             <section className="create-account-card" aria-labelledby="create-account-heading">
-              <header>
-                <h2 id="create-account-heading">Create your account</h2>
-                <p>Get started with Clinic Queueing.</p>
-              </header>
-
-              <form aria-label="Create account form">
+              <header><h2 id="create-account-heading">Create your account</h2><p>Get started with Clinic Queueing.</p></header>
+              <form aria-label="Create account form" onSubmit={submit}>
                 <fieldset className="account-type-fieldset">
                   <legend>Account type</legend>
                   <div className="account-type-grid">
-                    <label className={`account-type-card ${accountType === 'DOCTOR' ? 'is-selected' : ''}`}>
-                      <input type="radio" name="account-type" value="DOCTOR" checked={accountType === 'DOCTOR'} onChange={() => setAccountType('DOCTOR')} />
-                      <Icon name="person" />
-                      <span><strong>Doctor</strong><small>Manage your clinics, appointments, and queue operations.</small></span>
-                    </label>
-                    <label className={`account-type-card ${accountType === 'SECRETARY' ? 'is-selected' : ''}`}>
-                      <input type="radio" name="account-type" value="SECRETARY" checked={accountType === 'SECRETARY'} onChange={() => setAccountType('SECRETARY')} />
-                      <Icon name="person" />
-                      <span><strong>Secretary</strong><small>Work with clinics that assign you as a Secretary.</small></span>
-                    </label>
+                    <label className={`account-type-card ${accountType === 'DOCTOR' ? 'is-selected' : ''}`}><input type="radio" name="account-type" value="DOCTOR" checked={accountType === 'DOCTOR'} onChange={() => setAccountType('DOCTOR')} /><Icon name="person" /><span><strong>Doctor</strong><small>Manage your clinics, appointments, and queue operations.</small></span></label>
+                    <label className={`account-type-card ${accountType === 'SECRETARY' ? 'is-selected' : ''}`}><input type="radio" name="account-type" value="SECRETARY" checked={accountType === 'SECRETARY'} onChange={() => setAccountType('SECRETARY')} /><Icon name="person" /><span><strong>Secretary</strong><small>Work with clinics that assign you as a Secretary.</small></span></label>
                   </div>
                 </fieldset>
-
                 <div className="create-account-two-column">
-                  <label>First name<div className="create-account-input"><Icon name="person" /><input type="text" autoComplete="given-name" placeholder="Enter your first name" /></div></label>
-                  <label>Last name<div className="create-account-input"><Icon name="person" /><input type="text" autoComplete="family-name" placeholder="Enter your last name" /></div></label>
+                  <label>First name<div className="create-account-input"><Icon name="person" /><input required type="text" autoComplete="given-name" placeholder="Enter your first name" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></div></label>
+                  <label>Last name<div className="create-account-input"><Icon name="person" /><input required type="text" autoComplete="family-name" placeholder="Enter your last name" value={lastName} onChange={(event) => setLastName(event.target.value)} /></div></label>
                 </div>
-
-                <label>Email address<div className="create-account-input"><Icon name="mail" /><input type="email" autoComplete="email" placeholder="Enter your email address" /></div></label>
-                <label>Mobile number<div className="create-account-input"><Icon name="phone" /><input type="tel" autoComplete="tel" placeholder="Enter your mobile number" /></div></label>
-
+                <label>Email address<div className="create-account-input"><Icon name="mail" /><input required type="email" autoComplete="email" placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} /></div></label>
+                <label>Mobile number<div className="create-account-input"><Icon name="phone" /><input required type="tel" autoComplete="tel" placeholder="Enter your mobile number" value={mobileNumber} onChange={(event) => setMobileNumber(event.target.value)} /></div></label>
                 <div className="create-account-two-column">
-                  <label>Password<div className="create-account-input"><Icon name="lock" /><input type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Create a password" /><button type="button" className="password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div></label>
-                  <label>Confirm password<div className="create-account-input"><Icon name="lock" /><input type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Re-enter your password" /><button type="button" className="password-visibility" aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} aria-pressed={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)}><Icon name={showConfirmPassword ? 'eyeOff' : 'eye'} /></button></div></label>
+                  <label>Password<div className="create-account-input"><Icon name="lock" /><input required type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Create a password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div></label>
+                  <label>Confirm password<div className="create-account-input"><Icon name="lock" /><input required type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Re-enter your password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} aria-pressed={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)}><Icon name={showConfirmPassword ? 'eyeOff' : 'eye'} /></button></div></label>
                 </div>
-
-                <label className="create-account-consent">
-                  <input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} />
-                  <span>I agree to the <button type="button" className="inline-link">Terms of Service</button> and <button type="button" className="inline-link">Privacy Policy</button></span>
-                </label>
-
-                <button className="create-account-submit" type="button">Create account</button>
+                <label className="create-account-consent"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>I agree to the <button type="button" className="inline-link">Terms of Service</button> and <button type="button" className="inline-link">Privacy Policy</button></span></label>
+                {error ? <div className="form-error" role="alert">{error}</div> : null}
+                <button className="create-account-submit" type="submit">Create account</button>
               </form>
-
               <p className="create-account-signin">Already have an account? <Link to="/login">Sign in</Link></p>
             </section>
           </div>
         </div>
       </section>
-
       <footer className="sign-in-footer"><div><p><Icon name="lock" /> Secure <span>•</span> Private <span>•</span> Compliant</p><p>© 2026 Clinic Queueing SaaS. All rights reserved.</p></div></footer>
     </main>
   );
