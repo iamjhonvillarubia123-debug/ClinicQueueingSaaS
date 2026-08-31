@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ApiError, apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 
 type AccountType = 'DOCTOR' | 'SECRETARY';
@@ -59,6 +61,26 @@ function readRole(value: string | null): AccountType {
 export function RegistrationCheckEmailPage() {
   const [searchParams] = useSearchParams();
   const email = searchParams.get('email')?.trim() || 'your email address';
+  const [resending, setResending] = useState(false);
+  const [message, setMessage] = useState('');
+
+  async function resend() {
+    if (resending || email === 'your email address') return;
+    setResending(true);
+    setMessage('');
+    try {
+      await apiRequest('/auth/resend-email-verification', {
+        method: 'POST',
+        body: { email },
+      });
+      setMessage('A new verification email has been requested.');
+    } catch (caught) {
+      setMessage(caught instanceof ApiError ? caught.message : 'Unable to resend the verification email right now.');
+    } finally {
+      setResending(false);
+    }
+  }
+
   return (
     <JourneyFrame>
       <section className="registration-state-card" aria-labelledby="check-email-heading">
@@ -67,7 +89,8 @@ export function RegistrationCheckEmailPage() {
         <p>We sent a verification link to</p>
         <strong className="registration-state-email">{email}</strong>
         <p>Open the link in your email to verify your account.</p>
-        <button className="registration-secondary-action" type="button">Resend verification email</button>
+        <button className="registration-secondary-action" type="button" disabled={resending} onClick={() => void resend()}>{resending ? 'Sending…' : 'Resend verification email'}</button>
+        {message ? <p className="registration-state-footnote" role="status">{message}</p> : null}
         <p className="registration-state-footnote">Wrong email? <Link to="/register">Go back</Link></p>
       </section>
     </JourneyFrame>
