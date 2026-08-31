@@ -21,7 +21,7 @@ describe('approved sign-in experience', () => {
     render(<MemoryRouter><LoginPage /></MemoryRouter>);
 
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
-    expect(screen.getByRole('link', { name: 'Create Account' })).toHaveAttribute('href', '/register/doctor');
+    expect(screen.getByRole('link', { name: 'Create Account' })).toHaveAttribute('href', '/register');
     expect(screen.getByRole('link', { name: 'Reactivate Account' })).toHaveAttribute('href', '/account/reactivate');
     expect(screen.queryByRole('link', { name: /create secretary/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign in with google/i })).toBeDisabled();
