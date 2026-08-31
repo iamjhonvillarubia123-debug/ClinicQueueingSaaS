@@ -8,7 +8,6 @@ import {
   useParams,
 } from 'react-router-dom';
 import {
-  DoctorRegistrationPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   VerifyEmailPage,
@@ -174,11 +173,11 @@ export function App() {
       <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<CreateAccountPage />} />
+      <Route path="/register/doctor" element={<Navigate to="/register" replace />} />
       <Route path="/registration/check-email" element={<RegistrationCheckEmailPage />} />
       <Route path="/registration/account-ready" element={<RegistrationAccountReadyPage />} />
       <Route path="/registration/doctor-onboarding" element={<DoctorOnboardingPage />} />
       <Route path="/registration/secretary-home" element={<SecretaryNoAssignmentsPage />} />
-      <Route path="/register/doctor" element={<DoctorRegistrationPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
