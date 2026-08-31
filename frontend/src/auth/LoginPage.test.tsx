@@ -13,6 +13,7 @@ vi.mock('./AuthContext', () => ({
 afterEach(() => {
   cleanup();
   loginMock.mockClear();
+  localStorage.clear();
 });
 
 describe('approved sign-in experience', () => {
@@ -20,13 +21,13 @@ describe('approved sign-in experience', () => {
     render(<MemoryRouter><LoginPage /></MemoryRouter>);
 
     expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
-    expect(screen.getByRole('link', { name: 'Create doctor account' })).toHaveAttribute('href', '/register/doctor');
-    expect(screen.getByRole('link', { name: 'Reactivate a disabled account' })).toHaveAttribute('href', '/account/reactivate');
-    expect(screen.getByText(/Secretary\? Use the invitation sent by your Doctor/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create Doctor Account' })).toHaveAttribute('href', '/register/doctor');
+    expect(screen.getByRole('link', { name: 'Reactivate Account' })).toHaveAttribute('href', '/account/reactivate');
     expect(screen.queryByRole('link', { name: /create secretary/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sign in with google/i })).toBeDisabled();
     expect(screen.getByText(/Google sign-in is coming soon/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/remember me/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/remember me/i)).toBeInTheDocument();
+    expect(screen.getByText(/Only your email address is remembered/i)).toBeInTheDocument();
   });
 
   it('toggles password visibility without changing the password value', async () => {
@@ -60,5 +61,18 @@ describe('approved sign-in experience', () => {
 
     expect(loginMock).toHaveBeenCalledWith('doctor@example.com', 'secret-password');
     expect(await screen.findByText('Clinics destination')).toBeInTheDocument();
+  });
+
+  it('remembers only the email address when requested', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><LoginPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText('Email address'), 'staff@example.com');
+    await user.type(screen.getByLabelText('Password'), 'never-store-this');
+    await user.click(screen.getByLabelText('Remember me'));
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(localStorage.getItem('clinic-queueing.remembered-email')).toBe('staff@example.com');
+    expect(JSON.stringify(localStorage)).not.toContain('never-store-this');
   });
 });

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useAuth } from './AuthContext';
@@ -38,10 +38,19 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('clinic-queueing.remembered-email');
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   if (status === 'authenticated') return <Navigate to="/app" replace />;
 
@@ -51,6 +60,8 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
+      if (rememberMe) localStorage.setItem('clinic-queueing.remembered-email', email.trim());
+      else localStorage.removeItem('clinic-queueing.remembered-email');
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from || '/app', { replace: true });
     } catch (caught) {
@@ -85,7 +96,8 @@ export function LoginPage() {
             <div className="sign-in-input"><Icon name="mail" /><input id="signin-email" type="email" autoComplete="email" required placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
             <label htmlFor="signin-password">Password</label>
             <div className="sign-in-input"><Icon name="lock" /><input id="signin-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>
-            <div className="sign-in-help"><Link to="/forgot-password">Forgot password?</Link></div>
+            <div className="sign-in-help"><label className="remember-me"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /><span>Remember me</span></label><Link to="/forgot-password">Forgot password?</Link></div>
+            <span className="remember-email-note" id="remember-email-note">Only your email address is remembered on this device.</span>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
             <button className="sign-in-submit" type="submit" disabled={submitting || !email || !password}>{submitting ? 'Signing in…' : 'Sign in'}</button>
             <div className="sign-in-divider" aria-hidden="true"><span>or</span></div>
@@ -94,12 +106,10 @@ export function LoginPage() {
           </form>
         </section>
         <div className="sign-in-account-entry">
-          <p>Doctor without an account? <Link to="/register/doctor">Create doctor account</Link></p>
-          <p>Secretary? Use the invitation sent by your Doctor.</p>
-          <Link className="reactivation-link" to="/account/reactivate">Reactivate a disabled account</Link>
+          <Link to="/register/doctor">Create Doctor Account</Link><span aria-hidden="true">•</span><Link className="reactivation-link" to="/account/reactivate">Reactivate Account</Link>
         </div>
       </div>
-      <footer className="sign-in-footer"><div><p><Icon name="lock" /> Secure <span>•</span> Private <span>•</span> Compliant</p><p>© 2026 Clinic Queueing SaaS. All rights reserved.</p></div></footer>
     </section>
+    <footer className="sign-in-footer"><div><p><Icon name="lock" /> Secure <span>•</span> Private <span>•</span> Compliant</p><p>© 2026 Clinic Queueing SaaS. All rights reserved.</p></div></footer>
   </main>;
 }
