@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ApiError, apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 
 type AccountType = 'DOCTOR' | 'SECRETARY';
@@ -7,7 +8,7 @@ type IconName = 'brand' | 'calendar' | 'chart' | 'shield' | 'mail' | 'lock' | 'e
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
-    brand: <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" />,
+    brand: <path d="M9 3h6v6h6v6H9v-6H3V9h6z" />,
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M8 14h2M14 14h2M8 18h2" /></>,
     chart: <path d="M4 20V10M10 20V4M16 20v-7M22 20V7M2 20h22" />,
     shield: <path d="M12 2 4 5v6c0 5.4 3.4 9.3 8 11 4.6-1.7 8-5.6 8-11V5zM12 7v10M8 11l4 4 4-4" />,
@@ -36,8 +37,9 @@ export function CreateAccountPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     if (password !== confirmPassword) {
@@ -48,8 +50,26 @@ export function CreateAccountPage() {
       setError('Please accept the Terms of Service and Privacy Policy.');
       return;
     }
-    const params = new URLSearchParams({ email: email.trim(), role: accountType });
-    navigate(`/registration/check-email?${params.toString()}`);
+    setBusy(true);
+    try {
+      await apiRequest('/auth/register', {
+        method: 'POST',
+        body: {
+          firstName,
+          lastName,
+          email,
+          mobileNumber,
+          password,
+          role: accountType,
+        },
+      });
+      const params = new URLSearchParams({ email: email.trim(), role: accountType });
+      navigate(`/registration/check-email?${params.toString()}`);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Unable to create the account right now. Please try again.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -96,7 +116,7 @@ export function CreateAccountPage() {
                 </div>
                 <label className="create-account-consent"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>I agree to the <button type="button" className="inline-link">Terms of Service</button> and <button type="button" className="inline-link">Privacy Policy</button></span></label>
                 {error ? <div className="form-error" role="alert">{error}</div> : null}
-                <button className="create-account-submit" type="submit">Create account</button>
+                <button className="create-account-submit" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
               </form>
               <p className="create-account-signin">Already have an account? <Link to="/login">Sign in</Link></p>
             </section>
