@@ -19,6 +19,7 @@
     "dev:latest-booking-otp": "node scripts/show-dev-latest-booking-otp.cjs",
     "dev:latest-booking-group-recovery-otp": "node scripts/show-dev-latest-booking-group-recovery-otp.cjs",
     "dev:latest-appointment-recovery-otp": "node scripts/show-dev-latest-appointment-recovery-otp.cjs",
+    "dev:latest-email-verification-link": "node scripts/show-dev-latest-email-verification-link.cjs",
     "dev:cleanup-expired-bookings": "node scripts/cleanup-dev-expired-booking-drafts.cjs",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
