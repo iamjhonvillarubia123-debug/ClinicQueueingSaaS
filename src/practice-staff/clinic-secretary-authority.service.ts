@@ -25,6 +25,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
 import { RemoveRegularSecretaryDto } from './dto/remove-regular-secretary.dto';
 import { ReplaceRegularSecretaryDto } from './dto/replace-regular-secretary.dto';
+import { UpdateClinicSecretaryAuthorityDto } from './dto/update-clinic-secretary-authority.dto';
 import { ClinicSecretaryAuthorityBundle } from './secretary-authority.types';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -308,6 +309,69 @@ export class ClinicSecretaryAuthorityService {
         practiceStaffId: newAssignment.id,
         authorityBundles: bundles,
         disabledPracticeStaffId: previousAssignment.id,
+      };
+    });
+  }
+
+  async updateAuthority(
+    authenticatedUserId: string,
+    practiceStaffId: string,
+    dto: UpdateClinicSecretaryAuthorityDto,
+  ) {
+    const bundles = this.normalizeBundles(dto.authorityBundles);
+    return this.prisma.$transaction(async (transaction) => {
+      const owned = await transaction.practiceStaff.findFirst({
+        where: {
+          id: practiceStaffId,
+          disconnectedAt: null,
+          practiceLocation: {
+            doctorProfile: { userId: authenticatedUserId },
+          },
+        },
+        select: { id: true, practiceLocationId: true },
+      });
+      if (!owned)
+        throw new NotFoundException(
+          'Clinic Secretary assignment was not found.',
+        );
+
+      const location = await this.lockOwnedPracticeLocation(
+        transaction,
+        authenticatedUserId,
+        owned.practiceLocationId,
+      );
+      const assignment = await this.lockAssignmentById(
+        transaction,
+        practiceStaffId,
+      );
+      const actor = await this.readDoctor(
+        transaction,
+        authenticatedUserId,
+        false,
+      );
+      this.assertCurrentDoctor(actor);
+      if (
+        !assignment ||
+        !assignment.isActive ||
+        assignment.staffRole !== PracticeStaffRole.SECRETARY ||
+        location.currentRegularPracticeStaffId !== assignment.id
+      )
+        throw new ConflictException(
+          'Only the active Clinic Secretary authority can be edited.',
+        );
+
+      const now = new Date();
+      await this.replaceActiveBundles(
+        transaction,
+        assignment.id,
+        bundles,
+        authenticatedUserId,
+        now,
+      );
+      return {
+        practiceStaffId: assignment.id,
+        updated: true,
+        authorityBundles: bundles,
       };
     });
   }

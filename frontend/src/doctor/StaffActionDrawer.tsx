@@ -5,6 +5,7 @@ import { AUTHORITY_BUNDLES } from './StaffAssignmentDrawer';
 export type StaffActionCommand =
   | { type: 'DISABLE' }
   | { type: 'REMOVE'; password: string }
+  | { type: 'UPDATE_CLINIC_AUTHORITY'; authorityBundles: string[] }
   | { type: 'ACTIVATE_CLINIC'; authorityBundles: string[]; password?: string }
   | { type: 'CANCEL_COVERAGE'; coverageId: string }
   | {
@@ -61,6 +62,9 @@ export function StaffActionDrawer({
   onSubmit: (command: StaffActionCommand) => void | Promise<void>;
 }) {
   const [password, setPassword] = useState('');
+  const [statusValue, setStatusValue] = useState<'ACTIVE' | 'DISABLED'>(
+    staff.assignmentActive ? 'ACTIVE' : 'DISABLED',
+  );
   const [removalConfirmed, setRemovalConfirmed] = useState(false);
   const [bundles, setBundles] = useState<string[]>(
     staff.previousAuthorityBundles.length
@@ -76,7 +80,8 @@ export function StaffActionDrawer({
   const activeCoverage = staff.substituteCoverages.find(
     (coverage) => coverage.status === 'ACTIVE',
   );
-  const needsPassword = isClinic && replacementRequired;
+  const activating = !staff.assignmentActive && statusValue === 'ACTIVE';
+  const needsPassword = isClinic && activating && replacementRequired;
   const toggle = (value: string) =>
     setBundles((current) =>
       current.includes(value)
@@ -171,26 +176,39 @@ export function StaffActionDrawer({
   }
 
   function submitEdit() {
-    if (staff.assignmentActive) {
-      if (isClinic) void onSubmit({ type: 'DISABLE' });
-      else if (activeCoverage)
+    if (isClinic) {
+      if (statusValue === 'DISABLED') {
+        if (staff.assignmentActive) void onSubmit({ type: 'DISABLE' });
+        return;
+      }
+      if (staff.assignmentActive) {
         void onSubmit({
-          type: 'CANCEL_COVERAGE',
-          coverageId: activeCoverage.id,
+          type: 'UPDATE_CLINIC_AUTHORITY',
+          authorityBundles: bundles,
         });
-    } else if (isClinic)
+        return;
+      }
       void onSubmit({
         type: 'ACTIVATE_CLINIC',
         authorityBundles: bundles,
         ...(replacementRequired ? { password } : {}),
       });
-    else
-      void onSubmit({
-        type: 'ACTIVATE_SUBSTITUTE',
-        coverageMode,
-        fromServiceDate: fromDate,
-        toServiceDate: toDate,
-      });
+      return;
+    }
+    if (statusValue === 'DISABLED') {
+      if (staff.assignmentActive && activeCoverage)
+        void onSubmit({
+          type: 'CANCEL_COVERAGE',
+          coverageId: activeCoverage.id,
+        });
+      return;
+    }
+    void onSubmit({
+      type: 'ACTIVATE_SUBSTITUTE',
+      coverageMode,
+      fromServiceDate: fromDate,
+      toServiceDate: toDate,
+    });
   }
 
   return (
@@ -224,26 +242,23 @@ export function StaffActionDrawer({
             <div>
               <dt>Status</dt>
               <dd>
-                {staff.assignmentActive
-                  ? 'Active'
-                  : 'Disabled (at this clinic)'}
+                <select
+                  aria-label="Secretary status"
+                  value={statusValue}
+                  onChange={(event) =>
+                    setStatusValue(event.target.value as 'ACTIVE' | 'DISABLED')
+                  }
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="DISABLED">Disabled</option>
+                </select>
               </dd>
             </div>
           </dl>
-          {staff.assignmentActive ? (
-            <div className="staff-replacement-warning">
-              <strong>Disable at this clinic?</strong>
-              <p>
-                {isClinic
-                  ? 'This ends the Clinic Secretary assignment and revokes clinic authority. Their account and assignments at other clinics remain unaffected.'
-                  : 'This cancels the active substitute coverage. Their account and other clinic assignments remain unaffected.'}
-              </p>
-            </div>
-          ) : isClinic ? (
+          {isClinic ? (
             <>
               <p className="staff-action-copy">
-                Choose at least one authority bundle before reactivating this
-                Clinic Secretary.
+                Select the authority bundles available to this Clinic Secretary.
               </p>
               <div className="staff-bundle-list">
                 {AUTHORITY_BUNDLES.map(([value, label]) => (
@@ -251,6 +266,7 @@ export function StaffActionDrawer({
                     <input
                       type="checkbox"
                       checked={bundles.includes(value)}
+                      disabled={statusValue === 'DISABLED'}
                       onChange={() => toggle(value)}
                     />{' '}
                     <span>
@@ -259,63 +275,80 @@ export function StaffActionDrawer({
                   </label>
                 ))}
               </div>
-              {replacementRequired ? (
-                <div className="staff-replacement-warning">
-                  <strong>
-                    This will replace the current Clinic Secretary.
-                  </strong>
-                  <p>
-                    The current assignment will be disabled at this clinic only.
-                  </p>
-                </div>
-              ) : null}
             </>
-          ) : (
+          ) : null}
+          {statusValue === 'DISABLED' && staff.assignmentActive ? (
+            <div className="staff-replacement-warning">
+              <strong>Disable at this clinic?</strong>
+              <p>
+                {isClinic
+                  ? 'This ends the Clinic Secretary assignment and revokes clinic authority. Their account and assignments at other clinics remain unaffected.'
+                  : 'This cancels the active substitute coverage. Their account and other clinic assignments remain unaffected.'}
+              </p>
+            </div>
+          ) : isClinic && activating ? (
+            replacementRequired ? (
+              <div className="staff-replacement-warning">
+                <strong>This will replace the current Clinic Secretary.</strong>
+                <p>
+                  The current assignment will be disabled at this clinic only.
+                </p>
+              </div>
+            ) : null
+          ) : !isClinic && statusValue === 'ACTIVE' ? (
             <>
               <p className="staff-action-copy">
-                Set new substitute coverage dates.
+                Substitute authority is limited to live clinic and queue
+                operations for the selected coverage dates.
               </p>
-              <label className="staff-radio">
-                <input
-                  type="radio"
-                  checked={coverageMode === 'ONE_SERVICE_DATE'}
-                  onChange={() => setCoverageMode('ONE_SERVICE_DATE')}
-                />{' '}
-                One Clinic Day
-              </label>
-              <label className="staff-radio">
-                <input
-                  type="radio"
-                  checked={coverageMode === 'DATE_RANGE'}
-                  onChange={() => setCoverageMode('DATE_RANGE')}
-                />{' '}
-                Date Range
-              </label>
-              <div className="staff-date-fields">
-                <label>
-                  From
-                  <input
-                    type="date"
-                    value={fromDate}
-                    onChange={(event) => {
-                      setFromDate(event.target.value);
-                      if (coverageMode === 'ONE_SERVICE_DATE')
-                        setToDate(event.target.value);
-                    }}
-                  />
-                </label>
-                <label>
-                  To
-                  <input
-                    type="date"
-                    disabled={coverageMode === 'ONE_SERVICE_DATE'}
-                    value={toDate}
-                    onChange={(event) => setToDate(event.target.value)}
-                  />
-                </label>
-              </div>
+              {!staff.assignmentActive ? (
+                <>
+                  <p className="staff-action-copy">
+                    Set new substitute coverage dates.
+                  </p>
+                  <label className="staff-radio">
+                    <input
+                      type="radio"
+                      checked={coverageMode === 'ONE_SERVICE_DATE'}
+                      onChange={() => setCoverageMode('ONE_SERVICE_DATE')}
+                    />{' '}
+                    One Clinic Day
+                  </label>
+                  <label className="staff-radio">
+                    <input
+                      type="radio"
+                      checked={coverageMode === 'DATE_RANGE'}
+                      onChange={() => setCoverageMode('DATE_RANGE')}
+                    />{' '}
+                    Date Range
+                  </label>
+                  <div className="staff-date-fields">
+                    <label>
+                      From
+                      <input
+                        type="date"
+                        value={fromDate}
+                        onChange={(event) => {
+                          setFromDate(event.target.value);
+                          if (coverageMode === 'ONE_SERVICE_DATE')
+                            setToDate(event.target.value);
+                        }}
+                      />
+                    </label>
+                    <label>
+                      To
+                      <input
+                        type="date"
+                        disabled={coverageMode === 'ONE_SERVICE_DATE'}
+                        value={toDate}
+                        onChange={(event) => setToDate(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </>
+              ) : null}
             </>
-          )}
+          ) : null}
         </>
       ) : (
         <div className="staff-removal-impact">
@@ -444,12 +477,13 @@ export function StaffActionDrawer({
             (mode === 'REMOVE' && removalConfirmed && !password) ||
             (mode === 'EDIT' && needsPassword && !password) ||
             (mode === 'EDIT' &&
-              !staff.assignmentActive &&
+              statusValue === 'ACTIVE' &&
               isClinic &&
               bundles.length === 0) ||
             (mode === 'EDIT' &&
               !staff.assignmentActive &&
               !isClinic &&
+              statusValue === 'ACTIVE' &&
               (!fromDate || !toDate || fromDate > toDate))
           }
           onClick={
@@ -463,9 +497,7 @@ export function StaffActionDrawer({
           {pending
             ? 'Updating…'
             : mode === 'EDIT'
-              ? staff.assignmentActive
-                ? 'Disable at this clinic'
-                : 'Activate at this clinic'
+              ? 'Save Changes'
               : removalConfirmed
                 ? 'Permanently Remove'
                 : 'Proceed with Removal'}

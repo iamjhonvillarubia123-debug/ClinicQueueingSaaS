@@ -407,18 +407,46 @@ describe('ClinicStaffView', () => {
         onSubmit={onSubmit}
       />,
     );
+    await user.selectOptions(
+      screen.getByLabelText('Secretary status'),
+      'DISABLED',
+    );
     expect(
-      screen.getByText(
-        /account and assignments at other clinics remain unaffected/i,
-      ),
+      screen.getByText(/assignments at other clinics remain unaffected/i),
     ).toBeInTheDocument();
     expect(
       screen.queryByLabelText(/current password/i),
     ).not.toBeInTheDocument();
-    await user.click(
-      screen.getByRole('button', { name: 'Disable at this clinic' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
     expect(onSubmit).toHaveBeenCalledWith({ type: 'DISABLE' });
+  });
+
+  it('edits active Clinic Secretary authority without changing status', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <StaffActionDrawer
+        staff={staff.staffAssignments[0]}
+        mode="EDIT"
+        replacementRequired={false}
+        pending={false}
+        message=""
+        clinicName="North Clinic"
+        onClose={() => undefined}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.getByLabelText('Secretary status')).toHaveValue('ACTIVE');
+    await user.click(screen.getByText('Appointments & Patient Intake'));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      type: 'UPDATE_CLINIC_AUTHORITY',
+      authorityBundles: [
+        'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+        'APPOINTMENTS_AND_PATIENT_INTAKE',
+      ],
+    });
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
   });
   it('allows a disabled clinic connection to be removed while preserving audit history', async () => {
     const user = userEvent.setup();

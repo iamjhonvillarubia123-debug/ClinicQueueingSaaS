@@ -2,6 +2,7 @@ import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ClinicSecretaryAuthorityService } from './clinic-secretary-authority.service';
+import { ClinicSecretaryAuthorityBundle } from './secretary-authority.types';
 
 describe('ClinicSecretaryAuthorityService removal impact', () => {
   const prisma = {
@@ -19,6 +20,7 @@ describe('ClinicSecretaryAuthorityService removal impact', () => {
     clinicDayOperatingStaffAudit: { create: jest.fn() },
     appointment: { count: jest.fn() },
     $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     $transaction: jest.fn(),
   };
   const passwords = { verify: jest.fn() };
@@ -85,6 +87,49 @@ describe('ClinicSecretaryAuthorityService removal impact', () => {
         auditHistoryPreserved: true,
       }),
     );
+  });
+
+  it('updates authority bundles for the owned active Clinic Secretary', async () => {
+    prisma.practiceStaff.findFirst.mockResolvedValue({
+      id: 'staff-1',
+      practiceLocationId: 'clinic-1',
+    });
+    prisma.$queryRaw
+      .mockResolvedValueOnce([
+        {
+          id: 'clinic-1',
+          doctorUserId: 'doctor-1',
+          lifecycleStatus: 'ACTIVE',
+          currentRegularPracticeStaffId: 'staff-1',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'staff-1',
+          userId: 'secretary-1',
+          practiceLocationId: 'clinic-1',
+          staffRole: 'SECRETARY',
+          isActive: true,
+        },
+      ]);
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'doctor-1',
+      role: 'DOCTOR',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+    });
+
+    await expect(
+      service.updateAuthority('doctor-1', 'staff-1', {
+        authorityBundles: [
+          ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+          ClinicSecretaryAuthorityBundle.APPOINTMENTS_AND_PATIENT_INTAKE,
+        ],
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ practiceStaffId: 'staff-1', updated: true }),
+    );
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(3);
   });
 
   it('does not disclose a relationship outside Doctor ownership', async () => {

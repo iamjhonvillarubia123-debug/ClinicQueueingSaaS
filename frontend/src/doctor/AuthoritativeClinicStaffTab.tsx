@@ -517,6 +517,14 @@ export function AuthoritativeClinicStaffTab({
           headers: { 'Idempotency-Key': crypto.randomUUID() },
           body: { practiceLocationId: clinicId },
         });
+      } else if (command.type === 'UPDATE_CLINIC_AUTHORITY') {
+        await apiRequest(
+          `/practice-staff/regular/${encodeURIComponent(staff.practiceStaffId)}/authority`,
+          {
+            method: 'PATCH',
+            body: { authorityBundles: command.authorityBundles },
+          },
+        );
       } else if (command.type === 'ACTIVATE_CLINIC') {
         const replacing = data?.staffAssignments.some(
           (item) => item.isClinicSecretary && item.assignmentActive,

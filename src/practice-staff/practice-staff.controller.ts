@@ -5,6 +5,7 @@ import {
   Get,
   Headers,
   Param,
+  Patch,
   Post,
   Request,
   UseGuards,
@@ -19,6 +20,7 @@ import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
 import { RemoveRegularSecretaryDto } from './dto/remove-regular-secretary.dto';
 import { RemovePracticeStaffRelationshipDto } from './dto/remove-practice-staff-relationship.dto';
 import { ReplaceRegularSecretaryDto } from './dto/replace-regular-secretary.dto';
+import { UpdateClinicSecretaryAuthorityDto } from './dto/update-clinic-secretary-authority.dto';
 
 @Controller('practice-staff')
 export class PracticeStaffController {
@@ -65,6 +67,20 @@ export class PracticeStaffController {
       request.user.userId,
       dto,
       idempotencyKey,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('regular/:practiceStaffId/authority')
+  updateRegularAuthority(
+    @Param('practiceStaffId') practiceStaffId: string,
+    @Body() dto: UpdateClinicSecretaryAuthorityDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.clinicSecretaryAuthorityService.updateAuthority(
+      request.user.userId,
+      practiceStaffId,
+      dto,
     );
   }
 
