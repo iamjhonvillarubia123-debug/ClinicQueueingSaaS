@@ -20,6 +20,7 @@ describe('SecretaryInvitationService', () => {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     notificationOutbox: {
       create: jest.fn(),
@@ -215,20 +216,11 @@ describe('SecretaryInvitationService', () => {
   });
 
   it('revokes a pending invitation while preserving its audit row', async () => {
-    transaction.$queryRaw.mockResolvedValue([{ id: 'invite-1' }]);
-    transaction.secretaryInvitation.findFirst.mockResolvedValue({
-      id: 'invite-1',
-    });
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({ id: 'invite-1' });
+    transaction.secretaryInvitation.updateMany.mockResolvedValue({ count: 1 });
     await service.revokePending('doctor-1', 'invite-1');
-    expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
-      where: { id: 'invite-1' },
-      data: expect.objectContaining({
-        status: 'REVOKED',
-        activeInvitationKey: null,
-      }) as unknown,
-    });
-    expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
-      where: { id: 'invite-1' },
+    expect(transaction.secretaryInvitation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'invite-1', status: 'PENDING' },
       data: {
         status: 'REVOKED',
         revokedAt: expect.any(Date) as unknown,

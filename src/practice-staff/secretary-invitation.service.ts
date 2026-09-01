@@ -274,28 +274,30 @@ export class SecretaryInvitationService {
   }
 
   async revokePending(actorUserId: string, invitationId: string) {
+    const invitation = await this.prisma.secretaryInvitation.findFirst({
+      where: {
+        id: invitationId,
+        status: SecretaryInvitationStatus.PENDING,
+        practiceLocation: { doctorProfile: { userId: actorUserId } },
+      },
+      select: { id: true },
+    });
+    if (!invitation)
+      throw new NotFoundException('Pending invitation was not found.');
     const now = new Date();
     const removed = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw<Array<{ id: string }>>(
-        Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "id" = ${invitationId} LIMIT 1 FOR UPDATE`,
-      );
-      const invitation = await tx.secretaryInvitation.findFirst({
+      const result = await tx.secretaryInvitation.updateMany({
         where: {
-          id: invitationId,
+          id: invitation.id,
           status: SecretaryInvitationStatus.PENDING,
-          practiceLocation: { doctorProfile: { userId: actorUserId } },
         },
-        select: { id: true },
-      });
-      if (!invitation) return false;
-      await tx.secretaryInvitation.update({
-        where: { id: invitation.id },
         data: {
           status: SecretaryInvitationStatus.REVOKED,
           revokedAt: now,
           activeInvitationKey: null,
         },
       });
+      if (result.count !== 1) return false;
       await tx.notificationOutbox.updateMany({
         where: {
           secretaryInvitationId: invitation.id,
@@ -309,7 +311,9 @@ export class SecretaryInvitationService {
       return true;
     });
     if (!removed)
-      throw new NotFoundException('Pending invitation was not found.');
+      throw new ConflictException(
+        'This invitation is no longer pending and cannot be cancelled.',
+      );
     return { invitationId, removed: true };
   }
 
