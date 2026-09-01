@@ -17,6 +17,7 @@ export class PracticeLocationStaffReadService {
         name: true,
         currentRegularPracticeStaffId: true,
         staffAssignments: {
+          where: { disconnectedAt: null },
           orderBy: [{ isActive: 'desc' }, { activatedAt: 'asc' }],
           select: {
             id: true,
@@ -65,6 +66,12 @@ export class PracticeLocationStaffReadService {
             normalizedEmail: true,
             mobileNumber: true,
             status: true,
+            requestedAssignmentType: true,
+            requestedAuthorityBundles: true,
+            requestedCancelClinicDay: true,
+            requestedCoverageMode: true,
+            requestedFromServiceDate: true,
+            requestedToServiceDate: true,
             expiresAt: true,
             createdAt: true,
           },
@@ -81,14 +88,12 @@ export class PracticeLocationStaffReadService {
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
         emailVerifiedAt: { not: null },
-        OR: [
-          {
-            practiceStaffAssignments: {
-              some: { practiceLocation: { doctorProfile: { userId } } },
-            },
+        practiceStaffAssignments: {
+          some: {
+            disconnectedAt: null,
+            practiceLocation: { doctorProfile: { userId } },
           },
-          { secretaryInvitationAccepted: { practiceLocationId } },
-        ],
+        },
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: {
@@ -147,6 +152,12 @@ export class PracticeLocationStaffReadService {
         email: invitation.normalizedEmail,
         mobileNumber: invitation.mobileNumber,
         status: invitation.status,
+        assignmentType: invitation.requestedAssignmentType,
+        authorityBundles: invitation.requestedAuthorityBundles,
+        requestedCancelClinicDay: invitation.requestedCancelClinicDay,
+        coverageMode: invitation.requestedCoverageMode,
+        fromServiceDate: invitation.requestedFromServiceDate,
+        toServiceDate: invitation.requestedToServiceDate,
         invitedAt: invitation.createdAt,
         expiresAt: invitation.expiresAt,
       })),
@@ -186,6 +197,7 @@ export class PracticeLocationStaffReadService {
           },
         },
         staffAssignments: {
+          where: { disconnectedAt: null },
           orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
           select: {
             id: true,

@@ -719,10 +719,11 @@ export class PracticeStaffService {
   }
 
   private async assertPassword(
-    password: string,
+    password: string | undefined,
     passwordHash: string | undefined,
   ): Promise<void> {
     if (
+      !password ||
       !passwordHash ||
       !(await this.passwordSecurityService.verify(password, passwordHash))
     ) {

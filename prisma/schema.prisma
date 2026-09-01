@@ -237,6 +237,11 @@ enum SecretaryInvitationStatus {
   EXPIRED
 }
 
+enum SecretaryInvitationAssignmentType {
+  CLINIC_SECRETARY
+  SUBSTITUTE_SECRETARY
+}
+
 enum SecretaryAccessProfile {
   STANDARD
   FULL_CLINIC_CONFIGURATION
@@ -521,7 +526,7 @@ model User {
   substituteCoveragesCreated SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageCreatedBy")
   substituteCoveragesEnded SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageEndedBy")
   secretaryInvitationsSent SecretaryInvitation[] @relation("SecretaryInvitationInvitedBy")
-  secretaryInvitationAccepted SecretaryInvitation? @relation("SecretaryInvitationAcceptedUser")
+  acceptedSecretaryInvitations SecretaryInvitation[] @relation("SecretaryInvitationAcceptedUser")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
   createdScheduledReminders        ScheduledReminder[]                  @relation("ScheduledReminderCreatedBy")
@@ -848,6 +853,7 @@ model PracticeStaff {
   isActive Boolean @default(true)
   activatedAt DateTime @default(now()) @db.Timestamptz(3)
   deactivatedAt DateTime? @db.Timestamptz(3)
+  disconnectedAt DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -869,6 +875,7 @@ model PracticeStaff {
   @@index([practiceLocationId, isActive])
   @@index([userId, isActive])
   @@index([practiceLocationId, isActive, activatedAt], map: "PracticeStaff_location_active_activated_idx")
+  @@index([practiceLocationId, disconnectedAt], map: "PracticeStaff_location_disconnected_idx")
 }
 
 model SecretaryInvitation {
@@ -884,7 +891,7 @@ model SecretaryInvitation {
   status SecretaryInvitationStatus @default(PENDING)
   expiresAt DateTime @db.Timestamptz(3)
   acceptedAt DateTime? @db.Timestamptz(3)
-  acceptedUserId String? @unique
+  acceptedUserId String?
   revokedAt DateTime? @db.Timestamptz(3)
   requestedAccessProfile SecretaryAccessProfile @default(STANDARD)
   requestedCanManageClinicDetails Boolean @default(false)
@@ -893,6 +900,12 @@ model SecretaryInvitation {
   requestedCanManageSchedules Boolean @default(false)
   requestedCancelClinicDay Boolean @default(false)
   requestedAssignDaySecretary Boolean @default(false)
+  requestedAssignmentType SecretaryInvitationAssignmentType?
+  requestedAuthorityBundles PracticeStaffAuthorityBundleType[] @default([])
+  requestedCoverageMode SubstituteSecretaryCoverageMode?
+  requestedFromServiceDate DateTime? @db.Date
+  requestedToServiceDate DateTime? @db.Date
+  expectedCurrentPracticeStaffId String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
@@ -903,6 +916,7 @@ model SecretaryInvitation {
   @@index([status, expiresAt])
   @@index([practiceLocationId, createdAt])
   @@index([invitedByUserId, createdAt])
+  @@index([acceptedUserId])
 }
 
 model PracticeStaffAuthorityBundle {

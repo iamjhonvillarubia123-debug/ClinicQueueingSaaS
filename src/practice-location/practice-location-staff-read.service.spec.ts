@@ -52,6 +52,16 @@ describe('PracticeLocationStaffReadService', () => {
 
     const result = await service.getClinicStaff('doctor-1', 'clinic-1');
 
+    expect(prisma.practiceLocation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          staffAssignments: expect.objectContaining({
+            where: { disconnectedAt: null },
+          }) as unknown,
+        }) as unknown,
+      }),
+    );
+
     expect(result.staffAssignments[0]).toEqual(
       expect.objectContaining({
         practiceStaffId: 'staff-1',
@@ -71,7 +81,7 @@ describe('PracticeLocationStaffReadService', () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
-  it('limits existing candidates to verified active Secretaries associated with the Doctor', async () => {
+  it('returns active verified Secretary accounts as eligible existing candidates', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -97,16 +107,12 @@ describe('PracticeLocationStaffReadService', () => {
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
           emailVerifiedAt: { not: null },
-          OR: expect.arrayContaining([
-            {
-              practiceStaffAssignments: {
-                some: {
-                  practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
-                },
-              },
+          practiceStaffAssignments: {
+            some: {
+              disconnectedAt: null,
+              practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
             },
-            { secretaryInvitationAccepted: { practiceLocationId: 'clinic-1' } },
-          ]) as unknown,
+          },
         }) as unknown,
       }),
     );

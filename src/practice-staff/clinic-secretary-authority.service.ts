@@ -337,10 +337,9 @@ export class ClinicSecretaryAuthorityService {
       const actor = await this.readDoctor(
         transaction,
         authenticatedUserId,
-        true,
+        false,
       );
       this.assertCurrentDoctor(actor);
-      await this.assertPassword(dto.password, actor?.passwordHash);
 
       const replay = await transaction.commandIdempotency.findUnique({
         where: { commandIdentityKey },
@@ -410,6 +409,220 @@ export class ClinicSecretaryAuthorityService {
         disabledPracticeStaffId: previousAssignment.id,
       };
     });
+  }
+
+  async disconnectRelationship(
+    authenticatedUserId: string,
+    practiceStaffId: string,
+    password: string,
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const assignment = await transaction.practiceStaff.findFirst({
+        where: {
+          id: practiceStaffId,
+          disconnectedAt: null,
+          practiceLocation: {
+            doctorProfile: { userId: authenticatedUserId },
+          },
+        },
+        select: {
+          id: true,
+          practiceLocationId: true,
+          practiceLocation: { select: { currentRegularPracticeStaffId: true } },
+        },
+      });
+      if (!assignment)
+        throw new NotFoundException(
+          'Secretary clinic connection was not found.',
+        );
+
+      const actor = await this.readDoctor(
+        transaction,
+        authenticatedUserId,
+        true,
+      );
+      this.assertCurrentDoctor(actor);
+      await this.assertPassword(password, actor?.passwordHash);
+      const now = new Date();
+
+      if (
+        assignment.practiceLocation.currentRegularPracticeStaffId ===
+        assignment.id
+      ) {
+        await transaction.practiceLocation.update({
+          where: { id: assignment.practiceLocationId },
+          data: { currentRegularPracticeStaffId: null },
+        });
+      }
+      await this.reconcileOutgoingOperatingAuthority(
+        transaction,
+        assignment.practiceLocationId,
+        assignment.id,
+        authenticatedUserId,
+        now,
+      );
+      await transaction.practiceStaffCapability.updateMany({
+        where: { practiceStaffId: assignment.id, status: 'ACTIVE' },
+        data: {
+          status: 'REVOKED',
+          activeCapabilityKey: null,
+          revokedByUserId: authenticatedUserId,
+          revokedAt: now,
+        },
+      });
+      await transaction.practiceStaffAuthorityBundle.updateMany({
+        where: { practiceStaffId: assignment.id, status: 'ACTIVE' },
+        data: {
+          status: 'REVOKED',
+          revokedByUserId: authenticatedUserId,
+          revokedAt: now,
+        },
+      });
+      const activeCoverages =
+        await transaction.substituteSecretaryCoverage.findMany({
+          where: { practiceStaffId: assignment.id, status: 'ACTIVE' },
+          select: { id: true },
+        });
+      const activeCoverageIds = activeCoverages.map(({ id }) => id);
+      if (activeCoverageIds.length) {
+        await transaction.substituteSecretaryCoverageDate.updateMany({
+          where: { coverageId: { in: activeCoverageIds }, status: 'ACTIVE' },
+          data: { status: 'CANCELLED', endedAt: now },
+        });
+        await transaction.substituteSecretaryCoverage.updateMany({
+          where: { id: { in: activeCoverageIds } },
+          data: {
+            status: 'CANCELLED',
+            endedByUserId: authenticatedUserId,
+            endedAt: now,
+          },
+        });
+      }
+      await transaction.practiceStaff.update({
+        where: { id: assignment.id },
+        data: {
+          isActive: false,
+          deactivatedAt: now,
+          disconnectedAt: now,
+        },
+      });
+      return { practiceStaffId: assignment.id, removed: true };
+    });
+  }
+
+  async getRemovalImpact(authenticatedUserId: string, practiceStaffId: string) {
+    const assignment = await this.prisma.practiceStaff.findFirst({
+      where: {
+        id: practiceStaffId,
+        disconnectedAt: null,
+        practiceLocation: {
+          doctorProfile: { userId: authenticatedUserId },
+        },
+      },
+      select: {
+        id: true,
+        isActive: true,
+        practiceLocationId: true,
+        practiceLocation: {
+          select: {
+            name: true,
+            currentRegularPracticeStaffId: true,
+          },
+        },
+        substituteSecretaryCoverages: {
+          where: { status: 'ACTIVE' },
+          orderBy: { fromServiceDate: 'asc' },
+          select: {
+            id: true,
+            coverageMode: true,
+            fromServiceDate: true,
+            toServiceDate: true,
+          },
+        },
+        authoredSecretarySettingsDrafts: {
+          where: {
+            status: { in: ['DRAFT', 'SUBMITTED', 'RETURNED_FOR_REWORK'] },
+          },
+          select: { id: true, status: true },
+        },
+      },
+    });
+    if (!assignment)
+      throw new NotFoundException('Secretary clinic connection was not found.');
+
+    const operatingClinicDays = await this.prisma.clinicDay.findMany({
+      where: {
+        operatingPracticeStaffId: assignment.id,
+        status: { in: ['NOT_STARTED', 'DELAYED', 'STARTED'] },
+      },
+      orderBy: { serviceDate: 'asc' },
+      select: { id: true, serviceDate: true, status: true },
+    });
+    const isCurrentClinicSecretary =
+      assignment.practiceLocation.currentRegularPracticeStaffId ===
+      assignment.id;
+    const relevantDates = [
+      ...new Set([
+        ...operatingClinicDays.map(({ serviceDate }) =>
+          serviceDate.toISOString().slice(0, 10),
+        ),
+        ...assignment.substituteSecretaryCoverages.flatMap((coverage) => {
+          const dates: string[] = [];
+          const cursor = new Date(coverage.fromServiceDate);
+          while (cursor <= coverage.toServiceDate) {
+            dates.push(cursor.toISOString().slice(0, 10));
+            cursor.setUTCDate(cursor.getUTCDate() + 1);
+          }
+          return dates;
+        }),
+      ]),
+    ];
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const appointmentWhere: Prisma.AppointmentWhereInput = {
+      practiceLocationId: assignment.practiceLocationId,
+      status: {
+        in: ['WAITING', 'CALLED', 'TEMPORARILY_ABSENT', 'OUT_FOR_PROCEDURE'],
+      },
+      ...(isCurrentClinicSecretary
+        ? { serviceDate: { gte: today } }
+        : relevantDates.length
+          ? {
+              serviceDate: {
+                in: relevantDates.map(
+                  (value) => new Date(`${value}T00:00:00.000Z`),
+                ),
+              },
+            }
+          : { id: { equals: '__none__' } }),
+    };
+    const bookedAppointmentCount = await this.prisma.appointment.count({
+      where: appointmentWhere,
+    });
+
+    return {
+      practiceStaffId: assignment.id,
+      clinicName: assignment.practiceLocation.name,
+      assignmentActive: assignment.isActive,
+      isCurrentClinicSecretary,
+      clinicWillHaveNoCurrentSecretary: isCurrentClinicSecretary,
+      operatingClinicDays: operatingClinicDays.map((day) => ({
+        serviceDate: day.serviceDate.toISOString().slice(0, 10),
+        status: day.status,
+      })),
+      activeSubstituteCoverages: assignment.substituteSecretaryCoverages.map(
+        (coverage) => ({
+          coverageMode: coverage.coverageMode,
+          fromServiceDate: coverage.fromServiceDate.toISOString().slice(0, 10),
+          toServiceDate: coverage.toServiceDate.toISOString().slice(0, 10),
+        }),
+      ),
+      pendingConfigurationDraftCount:
+        assignment.authoredSecretarySettingsDrafts.length,
+      bookedAppointmentCount,
+      bookingsRemainScheduled: true,
+      auditHistoryPreserved: true,
+    };
   }
 
   private normalizeBundles(
@@ -492,6 +705,7 @@ export class ClinicSecretaryAuthorityService {
             "isActive" = TRUE,
             "activatedAt" = ${now},
             "deactivatedAt" = NULL,
+            "disconnectedAt" = NULL,
             "updatedAt" = ${now}
           WHERE "id" = ${existing.id}
         `);

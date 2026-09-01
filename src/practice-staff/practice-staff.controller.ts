@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
+  Get,
   Headers,
+  Param,
   Post,
   Request,
   UseGuards,
@@ -14,6 +17,7 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { ClinicSecretaryAuthorityService } from './clinic-secretary-authority.service';
 import { AssignPracticeStaffDto } from './dto/assign-practice-staff.dto';
 import { RemoveRegularSecretaryDto } from './dto/remove-regular-secretary.dto';
+import { RemovePracticeStaffRelationshipDto } from './dto/remove-practice-staff-relationship.dto';
 import { ReplaceRegularSecretaryDto } from './dto/replace-regular-secretary.dto';
 
 @Controller('practice-staff')
@@ -61,6 +65,32 @@ export class PracticeStaffController {
       request.user.userId,
       dto,
       idempotencyKey,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Delete('relationships/:practiceStaffId')
+  disconnectRelationship(
+    @Param('practiceStaffId') practiceStaffId: string,
+    @Body() dto: RemovePracticeStaffRelationshipDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.clinicSecretaryAuthorityService.disconnectRelationship(
+      request.user.userId,
+      practiceStaffId,
+      dto.password,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get('relationships/:practiceStaffId/removal-impact')
+  getRemovalImpact(
+    @Param('practiceStaffId') practiceStaffId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.clinicSecretaryAuthorityService.getRemovalImpact(
+      request.user.userId,
+      practiceStaffId,
     );
   }
 }

@@ -1,9 +1,16 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
-import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClinicSecretaryAuthorityBundle } from './secretary-authority.types';
+import { SecretaryInvitationAssignmentType } from './dto/create-secretary-invitation.dto';
 import { SecretaryInvitationService } from './secretary-invitation.service';
 
 describe('SecretaryInvitationService', () => {
@@ -13,141 +20,265 @@ describe('SecretaryInvitationService', () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
-    notificationOutbox: { create: jest.fn(), update: jest.fn() },
-    user: { findFirst: jest.fn(), create: jest.fn() },
+    notificationOutbox: {
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    user: { findUnique: jest.fn() },
+    practiceStaff: { create: jest.fn(), update: jest.fn() },
+    practiceLocation: { update: jest.fn() },
+    practiceStaffAuthorityBundle: { updateMany: jest.fn() },
+    practiceStaffCapability: { updateMany: jest.fn(), create: jest.fn() },
+    clinicDay: { findMany: jest.fn() },
+    clinicDayOperatingStaffAudit: { create: jest.fn() },
+    substituteSecretaryCoverageDate: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    substituteSecretaryCoverage: { create: jest.fn() },
     $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
   };
   const prisma = {
     practiceLocation: { findFirst: jest.fn() },
-    user: { findFirst: jest.fn() },
-    secretaryInvitation: { findUnique: jest.fn(), findFirst: jest.fn() },
+    user: { findFirst: jest.fn(), findUnique: jest.fn() },
+    secretaryInvitation: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
     $transaction: jest.fn((callback: (tx: typeof transaction) => unknown) =>
       callback(transaction),
     ),
   };
-  const config = { get: jest.fn(() => 'https://clinic.example') };
-  const payload = {
-    encrypt: jest.fn(
-      (value: string, purpose: string) => `encrypted:${purpose}:${value}`,
-    ),
-  };
-  const passwords = { hash: jest.fn(() => Promise.resolve('password-hash')) };
+  const payload = { encrypt: jest.fn((value: string) => `encrypted:${value}`) };
+  const passwords = { verify: jest.fn() };
   const service = new SecretaryInvitationService(
     prisma as unknown as PrismaService,
-    config as unknown as ConfigService,
+    {
+      get: jest.fn(() => 'https://clinic.example'),
+    } as unknown as ConfigService,
     payload as unknown as ProtectedAccountPayloadService,
     passwords as unknown as PasswordSecurityService,
   );
+  const clinicPlan = {
+    practiceLocationId: 'clinic-1',
+    firstName: 'Jane',
+    lastName: 'Reyes',
+    email: 'jane@example.test',
+    mobileNumber: '09183334444',
+    assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
+    authorityBundles: [
+      ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+    ],
+  };
 
-  beforeEach(() => jest.clearAllMocks());
-
-  it('does not disclose or invite into a clinic outside Doctor ownership', async () => {
-    prisma.practiceLocation.findFirst.mockResolvedValue(null);
-    await expect(
-      service.create('doctor-1', {
-        practiceLocationId: 'clinic-2',
-        firstName: 'Jane',
-        lastName: 'Reyes',
-        email: 'jane@example.test',
-        mobileNumber: '09183334444',
-      }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('requires an existing account to use the existing Secretary flow', async () => {
-    prisma.practiceLocation.findFirst.mockResolvedValue({
-      id: 'clinic-1',
-      name: 'North Clinic',
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma.user.findUnique.mockResolvedValue({
+      role: 'DOCTOR',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+      passwordHash: 'doctor-hash',
     });
-    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
-    await expect(
-      service.create('doctor-1', {
-        practiceLocationId: 'clinic-1',
-        firstName: 'Jane',
-        lastName: 'Reyes',
-        email: 'JANE@example.test',
-        mobileNumber: '09183334444',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('creates a pending invitation and protected email without a Doctor-set password', async () => {
+  it('requires a role-specific assignment plan', async () => {
+    await expect(
+      service.create('doctor-1', { ...clinicPlan, authorityBundles: [] }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not disclose a clinic outside Doctor ownership', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue(null);
+    await expect(service.create('doctor-1', clinicPlan)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('rejects an existing account with an incompatible role', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
+    });
+    prisma.user.findFirst.mockResolvedValue({ role: 'DOCTOR' });
+    await expect(service.create('doctor-1', clinicPlan)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('creates a pending relationship invitation without exposing an unrelated existing Secretary in the directory', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
+    });
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'secretary-1',
+      role: 'SECRETARY',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+      emailVerifiedAt: new Date(),
+      firstName: 'Jane',
+      lastName: 'Reyes',
+      mobileNumber: '09183334444',
+    });
+    prisma.secretaryInvitation.findUnique.mockResolvedValue(null);
+    transaction.secretaryInvitation.create.mockResolvedValue({
+      id: 'invite-existing',
+      status: 'PENDING',
+      expiresAt: new Date(),
+    });
+    transaction.notificationOutbox.create.mockResolvedValue({
+      id: 'outbox-existing',
+    });
+    await service.create('doctor-1', clinicPlan);
+    expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        normalizedEmail: 'jane@example.test',
+        status: 'PENDING',
+      }) as unknown,
+    });
+    expect(
+      JSON.stringify(transaction.secretaryInvitation.create.mock.calls[0]),
+    ).not.toContain('acceptedUserId');
+    expect(transaction.practiceStaff.create).not.toHaveBeenCalled();
+  });
+
+  it('requires and verifies the Doctor password for replacement intent', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: 'staff-current',
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+    await expect(service.create('doctor-1', clinicPlan)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    passwords.verify.mockResolvedValue(false);
+    await expect(
+      service.create('doctor-1', { ...clinicPlan, password: 'wrong' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('requires the Doctor password when planning Cancel Clinic Day authority', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+    await expect(
+      service.create('doctor-1', {
+        ...clinicPlan,
+        requestedCancelClinicDay: true,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(transaction.secretaryInvitation.create).not.toHaveBeenCalled();
+  });
+
+  it('updates only a Doctor-owned pending invitation plan', async () => {
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.secretaryInvitation.update.mockResolvedValue({
+      id: 'invite-1',
+      status: 'PENDING',
+      updatedAt: new Date(),
+    });
+    await service.updatePending('doctor-1', 'invite-1', {
+      assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
+      authorityBundles: [
+        ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+      ],
+    });
+    expect(prisma.secretaryInvitation.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'invite-1',
+          status: 'PENDING',
+          practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
+        }) as unknown,
+      }),
+    );
+    expect(prisma.secretaryInvitation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestedAssignmentType: 'CLINIC_SECRETARY',
+        }) as unknown,
+      }),
+    );
+  });
+
+  it('revokes a pending invitation while preserving its audit row', async () => {
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({ id: 'invite-1' });
+    await service.revokePending('doctor-1', 'invite-1');
+    expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
+      where: { id: 'invite-1' },
+      data: expect.objectContaining({
+        status: 'REVOKED',
+        tokenHash: null,
+        activeInvitationKey: null,
+      }) as unknown,
+    });
+    expect(transaction.notificationOutbox.updateMany).toHaveBeenCalled();
+  });
+
+  it('creates only a pending relationship invitation with assignment intent', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
     });
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.secretaryInvitation.findUnique.mockResolvedValue(null);
     transaction.secretaryInvitation.create.mockResolvedValue({
       id: 'invite-1',
       status: 'PENDING',
-      expiresAt: new Date('2026-09-07T00:00:00.000Z'),
+      expiresAt: new Date(),
     });
     transaction.notificationOutbox.create.mockResolvedValue({ id: 'outbox-1' });
-    await service.create('doctor-1', {
-      practiceLocationId: 'clinic-1',
-      firstName: ' Jane ',
-      lastName: ' Reyes ',
-      email: 'JANE@example.test',
-      mobileNumber: '09183334444',
-    });
+    await service.create('doctor-1', clinicPlan);
     expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        normalizedEmail: 'jane@example.test',
-        firstName: 'Jane',
-        lastName: 'Reyes',
-        status: 'PENDING',
+        requestedAssignmentType: 'CLINIC_SECRETARY',
+        requestedAuthorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
+        expectedCurrentPracticeStaffId: null,
       }) as unknown,
     });
-    expect(transaction.notificationOutbox.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        notificationType: 'SECRETARY_INVITATION',
-        channel: 'EMAIL',
-        secretaryInvitationId: 'invite-1',
-      }) as unknown,
-    });
+    expect(transaction).not.toHaveProperty('user.create');
+    expect(transaction.practiceStaff.create).not.toHaveBeenCalled();
     expect(
       JSON.stringify(transaction.secretaryInvitation.create.mock.calls[0]),
-    ).not.toContain('password');
-    expect(payload.encrypt).toHaveBeenCalledTimes(2);
+    ).not.toContain('doctor-hash');
   });
 
-  it('accepts a valid invitation by creating a verified Secretary account without granting clinic authority', async () => {
+  it('rejects acceptance by an incompatible signed-in role without creating an account', async () => {
     const token = 'valid-token';
     transaction.$queryRaw.mockResolvedValue([{ id: 'invite-1' }]);
     transaction.secretaryInvitation.findUnique.mockResolvedValue({
       id: 'invite-1',
       status: 'PENDING',
       tokenHash: createHash('sha256').update(token).digest('hex'),
-      activeInvitationKey: 'active-key',
+      activeInvitationKey: 'key',
       expiresAt: new Date(Date.now() + 60_000),
-      normalizedEmail: 'jane@example.test',
-      firstName: 'Jane',
-      lastName: 'Reyes',
-      mobileNumber: '09183334444',
-      notificationOutbox: { id: 'outbox-1', status: 'SENT' },
+      requestedAssignmentType: 'CLINIC_SECRETARY',
+      notificationOutbox: null,
     });
-    transaction.user.findFirst.mockResolvedValue(null);
-    transaction.user.create.mockResolvedValue({ id: 'secretary-1' });
-    await expect(service.accept(token, 'Secretary password')).resolves.toEqual({
-      accepted: true,
+    transaction.user.findUnique.mockResolvedValue({
+      id: 'doctor-2',
+      email: 'jane@example.test',
+      role: 'DOCTOR',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+      emailVerifiedAt: new Date(),
     });
-    expect(transaction.user.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        role: 'SECRETARY',
-        emailVerifiedAt: expect.any(Date) as unknown,
-        passwordHash: 'password-hash',
-      }) as unknown,
-    });
-    expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
-      where: { id: 'invite-1' },
-      data: expect.objectContaining({
-        status: 'ACCEPTED',
-        acceptedUserId: 'secretary-1',
-        tokenHash: null,
-        activeInvitationKey: null,
-      }) as unknown,
-    });
-    expect(transaction).not.toHaveProperty('practiceStaff');
+    await expect(service.accept('doctor-2', token)).rejects.toThrow(
+      'Only a signed-in Secretary',
+    );
+    expect(transaction.practiceStaff.create).not.toHaveBeenCalled();
   });
 });

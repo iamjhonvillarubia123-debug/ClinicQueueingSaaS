@@ -31,10 +31,25 @@
   color: #586270;
   font-size: 12px;
 }
-.global-secretaries-page { display: grid; gap: 18px; padding: 4px 0 30px; }
-.global-secretaries-page > header { display: flex; align-items: end; justify-content: space-between; }
-.global-secretaries-page h1 { margin: 0; font-size: 30px; }
-.global-secretaries-page header p { margin: 5px 0 0; color: #586270; font-size: 12px; }
+.global-secretaries-page {
+  display: grid;
+  gap: 18px;
+  padding: 4px 0 30px;
+}
+.global-secretaries-page > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+}
+.global-secretaries-page h1 {
+  margin: 0;
+  font-size: 30px;
+}
+.global-secretaries-page header p {
+  margin: 5px 0 0;
+  color: #586270;
+  font-size: 12px;
+}
 
 .clinic-staff-intro .clinic-staff-primary-button {
   margin: 0;
@@ -73,7 +88,9 @@
 
 .clinic-day-secretary-panel {
   display: grid;
-  grid-template-columns: minmax(230px, 1.15fr) minmax(220px, 1fr) minmax(200px, .85fr) auto;
+  grid-template-columns:
+    minmax(230px, 1.15fr) minmax(220px, 1fr) minmax(200px, 0.85fr)
+    auto;
   gap: 0;
   align-items: stretch;
   border: 1px solid #dce2e8;
@@ -139,7 +156,7 @@
 .clinic-staff-primary-button:disabled,
 .clinic-staff-secondary-button:disabled {
   cursor: not-allowed;
-  opacity: .45;
+  opacity: 0.45;
 }
 
 .clinic-staff-primary-button.is-full,
@@ -197,7 +214,9 @@
 .clinic-staff-table-head,
 .clinic-staff-table-row {
   display: grid;
-  grid-template-columns: minmax(210px, 1.45fr) minmax(110px, .8fr) minmax(120px, .9fr) minmax(120px, .85fr) minmax(145px, 1fr) 76px;
+  grid-template-columns:
+    minmax(210px, 1.45fr) minmax(110px, 0.8fr) minmax(120px, 0.9fr)
+    minmax(120px, 0.85fr) minmax(145px, 1fr) 76px;
   gap: 12px;
   align-items: center;
   padding: 12px 18px;
@@ -293,8 +312,12 @@
 .clinic-staff-status.is-disabled i {
   background: #f2991f;
 }
-.clinic-staff-status.is-pending { color: #6a45c4; }
-.clinic-staff-status.is-pending i { background: #7048cf; }
+.clinic-staff-status.is-pending {
+  color: #6a45c4;
+}
+.clinic-staff-status.is-pending i {
+  background: #7048cf;
+}
 
 .clinic-staff-role {
   justify-self: start;
@@ -320,19 +343,41 @@
 .clinic-staff-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 2px;
 }
 
 .clinic-staff-actions button {
-  min-width: 28px;
-  min-height: 28px;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: 50%;
   background: transparent;
+  color: #344150;
 }
-.clinic-staff-actions svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.clinic-staff-actions button:hover { background: #f1f4f7; }
-.clinic-staff-actions button:last-child:hover { background: #fff1f1; color: #a32222; }
+.clinic-staff-actions svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.clinic-staff-actions button:hover {
+  background: #eef2f6;
+  color: #101820;
+}
+.clinic-staff-actions button:focus-visible {
+  outline: 3px solid rgba(20, 105, 237, 0.25);
+  outline-offset: 2px;
+}
+.clinic-staff-actions button:nth-child(2):hover {
+  background: #fff0f0;
+  color: #b3261e;
+}
 
 .clinic-staff-assigned-at {
   color: #495462;
@@ -678,40 +723,265 @@
   border-radius: 9px;
   background: #fff;
 }
-.staff-drawer-close { position: absolute; top: 12px; right: 12px; border: 0; background: transparent; font-size: 22px; }
-.staff-drawer-step { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #1469ed; color: #fff; font-size: 11px; font-weight: 800; }
-.staff-assignment-drawer h2 { margin: 18px 0 7px; font-size: 17px; }
-.staff-assignment-drawer > p { margin: 0 0 16px; color: #53606e; font-size: 10px; line-height: 1.55; }
-.staff-choice-card { display: grid; gap: 7px; width: 100%; margin-bottom: 12px; padding: 16px; border: 1px solid #d9dfe7; border-radius: 7px; background: #fff; text-align: left; }
-.staff-choice-card.is-selected { border-color: #3980ef; background: #f7faff; }
-.staff-choice-card b { font-size: 11px; }
-.staff-choice-card span { color: #53606e; font-size: 9px; line-height: 1.5; }
-.staff-candidate-list { display: grid; gap: 9px; }
-.staff-candidate-list button { display: grid; grid-template-columns: 16px 1fr; gap: 10px; align-items: center; padding: 12px; border: 1px solid #dce2e8; border-radius: 7px; background: #fff; text-align: left; }
-.staff-candidate-list button.is-selected { border-color: #3980ef; background: #f7faff; }
-.staff-candidate-list i { width: 12px; height: 12px; border: 1px solid #aeb7c1; border-radius: 50%; }
-.staff-candidate-list button.is-selected i { border: 4px solid #1469ed; }
-.staff-candidate-list span { display: grid; gap: 3px; }
-.staff-candidate-list small { color: #5d6875; font-size: 8px; }
-.staff-bundle-list { display: grid; gap: 8px; }
-.staff-bundle-list label, .staff-radio { padding: 11px; border: 1px solid #dce2e8; border-radius: 6px; font-size: 10px; }
-.staff-replacement-warning, .staff-neutral-note, .staff-drawer-message { margin-top: 14px; padding: 12px; border-radius: 6px; background: #fff7e8; color: #654c20; font-size: 9px; line-height: 1.5; }
-.staff-replacement-warning label { display: grid; gap: 5px; margin-top: 10px; }
-.staff-replacement-warning input, .staff-date-fields input { min-height: 34px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 8px; }
-.staff-neutral-note { background: #f2f6fd; color: #40536e; }
-.staff-date-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
-.staff-date-fields label { display: grid; gap: 5px; font-size: 9px; }
-.staff-invite-fields { display: grid; gap: 10px; }
-.staff-invite-fields label { display: grid; gap: 5px; color: #46515f; font-size: 9px; }
-.staff-invite-fields input { min-height: 36px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 9px; }
-.staff-action-copy { color: #526071; font-size: 10px; line-height: 1.5; }
-.staff-password-field { display: grid; gap: 6px; margin-top: 14px; color: #46515f; font-size: 9px; font-weight: 650; }
-.staff-password-field input { min-height: 36px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 9px; }
-.staff-review { display: grid; gap: 0; border: 1px solid #dce2e8; border-radius: 7px; }
-.staff-review div { display: grid; grid-template-columns: 115px 1fr; gap: 8px; padding: 10px; border-bottom: 1px solid #e7ebef; font-size: 9px; }
-.staff-review div:last-child { border-bottom: 0; }
-.staff-review dt { color: #637080; }.staff-review dd { margin: 0; font-weight: 650; }
-.staff-assignment-drawer footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; padding-top: 18px; }
-.staff-assignment-drawer footer button { min-height: 38px; border: 1px solid #d3dae2; border-radius: 6px; background: #fff; font-size: 10px; font-weight: 750; }
-.staff-assignment-drawer footer button.is-primary { border-color: #111; background: #111; color: #fff; }
-.staff-assignment-drawer footer button:disabled { opacity: .45; }
+.staff-drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+}
+.staff-drawer-step {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: #1469ed;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.staff-assignment-drawer h2 {
+  margin: 18px 0 7px;
+  font-size: 17px;
+}
+.staff-assignment-drawer > p {
+  margin: 0 0 16px;
+  color: #53606e;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.staff-choice-card {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid #d9dfe7;
+  border-radius: 7px;
+  background: #fff;
+  text-align: left;
+}
+.staff-choice-card.is-selected {
+  border-color: #3980ef;
+  background: #f7faff;
+}
+.staff-choice-card b {
+  font-size: 11px;
+}
+.staff-choice-card span {
+  color: #53606e;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.staff-candidate-list {
+  display: grid;
+  gap: 9px;
+}
+.staff-candidate-list button {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dce2e8;
+  border-radius: 7px;
+  background: #fff;
+  text-align: left;
+}
+.staff-candidate-list button.is-selected {
+  border-color: #3980ef;
+  background: #f7faff;
+}
+.staff-candidate-list i {
+  width: 12px;
+  height: 12px;
+  border: 1px solid #aeb7c1;
+  border-radius: 50%;
+}
+.staff-candidate-list button.is-selected i {
+  border: 4px solid #1469ed;
+}
+.staff-candidate-list span {
+  display: grid;
+  gap: 3px;
+}
+.staff-candidate-list small {
+  color: #5d6875;
+  font-size: 8px;
+}
+.staff-bundle-list {
+  display: grid;
+  gap: 8px;
+}
+.staff-bundle-list label,
+.staff-radio {
+  padding: 11px;
+  border: 1px solid #dce2e8;
+  border-radius: 6px;
+  font-size: 10px;
+}
+.staff-replacement-warning,
+.staff-neutral-note,
+.staff-drawer-message {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #fff7e8;
+  color: #654c20;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.staff-replacement-warning label {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+}
+.staff-replacement-warning input,
+.staff-date-fields input {
+  min-height: 34px;
+  border: 1px solid #ccd4dd;
+  border-radius: 5px;
+  padding: 0 8px;
+}
+.staff-removal-impact h3 {
+  margin: 18px 0 8px;
+  font-size: 13px;
+}
+.staff-removal-impact ul {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 14px 16px 14px 32px;
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #344150;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.staff-removal-impact li.is-critical {
+  color: #a33a20;
+  font-weight: 700;
+}
+.staff-drawer-message.is-error {
+  background: #fff0f0;
+  color: #a52626;
+}
+.staff-neutral-note {
+  background: #f2f6fd;
+  color: #40536e;
+}
+.staff-date-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 12px;
+}
+.staff-date-fields label {
+  display: grid;
+  gap: 5px;
+  font-size: 9px;
+}
+.staff-invite-fields {
+  display: grid;
+  gap: 10px;
+}
+.staff-invite-fields label {
+  display: grid;
+  gap: 5px;
+  color: #46515f;
+  font-size: 9px;
+}
+.staff-invite-fields input {
+  min-height: 36px;
+  border: 1px solid #ccd4dd;
+  border-radius: 5px;
+  padding: 0 9px;
+}
+.staff-action-copy {
+  color: #526071;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.staff-profile-identity {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #dce2e8;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+.staff-profile-identity strong {
+  font-size: 16px;
+}
+.staff-profile-identity span {
+  color: #526071;
+  font-size: 10px;
+}
+.staff-password-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  color: #46515f;
+  font-size: 9px;
+  font-weight: 650;
+}
+.staff-password-field input {
+  min-height: 36px;
+  border: 1px solid #ccd4dd;
+  border-radius: 5px;
+  padding: 0 9px;
+}
+.staff-review {
+  display: grid;
+  gap: 0;
+  border: 1px solid #dce2e8;
+  border-radius: 7px;
+}
+.staff-review div {
+  display: grid;
+  grid-template-columns: 115px 1fr;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid #e7ebef;
+  font-size: 9px;
+}
+.staff-review div:last-child {
+  border-bottom: 0;
+}
+.staff-review dt {
+  color: #637080;
+}
+.staff-review dd {
+  margin: 0;
+  font-weight: 650;
+}
+.staff-assignment-drawer footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+.staff-assignment-drawer footer button {
+  min-height: 38px;
+  border: 1px solid #d3dae2;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 750;
+}
+.staff-assignment-drawer footer button.is-primary {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+.staff-assignment-drawer footer button:only-child {
+  grid-column: 1 / -1;
+}
+.staff-assignment-drawer footer button:disabled {
+  opacity: 0.45;
+}
