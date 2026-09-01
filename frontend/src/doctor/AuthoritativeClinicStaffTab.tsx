@@ -585,7 +585,7 @@ export function AuthoritativeClinicStaffTab({
       );
       setMessage(
         command.type === 'REMOVE'
-          ? 'Clinic connection removed.'
+          ? 'Pending invitation cancelled and removed.'
           : 'Planned authority updated.',
       );
       setRevision((value) => value + 1);

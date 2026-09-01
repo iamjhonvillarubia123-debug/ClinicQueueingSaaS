@@ -188,9 +188,9 @@ export class SecretaryInvitationService {
     const i = await this.prisma.secretaryInvitation.findFirst({
       where: {
         tokenHash: this.sha256(token),
-        status: SecretaryInvitationStatus.PENDING,
       },
       select: {
+        status: true,
         firstName: true,
         lastName: true,
         normalizedEmail: true,
@@ -204,9 +204,24 @@ export class SecretaryInvitationService {
         practiceLocation: { select: { name: true } },
       },
     });
-    if (!i || i.expiresAt.getTime() <= Date.now() || !i.requestedAssignmentType)
+    if (!i)
+      throw new BadRequestException('Invalid or expired Secretary invitation.');
+    if (i.status === SecretaryInvitationStatus.REVOKED) {
+      return { status: 'CANCELLED' as const };
+    }
+    if (
+      i.status === SecretaryInvitationStatus.EXPIRED ||
+      i.expiresAt.getTime() <= Date.now()
+    ) {
+      return { status: 'EXPIRED' as const };
+    }
+    if (
+      i.status !== SecretaryInvitationStatus.PENDING ||
+      !i.requestedAssignmentType
+    )
       throw new BadRequestException('Invalid or expired Secretary invitation.');
     return {
+      status: 'PENDING' as const,
       name: `${i.firstName} ${i.lastName}`.trim(),
       email: i.normalizedEmail,
       clinicName: i.practiceLocation.name,
@@ -259,24 +274,25 @@ export class SecretaryInvitationService {
   }
 
   async revokePending(actorUserId: string, invitationId: string) {
-    const invitation = await this.prisma.secretaryInvitation.findFirst({
-      where: {
-        id: invitationId,
-        status: SecretaryInvitationStatus.PENDING,
-        practiceLocation: { doctorProfile: { userId: actorUserId } },
-      },
-      select: { id: true },
-    });
-    if (!invitation)
-      throw new NotFoundException('Pending invitation was not found.');
     const now = new Date();
-    await this.prisma.$transaction(async (tx) => {
+    const removed = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "id" = ${invitationId} LIMIT 1 FOR UPDATE`,
+      );
+      const invitation = await tx.secretaryInvitation.findFirst({
+        where: {
+          id: invitationId,
+          status: SecretaryInvitationStatus.PENDING,
+          practiceLocation: { doctorProfile: { userId: actorUserId } },
+        },
+        select: { id: true },
+      });
+      if (!invitation) return false;
       await tx.secretaryInvitation.update({
         where: { id: invitation.id },
         data: {
           status: SecretaryInvitationStatus.REVOKED,
           revokedAt: now,
-          tokenHash: null,
           activeInvitationKey: null,
         },
       });
@@ -285,10 +301,16 @@ export class SecretaryInvitationService {
           secretaryInvitationId: invitation.id,
           status: NotificationOutboxStatus.PENDING,
         },
-        data: { status: NotificationOutboxStatus.CANCELLED },
+        data: {
+          status: NotificationOutboxStatus.CANCELLED,
+          cancelledAt: now,
+        },
       });
+      return true;
     });
-    return { invitationId: invitation.id, removed: true };
+    if (!removed)
+      throw new NotFoundException('Pending invitation was not found.');
+    return { invitationId, removed: true };
   }
 
   async accept(authenticatedUserId: string, token: string) {
@@ -304,6 +326,8 @@ export class SecretaryInvitationService {
         where: { id: locked[0].id },
         include: { notificationOutbox: true },
       });
+      if (i?.status === SecretaryInvitationStatus.REVOKED)
+        return { kind: 'cancelled' as const };
       if (
         !i ||
         i.status !== SecretaryInvitationStatus.PENDING ||
@@ -490,6 +514,10 @@ export class SecretaryInvitationService {
     if (outcome.kind === 'invalid_plan')
       throw new ConflictException(
         'This invitation has no valid assignment plan. Ask the Doctor to send a new invitation.',
+      );
+    if (outcome.kind === 'cancelled')
+      throw new ConflictException(
+        'This invitation was cancelled by the Doctor and can no longer be accepted.',
       );
     throw new BadRequestException('Invalid or expired Secretary invitation.');
   }

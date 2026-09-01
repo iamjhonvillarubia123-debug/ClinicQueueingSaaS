@@ -17,6 +17,7 @@ describe('SecretaryInvitationService', () => {
   const transaction = {
     secretaryInvitation: {
       create: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
     },
@@ -214,17 +215,50 @@ describe('SecretaryInvitationService', () => {
   });
 
   it('revokes a pending invitation while preserving its audit row', async () => {
-    prisma.secretaryInvitation.findFirst.mockResolvedValue({ id: 'invite-1' });
+    transaction.$queryRaw.mockResolvedValue([{ id: 'invite-1' }]);
+    transaction.secretaryInvitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+    });
     await service.revokePending('doctor-1', 'invite-1');
     expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
       where: { id: 'invite-1' },
       data: expect.objectContaining({
         status: 'REVOKED',
-        tokenHash: null,
         activeInvitationKey: null,
       }) as unknown,
     });
+    expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith({
+      where: { id: 'invite-1' },
+      data: {
+        status: 'REVOKED',
+        revokedAt: expect.any(Date) as unknown,
+        activeInvitationKey: null,
+      },
+    });
     expect(transaction.notificationOutbox.updateMany).toHaveBeenCalled();
+  });
+
+  it('shows a revoked invitation token as cancelled and prevents acceptance', async () => {
+    const token = 'cancelled-token';
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({
+      status: 'REVOKED',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await expect(service.preview(token)).resolves.toEqual({
+      status: 'CANCELLED',
+    });
+
+    transaction.$queryRaw.mockResolvedValue([{ id: 'invite-1' }]);
+    transaction.secretaryInvitation.findUnique.mockResolvedValue({
+      id: 'invite-1',
+      status: 'REVOKED',
+      tokenHash: createHash('sha256').update(token).digest('hex'),
+      notificationOutbox: null,
+    });
+    await expect(service.accept('secretary-1', token)).rejects.toThrow(
+      'cancelled by the Doctor',
+    );
+    expect(transaction.practiceStaff.create).not.toHaveBeenCalled();
   });
 
   it('creates only a pending relationship invitation with assignment intent', async () => {

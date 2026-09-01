@@ -17,6 +17,7 @@ afterEach(() => {
 const preview = () =>
   new Response(
     JSON.stringify({
+      status: 'PENDING',
       name: 'Anna Cruz',
       email: 'anna@example.test',
       clinicName: 'North Clinic',
@@ -32,6 +33,31 @@ const preview = () =>
   );
 
 describe('SecretaryInvitationAcceptancePage', () => {
+  it('shows cancellation and does not offer acceptance for a revoked invitation', async () => {
+    auth.status = 'authenticated';
+    auth.profile = { userId: 'secretary-1', role: 'SECRETARY' };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ status: 'CANCELLED' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    render(
+      <MemoryRouter
+        initialEntries={['/secretary-invitations/accept?token=cancelled-token']}
+      >
+        <SecretaryInvitationAcceptancePage />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Invitation Cancelled' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/can no longer be accepted/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Accept Invitation' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('explains that an unsigned invitee must create an account or sign in without password controls', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(preview());
     render(

@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
 type InvitationPreview = {
+  status: 'PENDING';
   name: string;
   email: string;
   clinicName: string;
@@ -15,6 +16,9 @@ type InvitationPreview = {
   fromServiceDate: string | null;
   toServiceDate: string | null;
 };
+type InvitationPreviewResponse =
+  | InvitationPreview
+  | { status: 'CANCELLED' | 'EXPIRED' };
 const bundleLabels: Record<string, string> = {
   QUEUE_AND_CLINIC_DAY_OPERATIONS: 'Queue & Clinic Day Operations',
   APPOINTMENTS_AND_PATIENT_INTAKE: 'Appointments & Patient Intake',
@@ -32,16 +36,22 @@ export function SecretaryInvitationAcceptancePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [unavailableStatus, setUnavailableStatus] = useState<
+    'CANCELLED' | 'EXPIRED' | null
+  >(null);
   useEffect(() => {
     if (!token) {
       setError('This invitation link is invalid or incomplete.');
       setLoading(false);
       return;
     }
-    void apiRequest<InvitationPreview>(
+    void apiRequest<InvitationPreviewResponse>(
       `/practice-staff/invitations/preview?token=${encodeURIComponent(token)}`,
     )
-      .then(setPreview)
+      .then((result) => {
+        if (result.status === 'PENDING') setPreview(result);
+        else setUnavailableStatus(result.status);
+      })
       .catch((cause: unknown) =>
         setError(
           cause instanceof Error
@@ -85,6 +95,27 @@ export function SecretaryInvitationAcceptancePage() {
           <span aria-hidden="true">✓</span>
           <h1>Clinic Assignment Accepted</h1>
           <p>Your clinic relationship is ready.</p>
+          <Link className="link-button" to="/app/secretary">
+            Open Secretary Workspace
+          </Link>
+        </section>
+      </main>
+    );
+  if (unavailableStatus)
+    return (
+      <main className="centered-page">
+        <section className="auth-panel" role="status">
+          <p className="eyebrow">Secretary invitation</p>
+          <h1>
+            {unavailableStatus === 'CANCELLED'
+              ? 'Invitation Cancelled'
+              : 'Invitation Expired'}
+          </h1>
+          <p>
+            {unavailableStatus === 'CANCELLED'
+              ? 'The Doctor cancelled this clinic invitation. It can no longer be accepted.'
+              : 'This clinic invitation has expired and can no longer be accepted.'}
+          </p>
           <Link className="link-button" to="/app/secretary">
             Open Secretary Workspace
           </Link>

@@ -130,8 +130,8 @@ export function PendingInvitationActionDrawer({
         </>
       ) : (
         <div className="staff-replacement-warning">
-          <strong>Permanently remove this clinic connection?</strong>
-          <p>The invitation will stop working and disappear from the clinic staff list. Its audit record is preserved for traceability.</p>
+          <strong>Cancel and remove this pending invitation?</strong>
+          <p>The invitation will disappear from the clinic staff list. Its link will show the Secretary that it was cancelled and will no longer allow acceptance. The audit record is preserved for traceability.</p>
         </div>
       )}
 
@@ -140,7 +140,7 @@ export function PendingInvitationActionDrawer({
         <button type="button" onClick={onClose}>{mode === 'VIEW' ? 'Close' : 'Cancel'}</button>
         {mode !== 'VIEW' ? (
           <button type="button" className="is-primary" disabled={pending || (mode === 'EDIT' && !valid)} onClick={mode === 'EDIT' ? submitEdit : () => void onSubmit({ type: 'REMOVE' })}>
-            {pending ? 'Updating…' : mode === 'EDIT' ? 'Save Changes' : 'Remove Connection'}
+            {pending ? 'Updating…' : mode === 'EDIT' ? 'Save Changes' : 'Cancel Invitation'}
           </button>
         ) : null}
       </footer>
