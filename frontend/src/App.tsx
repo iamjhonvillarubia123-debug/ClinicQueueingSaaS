@@ -31,6 +31,7 @@ import { LoginPage } from './auth/LoginPage';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
+import { DoctorCalendarPage } from './doctor/DoctorCalendarPage';
 import { ClinicTabPage } from './doctor/ClinicTab';
 import {
   DoctorOnly,
@@ -266,12 +267,7 @@ export function App() {
             />
             <Route
               path="/app/calendar"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Calendar"
-                  description="Doctor-wide availability and calendar controls will be placed here after workflow review."
-                />
-              }
+              element={<DoctorCalendarPage />}
             />
             <Route
               path="/app/secretaries"

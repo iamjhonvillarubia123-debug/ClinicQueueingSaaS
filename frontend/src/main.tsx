@@ -22,6 +22,7 @@ import './styles/secretary-workspace.css';
 import './styles/queue-action-drawer.css';
 import './styles/appointment-details.css';
 import './styles/service-date-control.css';
+import './styles/doctor-calendar.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

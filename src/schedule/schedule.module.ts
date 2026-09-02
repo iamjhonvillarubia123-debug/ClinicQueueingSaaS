@@ -7,9 +7,12 @@ import { PublicServiceDateAvailabilityService } from './public-service-date-avai
 import { RecurringScheduleConflictService } from './recurring-schedule-conflict.service';
 import { ScheduleResolutionService } from './schedule-resolution.service';
 import { ScheduleTimeService } from './schedule-time.service';
+import { DoctorCalendarController } from './doctor-calendar.controller';
+import { DoctorCalendarWorkspaceService } from './doctor-calendar-workspace.service';
 
 @Module({
   imports: [PrismaModule],
+  controllers: [DoctorCalendarController],
   providers: [
     ScheduleTimeService,
     AdvanceBookingWindowService,
@@ -18,6 +21,7 @@ import { ScheduleTimeService } from './schedule-time.service';
     CrossLocationScheduleConflictService,
     RecurringScheduleConflictService,
     PublicServiceDateAvailabilityService,
+    DoctorCalendarWorkspaceService,
   ],
   exports: [
     ScheduleTimeService,

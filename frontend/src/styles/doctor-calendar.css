@@ -1,0 +1,41 @@
+.doctor-calendar-page { display:grid; gap:20px; color:#111; }
+.doctor-calendar-page > header { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:18px; }
+.doctor-calendar-page h1 { margin:0; font-size:2.5rem; letter-spacing:-.04em; }
+.doctor-calendar-page header p { margin:7px 0 0; color:var(--muted); }
+.calendar-primary,.calendar-outline { min-height:44px; border-radius:7px; padding:0 20px; font:inherit; font-weight:700; }
+.calendar-primary { border:1px solid #111; background:#111; color:#fff; }
+.calendar-outline { border:1px solid var(--border); background:#fff; color:#111; }
+.calendar-outline.full { width:100%; margin-top:20px; }
+.calendar-error { border:1px solid #f2b7b7; border-radius:9px; background:#fff4f4; color:#b42318; padding:13px 16px; }
+.calendar-info { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; border:1px solid #bcd5fa; border-radius:8px; background:#f3f8ff; padding:18px; }
+.calendar-info strong { grid-row:span 2; color:#145fc1; }
+.calendar-info span { color:#344054; }
+.calendar-layout { display:grid; grid-template-columns:minmax(620px,1fr) 390px; gap:20px; align-items:start; }
+.calendar-controls { display:flex; align-items:center; gap:12px; min-height:56px; }
+.calendar-controls button { border:1px solid var(--border); background:#fff; border-radius:7px; min-width:38px; height:36px; font:inherit; }
+.calendar-controls h2 { margin:0 10px; font-size:1.25rem; }
+.calendar-legend { display:flex; gap:20px; margin-left:auto; font-size:.82rem; }
+.calendar-legend span:first-child { color:#16843d; }.calendar-legend span:nth-child(2){color:#c92828}.calendar-legend span:last-child{color:#1262c6}
+.month-grid { display:grid; grid-template-columns:repeat(7,1fr); overflow:hidden; border:1px solid var(--border); border-radius:9px; background:#fff; }
+.month-grid > strong { display:grid; place-items:center; min-height:42px; border-right:1px solid var(--border); font-size:.78rem; }
+.month-grid > button,.blank-day { min-height:91px; border:0; border-top:1px solid var(--border); border-right:1px solid var(--border); background:#fff; padding:12px; text-align:left; }
+.month-grid > button { display:flex; flex-direction:column; gap:5px; font:inherit; }
+.month-grid > button.is-selected { outline:1.5px solid #299c54; outline-offset:-2px; background:#f6fff8; border-radius:7px; }
+.month-grid > button.is-unavailable { background:#fff0f0; }
+.blocked-mark { display:grid; place-items:center; flex:1; width:100%; color:#c92424; }.blocked-mark small{margin-top:4px;font-weight:700}
+.clinic-dot { overflow:hidden; color:#1758a7; font-size:.75rem; white-space:nowrap; text-overflow:ellipsis; }
+.calendar-summary { margin-top:14px; border:1px solid var(--border); border-radius:9px; padding:17px; }
+.calendar-summary h3 { margin:0 0 14px; }
+.calendar-summary > div { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+.calendar-summary article { display:grid; gap:4px; border:1px solid #e5e7eb; border-radius:8px; padding:15px; background:#fafafa; }
+.calendar-summary article.green{background:#f0faf3}.calendar-summary article.red{background:#fff2f2}.calendar-summary article.blue{background:#f1f5ff}
+.calendar-summary b { font-size:1.65rem; }.calendar-summary span{color:var(--muted);font-size:.75rem}
+.calendar-layout aside { display:grid; gap:14px; }
+.calendar-day-panel,.upcoming-unavailable { border:1px solid var(--border); border-radius:10px; background:#fff; padding:21px; }
+.calendar-day-panel h2 { margin:0 0 13px; font-size:1.25rem; }.calendar-day-panel h3{margin:24px 0 12px;font-size:.95rem}
+.day-available,.day-unavailable { display:inline-flex; border-radius:7px; padding:7px 10px; font-size:.78rem; font-weight:700; }.day-available{background:#e8f7ec;color:#16773a}.day-unavailable{background:#ffe9e9;color:#bb2525}
+.calendar-day-panel > p,.muted { color:#344054; font-size:.84rem; }.calendar-day-panel hr{border:0;border-top:1px solid var(--border);margin:18px 0}
+.scheduled-clinic { display:flex; gap:13px; border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:9px; }.scheduled-clinic > span{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#f2f4f7}.scheduled-clinic div{display:grid;gap:3px}.scheduled-clinic p{margin:0}.scheduled-clinic small{color:var(--muted)}
+.upcoming-unavailable h3 { margin:0 0 12px; }.upcoming-unavailable button{display:grid;grid-template-columns:25px 1fr auto;width:100%;border:0;background:#fff;padding:9px 0;text-align:left}.upcoming-unavailable button span{color:#c92424}.upcoming-unavailable button small{color:var(--muted)}
+@media(max-width:1100px){.calendar-layout{grid-template-columns:1fr}.calendar-layout aside{grid-template-columns:1fr 1fr}.calendar-legend{display:none}}
+@media(max-width:720px){.doctor-calendar-page>header{grid-template-columns:1fr}.calendar-layout aside{grid-template-columns:1fr}.month-grid>button,.blank-day{min-height:68px;padding:7px}.clinic-dot{display:none}.calendar-summary>div{grid-template-columns:1fr 1fr}}
