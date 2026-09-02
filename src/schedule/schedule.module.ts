@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationModule } from '../notification/notification.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AdvanceBookingWindowService } from './advance-booking-window.service';
 import { CrossLocationScheduleConflictService } from './cross-location-schedule-conflict.service';
@@ -12,7 +13,7 @@ import { DoctorCalendarController } from './doctor-calendar.controller';
 import { DoctorCalendarWorkspaceService } from './doctor-calendar-workspace.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, NotificationModule],
   controllers: [DoctorCalendarController],
   providers: [
     ScheduleTimeService,

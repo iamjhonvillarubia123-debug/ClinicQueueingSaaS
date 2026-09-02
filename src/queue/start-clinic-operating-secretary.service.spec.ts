@@ -40,6 +40,7 @@ describe('StartClinicService operating secretary authority', () => {
     {} as PrismaService,
     {} as CommandIdempotencyService,
     {} as ScheduleResolutionService,
+    {} as never,
     {} as ScheduleTimeService,
     {} as SubscriptionCommercialGateService,
   );

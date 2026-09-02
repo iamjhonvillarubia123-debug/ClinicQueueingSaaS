@@ -215,17 +215,41 @@ export class PublicServiceDateAvailabilityService {
     return this.fromSchedule(schedule, true, 'AVAILABLE', effectiveCutoff);
   }
 
-  resolveCapacitySchedule(
+  async resolveCapacitySchedule(
     practiceLocationId: string,
     serviceDate: string,
     transaction?: AvailabilityClient,
   ) {
     const db: AvailabilityClient = transaction ?? this.prisma;
-    return this.scheduleResolution.resolveConfiguredSchedule(
+    const schedule = await this.scheduleResolution.resolveConfiguredSchedule(
       practiceLocationId,
       serviceDate,
       db,
     );
+    if (!schedule.isOpen || !schedule.opensAt || !schedule.closesAt)
+      return schedule;
+    const location = await db.practiceLocation.findUnique({
+      where: { id: practiceLocationId },
+      select: { doctorProfileId: true },
+    });
+    if (!location)
+      throw new NotFoundException('Practice location was not found.');
+    const available = await this.doctorCalendar.isAvailableForInterval(
+      location.doctorProfileId,
+      schedule.opensAt,
+      schedule.closesAt,
+      db,
+    );
+    return available
+      ? schedule
+      : {
+          ...schedule,
+          isOpen: false,
+          opensAt: null,
+          closesAt: null,
+          maximumOnlineBookingUntilAt: null,
+          maximumOperatingUntilAt: null,
+        };
   }
 
   private unavailable(

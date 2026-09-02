@@ -23,6 +23,7 @@ import {
 import { SubscriptionCommercialGateService } from '../financial/subscription-commercial-gate.service';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { DoctorCalendarAvailabilityService } from '../schedule/doctor-calendar-availability.service';
 import { ScheduleResolutionService } from '../schedule/schedule-resolution.service';
 import { ScheduleTimeService } from '../schedule/schedule-time.service';
 import { StartClinicDto } from './dto/start-clinic.dto';
@@ -32,6 +33,7 @@ type TransactionClient = Prisma.TransactionClient;
 type StartContext = {
   practiceLocationId: string;
   lifecycleStatus: PracticeLocationLifecycleStatus;
+  doctorProfileId: string;
   doctorUserId: string;
 };
 
@@ -72,6 +74,7 @@ export class StartClinicService {
     private readonly prisma: PrismaService,
     private readonly idempotency: CommandIdempotencyService,
     private readonly scheduleResolution: ScheduleResolutionService,
+    private readonly doctorCalendar: DoctorCalendarAvailabilityService,
     private readonly scheduleTime: ScheduleTimeService,
     private readonly commercialGate: SubscriptionCommercialGateService,
   ) {}
@@ -161,6 +164,11 @@ export class StartClinicService {
         transaction,
         dto.practiceLocationId,
       );
+      await transaction.$executeRaw(Prisma.sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`DOCTOR_SCHEDULE|${context.doctorProfileId}`}, 0)
+        )
+      `);
       await this.lockUser(transaction, authenticatedUserId);
       const actor = await transaction.user.findUnique({
         where: { id: authenticatedUserId },
@@ -181,6 +189,20 @@ export class StartClinicService {
       if (!schedule.isOpen) {
         throw new ConflictException(
           'Clinic cannot be started on a closed or unavailable Service Date.',
+        );
+      }
+      if (
+        !schedule.opensAt ||
+        !schedule.closesAt ||
+        !(await this.doctorCalendar.isAvailableForInterval(
+          context.doctorProfileId,
+          schedule.opensAt,
+          schedule.closesAt,
+          transaction,
+        ))
+      ) {
+        throw new ConflictException(
+          'Clinic cannot be started because the Doctor is unavailable on this Service Date.',
         );
       }
 
@@ -380,6 +402,7 @@ export class StartClinicService {
       SELECT
         pl."id" AS "practiceLocationId",
         pl."lifecycleStatus",
+        dp."id" AS "doctorProfileId",
         dp."userId" AS "doctorUserId"
       FROM "PracticeLocation" pl
       INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"

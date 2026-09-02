@@ -28,6 +28,24 @@ type CalendarData = {
   rules: CalendarRule[];
   clinics: Clinic[];
 };
+type CalendarImpact = {
+  date: string;
+  appointmentCount: number;
+  requiresPassword: boolean;
+  clinics: Array<{
+    clinicId: string;
+    clinicName: string;
+    appointmentCount: number;
+  }>;
+  appointments: Array<{
+    id: string;
+    bookingReference: string;
+    queueNumber: number;
+    patientName: string;
+    status: string;
+    clinicName: string;
+  }>;
+};
 
 const weekdays = [
   'SUNDAY',
@@ -60,6 +78,8 @@ export function DoctorCalendarPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [impact, setImpact] = useState<CalendarImpact | null>(null);
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -166,15 +186,44 @@ export function DoctorCalendarPage() {
           `/doctor-calendar/unavailable-dates/${encodeURIComponent(selectedRule.id)}`,
           { method: 'DELETE' },
         );
-      else
-        await apiRequest('/doctor-calendar/unavailable-dates', {
-          method: 'POST',
-          body: { date: selected },
-        });
+      else {
+        const report = await apiRequest<CalendarImpact>(
+          `/doctor-calendar/unavailable-dates/impact?date=${encodeURIComponent(selected)}`,
+        );
+        setImpact(report);
+        return;
+      }
       setRevision((value) => value + 1);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Unable to update this date.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmUnavailable() {
+    if (!impact) return;
+    setBusy(true);
+    setError('');
+    try {
+      await apiRequest('/doctor-calendar/unavailable-dates/confirm', {
+        method: 'POST',
+        body: {
+          date: impact.date,
+          cancelAffectedAppointments: impact.appointmentCount > 0,
+          ...(impact.requiresPassword ? { password } : {}),
+        },
+      });
+      setImpact(null);
+      setPassword('');
+      setRevision((value) => value + 1);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Unable to mark this date unavailable.',
       );
     } finally {
       setBusy(false);
@@ -394,6 +443,119 @@ export function DoctorCalendarPage() {
           </section>
         </aside>
       </div>
+      {impact ? (
+        <div className="calendar-dialog-backdrop" role="presentation">
+          <section
+            className="calendar-impact-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calendar-impact-title"
+          >
+            <button
+              className="calendar-dialog-close"
+              aria-label="Close"
+              onClick={() => {
+                setImpact(null);
+                setPassword('');
+              }}
+            >
+              ×
+            </button>
+            <span className="calendar-warning-icon">!</span>
+            <h2 id="calendar-impact-title">
+              Mark{' '}
+              {new Date(`${impact.date}T00:00:00.000Z`).toLocaleDateString(
+                'en-US',
+                {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                  timeZone: 'UTC',
+                },
+              )}{' '}
+              unavailable?
+            </h2>
+            {impact.appointmentCount ? (
+              <>
+                <p>
+                  This will close the date across all your clinics and cancel{' '}
+                  <strong>
+                    {impact.appointmentCount} active appointment
+                    {impact.appointmentCount === 1 ? '' : 's'}
+                  </strong>
+                  . Affected patients with operational messages enabled will be
+                  notified.
+                </p>
+                <div className="calendar-impact-clinics">
+                  {impact.clinics.map((clinic) => (
+                    <div key={clinic.clinicId}>
+                      <strong>{clinic.clinicName}</strong>
+                      <span>
+                        {clinic.appointmentCount} appointment
+                        {clinic.appointmentCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <details>
+                  <summary>View affected appointments</summary>
+                  {impact.appointments.map((appointment) => (
+                    <div
+                      className="calendar-impact-appointment"
+                      key={appointment.id}
+                    >
+                      <span>
+                        #{appointment.queueNumber} · {appointment.patientName}
+                      </span>
+                      <small>
+                        {appointment.clinicName} ·{' '}
+                        {appointment.bookingReference}
+                      </small>
+                    </div>
+                  ))}
+                </details>
+                <label>
+                  Current password
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <p>
+                No active appointments will be cancelled. All clinics will be
+                unavailable on this date and new bookings will be blocked.
+              </p>
+            )}
+            <footer>
+              <button
+                className="calendar-outline"
+                disabled={busy}
+                onClick={() => {
+                  setImpact(null);
+                  setPassword('');
+                }}
+              >
+                Keep Date Available
+              </button>
+              <button
+                className="calendar-primary"
+                disabled={busy || (impact.requiresPassword && !password)}
+                onClick={() => void confirmUnavailable()}
+              >
+                {busy
+                  ? 'Applying…'
+                  : impact.appointmentCount
+                    ? 'Cancel Appointments & Mark Unavailable'
+                    : 'Confirm Unavailable Date'}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

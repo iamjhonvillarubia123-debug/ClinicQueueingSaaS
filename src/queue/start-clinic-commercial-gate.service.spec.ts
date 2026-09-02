@@ -12,6 +12,7 @@ describe('StartClinicService commercial suspension', () => {
     const context = {
       practiceLocationId: 'location-1',
       lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+      doctorProfileId: 'profile-1',
       doctorUserId: 'doctor-1',
       currentRegularPracticeStaffId: null,
     };
@@ -62,6 +63,8 @@ describe('StartClinicService commercial suspension', () => {
       resolveOperationalSchedule: jest.fn(() =>
         Promise.resolve({
           isOpen: true,
+          opensAt: new Date('2026-08-20T08:00:00.000Z'),
+          closesAt: new Date('2026-08-20T10:00:00.000Z'),
           maximumOnlineBookingUntilAt: new Date('2026-08-20T10:00:00.000Z'),
         }),
       ),
@@ -82,6 +85,7 @@ describe('StartClinicService commercial suspension', () => {
       prisma as never,
       idempotency as never,
       scheduleResolution as never,
+      { isAvailableForInterval: jest.fn(() => Promise.resolve(true)) } as never,
       scheduleTime as never,
       commercialGate as never,
     );

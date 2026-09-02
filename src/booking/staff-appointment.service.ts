@@ -96,6 +96,7 @@ export class StaffAppointmentService {
           lifecycleStatus: true,
           doctorProfile: {
             select: {
+              id: true,
               userId: true,
               accountSettings: {
                 select: { maximumEstimatedServiceMinutesPerPatient: true },
@@ -139,6 +140,12 @@ export class StaffAppointmentService {
         throw new ConflictException(
           'Staff-assisted booking requires a started clinic day.',
         );
+
+      await transaction.$executeRaw(Prisma.sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`DOCTOR_SCHEDULE|${context.doctorProfile.id}`}, 0)
+        )
+      `);
 
       const services = await transaction.practiceLocationService.findMany({
         where: {

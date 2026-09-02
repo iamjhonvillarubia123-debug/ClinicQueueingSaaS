@@ -15,6 +15,7 @@ import { SubscriptionEntitlementService } from './../src/financial/subscription-
 import { CommandIdempotencyService } from './../src/idempotency/command-idempotency.service';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { StartClinicService } from './../src/queue/start-clinic.service';
+import { DoctorCalendarAvailabilityService } from './../src/schedule/doctor-calendar-availability.service';
 import { ScheduleResolutionService } from './../src/schedule/schedule-resolution.service';
 import { ScheduleTimeService } from './../src/schedule/schedule-time.service';
 
@@ -46,6 +47,7 @@ describe('START CLINIC controls (e2e)', () => {
       prisma,
       new CommandIdempotencyService(),
       scheduleResolution,
+      new DoctorCalendarAvailabilityService(prisma, scheduleTime),
       scheduleTime,
       commercialGate,
     );

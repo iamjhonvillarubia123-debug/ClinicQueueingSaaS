@@ -12,6 +12,7 @@ import {
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { ConfirmDoctorCalendarRuleDto } from './dto/confirm-doctor-calendar-rule.dto';
 import { CreateDoctorCalendarRuleDto } from './dto/create-doctor-calendar-rule.dto';
 import { DoctorCalendarWorkspaceService } from './doctor-calendar-workspace.service';
 
@@ -28,6 +29,15 @@ export class DoctorCalendarController {
     return this.calendar.getMonth(request.user.userId, month);
   }
 
+  @UseGuards(SessionAuthGuard)
+  @Get('unavailable-dates/impact')
+  impact(
+    @Query('date') date: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.calendar.impact(request.user.userId, date);
+  }
+
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('unavailable-dates')
   create(
@@ -35,6 +45,15 @@ export class DoctorCalendarController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.calendar.create(request.user.userId, dto.date, dto.label);
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('unavailable-dates/confirm')
+  confirm(
+    @Body() dto: ConfirmDoctorCalendarRuleDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.calendar.confirmUnavailable(request.user.userId, dto);
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
