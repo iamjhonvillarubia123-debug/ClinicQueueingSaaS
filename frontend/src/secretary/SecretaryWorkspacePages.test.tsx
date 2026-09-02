@@ -93,7 +93,16 @@ describe('Secretary workspace pages', () => {
   });
 
   it('shows only modules represented by granted authority', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(workspace));
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url.includes('/secretary/workspace')) return Promise.resolve(response(workspace));
+      if (url.includes('/operations/context'))
+        return Promise.resolve(response({ practiceLocationId: 'clinic-1', clinicName: 'North Clinic', timeZone: 'Asia/Manila', currentServiceDate: '2026-09-02' }));
+      const clinic = { id: 'clinic-1', name: 'North Clinic', address: 'Davao City', countryCode: 'PH', timeZone: 'Asia/Manila', lifecycleStatus: 'ACTIVE', doctorName: 'Maria Doctor' };
+      if (url.includes('/operations/overview'))
+        return Promise.resolve(response({ clinic, serviceDate: '2026-09-02', schedule: { isOpen: false, opensAt: null, closesAt: null }, clinicDay: null, queue: { counts: {}, waitingCount: 0, nowServing: null, next: null, waitingPreview: [] }, appointments: { total: 0, counts: {} }, timeline: [] }));
+      return Promise.resolve(response({ clinic, serviceDate: '2026-09-02', schedule: { isOpen: false, opensAt: null, closesAt: null }, clinicDay: null, counts: {}, patients: [], timeline: [] }));
+    });
     render(
       <MemoryRouter initialEntries={['/app/secretary/clinics/clinic-1']}>
         <Routes>
@@ -104,14 +113,9 @@ describe('Secretary workspace pages', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(
-      await screen.findByRole('heading', { name: 'Queue' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Reports' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Appointments' }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Queue' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Appointments' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Staff' })).not.toBeInTheDocument();
   });
 });

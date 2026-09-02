@@ -4,6 +4,7 @@ import { apiRequest } from '../api/client';
 import type { AppointmentDetailsModel } from './AppointmentDetailsDrawer';
 import type { AuthoritativeAppointmentReport } from './AuthoritativeAppointmentReportPreview';
 import { AuthoritativeClinicOperationsWorkspace } from './AuthoritativeClinicOperationsWorkspace';
+import type { OperationsTab } from './AuthoritativeClinicOperationsWorkspace';
 import type {
   ClinicOperationsEvent,
   ClinicOperationsOverview,
@@ -75,7 +76,21 @@ function mapAppointmentDetails(details: AppointmentDetailsResponse): Appointment
   };
 }
 
-export function AuthoritativeClinicOperationsRoutePage() {
+type RoutePageProps = {
+  visibleTabs?: OperationsTab[];
+  canUseQueue?: boolean;
+  canViewAppointments?: boolean;
+  canGenerateReports?: boolean;
+  backTo?: string;
+};
+
+export function AuthoritativeClinicOperationsRoutePage({
+  visibleTabs,
+  canUseQueue = true,
+  canViewAppointments = true,
+  canGenerateReports = true,
+  backTo = '/app/clinics',
+}: RoutePageProps = {}) {
   const navigate = useNavigate();
   const { clinicId } = useParams();
   const [operationsContext, setOperationsContext] = useState<OperationsContext | null>(null);
@@ -128,7 +143,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
   }, [clinicId]);
 
   useEffect(() => {
-    if (!clinicId) {
+    if (!clinicId || !canUseQueue) {
       setBookingConfiguration(null);
       return;
     }
@@ -137,11 +152,14 @@ export function AuthoritativeClinicOperationsRoutePage() {
       .then((result) => { if (!cancelled) setBookingConfiguration(result); })
       .catch(() => { if (!cancelled) setBookingConfiguration(null); });
     return () => { cancelled = true; };
-  }, [clinicId]);
+  }, [canUseQueue, clinicId]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!clinicId || !serviceDate) return;
+    if (!clinicId || !serviceDate || !canUseQueue) {
+      setOverviewLoading(false);
+      return;
+    }
     setOverviewLoading(true);
     setOverviewError('');
     void apiRequest<ClinicOperationsOverview>(`/practice-location/${encodeURIComponent(clinicId)}/operations/overview?serviceDate=${encodeURIComponent(serviceDate)}`)
@@ -154,11 +172,14 @@ export function AuthoritativeClinicOperationsRoutePage() {
       })
       .finally(() => { if (!cancelled) setOverviewLoading(false); });
     return () => { cancelled = true; };
-  }, [clinicId, serviceDate, operationsRevision]);
+  }, [canUseQueue, clinicId, serviceDate, operationsRevision]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!clinicId || !serviceDate) return;
+    if (!clinicId || !serviceDate || !canUseQueue) {
+      setQueueLoading(false);
+      return;
+    }
     setQueueLoading(true);
     setQueueError('');
     void apiRequest<ClinicOperationsQueue>(`/practice-location/${encodeURIComponent(clinicId)}/operations/queue?serviceDate=${encodeURIComponent(serviceDate)}`)
@@ -171,11 +192,14 @@ export function AuthoritativeClinicOperationsRoutePage() {
       })
       .finally(() => { if (!cancelled) setQueueLoading(false); });
     return () => { cancelled = true; };
-  }, [clinicId, serviceDate, operationsRevision]);
+  }, [canUseQueue, clinicId, serviceDate, operationsRevision]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!clinicId || !serviceDate) return;
+    if (!clinicId || !serviceDate || !canViewAppointments) {
+      setAppointmentsLoading(false);
+      return;
+    }
     setAppointmentsLoading(true);
     setAppointmentsError('');
     void apiRequest<ClinicOperationsQueue>(`/practice-location/${encodeURIComponent(clinicId)}/operations/appointments?serviceDate=${encodeURIComponent(serviceDate)}`)
@@ -188,7 +212,7 @@ export function AuthoritativeClinicOperationsRoutePage() {
       })
       .finally(() => { if (!cancelled) setAppointmentsLoading(false); });
     return () => { cancelled = true; };
-  }, [clinicId, serviceDate, operationsRevision]);
+  }, [canViewAppointments, clinicId, serviceDate, operationsRevision]);
 
   async function handleOperationsEvent(event: ClinicOperationsEvent) {
     if (!clinicId || !serviceDate) throw new Error('Clinic service date is not available.');
@@ -252,11 +276,13 @@ export function AuthoritativeClinicOperationsRoutePage() {
         appointmentsError={appointmentsError}
         serviceDate={serviceDate}
         onServiceDateChange={setServiceDate}
-        onBack={() => navigate('/app/clinics')}
+        onBack={() => navigate(backTo)}
         onEvent={handleOperationsEvent}
         bookingConfiguration={bookingConfiguration}
         loadAppointmentDetails={loadAppointmentDetails}
         loadDailyAppointmentReport={loadDailyAppointmentReport}
+        visibleTabs={visibleTabs}
+        canGenerateReports={canGenerateReports}
       />
     </ServiceDateTodayProvider>
   );

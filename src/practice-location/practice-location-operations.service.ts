@@ -1,10 +1,13 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AppointmentStatus, Weekday } from '../../generated/prisma/client';
+import {
+  AppointmentStatus,
+  PracticeStaffAuthorityBundleType,
+  Weekday,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 
@@ -30,7 +33,15 @@ export class PracticeLocationOperationsService {
     practiceLocationId: string,
     serviceDateInput: string,
   ) {
-    return this.getQueue(userId, practiceLocationId, serviceDateInput);
+    return this.getQueueWithAccess(
+      userId,
+      practiceLocationId,
+      serviceDateInput,
+      [
+        PracticeStaffAuthorityBundleType.APPOINTMENTS_AND_PATIENT_INTAKE,
+        PracticeStaffAuthorityBundleType.REPORTS_VIEW_ONLY,
+      ],
+    );
   }
 
   async getAppointmentDetails(
@@ -38,7 +49,10 @@ export class PracticeLocationOperationsService {
     practiceLocationId: string,
     appointmentId: string,
   ) {
-    await this.requireOwnedLocation(userId, practiceLocationId);
+    await this.requireLocationAccess(userId, practiceLocationId, [
+      PracticeStaffAuthorityBundleType.APPOINTMENTS_AND_PATIENT_INTAKE,
+      PracticeStaffAuthorityBundleType.REPORTS_VIEW_ONLY,
+    ]);
     const appointment = await this.prisma.appointment.findFirst({
       where: { id: appointmentId, practiceLocationId },
       select: {
@@ -177,6 +191,9 @@ export class PracticeLocationOperationsService {
     practiceLocationId: string,
     serviceDateInput: string,
   ) {
+    await this.requireLocationAccess(userId, practiceLocationId, [
+      PracticeStaffAuthorityBundleType.REPORTS_VIEW_ONLY,
+    ]);
     const appointments = await this.getAppointments(
       userId,
       practiceLocationId,
@@ -197,12 +214,53 @@ export class PracticeLocationOperationsService {
     };
   }
 
-  private async requireOwnedLocation(
+  private async requireLocationAccess(
     userId: string,
     practiceLocationId: string,
+    allowedBundles: PracticeStaffAuthorityBundleType[],
+    serviceDate?: Date,
   ) {
     const location = await this.prisma.practiceLocation.findFirst({
-      where: { id: practiceLocationId, doctorProfile: { userId } },
+      where: {
+        id: practiceLocationId,
+        OR: [
+          { doctorProfile: { userId } },
+          {
+            staffAssignments: {
+              some: {
+                userId,
+                isActive: true,
+                disconnectedAt: null,
+                OR: [
+                  {
+                    authorityBundles: {
+                      some: {
+                        status: 'ACTIVE',
+                        bundleType: { in: allowedBundles },
+                      },
+                    },
+                  },
+                  ...(allowedBundles.includes(
+                    PracticeStaffAuthorityBundleType.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+                  ) && serviceDate
+                    ? [
+                        {
+                          substituteSecretaryCoverages: {
+                            some: {
+                              status: 'ACTIVE' as const,
+                              fromServiceDate: { lte: serviceDate },
+                              toServiceDate: { gte: serviceDate },
+                            },
+                          },
+                        },
+                      ]
+                    : []),
+                ],
+              },
+            },
+          },
+        ],
+      },
       select: { id: true },
     });
     if (!location)
@@ -215,10 +273,25 @@ export class PracticeLocationOperationsService {
     practiceLocationId: string,
     serviceDateInput: string,
   ) {
+    return this.getQueueWithAccess(
+      userId,
+      practiceLocationId,
+      serviceDateInput,
+      [PracticeStaffAuthorityBundleType.QUEUE_AND_CLINIC_DAY_OPERATIONS],
+    );
+  }
+
+  private async getQueueWithAccess(
+    userId: string,
+    practiceLocationId: string,
+    serviceDateInput: string,
+    allowedBundles: PracticeStaffAuthorityBundleType[],
+  ) {
     const overview = await this.getOverview(
       userId,
       practiceLocationId,
       serviceDateInput,
+      allowedBundles,
     );
     const serviceDate = this.parseServiceDate(serviceDateInput);
     const appointments = await this.prisma.appointment.findMany({
@@ -264,17 +337,20 @@ export class PracticeLocationOperationsService {
     userId: string,
     practiceLocationId: string,
     serviceDateInput: string,
+    allowedBundles: PracticeStaffAuthorityBundleType[] = [
+      PracticeStaffAuthorityBundleType.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+    ],
   ) {
     const serviceDate = this.parseServiceDate(serviceDateInput);
-    const doctor = await this.prisma.doctorProfile.findUnique({
-      where: { userId },
-      select: { id: true },
-    });
-    if (!doctor)
-      throw new ForbiddenException('Only a doctor may view clinic operations.');
+    await this.requireLocationAccess(
+      userId,
+      practiceLocationId,
+      allowedBundles,
+      serviceDate,
+    );
 
     const location = await this.prisma.practiceLocation.findFirst({
-      where: { id: practiceLocationId, doctorProfileId: doctor.id },
+      where: { id: practiceLocationId },
       select: {
         id: true,
         name: true,

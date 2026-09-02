@@ -11,7 +11,29 @@ export class PracticeLocationOperationsContextService {
 
   async getContext(userId: string, practiceLocationId: string) {
     const location = await this.prisma.practiceLocation.findFirst({
-      where: { id: practiceLocationId, doctorProfile: { userId } },
+      where: {
+        id: practiceLocationId,
+        OR: [
+          { doctorProfile: { userId } },
+          {
+            staffAssignments: {
+              some: {
+                userId,
+                isActive: true,
+                disconnectedAt: null,
+                OR: [
+                  { authorityBundles: { some: { status: 'ACTIVE' } } },
+                  {
+                    substituteSecretaryCoverages: {
+                      some: { status: 'ACTIVE' },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
       select: { id: true, name: true, timeZone: true },
     });
 

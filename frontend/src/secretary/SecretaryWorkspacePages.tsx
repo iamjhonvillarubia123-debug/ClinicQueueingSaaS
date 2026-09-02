@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
+import { AuthoritativeClinicOperationsRoutePage } from '../doctor/AuthoritativeClinicOperationsRoutePage';
+import type { OperationsTab } from '../doctor/AuthoritativeClinicOperationsWorkspace';
 
 export type SecretaryClinic = {
   practiceStaffId: string;
@@ -94,13 +96,23 @@ function PageState({ loading, error }: { loading: boolean; error: string }) {
 
 export function SecretaryClinicsPage() {
   const { data, error, loading } = useSecretaryWorkspace();
+  const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'DISABLED'>('ALL');
+  const [search, setSearch] = useState('');
   if (loading || error) return <PageState loading={loading} error={error} />;
+  const clinics = (data?.clinics ?? []).filter(
+    (clinic) =>
+      (filter === 'ALL' || clinic.status === filter) &&
+      `${clinic.clinicName} ${clinic.address ?? ''} ${clinic.doctorName}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()),
+  );
+  const count = (status: 'ACTIVE' | 'DISABLED') =>
+    data?.clinics.filter((clinic) => clinic.status === status).length ?? 0;
   return (
     <section className="secretary-page">
       <header>
-        <p className="doctor-placeholder-eyebrow">Secretary workspace</p>
         <h1>Clinics</h1>
-        <p>Clinics appear here only after you accept a Doctor’s invitation.</p>
+        <p>Open clinics connected to your account and work within the authority granted by each Doctor.</p>
       </header>
       {!data?.clinics.length ? (
         <div className="secretary-empty">
@@ -115,44 +127,43 @@ export function SecretaryClinicsPage() {
           </Link>
         </div>
       ) : (
-        <div className="secretary-clinic-grid">
-          {data.clinics.map((clinic) => (
-            <article
-              className="secretary-clinic-card"
-              key={clinic.practiceStaffId}
-            >
-              <div className="secretary-card-top">
-                <span className="secretary-clinic-mark">+</span>
-                <span
-                  className={`secretary-status is-${clinic.status.toLowerCase()}`}
-                >
-                  {clinic.status === 'ACTIVE' ? 'Active' : 'Disabled'}
-                </span>
-              </div>
-              <h2>{clinic.clinicName}</h2>
-              <p>{clinic.address || 'Clinic address not provided'}</p>
-              <dl>
-                <div>
-                  <dt>Doctor</dt>
-                  <dd>{clinic.doctorName}</dd>
-                </div>
-                <div>
-                  <dt>Role</dt>
-                  <dd>
-                    {clinic.assignmentType === 'CLINIC_SECRETARY'
-                      ? 'Clinic Secretary'
-                      : 'Substitute Secretary'}
-                  </dd>
-                </div>
-              </dl>
-              <Link
-                className="secretary-open-clinic"
-                to={`/app/secretary/clinics/${encodeURIComponent(clinic.clinicId)}`}
-              >
-                Open Clinic
-              </Link>
-            </article>
-          ))}
+        <div className="secretary-clinic-browser">
+          <div className="secretary-clinic-toolbar">
+            <div className="secretary-clinic-filters" aria-label="Clinic filters">
+              {(['ALL', 'ACTIVE', 'DISABLED'] as const).map((value) => (
+                <button className={filter === value ? 'is-active' : ''} key={value} onClick={() => setFilter(value)}>
+                  {value === 'ALL' ? 'All Clinics' : value === 'ACTIVE' ? 'Active' : 'Disabled'}{' '}
+                  <span>{value === 'ALL' ? data.clinics.length : count(value)}</span>
+                </button>
+              ))}
+            </div>
+            <input aria-label="Search clinics" placeholder="Search clinics…" value={search} onChange={(event) => setSearch(event.target.value)} />
+          </div>
+          <div className="secretary-clinic-list">
+            {clinics.map((clinic) => {
+              const canOpen = clinic.status === 'ACTIVE' &&
+                (clinic.assignmentType === 'SUBSTITUTE_SECRETARY' || clinic.authorityBundles.some((bundle) => bundle !== 'CLINIC_CONFIGURATION_DRAFTING'));
+              return (
+                <article key={clinic.practiceStaffId}>
+                  <span className="secretary-clinic-mark">+</span>
+                  <div className="secretary-clinic-identity">
+                    <h2>{clinic.clinicName}</h2>
+                    <p>{clinic.address || 'Clinic address not provided'}</p>
+                    <small>{clinic.timeZone}</small>
+                  </div>
+                  <span className={`secretary-status is-${clinic.status.toLowerCase()}`}>{clinic.status}</span>
+                  <div className="secretary-clinic-doctor"><strong>Doctor</strong><span>{clinic.doctorName}</span></div>
+                  <div className="secretary-clinic-role"><strong>Role</strong><span>{clinic.assignmentType === 'CLINIC_SECRETARY' ? 'Clinic Secretary' : 'Substitute Secretary'}</span></div>
+                  {canOpen ? (
+                    <Link className="secretary-open-clinic" to={`/app/secretary/clinics/${encodeURIComponent(clinic.clinicId)}`}>Open Clinic</Link>
+                  ) : (
+                    <button className="secretary-open-clinic" disabled>{clinic.status === 'DISABLED' ? 'Access Disabled' : 'No Live Access'}</button>
+                  )}
+                </article>
+              );
+            })}
+            {!clinics.length ? <p className="secretary-no-results">No clinics match this view.</p> : null}
+          </div>
         </div>
       )}
     </section>
@@ -275,78 +286,46 @@ export function SecretaryClinicWorkspacePage() {
         This clinic is not connected to your Secretary account.
       </div>
     );
-  const modules =
-    clinic.assignmentType === 'SUBSTITUTE_SECRETARY'
-      ? [
-          {
-            title: 'Queue',
-            copy: 'Live queue and clinic-day operations during your approved coverage.',
-          },
-        ]
-      : [
-          ...(clinic.authorityBundles.includes(
-            'QUEUE_AND_CLINIC_DAY_OPERATIONS',
-          )
-            ? [{ title: 'Queue', copy: 'Queue and clinic-day operations.' }]
-            : []),
-          ...(clinic.authorityBundles.includes(
-            'APPOINTMENTS_AND_PATIENT_INTAKE',
-          )
-            ? [
-                {
-                  title: 'Appointments',
-                  copy: 'Appointments and patient intake.',
-                },
-              ]
-            : []),
-          ...(clinic.authorityBundles.includes('CLINIC_CONFIGURATION_DRAFTING')
-            ? [
-                {
-                  title: 'Clinic Configuration',
-                  copy: 'Prepare configuration drafts for Doctor approval.',
-                },
-              ]
-            : []),
-          ...(clinic.authorityBundles.includes('REPORTS_VIEW_ONLY')
-            ? [
-                {
-                  title: 'Reports',
-                  copy: 'View clinic reports without editing operational records.',
-                },
-              ]
-            : []),
-        ];
-  return (
-    <section className="secretary-page secretary-clinic-workspace">
-      <Link to="/app/secretary/clinics">← Back to Clinics</Link>
-      <header>
-        <p className="doctor-placeholder-eyebrow">
-          {clinic.assignmentType === 'CLINIC_SECRETARY'
-            ? 'Clinic Secretary'
-            : 'Substitute Secretary'}
-        </p>
-        <h1>{clinic.clinicName}</h1>
-        <p>
-          {clinic.address || clinic.timeZone} · Dr. {clinic.doctorName}
-        </p>
-      </header>
-      {clinic.status === 'DISABLED' ? (
-        <div className="secretary-notice is-warning">
-          Your access at this clinic is disabled. Clinic modules are read-only
-          until the Doctor reactivates the relationship.
+  if (clinic.status === 'DISABLED')
+    return (
+      <section className="secretary-page">
+        <Link to="/app/secretary/clinics">← Back to Clinics</Link>
+        <div className="secretary-state is-error" role="alert">
+          Your access at this clinic is disabled. Ask the Doctor to reactivate
+          the relationship before opening clinic operations.
         </div>
-      ) : null}
-      <div className="secretary-module-grid">
-        {modules.map((module) => (
-          <article key={module.title}>
-            <h2>{module.title}</h2>
-            <p>{module.copy}</p>
-            <span>
-              {clinic.status === 'ACTIVE' ? 'Granted' : 'Unavailable'}
-            </span>
-          </article>
-        ))}
-      </div>
-    </section>
+      </section>
+    );
+  const canUseQueue =
+    clinic.assignmentType === 'SUBSTITUTE_SECRETARY' ||
+    clinic.authorityBundles.includes('QUEUE_AND_CLINIC_DAY_OPERATIONS');
+  const canViewAppointments = clinic.authorityBundles.some((bundle) =>
+    ['APPOINTMENTS_AND_PATIENT_INTAKE', 'REPORTS_VIEW_ONLY'].includes(bundle),
+  );
+  const canGenerateReports = clinic.authorityBundles.includes(
+    'REPORTS_VIEW_ONLY',
+  );
+  const visibleTabs: OperationsTab[] = [
+    ...(canUseQueue ? (['overview', 'queue'] as OperationsTab[]) : []),
+    ...(canViewAppointments ? (['appointments'] as OperationsTab[]) : []),
+  ];
+  if (!visibleTabs.length)
+    return (
+      <section className="secretary-page">
+        <Link to="/app/secretary/clinics">← Back to Clinics</Link>
+        <div className="secretary-empty">
+          <h2>No operational access granted</h2>
+          <p>Your current authority does not include a live clinic module.</p>
+        </div>
+      </section>
+    );
+  return (
+    <AuthoritativeClinicOperationsRoutePage
+      visibleTabs={visibleTabs}
+      canUseQueue={canUseQueue}
+      canViewAppointments={canViewAppointments}
+      canGenerateReports={canGenerateReports}
+      backTo="/app/secretary/clinics"
+    />
   );
 }

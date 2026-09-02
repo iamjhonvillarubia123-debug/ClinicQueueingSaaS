@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   AppointmentStatus,
   ClinicDayStatus,
@@ -34,11 +30,11 @@ describe('PracticeLocationOperationsService', () => {
     expect(prisma.doctorProfile.findUnique).not.toHaveBeenCalled();
   });
 
-  it('requires an authenticated doctor profile', async () => {
+  it('does not disclose a clinic to an unrelated authenticated account', async () => {
     prisma.doctorProfile.findUnique.mockResolvedValue(null);
     await expect(
       service.getOverview('secretary-1', 'clinic-1', '2026-08-25'),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('does not disclose a clinic outside the doctor ownership scope', async () => {
