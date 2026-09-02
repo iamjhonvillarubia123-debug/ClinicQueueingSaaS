@@ -12,6 +12,8 @@ import { SecretaryInvitationController } from './secretary-invitation.controller
 import { SecretaryInvitationService } from './secretary-invitation.service';
 import { SecretaryDirectoryController } from './secretary-directory.controller';
 import { SecretaryDirectoryService } from './secretary-directory.service';
+import { SecretaryWorkspaceController } from './secretary-workspace.controller';
+import { SecretaryWorkspaceService } from './secretary-workspace.service';
 
 @Module({
   imports: [PrismaModule, AuthModule],
@@ -21,12 +23,14 @@ import { SecretaryDirectoryService } from './secretary-directory.service';
     SubstituteSecretaryCoverageService,
     SecretaryInvitationService,
     SecretaryDirectoryService,
+    SecretaryWorkspaceService,
   ],
   controllers: [
     PracticeStaffController,
     SubstituteSecretaryCoverageController,
     SecretaryInvitationController,
     SecretaryDirectoryController,
+    SecretaryWorkspaceController,
   ],
   exports: [SubstituteSecretaryCoverageService],
 })

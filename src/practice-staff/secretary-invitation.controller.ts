@@ -67,4 +67,16 @@ export class SecretaryInvitationController {
   ) {
     return this.invitations.accept(request.user.userId, dto.token);
   }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post(':invitationId/accept')
+  acceptFromWorkspace(
+    @Param('invitationId') invitationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.invitations.acceptPendingById(
+      request.user.userId,
+      invitationId,
+    );
+  }
 }

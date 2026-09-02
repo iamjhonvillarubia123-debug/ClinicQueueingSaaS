@@ -320,10 +320,27 @@ export class SecretaryInvitationService {
   async accept(authenticatedUserId: string, token: string) {
     if (!token)
       throw new BadRequestException('Invalid or expired Secretary invitation.');
-    const tokenHash = this.sha256(token);
+    return this.acceptSelected(authenticatedUserId, {
+      tokenHash: this.sha256(token),
+    });
+  }
+
+  async acceptPendingById(authenticatedUserId: string, invitationId: string) {
+    if (!invitationId)
+      throw new BadRequestException('Secretary invitation is required.');
+    return this.acceptSelected(authenticatedUserId, { invitationId });
+  }
+
+  private async acceptSelected(
+    authenticatedUserId: string,
+    selector: { tokenHash: string } | { invitationId: string },
+  ) {
+    const tokenHash = 'tokenHash' in selector ? selector.tokenHash : null;
     const outcome = await this.prisma.$transaction(async (tx) => {
       const locked = await tx.$queryRaw<Array<{ id: string }>>(
-        Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "tokenHash" = ${tokenHash} LIMIT 1 FOR UPDATE`,
+        'tokenHash' in selector
+          ? Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "tokenHash" = ${selector.tokenHash} LIMIT 1 FOR UPDATE`
+          : Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "id" = ${selector.invitationId} LIMIT 1 FOR UPDATE`,
       );
       if (!locked[0]) return { kind: 'invalid' as const };
       const i = await tx.secretaryInvitation.findUnique({
@@ -335,7 +352,7 @@ export class SecretaryInvitationService {
       if (
         !i ||
         i.status !== SecretaryInvitationStatus.PENDING ||
-        i.tokenHash !== tokenHash ||
+        (tokenHash !== null && i.tokenHash !== tokenHash) ||
         !i.activeInvitationKey ||
         !i.requestedAssignmentType
       )

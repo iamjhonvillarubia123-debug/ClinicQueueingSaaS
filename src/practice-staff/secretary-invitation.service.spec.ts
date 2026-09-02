@@ -307,4 +307,30 @@ describe('SecretaryInvitationService', () => {
     );
     expect(transaction.practiceStaff.create).not.toHaveBeenCalled();
   });
+
+  it('accepts workspace selection by invitation id while retaining identity checks', async () => {
+    transaction.$queryRaw.mockResolvedValue([{ id: 'invite-1' }]);
+    transaction.secretaryInvitation.findUnique.mockResolvedValue({
+      id: 'invite-1',
+      status: 'PENDING',
+      tokenHash: 'stored-hash',
+      activeInvitationKey: 'key',
+      expiresAt: new Date(Date.now() + 60_000),
+      requestedAssignmentType: 'CLINIC_SECRETARY',
+      notificationOutbox: null,
+    });
+    transaction.user.findUnique.mockResolvedValue({
+      id: 'doctor-2',
+      email: 'jane@example.test',
+      role: 'DOCTOR',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+      emailVerifiedAt: new Date(),
+    });
+    await expect(
+      service.acceptPendingById('doctor-2', 'invite-1'),
+    ).rejects.toThrow('Only a signed-in Secretary');
+    expect(transaction.$queryRaw).toHaveBeenCalled();
+    expect(transaction.practiceStaff.create).not.toHaveBeenCalled();
+  });
 });
