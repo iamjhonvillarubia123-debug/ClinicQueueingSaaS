@@ -32,6 +32,7 @@ import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
 import { DoctorCalendarPage } from './doctor/DoctorCalendarPage';
+import { DoctorSettingsPage } from './doctor/DoctorSettingsPage';
 import { ClinicTabPage } from './doctor/ClinicTab';
 import {
   DoctorOnly,
@@ -275,12 +276,7 @@ export function App() {
             />
             <Route
               path="/app/settings"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Settings"
-                  description="Doctor profile and account settings will be designed here next."
-                />
-              }
+              element={<DoctorSettingsPage />}
             />
             <Route
               path="/app/billing"
