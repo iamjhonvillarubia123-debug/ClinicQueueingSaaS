@@ -40,7 +40,9 @@ afterEach(() => {
 
 describe('Doctor Settings', () => {
   it('shows all five sections without inventing account data and safely blocks disablement', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () => response({ sessions: [] }));
     const user = mount();
     for (const name of [
       'Account & Security',
@@ -63,11 +65,27 @@ describe('Doctor Settings', () => {
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(
+      true,
+    );
   });
 
-  it('leaves password and session actions unconnected', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+  it('leaves password change unconnected and requires a password for other-session revocation', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () =>
+        response({
+          sessions: [
+            {
+              id: 'other',
+              isCurrent: false,
+              createdAt: '2026-09-03T09:00:00Z',
+              lastSeenAt: '2026-09-03T09:00:00Z',
+              expiresAt: '2026-09-04T09:00:00Z',
+            },
+          ],
+        }),
+      );
     const user = mount();
     await user.click(
       screen.getAllByRole('button', {
@@ -86,20 +104,29 @@ describe('Doctor Settings', () => {
     expect(
       screen.getByRole('button', { name: 'Sign Out Others' }),
     ).toBeDisabled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(
+      true,
+    );
   });
 
   it('requires explicit final confirmation and preserves the form on deletion failure', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        response({ message: 'Email or current password is incorrect.' }, 401),
+      .mockImplementation(async (url) =>
+        String(url).endsWith('/auth/sessions')
+          ? response({ sessions: [] })
+          : response(
+              { message: 'Email or current password is incorrect.' },
+              401,
+            ),
       );
     const user = mount();
     await user.click(
       screen.getByRole('button', { name: 'Delete Account Permanently' }),
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(
+      true,
+    );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(
       screen.getByRole('button', { name: 'Permanently Delete My Account' }),
@@ -117,7 +144,9 @@ describe('Doctor Settings', () => {
       screen.getByRole('button', { name: 'Permanently Delete My Account' }),
     );
     expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
-    const [url, options] = fetchMock.mock.calls[0];
+    const [url, options] = fetchMock.mock.calls.find(
+      ([, options]) => options?.method === 'POST',
+    )!;
     expect(String(url)).toContain('/doctor/account/permanent-delete');
     expect(JSON.parse(String(options?.body))).toEqual({
       email: 'test@example.test',

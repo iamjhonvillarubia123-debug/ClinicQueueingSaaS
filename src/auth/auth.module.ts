@@ -4,6 +4,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { AccountRegistrationService } from './account-registration.service';
 import { AuthController } from './auth.controller';
+import { SessionManagementController } from './session-management.controller';
+import { SessionManagementService } from './session-management.service';
 import { AuthService } from './auth.service';
 import { AuthenticationService } from './authentication.service';
 import { EmailVerificationService } from './email-verification.service';
@@ -16,8 +18,9 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
 
 @Module({
   imports: [PrismaModule, ConfigModule, MobileNumberModule],
-  controllers: [AuthController],
+  controllers: [AuthController, SessionManagementController],
   providers: [
+    SessionManagementService,
     AccountRegistrationService,
     AuthService,
     AuthenticationService,

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { SessionSettings } from './SessionSettings';
 import {
   Card,
   Checklist,
@@ -127,26 +128,7 @@ export function AccountSettings() {
             </button>
           </div>
         </Card>
-        <Card
-          title="3. Active Sessions"
-          description="Devices where your account is currently signed in."
-          icon="globe"
-        >
-          <div className="ds-soft-row">
-            <span>This device</span>
-            <span className="ds-badge">Current workspace</span>
-          </div>
-          <p className="ds-muted">
-            Device details and other sessions are not available from the current
-            backend.
-          </p>
-          <button onClick={() => open('Manage Active Sessions')}>
-            Manage Active Sessions
-          </button>{' '}
-          <button onClick={() => open('Sign Out All Other Sessions')}>
-            Sign Out All Other Sessions
-          </button>
-        </Card>
+        <SessionSettings panel={panel} onOpen={open} onClose={close} />
         <Card
           title="4. Account Management"
           description="Disable or permanently delete your account."
@@ -202,171 +184,159 @@ export function AccountSettings() {
         </Card>
         <Help title="Account Help" items={securityNotes} />
       </aside>
-      {panel && (
-        <Drawer title={panel} onClose={close} busy={busy}>
-          {panel === 'View Profile' && (
-            <>
-              <p>Doctor account</p>
-              <dl>
-                <dt>Account ID</dt>
-                <dd>{profile?.userId}</dd>
-                <dt>Role</dt>
-                <dd>Doctor</dd>
-              </dl>
-              <Unconnected reason="The authenticated profile endpoint exposes only an account ID and role, not your name, email, verification, or professional profile." />
-            </>
-          )}
-          {panel === 'Change Password' && (
-            <>
-              <p>Update your password to keep your account secure.</p>
-              <PasswordField
-                label="Current Password"
-                value={password}
-                onChange={setPassword}
-              />
-              <PasswordField
-                label="New Password"
-                value={newPassword}
-                onChange={setNewPassword}
-                newPassword
-              />
-              <PasswordField
-                label="Confirm New Password"
-                value={confirmation}
-                onChange={setConfirmation}
-                newPassword
-              />
-              <Unconnected reason="There is no signed-in change-password endpoint. Email-based password recovery is a separate workflow." />
-              <div className="ds-editor">
-                <h3>Password requirements in the approved design</h3>
+      {panel &&
+        ![
+          'Manage Active Sessions',
+          'Sign Out All Other Sessions',
+          'Sign Out Session',
+        ].includes(panel) && (
+          <Drawer title={panel} onClose={close} busy={busy}>
+            {panel === 'View Profile' && (
+              <>
+                <p>Doctor account</p>
+                <dl>
+                  <dt>Account ID</dt>
+                  <dd>{profile?.userId}</dd>
+                  <dt>Role</dt>
+                  <dd>Doctor</dd>
+                </dl>
+                <Unconnected reason="The authenticated profile endpoint exposes only an account ID and role, not your name, email, verification, or professional profile." />
+              </>
+            )}
+            {panel === 'Change Password' && (
+              <>
+                <p>Update your password to keep your account secure.</p>
+                <PasswordField
+                  label="Current Password"
+                  value={password}
+                  onChange={setPassword}
+                />
+                <PasswordField
+                  label="New Password"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  newPassword
+                />
+                <PasswordField
+                  label="Confirm New Password"
+                  value={confirmation}
+                  onChange={setConfirmation}
+                  newPassword
+                />
+                <Unconnected reason="There is no signed-in change-password endpoint. Email-based password recovery is a separate workflow." />
+                <div className="ds-editor">
+                  <h3>Password requirements in the approved design</h3>
+                  <Checklist
+                    items={[
+                      'At least 8 characters',
+                      'Uppercase and lowercase letters',
+                      'At least one number',
+                      'At least one special character',
+                    ]}
+                  />
+                  <small>
+                    These proposed requirements are not yet enforced by a
+                    change-password backend.
+                  </small>
+                </div>
+                <button disabled>Update Password</button>
+              </>
+            )}
+            {panel === 'Disable Account' && (
+              <>
+                <Note warning>
+                  You are about to disable your account temporarily.
+                </Note>
                 <Checklist
                   items={[
-                    'At least 8 characters',
-                    'Uppercase and lowercase letters',
-                    'At least one number',
-                    'At least one special character',
+                    'You would be signed out of your devices.',
+                    'Clinic access and new bookings would stop.',
+                    'Your data and settings would follow the account retention policy.',
+                    'You can reactivate a voluntarily disabled account later.',
                   ]}
                 />
-                <small>
-                  These proposed requirements are not yet enforced by a
-                  change-password backend.
-                </small>
-              </div>
-              <button disabled>Update Password</button>
-            </>
-          )}
-          {panel === 'Manage Active Sessions' && (
-            <Unconnected reason="The server does not expose a session list or per-device sign-out endpoint." />
-          )}
-          {panel === 'Sign Out All Other Sessions' && (
-            <>
-              <Note>
-                This would sign you out of all other devices except this one.
-              </Note>
-              <PasswordField
-                label="Password"
-                value={password}
-                onChange={setPassword}
-              />
-              <Unconnected reason="There is no password-verified sign-out-other-sessions endpoint." />
-              <button disabled>Sign Out Others</button>
-            </>
-          )}
-          {panel === 'Disable Account' && (
-            <>
-              <Note warning>
-                You are about to disable your account temporarily.
-              </Note>
-              <Checklist
-                items={[
-                  'You would be signed out of your devices.',
-                  'Clinic access and new bookings would stop.',
-                  'Your data and settings would follow the account retention policy.',
-                  'You can reactivate a voluntarily disabled account later.',
-                ]}
-              />
-              <PasswordField
-                label="Password"
-                value={password}
-                onChange={setPassword}
-              />
-              <Unconnected reason="Disablement exists, but its endpoint does not verify the password required by this design. It is intentionally not called here." />
-              <button disabled>Disable Account</button>
-            </>
-          )}
-          {panel === 'Permanently Delete Account' && (
-            <>
-              <Note warning>
-                This action is permanent and cannot be undone.
-              </Note>
-              <Checklist items={deletionNotes} />
-              <button
-                className="ds-danger"
-                onClick={() => setPanel('Confirm Permanent Deletion')}
-              >
-                Continue
-              </button>
-            </>
-          )}
-          {panel === 'Confirm Permanent Deletion' && (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void permanentlyDelete();
-              }}
-            >
-              <Note warning>
-                Final confirmation required. Enter the email and password of the
-                Doctor account you intend to permanently close.
-              </Note>
-              <label>
-                Doctor account email
-                <input
-                  type="email"
-                  autoComplete="username"
-                  required
-                  value={email}
-                  disabled={busy}
-                  onChange={(event) => setEmail(event.target.value)}
+                <PasswordField
+                  label="Password"
+                  value={password}
+                  onChange={setPassword}
                 />
-              </label>
-              <PasswordField
-                label="Password"
-                value={password}
-                onChange={setPassword}
-                disabled={busy}
-              />
-              <label className="ds-checkbox">
-                <input
-                  type="checkbox"
-                  required
-                  checked={acknowledged}
-                  disabled={busy}
-                  onChange={(event) => setAcknowledged(event.target.checked)}
-                />
-                I understand that this account cannot be reactivated and this
-                action is irreversible.
-              </label>
-              {error && (
-                <p role="alert" className="ds-error">
-                  {error}
-                </p>
-              )}
-              <button
-                className="ds-danger"
-                disabled={busy || !acknowledged || !password || !email}
+                <Unconnected reason="Disablement exists, but its endpoint does not verify the password required by this design. It is intentionally not called here." />
+                <button disabled>Disable Account</button>
+              </>
+            )}
+            {panel === 'Permanently Delete Account' && (
+              <>
+                <Note warning>
+                  This action is permanent and cannot be undone.
+                </Note>
+                <Checklist items={deletionNotes} />
+                <button
+                  className="ds-danger"
+                  onClick={() => setPanel('Confirm Permanent Deletion')}
+                >
+                  Continue
+                </button>
+              </>
+            )}
+            {panel === 'Confirm Permanent Deletion' && (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void permanentlyDelete();
+                }}
               >
-                {busy ? 'Deleting…' : 'Permanently Delete My Account'}
+                <Note warning>
+                  Final confirmation required. Enter the email and password of
+                  the Doctor account you intend to permanently close.
+                </Note>
+                <label>
+                  Doctor account email
+                  <input
+                    type="email"
+                    autoComplete="username"
+                    required
+                    value={email}
+                    disabled={busy}
+                    onChange={(event) => setEmail(event.target.value)}
+                  />
+                </label>
+                <PasswordField
+                  label="Password"
+                  value={password}
+                  onChange={setPassword}
+                  disabled={busy}
+                />
+                <label className="ds-checkbox">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={acknowledged}
+                    disabled={busy}
+                    onChange={(event) => setAcknowledged(event.target.checked)}
+                  />
+                  I understand that this account cannot be reactivated and this
+                  action is irreversible.
+                </label>
+                {error && (
+                  <p role="alert" className="ds-error">
+                    {error}
+                  </p>
+                )}
+                <button
+                  className="ds-danger"
+                  disabled={busy || !acknowledged || !password || !email}
+                >
+                  {busy ? 'Deleting…' : 'Permanently Delete My Account'}
+                </button>
+              </form>
+            )}
+            <footer>
+              <button onClick={close} disabled={busy}>
+                {panel === 'View Profile' ? 'Close' : 'Cancel'}
               </button>
-            </form>
-          )}
-          <footer>
-            <button onClick={close} disabled={busy}>
-              {panel === 'View Profile' ? 'Close' : 'Cancel'}
-            </button>
-          </footer>
-        </Drawer>
-      )}
+            </footer>
+          </Drawer>
+        )}
     </>
   );
 }

@@ -1,5 +1,7 @@
 # Doctor Settings: frontend and backend coverage
 
+Follow-up: Active Sessions is now implemented with authenticated session listing, owner-only individual revocation, and password-verified revocation of other sessions. Browser/location metadata remains unavailable. The table below records the original frontend-only checkpoint; see [settings-backend-follow-up.md](settings-backend-follow-up.md) for the current implementation status and the user's subsequent decisions, including account-only exports with no patient data.
+
 Reviewed September 3, 2026. Scope: the five approved Doctor Settings designs. No backend, database, migration, or API contract changes were made for this implementation.
 
 The new page is `/app/settings`, with bookmarkable `?tab=account`, `defaults`, `notifications`, `privacy`, and `audit` sections. Existing Doctor navigation is preserved. Unsupported panels are available for review, but their final submission buttons are disabled and explicitly say **Not connected yet**. No sample identities, notifications, audit events, security statuses, or success results are presented as real data.
