@@ -297,7 +297,7 @@ describe('Doctor Settings', () => {
     });
   });
 
-  it('does not call the incompatible apply endpoint or save unsupported defaults', async () => {
+  it('requires templates before copying and loads current general defaults', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async (url) =>
@@ -310,7 +310,13 @@ describe('Doctor Settings', () => {
                   lifecycleStatus: 'ACTIVE',
                 },
               ]
-            : { services: [], bookingQuestions: [] },
+            : String(url).endsWith('/account/settings')
+              ? {
+                  defaultTimeZone: 'Asia/Manila',
+                  maximumAdvanceBookingDays: 30,
+                  allowOnlineBooking: true,
+                }
+              : { services: [], bookingQuestions: [] },
         ),
       );
     const user = mount('defaults');
@@ -320,14 +326,15 @@ describe('Doctor Settings', () => {
     await user.click(
       await screen.findByRole('checkbox', { name: 'Test Clinic' }),
     );
-    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Review Copy' })).toBeDisabled();
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Close',
       }),
     );
     await user.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
-    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    expect(screen.getByLabelText('Select Timezone')).toHaveValue('Asia/Manila');
     expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(
       true,
     );
@@ -481,13 +488,15 @@ describe('Doctor Settings', () => {
       .spyOn(globalThis, 'fetch')
       .mockRejectedValue(new Error('offline'));
     const user = mount('defaults');
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect((await screen.findAllByRole('alert'))[0]).toHaveTextContent(
       'Unable to load',
     );
-    fetchMock.mockResolvedValue(
-      response({ services: [], bookingQuestions: [] }),
-    );
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+    fetchMock.mockImplementation(async (url) => response(String(url).endsWith('/account/settings')
+      ? { defaultTimeZone: 'Asia/Manila', maximumAdvanceBookingDays: 30, allowOnlineBooking: true }
+      : { services: [], bookingQuestions: [] }));
+    for (const button of screen.getAllByRole('button', { name: 'Retry' }))
+      await user.click(button);
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: 'Manage Services' }),

@@ -22,6 +22,9 @@ const MAX_PATIENT_ESTIMATED_SERVICE_MINUTES = 3 * 24 * 60;
 
 type DoctorDurationSettingsRow = {
   maximumEstimatedServiceMinutesPerPatient: number | null;
+  defaultTimeZone: string;
+  maximumAdvanceBookingDays: number;
+  allowOnlineBooking: boolean;
 };
 
 @Injectable()
@@ -139,10 +142,14 @@ export class DoctorService {
   async getAccountSettings(authenticatedUserId: string) {
     const rows = await this.prisma.$queryRaw<DoctorDurationSettingsRow[]>(
       Prisma.sql`
-        SELECT s."maximumEstimatedServiceMinutesPerPatient"
+        SELECT s."maximumEstimatedServiceMinutesPerPatient", s."defaultTimeZone",
+          s."maximumAdvanceBookingDays", s."allowOnlineBooking"
         FROM "DoctorAccountSettings" s
         INNER JOIN "DoctorProfile" d ON d."id" = s."doctorProfileId"
+        INNER JOIN "User" u ON u."id" = d."userId"
         WHERE d."userId" = ${authenticatedUserId}
+          AND u."role" = 'DOCTOR' AND u."accountStatus" = 'ACTIVE'
+          AND u."administrativeRestrictionStatus" = 'NONE'
         LIMIT 1
       `,
     );
@@ -159,14 +166,15 @@ export class DoctorService {
     authenticatedUserId: string,
     dto: UpdateDoctorAccountSettingsDto,
   ) {
-    if (dto.maximumEstimatedServiceMinutesPerPatient === undefined) {
+    if (Object.values(dto).every((value) => value === undefined)) {
       throw new BadRequestException(
-        'maximumEstimatedServiceMinutesPerPatient is required.',
+        'At least one account setting is required.',
       );
     }
     const maximumEstimatedServiceMinutesPerPatient =
       dto.maximumEstimatedServiceMinutesPerPatient;
     if (
+      maximumEstimatedServiceMinutesPerPatient !== undefined &&
       maximumEstimatedServiceMinutesPerPatient !== null &&
       (!Number.isInteger(maximumEstimatedServiceMinutesPerPatient) ||
         maximumEstimatedServiceMinutesPerPatient < 1 ||
@@ -178,16 +186,56 @@ export class DoctorService {
       );
     }
 
+    const changes: Prisma.Sql[] = [];
+    if (maximumEstimatedServiceMinutesPerPatient !== undefined) {
+      changes.push(
+        Prisma.sql`"maximumEstimatedServiceMinutesPerPatient" = ${maximumEstimatedServiceMinutesPerPatient}`,
+      );
+    }
+    if (dto.defaultTimeZone !== undefined) {
+      if (
+        typeof dto.defaultTimeZone !== 'string' ||
+        !dto.defaultTimeZone.trim()
+      )
+        throw new BadRequestException('A valid timezone is required.');
+      this.assertValidTimeZone(dto.defaultTimeZone);
+      changes.push(Prisma.sql`"defaultTimeZone" = ${dto.defaultTimeZone}`);
+    }
+    if (dto.maximumAdvanceBookingDays !== undefined) {
+      if (
+        !Number.isInteger(dto.maximumAdvanceBookingDays) ||
+        dto.maximumAdvanceBookingDays < 1 ||
+        dto.maximumAdvanceBookingDays > 365
+      )
+        throw new BadRequestException(
+          'Advance booking must be between 1 and 365 days.',
+        );
+      changes.push(
+        Prisma.sql`"maximumAdvanceBookingDays" = ${dto.maximumAdvanceBookingDays}`,
+      );
+    }
+    if (dto.allowOnlineBooking !== undefined) {
+      if (typeof dto.allowOnlineBooking !== 'boolean')
+        throw new BadRequestException('Online booking must be true or false.');
+      changes.push(
+        Prisma.sql`"allowOnlineBooking" = ${dto.allowOnlineBooking}`,
+      );
+    }
+    if (!changes.length)
+      throw new BadRequestException('No supported settings supplied.');
     const rows = await this.prisma.$queryRaw<DoctorDurationSettingsRow[]>(
       Prisma.sql`
         UPDATE "DoctorAccountSettings" s
         SET
-          "maximumEstimatedServiceMinutesPerPatient" = ${maximumEstimatedServiceMinutesPerPatient},
+          ${Prisma.join(changes)},
           "updatedAt" = CURRENT_TIMESTAMP
-        FROM "DoctorProfile" d
+        FROM "DoctorProfile" d, "User" u
         WHERE s."doctorProfileId" = d."id"
           AND d."userId" = ${authenticatedUserId}
-        RETURNING s."maximumEstimatedServiceMinutesPerPatient"
+          AND u."id" = d."userId" AND u."role" = 'DOCTOR'
+          AND u."accountStatus" = 'ACTIVE' AND u."administrativeRestrictionStatus" = 'NONE'
+        RETURNING s."maximumEstimatedServiceMinutesPerPatient", s."defaultTimeZone",
+          s."maximumAdvanceBookingDays", s."allowOnlineBooking"
       `,
     );
     const settings = rows[0];

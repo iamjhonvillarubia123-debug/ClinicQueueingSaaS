@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CopyDefaults } from './CopyDefaults';
 import { apiRequest } from '../../api/client';
 import {
   Card,
@@ -34,7 +35,6 @@ type Question = {
   selectOptions?: { value: string; label: string }[] | null;
 };
 type Defaults = { services: Service[]; bookingQuestions: Question[] };
-type Clinic = { id: string; name: string; lifecycleStatus: string };
 const about = [
   'These templates help you set up new clinics faster.',
   'Clinic-specific settings take precedence.',
@@ -51,56 +51,13 @@ function lastUpdated(items: { updatedAt?: string }[] | undefined) {
     : 'Not available';
 }
 
-function ApplyPreview({ kind }: { kind: string }) {
-  const clinics = useSettingsData<Clinic[]>('/practice-location');
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
-  const visible = (clinics.data ?? []).filter(
-    (item) =>
-      item.lifecycleStatus !== 'PERMANENTLY_DELETED' &&
-      item.name.toLowerCase().includes(search.toLowerCase()),
-  );
-  return (
-    <>
-      <p>Select clinics for your default {kind.toLowerCase()}.</p>
-      <label>
-        Search clinics
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </label>
-      <LoadState
-        error={clinics.error}
-        loading={!clinics.data}
-        retry={clinics.reload}
-      />
-      {visible.map((clinic) => (
-        <label key={clinic.id} className="ds-checkbox ds-soft-row">
-          <input
-            type="checkbox"
-            checked={selected.includes(clinic.id)}
-            onChange={(event) =>
-              setSelected(
-                event.target.checked
-                  ? [...selected, clinic.id]
-                  : selected.filter((id) => id !== clinic.id),
-              )
-            }
-          />
-          {clinic.name}
-        </label>
-      ))}
-      {clinics.data && !visible.length && <p>No matching clinics.</p>}
-      <Unconnected reason="The existing apply endpoint copies both services and questions and overwrites template-linked entries. It does not support this separate, additive-only action." />
-      <button disabled>Apply</button>
-    </>
-  );
-}
-
 export function DefaultSettings() {
   const defaults = useSettingsData<Defaults>('/doctor/defaults');
+  const settings = useSettingsData<{
+    defaultTimeZone: string;
+    maximumAdvanceBookingDays: number;
+    allowOnlineBooking: boolean;
+  }>('/doctor/account/settings');
   const [panel, setPanel] = useState('');
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
@@ -115,10 +72,39 @@ export function DefaultSettings() {
     setMessage('');
     setEditingService(null);
     setEditingQuestion(null);
-    setPreviewValue('');
+    setPreviewValue(
+      value.includes('Timezone')
+        ? (settings.data?.defaultTimeZone ?? '')
+        : String(settings.data?.maximumAdvanceBookingDays ?? ''),
+    );
+    setPreviewEnabled(settings.data?.allowOnlineBooking ?? false);
   }
   function close() {
     if (!busy) open('');
+  }
+  async function saveGeneral() {
+    setBusy(true);
+    setError('');
+    try {
+      await apiRequest('/doctor/account/settings', {
+        method: 'PATCH',
+        body: panel.includes('Timezone')
+          ? { defaultTimeZone: previewValue }
+          : panel.includes('Advance')
+            ? { maximumAdvanceBookingDays: Number(previewValue) }
+            : { allowOnlineBooking: previewEnabled },
+      });
+      settings.reload();
+      setMessage(
+        'Default saved. Existing bookings and clinic configuration were not changed.',
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to save default.',
+      );
+    } finally {
+      setBusy(false);
+    }
   }
   async function saveTemplate(
     kind: 'services' | 'booking-questions',
@@ -156,6 +142,11 @@ export function DefaultSettings() {
           description="System defaults that control general behavior across your practice."
           icon="globe"
         >
+          <LoadState
+            error={settings.error}
+            loading={!settings.data}
+            retry={settings.reload}
+          />
           <div className="ds-three">
             {[
               'Default Timezone',
@@ -164,15 +155,30 @@ export function DefaultSettings() {
             ].map((title) => (
               <section className="ds-tile" key={title}>
                 <h3>{title}</h3>
-                <strong className="ds-value">Not available</strong>
+                <strong className="ds-value">
+                  {!settings.data
+                    ? 'Not available'
+                    : title === 'Default Timezone'
+                      ? settings.data.defaultTimeZone
+                      : title === 'Maximum Advance Booking'
+                        ? `${settings.data.maximumAdvanceBookingDays} days`
+                        : settings.data.allowOnlineBooking
+                          ? 'Enabled'
+                          : 'Disabled'}
+                </strong>
                 <p>
                   {title === 'Default Timezone'
-                    ? 'Default time zone for new clinics.'
+                    ? 'Default time zone and Doctor calendar time zone.'
                     : title === 'Maximum Advance Booking'
                       ? 'How far in advance patients can book online.'
-                      : 'Whether new online bookings are enabled.'}
+                      : 'Practice-wide permission for new online bookings.'}
                 </p>
-                <button onClick={() => open(`Edit ${title}`)}>Edit</button>
+                <button
+                  disabled={!settings.data || !!settings.error}
+                  onClick={() => open(`Edit ${title}`)}
+                >
+                  Edit
+                </button>
               </section>
             ))}
           </div>
@@ -223,10 +229,15 @@ export function DefaultSettings() {
             </div>
           ))}
           <Note>
-            The approved Apply workflow adds missing items without overwriting
-            existing clinic settings. It is not connected yet because the
-            current backend behaves differently.
+            Copying defaults adds missing items without overwriting existing
+            clinic settings.
           </Note>
+          <button
+            disabled={!defaults.data}
+            onClick={() => open('Apply All Defaults to Clinics')}
+          >
+            Apply Services and Questions
+          </button>
         </Card>
       </div>
       <aside className="ds-aside">
@@ -253,10 +264,12 @@ export function DefaultSettings() {
         <Drawer title={panel} onClose={close} busy={busy}>
           {panel.startsWith('Edit ') && (
             <>
-              <p>
-                Preview this default. The current value is not exposed by the
-                settings API.
-              </p>
+              <Note>
+                Timezone does not change existing clinic timezones. Advance
+                booking and online booking govern new public bookings across
+                your clinics. Existing bookings are preserved; clinic
+                availability rules still apply.
+              </Note>
               {panel.includes('Timezone') ? (
                 <label>
                   Select Timezone
@@ -276,6 +289,7 @@ export function DefaultSettings() {
                   <input
                     type="number"
                     min="1"
+                    max="365"
                     value={previewValue}
                     onChange={(event) => setPreviewValue(event.target.value)}
                   />
@@ -289,17 +303,37 @@ export function DefaultSettings() {
                       setPreviewEnabled(event.target.checked)
                     }
                   />
-                  Enable public online booking (preview only)
+                  Enable public online booking
                 </label>
               )}
-              <Unconnected reason="These values exist in the database, but the existing account settings endpoint neither returns nor updates them." />
-              <button disabled>Save Changes</button>
+              <button
+                className="ds-primary"
+                disabled={
+                  busy ||
+                  (panel.includes('Timezone') && !previewValue) ||
+                  (panel.includes('Advance') &&
+                    (!Number.isInteger(Number(previewValue)) ||
+                      Number(previewValue) < 1 ||
+                      Number(previewValue) > 365))
+                }
+                onClick={() => void saveGeneral()}
+              >
+                Save Changes
+              </button>
             </>
           )}
-          {panel.startsWith('Apply ') && (
-            <ApplyPreview
+          {panel.startsWith('Apply ') && defaults.data && (
+            <CopyDefaults
+              key={panel}
+              defaults={defaults.data}
+              busy={busy}
+              setBusy={setBusy}
               kind={
-                panel.includes('Services') ? 'Services' : 'Booking Questions'
+                panel.includes('All Defaults')
+                  ? 'both'
+                  : panel.includes('Services')
+                    ? 'services'
+                    : 'questions'
               }
             />
           )}

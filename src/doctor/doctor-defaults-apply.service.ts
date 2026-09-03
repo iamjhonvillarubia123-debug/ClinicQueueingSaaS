@@ -46,11 +46,22 @@ export class DoctorDefaultsApplyService {
       `${commandType}|${authenticatedUserId}|${key}`,
     );
     const requestFingerprint = this.hash(
-      `${commandType}|${authenticatedUserId}|${targetIds.join(',')}`,
+      JSON.stringify([
+        commandType,
+        authenticatedUserId,
+        targetIds,
+        dto.serviceTemplateIds ? [...dto.serviceTemplateIds].sort() : 'ALL',
+        dto.bookingQuestionTemplateIds
+          ? [...dto.bookingQuestionTemplateIds].sort()
+          : 'ALL',
+      ]),
     );
 
     return this.prisma.$transaction(async (transaction) => {
       await this.acquireCommandLock(transaction, commandIdentityKey);
+      await transaction.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${authenticatedUserId} FOR UPDATE`,
+      );
       const actor = await transaction.user.findUnique({
         where: { id: authenticatedUserId },
         select: {
@@ -119,7 +130,7 @@ export class DoctorDefaultsApplyService {
         }
       }
 
-      const [serviceTemplates, questionTemplates] = await Promise.all([
+      const [allServices, allQuestions] = await Promise.all([
         transaction.doctorServiceTemplate.findMany({
           where: { doctorProfileId },
           orderBy: { id: 'asc' },
@@ -130,11 +141,45 @@ export class DoctorDefaultsApplyService {
         }),
       ]);
 
+      const selectTemplates = <T extends { id: string }>(
+        all: T[],
+        ids: string[] | undefined,
+      ): T[] => {
+        if (ids === undefined) return all;
+        if (
+          !Array.isArray(ids) ||
+          new Set(ids).size !== ids.length ||
+          ids.some((id) => !all.some((item) => item.id === id))
+        ) {
+          throw new BadRequestException(
+            'Select only your own existing default templates, without duplicates.',
+          );
+        }
+        return all.filter((item) => ids.includes(item.id));
+      };
+      const serviceTemplates = selectTemplates(
+        allServices,
+        dto.serviceTemplateIds,
+      );
+      const questionTemplates = selectTemplates(
+        allQuestions,
+        dto.bookingQuestionTemplateIds,
+      );
+      if (!serviceTemplates.length && !questionTemplates.length) {
+        throw new BadRequestException('Select at least one default template.');
+      }
+      const questionPlans = new Map<
+        string,
+        Awaited<ReturnType<typeof this.validateQuestionResult>>
+      >();
       for (const practiceLocationId of targetIds) {
-        await this.validateQuestionResult(
-          transaction,
+        questionPlans.set(
           practiceLocationId,
-          questionTemplates,
+          await this.validateQuestionResult(
+            transaction,
+            practiceLocationId,
+            questionTemplates,
+          ),
         );
       }
 
@@ -182,26 +227,18 @@ export class DoctorDefaultsApplyService {
             },
             select: { id: true },
           });
-          const target = existing
-            ? await transaction.practiceLocationService.update({
-                where: { id: existing.id },
-                data: {
-                  name: template.name,
-                  durationMinutes: template.durationMinutes,
-                  status: template.status,
-                },
-                select: { id: true },
-              })
-            : await transaction.practiceLocationService.create({
-                data: {
-                  practiceLocationId,
-                  sourceDoctorServiceTemplateId: template.id,
-                  name: template.name,
-                  durationMinutes: template.durationMinutes,
-                  status: template.status,
-                },
-                select: { id: true },
-              });
+          // Existing source-linked configuration is owned by the clinic from now on.
+          if (existing) continue;
+          const target = await transaction.practiceLocationService.create({
+            data: {
+              practiceLocationId,
+              sourceDoctorServiceTemplateId: template.id,
+              name: template.name,
+              durationMinutes: template.durationMinutes,
+              status: template.status,
+            },
+            select: { id: true },
+          });
           await this.insertAuditItem(
             transaction,
             targetAuditId,
@@ -211,11 +248,15 @@ export class DoctorDefaultsApplyService {
           );
         }
 
+        const plan = questionPlans.get(practiceLocationId)!;
+        let displayOrder = plan.nextOrder;
         for (const template of questionTemplates) {
-          const targetId = await this.upsertBookingQuestion(
+          if (!plan.missingIds.has(template.id)) continue;
+          const targetId = await this.insertBookingQuestion(
             transaction,
             practiceLocationId,
-            template,
+            { ...template, displayOrder: displayOrder++ },
+            JSON.stringify(template.selectOptions),
           );
           await this.insertAuditItem(
             transaction,
@@ -252,138 +293,25 @@ export class DoctorDefaultsApplyService {
       ORDER BY "id"
       FOR UPDATE
     `);
-    const templateIds = new Set(templates.map((template) => template.id));
-    const local = existing.filter(
-      (question) =>
-        !question.sourceDoctorBookingQuestionTemplateId ||
-        !templateIds.has(question.sourceDoctorBookingQuestionTemplateId),
+    const sourceIds = new Set(
+      existing.map(
+        (question) => question.sourceDoctorBookingQuestionTemplateId,
+      ),
     );
-    const localOrders = new Set(local.map((question) => question.displayOrder));
-    for (const template of templates) {
-      if (localOrders.has(template.displayOrder)) {
-        throw new ConflictException(
-          'A selected PracticeLocation has a location-only BookingQuestion using a Doctor-default display order. Resolve the display order before applying defaults.',
-        );
-      }
-    }
+    const missing = templates.filter((template) => !sourceIds.has(template.id));
     const activeCount =
-      local.filter((question) => question.isActive).length +
-      templates.filter((template) => template.isActive).length;
+      existing.filter((question) => question.isActive).length +
+      missing.filter((template) => template.isActive).length;
     if (activeCount > MAX_ACTIVE_BOOKING_QUESTIONS) {
       throw new ConflictException(
-        'Applying Doctor-wide defaults would exceed five active BookingQuestions at a selected PracticeLocation.',
+        'Copying these defaults would exceed five active booking questions at a selected clinic. Select fewer questions. No clinics have been changed.',
       );
     }
-  }
-
-  private async upsertBookingQuestion(
-    transaction: TransactionClient,
-    practiceLocationId: string,
-    template: {
-      id: string;
-      questionText: string;
-      helpText: string | null;
-      type: string;
-      isRequired: boolean;
-      displayOrder: number;
-      isActive: boolean;
-      estimatedMinutesAdjustment: number;
-      textMaximumLength: number | null;
-      numberMinimum: Prisma.Decimal | null;
-      numberMaximum: Prisma.Decimal | null;
-      selectOptions: Prisma.JsonValue | null;
-    },
-  ): Promise<string> {
-    const existing = await transaction.$queryRaw<Array<{ id: string }>>(
-      Prisma.sql`
-        SELECT "id"
-        FROM "BookingQuestion"
-        WHERE "practiceLocationId" = ${practiceLocationId}
-          AND "sourceDoctorBookingQuestionTemplateId" = ${template.id}
-        ORDER BY "createdAt" DESC, "id" DESC
-        LIMIT 1
-        FOR UPDATE
-      `,
-    );
-    const currentId = existing[0]?.id;
-    const selectOptions = JSON.stringify(template.selectOptions);
-    if (currentId) {
-      const history = await transaction.$queryRaw<
-        Array<{ hasHistory: boolean; meaningChanged: boolean }>
-      >(Prisma.sql`
-        SELECT
-          (
-            EXISTS (
-              SELECT 1 FROM "BookingDraftAnswer" bda
-              WHERE bda."bookingQuestionId" = q."id"
-            )
-            OR EXISTS (
-              SELECT 1 FROM "AppointmentAnswer" aa
-              WHERE aa."bookingQuestionId" = q."id"
-            )
-          ) AS "hasHistory",
-          (
-            q."questionText" IS DISTINCT FROM ${template.questionText}
-            OR q."type" IS DISTINCT FROM ${template.type}::"BookingQuestionType"
-            OR COALESCE(q."selectOptions", 'null'::jsonb)
-              IS DISTINCT FROM COALESCE(${selectOptions}::jsonb, 'null'::jsonb)
-          ) AS "meaningChanged"
-        FROM "BookingQuestion" q
-        WHERE q."id" = ${currentId}
-      `);
-      if (history[0]?.hasHistory && history[0]?.meaningChanged) {
-        const temporaryOrderRows = await transaction.$queryRaw<
-          Array<{ displayOrder: number }>
-        >(Prisma.sql`
-          SELECT COALESCE(MAX("displayOrder"), 0) + 1000 AS "displayOrder"
-          FROM "BookingQuestion"
-          WHERE "practiceLocationId" = ${practiceLocationId}
-        `);
-        const historicalDisplayOrder =
-          temporaryOrderRows[0]?.displayOrder ?? 1000;
-        await transaction.$executeRaw(Prisma.sql`
-          UPDATE "BookingQuestion"
-          SET
-            "displayOrder" = ${historicalDisplayOrder},
-            "isActive" = false,
-            "sourceDoctorBookingQuestionTemplateId" = NULL,
-            "updatedAt" = CURRENT_TIMESTAMP
-          WHERE "id" = ${currentId}
-        `);
-        return this.insertBookingQuestion(
-          transaction,
-          practiceLocationId,
-          template,
-          selectOptions,
-        );
-      }
-
-      await transaction.$executeRaw(Prisma.sql`
-        UPDATE "BookingQuestion"
-        SET
-          "questionText" = ${template.questionText},
-          "helpText" = ${template.helpText},
-          "type" = ${template.type}::"BookingQuestionType",
-          "isRequired" = ${template.isRequired},
-          "displayOrder" = ${template.displayOrder},
-          "isActive" = ${template.isActive},
-          "estimatedMinutesAdjustment" = ${template.estimatedMinutesAdjustment},
-          "textMaximumLength" = ${template.textMaximumLength},
-          "numberMinimum" = ${template.numberMinimum},
-          "numberMaximum" = ${template.numberMaximum},
-          "selectOptions" = ${selectOptions}::jsonb,
-          "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "id" = ${currentId}
-      `);
-      return currentId;
-    }
-
-    return this.insertBookingQuestion(
-      transaction,
-      practiceLocationId,
-      template,
-      selectOptions,
-    );
+    return {
+      missingIds: new Set(missing.map((template) => template.id)),
+      nextOrder:
+        Math.max(-1, ...existing.map((question) => question.displayOrder)) + 1,
+    };
   }
 
   private async insertBookingQuestion(

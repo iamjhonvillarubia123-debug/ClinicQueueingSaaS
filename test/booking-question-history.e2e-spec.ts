@@ -294,7 +294,7 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
     }
   });
 
-  it('re-Apply preserves answered template-derived question history and creates the refreshed replacement', async () => {
+  it('re-Apply leaves answered template-derived questions completely unchanged', async () => {
     const fixture = await createFixture();
     try {
       const template = await prisma.doctorBookingQuestionTemplate.create({
@@ -327,32 +327,13 @@ describe('BookingQuestion historical meaning protection (e2e)', () => {
         where: { practiceLocationId: fixture.location.id },
         orderBy: { createdAt: 'asc' },
       });
-      expect(questions).toHaveLength(2);
-      const historical = questions.find(
-        (question) => question.id === fixture.question.id,
-      );
-      const replacement = questions.find(
-        (question) => question.id !== fixture.question.id,
-      );
-      expect(historical).toMatchObject({
+      expect(questions).toHaveLength(1);
+      expect(questions[0]).toMatchObject({
+        id: fixture.question.id,
         questionText: 'Historical question?',
-        isActive: false,
-      });
-      expect(replacement).toMatchObject({
-        questionText: 'Refreshed template question?',
         isActive: true,
         displayOrder: 0,
       });
-      const replacementSource = await prisma.$queryRaw<
-        Array<{ sourceDoctorBookingQuestionTemplateId: string | null }>
-      >`
-        SELECT "sourceDoctorBookingQuestionTemplateId"
-        FROM "BookingQuestion"
-        WHERE "id" = ${replacement!.id}
-      `;
-      expect(replacementSource[0]?.sourceDoctorBookingQuestionTemplateId).toBe(
-        template.id,
-      );
     } finally {
       await cleanup(fixture);
     }

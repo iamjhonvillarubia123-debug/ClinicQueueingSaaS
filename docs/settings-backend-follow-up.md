@@ -2,6 +2,18 @@
 
 ## User decisions — September 3, 2026
 
+Follow-up approval: “ok lets do that all” authorizes the remaining Settings work and recommendations, with #2 profile details still deferred and account-only exports mandatory. The original discussion below is historical; checkpoint sections record actual delivery.
+
+## Checkpoint: General defaults and additive copying (#5–6)
+
+- GET/PATCH account settings now expose timezone, advance-booking days (1–365), and online-booking permission, with server validation and current owner/account-state predicates. Omitted fields remain unchanged. Existing clinic configuration is never rewritten. Existing booking logic uses advance-booking/online permission practice-wide for new bookings; the UI explicitly says so. Changing timezone does not rewrite existing clinic timezones.
+- Copy services, questions, or both; copy all missing or selected templates. Explicit empty selection means none of that kind; omitted selection retains compatibility by selecting all of that kind.
+- Copy is additive only. Existing source-linked service/question rows are skipped, including inactive or locally edited copies. New questions append after existing order. No historical answers or existing clinic entries are modified.
+- Backend rechecks ownership and active account state, locks the actor and clinic rows, validates all targets and five-active-question capacity before writing, and applies atomically. Idempotency fingerprints include selections. The UI reviews selections and preserves retry keys after uncertain failures.
+- No schema change. Seven historical-question database tests passed against the isolated test database, with only test-designated fixtures modified. Backend: 141 suites / 671 tests passed; frontend full run: 134 passed and one outdated retry mock failed, then both affected suites passed (14 tests) after fixing the mock to return a fresh response per request. Type checks, lint, and both builds passed. Existing frontend bundle-size warning remains.
+
+Remaining: password workflows, notification expansion, audit read model, account-only export/backup, privacy inventory/status, and template-management follow-up. They are not claimed complete by this checkpoint.
+
 This records the discussion following checkpoint `8956061`. It is not a claim that every item below is implemented.
 
 1. Account disablement: user requested clarification. Existing route does not verify a password. No change authorized specifically to this workflow yet.

@@ -183,6 +183,45 @@ describe('DoctorService', () => {
     });
   });
 
+  it('updates only supplied general defaults with owner and account-state predicates', async () => {
+    prismaServiceMock.$queryRaw.mockResolvedValue([
+      {
+        defaultTimeZone: 'Asia/Manila',
+        maximumAdvanceBookingDays: 60,
+        allowOnlineBooking: false,
+      },
+    ]);
+    await service.updateAccountSettings('owner', {
+      maximumAdvanceBookingDays: 60,
+      allowOnlineBooking: false,
+    });
+    const query = (
+      prismaServiceMock.$queryRaw.mock.calls as unknown[][]
+    )[0][0] as {
+      sql: string;
+      values: unknown[];
+    };
+    expect(query.sql).toContain('u."accountStatus"');
+    expect(query.sql).not.toContain('UPDATE "PracticeLocation"');
+    expect(query.sql).not.toContain('"defaultTimeZone" =');
+    expect(query.values).toContain('owner');
+    expect(query.values).toContain(false);
+  });
+
+  it('rejects invalid general defaults and empty updates', async () => {
+    for (const dto of [
+      {},
+      { defaultTimeZone: 'bad-zone' },
+      { maximumAdvanceBookingDays: 0 },
+      { maximumAdvanceBookingDays: 366 },
+    ]) {
+      await expect(
+        service.updateAccountSettings('owner', dto),
+      ).rejects.toThrow();
+    }
+    expect(prismaServiceMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
   it('sets or clears the Doctor-wide per-patient duration cap', async () => {
     prismaServiceMock.$queryRaw
       .mockResolvedValueOnce([{ maximumEstimatedServiceMinutesPerPatient: 45 }])
