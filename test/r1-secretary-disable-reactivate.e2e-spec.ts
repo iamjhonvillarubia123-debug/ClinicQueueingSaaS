@@ -75,7 +75,9 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       },
     });
 
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
 
     const browser = request.agent(app.getHttpServer());
     await browser.post('/auth/login').send({ email, password }).expect(201);
@@ -95,7 +97,9 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       .expect(401);
 
     expect(
-      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).accountStatus,
+      (
+        await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
+      ).accountStatus,
     ).toBe('ACTIVE');
 
     await browser
@@ -107,10 +111,18 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       .expect({ disabled: true, replayed: false });
 
     expect(
-      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).accountStatus,
+      (
+        await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
+      ).accountStatus,
     ).toBe('VOLUNTARILY_DISABLED');
-    expect(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
     await browser.get('/auth/profile').expect(401);
 
     await request(app.getHttpServer())
@@ -127,10 +139,18 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       .expect({ reactivated: true, replayed: false });
 
     expect(
-      (await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).accountStatus,
+      (
+        await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
+      ).accountStatus,
     ).toBe('ACTIVE');
-    expect(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
 
     await request(app.getHttpServer()).get('/secretary/workspace').expect(401);
 
@@ -138,6 +158,8 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
     await newBrowser.post('/auth/login').send({ email, password }).expect(201);
     const workspace = await newBrowser.get('/secretary/workspace').expect(200);
     expect(workspace.body).toEqual({ clinics: [], invitations: [] });
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
   });
 });
