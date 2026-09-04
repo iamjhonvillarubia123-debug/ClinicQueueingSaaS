@@ -24,7 +24,12 @@ describe('approved create account UI', () => {
     expect(screen.getByPlaceholderText('Enter your last name')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter your email address')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter your mobile number')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getByText('At least 8 characters')).toBeInTheDocument();
+    expect(screen.getByText('Uppercase letter')).toBeInTheDocument();
+    expect(screen.getByText('Lowercase letter')).toBeInTheDocument();
+    expect(screen.getByText('Number')).toBeInTheDocument();
+    expect(screen.getByText('Special character')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
   });
 
@@ -37,6 +42,25 @@ describe('approved create account UI', () => {
     expect(screen.getByRole('radio', { name: /Secretary/i })).toBeChecked();
     expect(screen.getByText(/Work with clinics that assign you as a Secretary/i)).toBeInTheDocument();
     expect(screen.queryByText(/PracticeLocation/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps account creation blocked until the shared password requirements are met', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><CreateAccountPage /></MemoryRouter>);
+
+    const password = screen.getByPlaceholderText('Create a password');
+    const confirmation = screen.getByPlaceholderText('Re-enter your password');
+    const submit = screen.getByRole('button', { name: 'Create account' });
+
+    await user.type(password, 'weakpassword');
+    await user.type(confirmation, 'weakpassword');
+    expect(submit).toBeDisabled();
+
+    await user.clear(password);
+    await user.clear(confirmation);
+    await user.type(password, 'ExamplePass1!');
+    await user.type(confirmation, 'ExamplePass1!');
+    expect(submit).toBeEnabled();
   });
 
   it('registers the selected role and moves to the approved check-email UI', async () => {
