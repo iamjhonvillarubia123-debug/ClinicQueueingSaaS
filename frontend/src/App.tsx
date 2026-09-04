@@ -277,6 +277,15 @@ export function App() {
               element={<GlobalSecretariesPage />}
             />
             <Route
+              path="/app/reports"
+              element={
+                <DoctorWorkspacePlaceholder
+                  title="Reports"
+                  description="Doctor reporting and analytics will be implemented here from the approved Reports UI."
+                />
+              }
+            />
+            <Route
               path="/app/settings"
               element={<DoctorSettingsPage />}
             />
