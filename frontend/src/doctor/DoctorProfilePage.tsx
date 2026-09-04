@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from 'react';
+import { ApiError, apiRequest } from '../api/client';
 import './DoctorProfilePage.css';
 
 const profileChecklist = [
@@ -9,6 +11,50 @@ const profileChecklist = [
   'Clinics & contact',
   'Services & pricing',
 ];
+
+type PracticeLocationResponse = {
+  id: string;
+  publicIdentifier: string;
+  lifecycleStatus: 'DRAFT' | 'ACTIVE' | 'DISABLED' | 'PERMANENTLY_DELETED';
+  name: string | null;
+  addressLine1: string | null;
+  cityMunicipality?: string | null;
+  province?: string | null;
+  contactNumber: string | null;
+  clinicEmail?: string | null;
+  services?: Array<{ id: string; name: string; status: 'ACTIVE' | 'INACTIVE' }>;
+};
+
+type DoctorIdentity = {
+  publicIdentifier: string;
+  publicSlug: string | null;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  suffix: string | null;
+  professionalTitle: string;
+  specialization: string;
+  profileDescription: string | null;
+  profilePhotoUrl: string | null;
+};
+
+type PublicPracticeLocationRoute = {
+  publicIdentifier: string;
+  publicUrl: string;
+  qrPayload: string;
+  doctorPublicUrl: string;
+  doctor: DoctorIdentity;
+};
+
+type PublicDoctorRoute = {
+  publicIdentifier: string;
+  publicSlug: string | null;
+  publicUrl: string;
+  qrPayload: string;
+  doctor: DoctorIdentity;
+};
+
+type PublicationState = 'loading' | 'published' | 'private' | 'unknown';
 
 function Icon({ name }: { name: 'location' | 'mail' | 'phone' | 'eye' | 'copy' | 'qr' | 'print' | 'camera' | 'lock' | 'check' | 'share' | 'shield' | 'help' }) {
   const common = {
@@ -40,53 +86,180 @@ function Icon({ name }: { name: 'location' | 'mail' | 'phone' | 'eye' | 'copy' |
   }
 }
 
+function profileName(doctor: DoctorIdentity | null) {
+  if (!doctor) return 'Doctor account';
+  return [doctor.professionalTitle, doctor.firstName, doctor.middleName, doctor.lastName, doctor.suffix]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function clinicLocation(clinic: PracticeLocationResponse | null) {
+  if (!clinic) return 'No clinic connected yet';
+  const place = [clinic.cityMunicipality, clinic.province].filter(Boolean).join(', ');
+  return place ? `${clinic.name ?? 'Clinic'} · ${place}` : (clinic.name ?? clinic.addressLine1 ?? 'Clinic');
+}
+
+function profileInitials(doctor: DoctorIdentity | null) {
+  if (!doctor) return 'DR';
+  return `${doctor.firstName.charAt(0)}${doctor.lastName.charAt(0)}`.toUpperCase();
+}
+
 export function DoctorProfilePage() {
+  const [doctor, setDoctor] = useState<DoctorIdentity | null>(null);
+  const [primaryClinic, setPrimaryClinic] = useState<PracticeLocationResponse | null>(null);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
+  const [publicationState, setPublicationState] = useState<PublicationState>('loading');
+  const [loadError, setLoadError] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [suffix, setSuffix] = useState('');
+  const [professionalTitle, setProfessionalTitle] = useState('');
+  const [specialization, setSpecialization] = useState('');
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadConnectedProfileData() {
+      try {
+        const locations = await apiRequest<PracticeLocationResponse[]>('/practice-location');
+        if (!active) return;
+
+        const clinic = locations.find((location) => location.lifecycleStatus !== 'PERMANENTLY_DELETED') ?? null;
+        setPrimaryClinic(clinic);
+
+        if (!clinic?.publicIdentifier) {
+          setPublicationState('unknown');
+          return;
+        }
+
+        const locationRoute = await apiRequest<PublicPracticeLocationRoute>(
+          `/public/practice-locations/${encodeURIComponent(clinic.publicIdentifier)}`,
+        );
+        if (!active) return;
+
+        const connectedDoctor = locationRoute.doctor;
+        setDoctor(connectedDoctor);
+        setProfileUrl(locationRoute.doctorPublicUrl);
+        setFirstName(connectedDoctor.firstName);
+        setMiddleName(connectedDoctor.middleName ?? '');
+        setLastName(connectedDoctor.lastName);
+        setSuffix(connectedDoctor.suffix ?? '');
+        setProfessionalTitle(connectedDoctor.professionalTitle);
+        setSpecialization(connectedDoctor.specialization);
+        setDescription(connectedDoctor.profileDescription ?? '');
+
+        try {
+          const publicDoctor = await apiRequest<PublicDoctorRoute>(
+            `/public/doctors/${encodeURIComponent(connectedDoctor.publicIdentifier)}`,
+          );
+          if (!active) return;
+          setDoctor(publicDoctor.doctor);
+          setProfileUrl(publicDoctor.publicUrl);
+          setPublicationState('published');
+        } catch (error) {
+          if (!active) return;
+          if (error instanceof ApiError && error.status === 404) {
+            setPublicationState('private');
+          } else {
+            setPublicationState('unknown');
+          }
+        }
+      } catch {
+        if (!active) return;
+        setLoadError(true);
+        setPublicationState('unknown');
+      }
+    }
+
+    void loadConnectedProfileData();
+    return () => { active = false; };
+  }, []);
+
+  const isPublished = publicationState === 'published';
+  const publicStatusLabel = publicationState === 'loading'
+    ? 'Checking…'
+    : publicationState === 'published'
+      ? 'Published'
+      : publicationState === 'private'
+        ? 'Private'
+        : 'Unavailable';
+
+  const publicStatusCopy = publicationState === 'published'
+    ? 'Your public webpage is visible to patients.'
+    : publicationState === 'private'
+      ? 'Your public webpage is not published.'
+      : publicationState === 'loading'
+        ? 'Checking your public webpage status.'
+        : 'Public webpage status is not available right now.';
+
+  const accountContact = useMemo(() => ({
+    email: primaryClinic?.clinicEmail ?? null,
+    phone: primaryClinic?.contactNumber ?? null,
+  }), [primaryClinic]);
+
+  function previewWebpage() {
+    if (!isPublished || !profileUrl) return;
+    window.open(profileUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  async function copyProfileLink() {
+    if (!profileUrl || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(profileUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
   return (
     <div className="doctor-profile-page">
       <div className="doctor-profile-main">
         <header className="doctor-profile-heading">
           <h1>Professional Profile</h1>
           <p>Manage your professional information and how you appear to patients.</p>
+          {loadError ? <p className="doctor-profile-load-note" role="status">Connected profile data could not be loaded. The profile controls remain available for UI review.</p> : null}
         </header>
 
         <section className="doctor-profile-hero">
-          <div className="doctor-profile-photo" aria-label="Profile photo placeholder">
-            <span>DR</span>
-            <button type="button" className="doctor-profile-camera" aria-label="Change profile photo">
+          <div className="doctor-profile-photo" aria-label="Profile photo">
+            {doctor?.profilePhotoUrl ? <img src={doctor.profilePhotoUrl} alt="" /> : <span>{profileInitials(doctor)}</span>}
+            <button type="button" className="doctor-profile-camera" aria-label="Change profile photo" title="Profile photo upload is not connected yet">
               <Icon name="camera" />
             </button>
           </div>
           <div className="doctor-profile-identity">
-            <h2>Doctor account</h2>
-            <strong>Specialization</strong>
-            <p><Icon name="location" /> Main clinic</p>
-            <p><Icon name="mail" /> Account email</p>
-            <p><Icon name="phone" /> Mobile number</p>
+            <h2>{profileName(doctor)}</h2>
+            <strong>{doctor?.specialization ?? 'Specialization'}</strong>
+            <p><Icon name="location" /> {clinicLocation(primaryClinic)}</p>
+            <p><Icon name="mail" /> {accountContact.email ?? 'Clinic email not available'}</p>
+            <p><Icon name="phone" /> {accountContact.phone ?? 'Clinic contact number not available'}</p>
           </div>
           <div className="doctor-profile-public-state">
-            <span className="doctor-profile-status-pill"><Icon name="lock" /> Private</span>
-            <p>Your public webpage is not published.</p>
-            <button type="button" className="doctor-profile-secondary"><Icon name="eye" /> Preview Webpage</button>
+            <span className={`doctor-profile-status-pill ${isPublished ? 'published' : ''}`}><Icon name={isPublished ? 'check' : 'lock'} /> {publicStatusLabel}</span>
+            <p>{publicStatusCopy}</p>
+            <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={!isPublished || !profileUrl}><Icon name="eye" /> Preview Webpage</button>
           </div>
         </section>
 
         <section className="doctor-profile-card">
           <div className="doctor-profile-section-title">
             <span>1.</span>
-            <div><h3>Professional Information</h3><p>Information from your account creation is already filled.</p></div>
+            <div><h3>Professional Information</h3><p>Information already available from your current profile is filled automatically.</p></div>
           </div>
           <div className="doctor-profile-grid four">
-            <label>First Name<input type="text" placeholder="First name" /></label>
-            <label>Middle Name <span>(Optional)</span><input type="text" placeholder="Middle name" /></label>
-            <label>Last Name<input type="text" placeholder="Last name" /></label>
-            <label>Suffix <span>(Optional)</span><select defaultValue=""><option value="">Select suffix</option><option>Jr.</option><option>Sr.</option><option>III</option></select></label>
+            <label>First Name<input type="text" placeholder="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
+            <label>Middle Name <span>(Optional)</span><input type="text" placeholder="Middle name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} /></label>
+            <label>Last Name<input type="text" placeholder="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
+            <label>Suffix <span>(Optional)</span><select value={suffix} onChange={(event) => setSuffix(event.target.value)}><option value="">Select suffix</option><option>Jr.</option><option>Sr.</option><option>III</option></select></label>
           </div>
           <div className="doctor-profile-grid two">
-            <label>Professional Title<input type="text" placeholder="Doctor" /><small>e.g., Doctor, Medical Specialist</small></label>
-            <label>Specialization<input type="text" placeholder="Your area of medical practice" /><small>Your area of medical practice</small></label>
+            <label>Professional Title<input type="text" placeholder="Doctor" value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} /><small>e.g., Doctor, Medical Specialist</small></label>
+            <label>Specialization<input type="text" placeholder="Your area of medical practice" value={specialization} onChange={(event) => setSpecialization(event.target.value)} /><small>Your area of medical practice</small></label>
           </div>
           <div className="doctor-profile-license-row">
-            <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" readOnly /><button type="button">Change License</button></div><small>Your professional license number is used for verification.</small></label>
+            <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" readOnly /><button type="button" title="License-change workflow is not connected yet">Change License</button></div><small>Your license remains protected because the current authenticated profile API does not expose it.</small></label>
           </div>
         </section>
 
@@ -96,8 +269,8 @@ export function DoctorProfilePage() {
             <div><h3>About Me</h3><p>Write a short description about yourself and your approach to patient care.</p></div>
           </div>
           <label className="doctor-profile-full-label">Profile Description
-            <textarea maxLength={2000} placeholder="Write a short professional description that patients can read on your public webpage." />
-            <span className="doctor-profile-field-footer"><small>This description will appear on your public webpage.</small><small>Characters: 0/2000</small></span>
+            <textarea maxLength={2000} placeholder="Write a short professional description that patients can read on your public webpage." value={description} onChange={(event) => setDescription(event.target.value)} />
+            <span className="doctor-profile-field-footer"><small>This description will appear on your public webpage once profile editing is connected.</small><small>Characters: {description.length}/2000</small></span>
           </label>
         </section>
 
@@ -109,19 +282,19 @@ export function DoctorProfilePage() {
           <div className="doctor-profile-public-grid">
             <div>
               <label>Profile Address (URL)</label>
-              <div className="doctor-profile-url-field"><span>clinicqueueing.com/dr/your-profile</span><button type="button"><Icon name="copy" /> Copy Link</button></div>
+              <div className="doctor-profile-url-field"><span>{profileUrl ?? 'Public profile address is not available yet'}</span><button type="button" onClick={() => void copyProfileLink()} disabled={!profileUrl}><Icon name="copy" /> {copied ? 'Copied' : 'Copy Link'}</button></div>
             </div>
             <div>
               <label>Status</label>
-              <span className="doctor-profile-status-pill"><Icon name="lock" /> Private</span>
-              <p>Your profile is not visible to patients yet.</p>
+              <span className={`doctor-profile-status-pill ${isPublished ? 'published' : ''}`}><Icon name={isPublished ? 'check' : 'lock'} /> {publicStatusLabel}</span>
+              <p>{publicStatusCopy}</p>
             </div>
           </div>
           <div className="doctor-profile-actions">
-            <button type="button" className="doctor-profile-secondary"><Icon name="eye" /> Preview Webpage</button>
-            <button type="button" className="doctor-profile-primary">◎ Publish Webpage</button>
-            <button type="button" className="doctor-profile-secondary"><Icon name="qr" /> Generate QR</button>
-            <button type="button" className="doctor-profile-secondary"><Icon name="print" /> Print Calling Card</button>
+            <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={!isPublished || !profileUrl}><Icon name="eye" /> Preview Webpage</button>
+            <button type="button" className="doctor-profile-primary" title="Publishing is not connected yet">◎ Publish Webpage</button>
+            <button type="button" className="doctor-profile-secondary" title="Doctor-profile QR generation is not connected yet"><Icon name="qr" /> Generate QR</button>
+            <button type="button" className="doctor-profile-secondary" title="Calling-card printing is not connected yet"><Icon name="print" /> Print Calling Card</button>
           </div>
         </section>
       </div>
@@ -149,7 +322,7 @@ export function DoctorProfilePage() {
         <section className="doctor-profile-side-card doctor-profile-help">
           <div className="doctor-profile-help-title"><span><Icon name="help" /></span><h3>Need Help?</h3></div>
           <p>Learn how your public profile works and how to share it with patients.</p>
-          <button type="button" className="doctor-profile-secondary">View Profile Guide ↗</button>
+          <button type="button" className="doctor-profile-secondary" title="Profile guide is not connected yet">View Profile Guide ↗</button>
         </section>
       </aside>
     </div>
