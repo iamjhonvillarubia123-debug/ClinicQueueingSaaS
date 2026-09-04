@@ -75,9 +75,14 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
         role: 'SECRETARY',
       })
       .expect(201);
+    const registrationBody = registration.body as unknown as {
+      userId: string;
+      role: 'SECRETARY';
+      emailVerificationRequired: boolean;
+    };
+    const userId = registrationBody.userId;
 
-    const userId = registration.body.userId as string;
-    expect(registration.body).toEqual(
+    expect(registrationBody).toEqual(
       expect.objectContaining({
         userId,
         role: 'SECRETARY',
@@ -98,7 +103,8 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
       include: { notificationOutbox: true },
       orderBy: { createdAt: 'desc' },
     });
-    const encryptedMessage = verification.notificationOutbox?.messageBodyEncrypted;
+    const encryptedMessage =
+      verification.notificationOutbox?.messageBodyEncrypted;
     if (!encryptedMessage) throw new Error('Verification message is missing.');
 
     const message = protectedPayloadService.decrypt(
@@ -117,10 +123,7 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
       .expect(201);
 
     const browser = request.agent(app.getHttpServer());
-    await browser
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
+    await browser.post('/auth/login').send({ email, password }).expect(201);
 
     const profile = await browser.get('/auth/profile').expect(200);
     expect(profile.body).toEqual({ userId, role: 'SECRETARY' });
