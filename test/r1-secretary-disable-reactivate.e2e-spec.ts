@@ -96,11 +96,10 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       .send({ currentPassword: 'wrong-password' })
       .expect(401);
 
-    expect(
-      (
-        await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
-      ).accountStatus,
-    ).toBe('ACTIVE');
+    const activeUser = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(activeUser.accountStatus).toBe('ACTIVE');
 
     await browser
       .post('/secretary/account/disable')
@@ -110,11 +109,10 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       .expect(201)
       .expect({ disabled: true, replayed: false });
 
-    expect(
-      (
-        await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
-      ).accountStatus,
-    ).toBe('VOLUNTARILY_DISABLED');
+    const disabledUser = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(disabledUser.accountStatus).toBe('VOLUNTARILY_DISABLED');
     expect(
       await prisma.userSession.count({
         where: { userId: user.id, revokedAt: null },
@@ -138,11 +136,10 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
       .expect(201)
       .expect({ reactivated: true, replayed: false });
 
-    expect(
-      (
-        await prisma.user.findUniqueOrThrow({ where: { id: user.id } })
-      ).accountStatus,
-    ).toBe('ACTIVE');
+    const reactivatedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
+    expect(reactivatedUser.accountStatus).toBe('ACTIVE');
     expect(
       await prisma.userSession.count({
         where: { userId: user.id, revokedAt: null },
