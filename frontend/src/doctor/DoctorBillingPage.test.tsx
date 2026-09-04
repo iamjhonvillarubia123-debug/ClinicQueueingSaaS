@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DoctorBillingPage } from './DoctorBillingPage';
@@ -19,8 +19,9 @@ describe('Doctor Billing', () => {
     const user = userEvent.setup();
     render(<DoctorBillingPage />);
     await user.click(screen.getByRole('button', { name: 'View Plan Details' }));
-    expect(screen.getByRole('dialog', { name: 'View Plan Details' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    const planDialog = screen.getByRole('dialog', { name: 'View Plan Details' });
+    expect(planDialog).toBeInTheDocument();
+    await user.click(within(planDialog).getByRole('button', { name: 'Close', exact: true }));
     await user.click(screen.getByRole('button', { name: 'Manage Subscription' }));
     expect(screen.getByRole('dialog', { name: 'Manage Subscription' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
