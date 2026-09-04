@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AccountSecurityPage, PermanentCloseAccountPage, ReactivateAccountPage } from './AccountLifecyclePages';
 
-const refreshMock = vi.fn().mockResolvedValue(undefined);
+const clearSessionMock = vi.fn();
 
 vi.mock('./AuthContext', () => ({
   useAuth: () => ({
     profile: { userId: 'doctor-1', role: 'DOCTOR' },
-    refresh: refreshMock,
+    clearSession: clearSessionMock,
   }),
 }));
 
@@ -20,11 +20,11 @@ function jsonResponse(body: unknown, status = 200) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  refreshMock.mockClear();
+  clearSessionMock.mockClear();
 });
 
 describe('F5 staff account lifecycle', () => {
-  it('requires and submits the current password before voluntary disablement', async () => {
+  it('requires the current password and clears stale auth state after voluntary disablement', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ disabled: true, replayed: false }));
     const user = userEvent.setup();
     render(<MemoryRouter><AccountSecurityPage /></MemoryRouter>);
@@ -42,6 +42,7 @@ describe('F5 staff account lifecycle', () => {
     expect(String(url)).toContain('/doctor/account/disable');
     expect(JSON.parse(String(init?.body))).toEqual({ currentPassword: 'secret-password' });
     expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
+    expect(clearSessionMock).toHaveBeenCalledTimes(1);
   });
 
   it('reactivates a disabled Doctor without creating a signed-in session', async () => {
@@ -94,7 +95,7 @@ describe('F5 staff account lifecycle', () => {
     await user.click(closeButton);
 
     expect(await screen.findByRole('heading', { name: 'Account permanently closed.' })).toBeInTheDocument();
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(clearSessionMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0];
     expect(JSON.parse(String(init?.body))).toEqual(expect.objectContaining({ confirmPermanentDelete: true }));
     expect(new Headers(init?.headers).get('Idempotency-Key')).toBeTruthy();
@@ -112,6 +113,6 @@ describe('F5 staff account lifecycle', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Email or current password is incorrect.');
     expect(screen.queryByRole('heading', { name: 'Account permanently closed.' })).not.toBeInTheDocument();
-    expect(refreshMock).not.toHaveBeenCalled();
+    expect(clearSessionMock).not.toHaveBeenCalled();
   });
 });
