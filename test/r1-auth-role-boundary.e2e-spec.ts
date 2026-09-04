@@ -127,6 +127,8 @@ describe('R1 authentication role boundaries (e2e)', () => {
         where: { name: 'Unauthorized Secretary Clinic' },
       }),
     ).toBe(0);
-    expect(await prisma.practiceStaff.count({ where: { userId: secretary.id } })).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: secretary.id } }),
+    ).toBe(0);
   });
 });
