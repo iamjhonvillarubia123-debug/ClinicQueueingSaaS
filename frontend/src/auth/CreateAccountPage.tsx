@@ -2,9 +2,10 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
+import { meetsPasswordPolicy, passwordChecks } from './passwordPolicy';
 
 type AccountType = 'DOCTOR' | 'SECRETARY';
-type IconName = 'brand' | 'calendar' | 'chart' | 'shield' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'globe' | 'person' | 'phone';
+type IconName = 'brand' | 'calendar' | 'chart' | 'shield' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'globe' | 'person' | 'phone' | 'check';
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -19,6 +20,7 @@ function Icon({ name }: { name: IconName }) {
     globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9S14.5 18.5 12 21M12 3C9.5 5.5 8.5 8.5 8.5 12S9.5 18.5 12 21" /></>,
     person: <><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></>,
     phone: <path d="M6.6 2.8 9.4 8l-2 1.7a15.5 15.5 0 0 0 6.9 6.9l1.7-2 5.2 2.8-1.3 3.1c-.4.9-1.3 1.5-2.3 1.4C9.1 21.1 2.9 14.9 2.1 6.4c-.1-1 .5-1.9 1.4-2.3z" />,
+    check: <path d="m5 12 4 4L19 6" />,
   };
 
   return <svg className="sign-in-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
@@ -38,10 +40,15 @@ export function CreateAccountPage() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const meetsRequirements = meetsPasswordPolicy(password);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    if (!meetsRequirements) {
+      setError('Your password does not meet all password requirements.');
+      return;
+    }
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -114,9 +121,11 @@ export function CreateAccountPage() {
                   <label>Password<div className="create-account-input"><Icon name="lock" /><input required type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Create a password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div></label>
                   <label>Confirm password<div className="create-account-input"><Icon name="lock" /><input required type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Re-enter your password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'} aria-pressed={showConfirmPassword} onClick={() => setShowConfirmPassword((visible) => !visible)}><Icon name={showConfirmPassword ? 'eyeOff' : 'eye'} /></button></div></label>
                 </div>
+                <div className="password-requirements"><strong>Password must contain:</strong><ul>{passwordChecks.map((check) => { const valid = check.valid(password); return <li className={valid ? 'valid' : ''} key={check.label}><span><Icon name="check" /></span>{check.label}</li>; })}</ul></div>
+                {confirmPassword && password !== confirmPassword ? <div className="form-error" role="alert">Passwords do not match.</div> : null}
                 <label className="create-account-consent"><input type="checkbox" checked={termsAccepted} onChange={(event) => setTermsAccepted(event.target.checked)} /><span>I agree to the <button type="button" className="inline-link">Terms of Service</button> and <button type="button" className="inline-link">Privacy Policy</button></span></label>
                 {error ? <div className="form-error" role="alert">{error}</div> : null}
-                <button className="create-account-submit" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
+                <button className="create-account-submit" type="submit" disabled={busy || !meetsRequirements || password !== confirmPassword}>{busy ? 'Creating account…' : 'Create account'}</button>
               </form>
               <p className="create-account-signin">Already have an account? <Link to="/login">Sign in</Link></p>
             </section>
