@@ -17,7 +17,20 @@ type ReportsDashboardProps = {
   loadError?: boolean;
 };
 
-function Icon({ name }: { name: 'clinic' | 'calendar' | 'download' | 'users' | 'clock' | 'alert' | 'check' | 'info' | 'refresh' | 'service' | 'queue' }) {
+type ReportIconName =
+  | 'clinic'
+  | 'calendar'
+  | 'download'
+  | 'users'
+  | 'clock'
+  | 'alert'
+  | 'check'
+  | 'info'
+  | 'refresh'
+  | 'service'
+  | 'queue';
+
+function Icon({ name }: { name: ReportIconName }) {
   const common = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
   switch (name) {
     case 'clinic': return <svg {...common}><path d="M4 21V8h6v13M10 21V4h10v17M2 21h20" /><path d="M13 8h4M15 6v4" /></svg>;
@@ -34,7 +47,7 @@ function Icon({ name }: { name: 'clinic' | 'calendar' | 'download' | 'users' | '
   }
 }
 
-function MetricCard({ icon, label, tone }: { icon: 'users' | 'clock' | 'alert' | 'check'; label: string; tone: 'green' | 'blue' | 'red' }) {
+function MetricCard({ icon, label, tone }: { icon: 'users' | 'clock' | 'alert' | 'check' | 'queue'; label: string; tone: 'green' | 'blue' | 'red' }) {
   return <section className="report-metric-card"><div className={`report-metric-icon ${tone}`}><Icon name={icon} /></div><div><span>{label}</span><strong>—</strong><small>Range reporting is not connected yet</small></div></section>;
 }
 
