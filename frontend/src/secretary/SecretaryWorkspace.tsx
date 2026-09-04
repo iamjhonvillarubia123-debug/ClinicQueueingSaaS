@@ -2,7 +2,7 @@ import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
 type SecretaryIconName =
-  'home' | 'clinics' | 'invitations' | 'reports' | 'settings' | 'signout';
+  'home' | 'profile' | 'clinics' | 'invitations' | 'reports' | 'settings' | 'signout';
 
 function SecretaryIcon({ name }: { name: SecretaryIconName }) {
   const common = {
@@ -23,6 +23,14 @@ function SecretaryIcon({ name }: { name: SecretaryIconName }) {
         <path d="M3 10.5 12 3l9 7.5" />
         <path d="M5.5 9.5V21h13V9.5" />
         <path d="M9.5 21v-7h5v7" />
+      </svg>
+    );
+  }
+  if (name === 'profile') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
       </svg>
     );
   }
@@ -154,6 +162,15 @@ export function SecretaryWorkspaceShell() {
             >
               <SecretaryIcon name="home" />
               <span>Overview</span>
+            </NavLink>
+            <NavLink
+              to="/app/secretary/profile"
+              className={({ isActive }) =>
+                `doctor-nav-item${isActive ? ' is-active' : ''}`
+              }
+            >
+              <SecretaryIcon name="profile" />
+              <span>Profile</span>
             </NavLink>
             <NavLink
               to="/app/secretary/clinics"
