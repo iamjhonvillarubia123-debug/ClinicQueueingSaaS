@@ -7,8 +7,18 @@ const PASSWORD_BCRYPT_SALT_ROUNDS = 12;
 @Injectable()
 export class PasswordSecurityService {
   assertValid(password: string): void {
-    if (!password.trim()) {
-      throw new BadRequestException('Password must not be blank.');
+    if (
+      typeof password !== 'string' ||
+      password.length < 8 ||
+      password.length > 128 ||
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/\d/.test(password) ||
+      !/[^A-Za-z0-9]/.test(password)
+    ) {
+      throw new BadRequestException(
+        'Password must be 8 to 128 characters and include an uppercase letter, lowercase letter, number, and special character.',
+      );
     }
   }
 
