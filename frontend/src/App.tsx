@@ -44,6 +44,7 @@ import {
 } from './doctor/DoctorWorkspace';
 import { GlobalSecretariesPage } from './doctor/GlobalSecretariesPage';
 import { SecretaryInvitationAcceptancePage } from './secretary/SecretaryInvitationAcceptancePage';
+import { SecretaryReportsPage } from './secretary/SecretaryReportsPage';
 import {
   SecretaryOnly,
   SecretaryWorkspacePlaceholder,
@@ -226,7 +227,7 @@ export function App() {
             <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
             <Route path="/app/secretary/clinics/:clinicId" element={<SecretaryClinicWorkspacePage />} />
             <Route path="/app/secretary/invitations" element={<SecretaryInvitationsPage />} />
-            <Route path="/app/secretary/reports" element={<SecretaryWorkspacePlaceholder title="Reports" description="Reports for clinics within your authorized assignments will be implemented here from the approved Secretary Reports UI." />} />
+            <Route path="/app/secretary/reports" element={<SecretaryReportsPage />} />
             <Route path="/app/secretary/settings" element={<SecretaryWorkspacePlaceholder title="Settings" description="Secretary profile and account settings will be designed here next." />} />
           </Route>
         </Route>
