@@ -20,37 +20,37 @@ describe('approved post-registration UI states', () => {
     expect(screen.getByRole('link', { name: 'Go back' })).toHaveAttribute('href', '/register');
   });
 
-  it('shows the Doctor account-ready state and Doctor onboarding destination', () => {
+  it('routes a verified Doctor directly to the Doctor Profile tab', () => {
     render(<MemoryRouter initialEntries={['/registration/account-ready?role=DOCTOR']}><RegistrationAccountReadyPage /></MemoryRouter>);
 
     expect(screen.getByText('Your Doctor account has been verified.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/registration/doctor-onboarding');
+    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/app/profile');
   });
 
-  it('shows the Secretary account-ready state and Secretary empty-home destination', () => {
+  it('routes a verified Secretary directly to the Secretary Profile tab', () => {
     render(<MemoryRouter initialEntries={['/registration/account-ready?role=SECRETARY']}><RegistrationAccountReadyPage /></MemoryRouter>);
 
     expect(screen.getByText('Your Secretary account has been verified.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/registration/secretary-home');
+    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/app/secretary/profile');
   });
 
-  it('routes Doctor setup into the protected Doctor Settings tab', () => {
+  it('keeps the legacy Doctor onboarding page pointed at the Doctor Profile tab', () => {
     render(<MemoryRouter><DoctorOnboardingPage /></MemoryRouter>);
 
     expect(screen.getByRole('heading', { name: "Let's get you started" })).toBeInTheDocument();
     expect(screen.getByText('Complete your profile')).toBeInTheDocument();
     expect(screen.getByText('Create your clinic')).toBeInTheDocument();
     expect(screen.getByText('Configure settings')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Start setup' })).toHaveAttribute('href', '/app/settings');
+    expect(screen.getByRole('link', { name: 'Start setup' })).toHaveAttribute('href', '/app/profile');
   });
 
-  it('routes a zero-assignment Secretary into the protected Secretary Settings tab', () => {
+  it('keeps the zero-assignment Secretary page pointed at the Secretary Profile tab', () => {
     render(<MemoryRouter><SecretaryNoAssignmentsPage /></MemoryRouter>);
 
     expect(screen.getByRole('heading', { name: /Welcome to Clinic Queueing/i })).toBeInTheDocument();
     expect(screen.getByText('No clinic assignments yet')).toBeInTheDocument();
     expect(screen.getByText(/Clinics will appear here when a Doctor assigns you as a Secretary/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /create clinic/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Continue to settings' })).toHaveAttribute('href', '/app/secretary/settings');
+    expect(screen.getByRole('link', { name: 'Continue to profile' })).toHaveAttribute('href', '/app/secretary/profile');
   });
 });
