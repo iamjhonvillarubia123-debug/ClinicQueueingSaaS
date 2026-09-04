@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
+import { meetsPasswordPolicy, passwordChecks } from './passwordPolicy';
 
 type IconName = 'brand' | 'check' | 'eye' | 'eyeOff' | 'lock' | 'mail';
 
@@ -76,14 +77,6 @@ export function ForgotPasswordPage() {
   </section>}</RecoveryFrame>;
 }
 
-const passwordChecks = [
-  { label: 'At least 8 characters', valid: (value: string) => value.length >= 8 },
-  { label: 'Uppercase letter', valid: (value: string) => /[A-Z]/.test(value) },
-  { label: 'Lowercase letter', valid: (value: string) => /[a-z]/.test(value) },
-  { label: 'Number', valid: (value: string) => /\d/.test(value) },
-  { label: 'Special character', valid: (value: string) => /[^A-Za-z0-9]/.test(value) },
-];
-
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token')?.trim() ?? '';
@@ -94,7 +87,7 @@ export function ResetPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState('');
-  const meetsRequirements = passwordChecks.every((check) => check.valid(password));
+  const meetsRequirements = meetsPasswordPolicy(password);
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
