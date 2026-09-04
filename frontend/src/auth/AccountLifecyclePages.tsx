@@ -73,7 +73,7 @@ function reactivationError(error: unknown) {
 }
 
 export function AccountSecurityPage() {
-  const { profile, refresh } = useAuth();
+  const { profile, clearSession } = useAuth();
   const navigate = useNavigate();
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -95,7 +95,7 @@ export function AccountSecurityPage() {
         body: { currentPassword },
       });
       setCurrentPassword('');
-      await refresh();
+      clearSession();
       navigate(`/account/disabled?role=${targetRole}`, { replace: true });
     } catch (caught) {
       setError(errorMessage(caught, 'Unable to disable the account. Please check your password and try again.'));
@@ -237,7 +237,7 @@ export function ReactivateAccountPage() {
 }
 
 export function PermanentCloseAccountPage() {
-  const { refresh } = useAuth();
+  const { clearSession } = useAuth();
   const [params] = useSearchParams();
   const initialRole = roleFromQuery(params.get('role'));
   const [role, setRole] = useState<LifecycleRole>(initialRole ?? 'DOCTOR');
@@ -262,7 +262,7 @@ export function PermanentCloseAccountPage() {
         headers: { 'Idempotency-Key': idempotencyKey('permanent-close-account') },
         body: { email, password, confirmPermanentDelete: true },
       });
-      await refresh();
+      clearSession();
       setComplete(true);
     } catch (caught) {
       setError(permanentClosureError(caught));
