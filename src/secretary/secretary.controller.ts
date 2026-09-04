@@ -6,9 +6,11 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
+import { RevokeOtherSessionsDto } from '../auth/session-management.controller';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { PermanentlyDeleteSecretaryDto } from './dto/permanently-delete-secretary.dto';
 import { ReactivateSecretaryDto } from './dto/reactivate-secretary.dto';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
@@ -20,17 +22,31 @@ export class SecretaryController {
   ) {}
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @RateLimit({
+    id: 'secretary-disable-password',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
     @Headers('idempotency-key') idempotencyKey: string,
+    @Body() dto: RevokeOtherSessionsDto,
   ) {
     return this.secretaryLifecycleService.disable(
       request.user.userId,
       idempotencyKey,
+      dto.currentPassword,
     );
   }
 
+  @RateLimit({
+    id: 'secretary-reactivate',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
   @Post('account/reactivate')
   reactivateAccount(
     @Body() dto: ReactivateSecretaryDto,
@@ -43,6 +59,12 @@ export class SecretaryController {
     );
   }
 
+  @RateLimit({
+    id: 'secretary-permanent-delete',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'email' },
+  })
   @Post('account/permanent-delete')
   permanentlyDeleteAccount(
     @Body() dto: PermanentlyDeleteSecretaryDto,
