@@ -33,6 +33,7 @@ import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
 import { DoctorCalendarPage } from './doctor/DoctorCalendarPage';
 import { DoctorProfilePage } from './doctor/DoctorProfilePage';
+import { DoctorReportsPage } from './doctor/DoctorReportsPage';
 import { DoctorSettingsPage } from './doctor/DoctorSettingsPage';
 import { ClinicTabPage } from './doctor/ClinicTab';
 import {
@@ -172,78 +173,30 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route
-        path="/public/doctors/:publicIdentifier"
-        element={<DoctorPublicPage />}
-      />
-      <Route
-        path="/public/practice-locations/:publicIdentifier"
-        element={<PracticeLocationPublicPage />}
-      />
-      <Route
-        path="/book/:publicIdentifier"
-        element={<IndividualBookingPage />}
-      />
-      <Route
-        path="/book/:publicIdentifier/group"
-        element={<MultiPersonBookingPage />}
-      />
+      <Route path="/public/doctors/:publicIdentifier" element={<DoctorPublicPage />} />
+      <Route path="/public/practice-locations/:publicIdentifier" element={<PracticeLocationPublicPage />} />
+      <Route path="/book/:publicIdentifier" element={<IndividualBookingPage />} />
+      <Route path="/book/:publicIdentifier/group" element={<MultiPersonBookingPage />} />
       <Route path="/booking/access" element={<BookingAccessBootstrapPage />} />
-      <Route
-        path="/recover/:publicIdentifier"
-        element={<BookingRecoveryPage />}
-      />
-      <Route
-        path="/recover/appointment/:publicIdentifier"
-        element={<LegacyRecoveryRedirect />}
-      />
-      <Route
-        path="/recover/group/:publicIdentifier"
-        element={<LegacyRecoveryRedirect />}
-      />
-      <Route
-        path="/patient-bookings/:bookingReference"
-        element={<PatientAppointmentPage />}
-      />
-      <Route
-        path="/patient-booking-groups"
-        element={<PatientBookingGroupPage />}
-      />
+      <Route path="/recover/:publicIdentifier" element={<BookingRecoveryPage />} />
+      <Route path="/recover/appointment/:publicIdentifier" element={<LegacyRecoveryRedirect />} />
+      <Route path="/recover/group/:publicIdentifier" element={<LegacyRecoveryRedirect />} />
+      <Route path="/patient-bookings/:bookingReference" element={<PatientAppointmentPage />} />
+      <Route path="/patient-booking-groups" element={<PatientBookingGroupPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<CreateAccountPage />} />
-      <Route
-        path="/register/doctor"
-        element={<Navigate to="/register" replace />}
-      />
-      <Route
-        path="/registration/check-email"
-        element={<RegistrationCheckEmailPage />}
-      />
-      <Route
-        path="/registration/account-ready"
-        element={<RegistrationAccountReadyPage />}
-      />
-      <Route
-        path="/registration/doctor-onboarding"
-        element={<DoctorOnboardingPage />}
-      />
-      <Route
-        path="/registration/secretary-home"
-        element={<SecretaryNoAssignmentsPage />}
-      />
+      <Route path="/register/doctor" element={<Navigate to="/register" replace />} />
+      <Route path="/registration/check-email" element={<RegistrationCheckEmailPage />} />
+      <Route path="/registration/account-ready" element={<RegistrationAccountReadyPage />} />
+      <Route path="/registration/doctor-onboarding" element={<DoctorOnboardingPage />} />
+      <Route path="/registration/secretary-home" element={<SecretaryNoAssignmentsPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/account/disabled" element={<DisabledAccountPage />} />
       <Route path="/account/reactivate" element={<ReactivateAccountPage />} />
-      <Route
-        path="/account/permanent-close"
-        element={<PermanentCloseAccountPage />}
-      />
-      <Route
-        path="/secretary-invitations/accept"
-        element={<SecretaryInvitationAcceptancePage />}
-      />
+      <Route path="/account/permanent-close" element={<PermanentCloseAccountPage />} />
+      <Route path="/secretary-invitations/accept" element={<SecretaryInvitationAcceptancePage />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<LegacyShell />}>
@@ -253,90 +206,26 @@ export function App() {
 
         <Route element={<DoctorOnly />}>
           <Route element={<DoctorWorkspaceShell />}>
-            <Route
-              path="/app/overview"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Overview"
-                  description="Your clinic overview will appear here once the approved workspace content is designed and connected."
-                />
-              }
-            />
+            <Route path="/app/overview" element={<DoctorWorkspacePlaceholder title="Overview" description="Your clinic overview will appear here once the approved workspace content is designed and connected." />} />
             <Route path="/app/profile" element={<DoctorProfilePage />} />
             <Route path="/app/clinics" element={<ClinicTabPage />} />
-            <Route
-              path="/app/clinics/:clinicId/operations"
-              element={<AuthoritativeClinicOperationsRoutePage />}
-            />
-            <Route
-              path="/app/calendar"
-              element={<DoctorCalendarPage />}
-            />
-            <Route
-              path="/app/secretaries"
-              element={<GlobalSecretariesPage />}
-            />
-            <Route
-              path="/app/reports"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Reports"
-                  description="Doctor reporting and analytics will be implemented here from the approved Reports UI."
-                />
-              }
-            />
-            <Route
-              path="/app/settings"
-              element={<DoctorSettingsPage />}
-            />
-            <Route
-              path="/app/billing"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Billing"
-                  description="Subscription and financial controls will be connected here when the billing frontend slice is implemented."
-                />
-              }
-            />
+            <Route path="/app/clinics/:clinicId/operations" element={<AuthoritativeClinicOperationsRoutePage />} />
+            <Route path="/app/calendar" element={<DoctorCalendarPage />} />
+            <Route path="/app/secretaries" element={<GlobalSecretariesPage />} />
+            <Route path="/app/reports" element={<DoctorReportsPage />} />
+            <Route path="/app/settings" element={<DoctorSettingsPage />} />
+            <Route path="/app/billing" element={<DoctorWorkspacePlaceholder title="Billing" description="Subscription and financial controls will be connected here when the billing frontend slice is implemented." />} />
           </Route>
         </Route>
 
         <Route element={<SecretaryOnly />}>
           <Route element={<SecretaryWorkspaceShell />}>
-            <Route
-              path="/app/secretary"
-              element={<Navigate to="/app/secretary/overview" replace />}
-            />
-            <Route
-              path="/app/secretary/overview"
-              element={
-                <SecretaryWorkspacePlaceholder
-                  title="Overview"
-                  description="Your Secretary overview will be designed and connected here later."
-                />
-              }
-            />
-            <Route
-              path="/app/secretary/clinics"
-              element={<SecretaryClinicsPage />}
-            />
-            <Route
-              path="/app/secretary/clinics/:clinicId"
-              element={<SecretaryClinicWorkspacePage />}
-            />
-            <Route
-              path="/app/secretary/invitations"
-              element={<SecretaryInvitationsPage />}
-            />
-            <Route
-              path="/app/secretary/settings"
-              element={
-                <SecretaryWorkspacePlaceholder
-                  title="Settings"
-                  description="Secretary profile and account settings will be designed here next."
-                />
-              }
-            />
+            <Route path="/app/secretary" element={<Navigate to="/app/secretary/overview" replace />} />
+            <Route path="/app/secretary/overview" element={<SecretaryWorkspacePlaceholder title="Overview" description="Your Secretary overview will be designed and connected here later." />} />
+            <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
+            <Route path="/app/secretary/clinics/:clinicId" element={<SecretaryClinicWorkspacePage />} />
+            <Route path="/app/secretary/invitations" element={<SecretaryInvitationsPage />} />
+            <Route path="/app/secretary/settings" element={<SecretaryWorkspacePlaceholder title="Settings" description="Secretary profile and account settings will be designed here next." />} />
           </Route>
         </Route>
       </Route>
