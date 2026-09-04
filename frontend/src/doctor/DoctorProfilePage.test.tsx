@@ -109,11 +109,6 @@ describe('Doctor Profile', () => {
   });
 
   it('copies the backend-provided doctor public URL without creating a new API write', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText },
-    });
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       const value = String(url);
       if (value.endsWith('/practice-location')) return response([clinic]);
@@ -131,6 +126,7 @@ describe('Doctor Profile', () => {
     });
 
     const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText');
     render(<DoctorProfilePage />);
     await screen.findByText('https://example.test/public/doctors/doctor-public-1');
     await user.click(screen.getByRole('button', { name: 'Copy Link' }));
