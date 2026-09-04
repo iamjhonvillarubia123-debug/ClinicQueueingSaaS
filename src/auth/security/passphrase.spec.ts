@@ -1,3 +1,4 @@
+import * as bcrypt from 'bcrypt';
 import { PasswordSecurityService } from './password-security.service';
 
 describe('Long passphrase compatibility', () => {
@@ -18,7 +19,8 @@ describe('Long passphrase compatibility', () => {
     expect(await service.verify(prefix + 'two', hashed)).toBe(false);
   });
   it('still verifies existing bcrypt passwords', async () => {
-    const hash = await service.hash('Existing password');
-    expect(await service.verify('Existing password', hash)).toBe(true);
+    const legacyPassword = 'Existing password';
+    const legacyHash = await bcrypt.hash(legacyPassword, 12);
+    expect(await service.verify(legacyPassword, legacyHash)).toBe(true);
   });
 });
