@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import * as bcrypt from 'bcrypt';
 import {
   AdministrativeRestrictionStatus,
   SubscriptionCreditEntryType,
@@ -8,7 +9,6 @@ import {
   UserRole,
 } from './../generated/prisma/client';
 import { AppModule } from './../src/app.module';
-import { PasswordSecurityService } from './../src/auth/security/password-security.service';
 import { FinancialAccountLockService } from './../src/financial/financial-account-lock.service';
 import { SubscriptionCreditRecoveryService } from './../src/financial/subscription-credit-recovery.service';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -20,7 +20,6 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
   let prisma: PrismaService;
   let recovery: SubscriptionCreditRecoveryService;
   let accountLocks: FinancialAccountLockService;
-  let passwordSecurity: PasswordSecurityService;
 
   const testEnvironment: Record<string, string> = {
     JWT_SECRET: 'm10-credit-recovery-e2e-only-jwt-secret-not-for-production',
@@ -47,7 +46,6 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
     prisma = moduleFixture.get(PrismaService);
     recovery = moduleFixture.get(SubscriptionCreditRecoveryService);
     accountLocks = moduleFixture.get(FinancialAccountLockService);
-    passwordSecurity = moduleFixture.get(PasswordSecurityService);
   });
 
   afterAll(async () => {
@@ -214,7 +212,7 @@ describe('Subscription credit recovery concurrency (e2e)', () => {
     const recoveryEmailHash = createHash('sha256')
       .update(`recovery-${scope}@example.test`, 'utf8')
       .digest('hex');
-    const challengeCodeHash = await passwordSecurity.hash('123456');
+    const challengeCodeHash = await bcrypt.hash('123456', 12);
     const challengeCreatedAt = new Date();
     const challenge = await prisma.financialAccessChallenge.create({
       data: {
