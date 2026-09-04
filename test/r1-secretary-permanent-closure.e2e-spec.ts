@@ -75,14 +75,16 @@ describe('R1 Secretary permanent account closure (e2e)', () => {
         role: 'SECRETARY',
       })
       .expect(201);
+    const registrationBody = registration.body as unknown as { userId: string };
+    const originalUserId = registrationBody.userId;
 
-    const originalUserId = registration.body.userId as string;
     const verification = await prisma.emailVerification.findFirstOrThrow({
       where: { userId: originalUserId, status: 'PENDING' },
       include: { notificationOutbox: true },
       orderBy: { createdAt: 'desc' },
     });
-    const encryptedMessage = verification.notificationOutbox?.messageBodyEncrypted;
+    const encryptedMessage =
+      verification.notificationOutbox?.messageBodyEncrypted;
     if (!encryptedMessage) throw new Error('Verification message is missing.');
 
     const message = protectedPayloadService.decrypt(
@@ -101,10 +103,7 @@ describe('R1 Secretary permanent account closure (e2e)', () => {
       .expect(201);
 
     const browser = request.agent(app.getHttpServer());
-    await browser
-      .post('/auth/login')
-      .send({ email, password })
-      .expect(201);
+    await browser.post('/auth/login').send({ email, password }).expect(201);
     await browser.get('/auth/profile').expect(200);
 
     await request(app.getHttpServer())
@@ -189,9 +188,13 @@ describe('R1 Secretary permanent account closure (e2e)', () => {
         role: 'SECRETARY',
       })
       .expect(201);
+    const replacementBody = replacementRegistration.body as unknown as {
+      userId: string;
+      role: 'SECRETARY';
+    };
 
-    expect(replacementRegistration.body.userId).not.toBe(originalUserId);
-    expect(replacementRegistration.body.role).toBe('SECRETARY');
+    expect(replacementBody.userId).not.toBe(originalUserId);
+    expect(replacementBody.role).toBe('SECRETARY');
     expect(
       await prisma.user.count({
         where: { email: email.toLowerCase() },
