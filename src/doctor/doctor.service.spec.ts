@@ -212,7 +212,7 @@ describe('DoctorService', () => {
     for (const dto of [
       {},
       { defaultTimeZone: 'bad-zone' },
-      { maximumAdvanceBookingDays: 0 },
+      { maximumAdvanceBookingDays: -1 },
       { maximumAdvanceBookingDays: 366 },
     ]) {
       await expect(

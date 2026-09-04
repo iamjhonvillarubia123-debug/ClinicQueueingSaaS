@@ -417,6 +417,7 @@ enum AdministrativeReasonCategory {
 }
 
 enum ApplicationNotificationType {
+  ACCOUNT_ACTIVITY
   SECRETARY_ACCOUNT_DISABLED
   SECRETARY_ACCOUNT_DELETED
 }
@@ -753,6 +754,9 @@ model AdministrativeAccountActionScope {
 }
 
 model ApplicationNotification {
+  title                   String? @db.VarChar(200)
+  message                 String? @db.VarChar(2000)
+  sourceActorUserId       String?
   id                      String                      @id @default(uuid())
   recipientUserId         String
   notificationType        ApplicationNotificationType

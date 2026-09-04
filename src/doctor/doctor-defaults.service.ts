@@ -41,103 +41,175 @@ export class DoctorDefaultsService {
     authenticatedUserId: string,
     dto: SaveDoctorServiceTemplateDto,
   ) {
-    const doctorProfileId =
-      await this.requireDoctorProfileId(authenticatedUserId);
-    const data = this.normalizeService(dto);
-    return this.prisma.doctorServiceTemplate.create({
-      data: { doctorProfileId, ...data },
+    return this.mutate(authenticatedUserId, async (tx, doctorProfileId) => {
+      const data = this.normalizeService(dto);
+      return tx.doctorServiceTemplate.create({
+        data: { doctorProfileId, ...data },
+      });
     });
   }
-
   async updateServiceTemplate(
     authenticatedUserId: string,
     templateId: string,
     dto: SaveDoctorServiceTemplateDto,
   ) {
-    const doctorProfileId =
-      await this.requireDoctorProfileId(authenticatedUserId);
-    const template = await this.prisma.doctorServiceTemplate.findFirst({
-      where: { id: templateId, doctorProfileId },
-      select: { id: true },
-    });
-    if (!template) {
-      throw new NotFoundException('Doctor Service template was not found.');
-    }
-    return this.prisma.doctorServiceTemplate.update({
-      where: { id: template.id },
-      data: this.normalizeService(dto),
+    return this.mutate(authenticatedUserId, async (tx, doctorProfileId) => {
+      const template = await tx.doctorServiceTemplate.findFirst({
+        where: { id: templateId, doctorProfileId },
+        select: { id: true },
+      });
+      if (!template) {
+        throw new NotFoundException('Doctor Service template was not found.');
+      }
+      return tx.doctorServiceTemplate.update({
+        where: { id: template.id },
+        data: this.normalizeService(dto),
+      });
     });
   }
-
   async createBookingQuestionTemplate(
     authenticatedUserId: string,
     dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    const doctorProfileId =
-      await this.requireDoctorProfileId(authenticatedUserId);
-    const data = this.normalizeBookingQuestion(dto);
-    await this.assertBookingQuestionTemplateState(
-      doctorProfileId,
-      null,
-      data.proposedDisplayOrder,
-      data.proposedIsActive,
-    );
-    return this.prisma.doctorBookingQuestionTemplate.create({
-      data: {
+    return this.mutate(authenticatedUserId, async (tx, doctorProfileId) => {
+      const data = this.normalizeBookingQuestion(dto);
+      await this.assertBookingQuestionTemplateState(
+        tx,
         doctorProfileId,
-        questionText: data.proposedQuestionText,
-        helpText: data.proposedHelpText,
-        type: data.proposedType,
-        isRequired: data.proposedIsRequired,
-        displayOrder: data.proposedDisplayOrder,
-        isActive: data.proposedIsActive,
-        estimatedMinutesAdjustment: 0,
-        textMaximumLength: data.proposedTextMaximumLength,
-        numberMinimum: data.proposedNumberMinimum,
-        numberMaximum: data.proposedNumberMaximum,
-        selectOptions: data.proposedSelectOptions,
-      },
+        null,
+        data.proposedDisplayOrder,
+        data.proposedIsActive,
+      );
+      return tx.doctorBookingQuestionTemplate.create({
+        data: {
+          doctorProfileId,
+          questionText: data.proposedQuestionText,
+          helpText: data.proposedHelpText,
+          type: data.proposedType,
+          isRequired: data.proposedIsRequired,
+          displayOrder: data.proposedDisplayOrder,
+          isActive: data.proposedIsActive,
+          estimatedMinutesAdjustment: 0,
+          textMaximumLength: data.proposedTextMaximumLength,
+          numberMinimum: data.proposedNumberMinimum,
+          numberMaximum: data.proposedNumberMaximum,
+          selectOptions: data.proposedSelectOptions,
+        },
+      });
     });
   }
-
   async updateBookingQuestionTemplate(
     authenticatedUserId: string,
     templateId: string,
     dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    const doctorProfileId =
-      await this.requireDoctorProfileId(authenticatedUserId);
-    const template = await this.prisma.doctorBookingQuestionTemplate.findFirst({
-      where: { id: templateId, doctorProfileId },
-      select: { id: true },
-    });
-    if (!template) {
-      throw new NotFoundException(
-        'Doctor BookingQuestion template was not found.',
+    return this.mutate(authenticatedUserId, async (tx, doctorProfileId) => {
+      const template = await tx.doctorBookingQuestionTemplate.findFirst({
+        where: { id: templateId, doctorProfileId },
+        select: { id: true },
+      });
+      if (!template) {
+        throw new NotFoundException(
+          'Doctor BookingQuestion template was not found.',
+        );
+      }
+      const data = this.normalizeBookingQuestion(dto);
+      await this.assertBookingQuestionTemplateState(
+        tx,
+        doctorProfileId,
+        template.id,
+        data.proposedDisplayOrder,
+        data.proposedIsActive,
       );
-    }
-    const data = this.normalizeBookingQuestion(dto);
-    await this.assertBookingQuestionTemplateState(
-      doctorProfileId,
-      template.id,
-      data.proposedDisplayOrder,
-      data.proposedIsActive,
-    );
-    return this.prisma.doctorBookingQuestionTemplate.update({
-      where: { id: template.id },
-      data: {
-        questionText: data.proposedQuestionText,
-        helpText: data.proposedHelpText,
-        type: data.proposedType,
-        isRequired: data.proposedIsRequired,
-        displayOrder: data.proposedDisplayOrder,
-        isActive: data.proposedIsActive,
-        estimatedMinutesAdjustment: 0,
-        textMaximumLength: data.proposedTextMaximumLength,
-        numberMinimum: data.proposedNumberMinimum,
-        numberMaximum: data.proposedNumberMaximum,
-        selectOptions: data.proposedSelectOptions,
-      },
+      return tx.doctorBookingQuestionTemplate.update({
+        where: { id: template.id },
+        data: {
+          questionText: data.proposedQuestionText,
+          helpText: data.proposedHelpText,
+          type: data.proposedType,
+          isRequired: data.proposedIsRequired,
+          displayOrder: data.proposedDisplayOrder,
+          isActive: data.proposedIsActive,
+          estimatedMinutesAdjustment: 0,
+          textMaximumLength: data.proposedTextMaximumLength,
+          numberMinimum: data.proposedNumberMinimum,
+          numberMaximum: data.proposedNumberMaximum,
+          selectOptions: data.proposedSelectOptions,
+        },
+      });
+    });
+  }
+  async removeTemplate(
+    userId: string,
+    kind: 'services' | 'questions',
+    templateId: string,
+  ) {
+    return this.mutate(userId, async (tx, doctorProfileId) => {
+      const result =
+        kind === 'services'
+          ? await tx.doctorServiceTemplate.deleteMany({
+              where: { id: templateId, doctorProfileId },
+            })
+          : await tx.doctorBookingQuestionTemplate.deleteMany({
+              where: { id: templateId, doctorProfileId },
+            });
+      if (!result.count)
+        throw new NotFoundException('Default template was not found.');
+      return { removed: true, clinicCopiesUnchanged: true };
+    });
+  }
+
+  async reorderQuestions(userId: string, ids: string[]) {
+    return this.mutate(userId, async (tx, doctorProfileId) => {
+      const current = await tx.doctorBookingQuestionTemplate.findMany({
+        where: { doctorProfileId },
+        select: { id: true, displayOrder: true },
+      });
+      if (
+        !Array.isArray(ids) ||
+        new Set(ids).size !== ids.length ||
+        ids.length !== current.length ||
+        ids.some((id) => !current.some((item) => item.id === id))
+      )
+        throw new ConflictException(
+          'The template list changed. Reload and reorder your current templates.',
+        );
+      // Move to unused positive positions before assigning the final unique order.
+      const offset =
+        Math.max(0, ...current.map((item) => item.displayOrder)) + 1;
+      for (let index = 0; index < ids.length; index++)
+        await tx.doctorBookingQuestionTemplate.update({
+          where: { id: ids[index] },
+          data: { displayOrder: offset + index },
+        });
+      for (let index = 0; index < ids.length; index++)
+        await tx.doctorBookingQuestionTemplate.update({
+          where: { id: ids[index] },
+          data: { displayOrder: index },
+        });
+      return { reordered: true, clinicCopiesUnchanged: true };
+    });
+  }
+
+  private async mutate<T>(
+    userId: string,
+    operation: (
+      tx: Prisma.TransactionClient,
+      doctorProfileId: string,
+    ) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const users = await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT "id" FROM "User" WHERE "id" = ${userId} AND "role" = 'DOCTOR' AND "accountStatus" = 'ACTIVE' AND "administrativeRestrictionStatus" = 'NONE' FOR UPDATE`;
+      if (!users.length)
+        throw new ForbiddenException('Active Doctor authority is required.');
+      const profile = await tx.doctorProfile.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+      if (!profile) throw new ForbiddenException('Doctor profile is required.');
+      return operation(tx, profile.id);
     });
   }
 
@@ -183,27 +255,27 @@ export class DoctorDefaultsService {
   }
 
   private async assertBookingQuestionTemplateState(
+    tx: Prisma.TransactionClient,
     doctorProfileId: string,
     currentTemplateId: string | null,
     displayOrder: number,
     isActive: boolean,
   ) {
-    const orderConflict =
-      await this.prisma.doctorBookingQuestionTemplate.findFirst({
-        where: {
-          doctorProfileId,
-          displayOrder,
-          ...(currentTemplateId ? { id: { not: currentTemplateId } } : {}),
-        },
-        select: { id: true },
-      });
+    const orderConflict = await tx.doctorBookingQuestionTemplate.findFirst({
+      where: {
+        doctorProfileId,
+        displayOrder,
+        ...(currentTemplateId ? { id: { not: currentTemplateId } } : {}),
+      },
+      select: { id: true },
+    });
     if (orderConflict) {
       throw new ConflictException(
         'Doctor BookingQuestion display order must be unique.',
       );
     }
     if (!isActive) return;
-    const activeCount = await this.prisma.doctorBookingQuestionTemplate.count({
+    const activeCount = await tx.doctorBookingQuestionTemplate.count({
       where: {
         doctorProfileId,
         isActive: true,

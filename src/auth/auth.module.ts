@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountSecurityController } from './account-security.controller';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
@@ -18,7 +19,11 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
 
 @Module({
   imports: [PrismaModule, ConfigModule, MobileNumberModule],
-  controllers: [AuthController, SessionManagementController],
+  controllers: [
+    AuthController,
+    SessionManagementController,
+    AccountSecurityController,
+  ],
   providers: [
     SessionManagementService,
     AccountRegistrationService,
@@ -33,6 +38,7 @@ import { ProtectedAccountPayloadService } from './security/protected-account-pay
     CsrfOriginGuard,
   ],
   exports: [
+    SessionManagementService,
     AccountRegistrationService,
     AuthService,
     AuthenticationService,

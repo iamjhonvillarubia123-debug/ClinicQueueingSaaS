@@ -204,11 +204,11 @@ export class DoctorService {
     if (dto.maximumAdvanceBookingDays !== undefined) {
       if (
         !Number.isInteger(dto.maximumAdvanceBookingDays) ||
-        dto.maximumAdvanceBookingDays < 1 ||
+        dto.maximumAdvanceBookingDays < 0 ||
         dto.maximumAdvanceBookingDays > 365
       )
         throw new BadRequestException(
-          'Advance booking must be between 1 and 365 days.',
+          'Advance booking must be between 0 and 365 days.',
         );
       changes.push(
         Prisma.sql`"maximumAdvanceBookingDays" = ${dto.maximumAdvanceBookingDays}`,
@@ -225,11 +225,15 @@ export class DoctorService {
       throw new BadRequestException('No supported settings supplied.');
     const rows = await this.prisma.$queryRaw<DoctorDurationSettingsRow[]>(
       Prisma.sql`
+        WITH eligible AS (
+          SELECT "id", "role", "accountStatus", "administrativeRestrictionStatus"
+          FROM "User" WHERE "id" = ${authenticatedUserId} FOR UPDATE
+        )
         UPDATE "DoctorAccountSettings" s
         SET
           ${Prisma.join(changes)},
           "updatedAt" = CURRENT_TIMESTAMP
-        FROM "DoctorProfile" d, "User" u
+        FROM "DoctorProfile" d, eligible u
         WHERE s."doctorProfileId" = d."id"
           AND d."userId" = ${authenticatedUserId}
           AND u."id" = d."userId" AND u."role" = 'DOCTOR'

@@ -92,6 +92,52 @@ export class SessionManagementService {
     });
   }
 
+  async changePassword(
+    actor: AuthenticatedUserContext,
+    currentPassword: string,
+    newPassword: string,
+    confirmation: string,
+  ) {
+    if (newPassword !== confirmation)
+      throw new BadRequestException('New passwords do not match.');
+    this.passwords.assertStrong(newPassword);
+    return this.prisma.$transaction(async (transaction) => {
+      // Match recovery's account advisory lock and reset-before-user lock order.
+      await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${actor.userId}, 0))`;
+      await transaction.$queryRaw`SELECT "id" FROM "PasswordReset" WHERE "userId" = ${actor.userId} AND "status" = 'PENDING' ORDER BY "id" FOR UPDATE`;
+      const user = await this.validateActor(transaction, actor);
+      if (
+        !currentPassword ||
+        !(await this.passwords.verify(currentPassword, user.passwordHash))
+      ) {
+        throw new UnauthorizedException('Current password is incorrect.');
+      }
+      if (await this.passwords.verify(newPassword, user.passwordHash))
+        throw new BadRequestException('Choose a different password.');
+      const passwordHash = await this.passwords.hashStrong(newPassword);
+      await this.requireCurrentSession(transaction, actor);
+      await transaction.user.update({
+        where: { id: actor.userId },
+        data: { passwordHash },
+      });
+      await transaction.userSession.updateMany({
+        where: { userId: actor.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      // Previously issued recovery links must not remain usable after a credential change.
+      await transaction.passwordReset.updateMany({
+        where: { userId: actor.userId, status: 'PENDING' },
+        data: {
+          status: 'REVOKED',
+          revokedAt: new Date(),
+          tokenHash: null,
+          activeResetKey: null,
+        },
+      });
+      return { changed: true, signInRequired: true };
+    });
+  }
+
   private liveSessions(userId: string, now: Date) {
     return {
       userId,
@@ -101,7 +147,7 @@ export class SessionManagementService {
     };
   }
 
-  private async validateActor(
+  async validateActor(
     transaction: Prisma.TransactionClient,
     actor: AuthenticatedUserContext,
   ) {

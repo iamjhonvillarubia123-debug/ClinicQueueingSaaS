@@ -57,6 +57,28 @@ Unit and HTTP-boundary tests cover account ownership, role/state changes, curren
 
 Verification results: 140 backend suites / 663 tests passed; 35 frontend suites / 134 tests passed (two workers, 15-second UI-test allowance). Backend and frontend type checks and builds passed. Frontend retains the existing non-blocking large-bundle warning. No database reset or migration was performed.
 
-## Next authorized checkpoint
+## Checkpoint: secure account actions, notifications, audit, and account-only data
 
-Implement #6's additive-only defaults workflow, including copy-all-missing and selected-copy modes, impact/capacity checks, and regression coverage preserving clinic-local configuration. Then proceed with #8, #10, and the account-only scope of #11 in separate tested checkpoints. Do not treat profile work (#2) or clarification-only items as newly approved changes.
+- Signed-in password changes now verify the current password, enforce the server passphrase policy, reject password reuse, safely handle passphrases beyond bcrypt's byte limit, cancel outstanding reset requests, revoke all sessions, and require a new sign-in.
+- Voluntary Doctor-account disablement now requires the current password. A rejected password or failed request leaves the account unchanged.
+- Account & Security drawers preserve server errors for password changes, disablement, and permanent deletion.
+- Notifications now include account-security changes, invitation lifecycle events, subscription payments/refunds, and authorized System Administrator announcements. Delivery is scoped to the affected account; it is not a directory or unrelated-user search surface.
+- The Doctor audit endpoint provides a read-only, owner-scoped chronological view of recorded clinic, staff-authority, queue, appointment, configuration, and retained account-activity events. It excludes patient answers, queue metadata, credentials, and secrets. Historical events that were never recorded cannot be reconstructed.
+- Export My Data requires the current password and returns an allowlisted summary of only the signed-in Doctor's account. Backup Settings returns only reusable Doctor settings. Both explicitly exclude patients, appointments, booking answers, queue data, clinic operational records, other users, password hashes, and tokens.
+- The privacy inventory reports actual backend capabilities. Automatic-erasure worker health remains `UNKNOWN` because the system has no durable heartbeat proving that worker is running; the UI no longer presents an unsupported “Active” claim.
+- Doctor default services/questions can be removed from the reusable template library without deleting copies already added to clinics. Default questions can be reordered with exact-set validation and transaction locking. Applying defaults remains additive and never removes clinic-local items.
+- Profile-detail editing remains intentionally deferred, as requested. A password last-changed timestamp is also unavailable because it is not currently stored; the UI says “Not available” instead of inventing a value.
+
+### Verification — September 4, 2026
+
+- Prisma schema validation and both account-activity migrations succeeded against the local development and isolated test databases without resetting data.
+- Backend lint, 146 unit/integration suites (691 tests), and production build passed.
+- Frontend type check, lint, 37 suites (138 tests), and production build passed. The complete suite was run with one worker to avoid unrelated five-second UI-test timeouts under parallel machine load. The existing non-blocking bundle-size warning remains.
+- Database-backed end-to-end verification passed: 55 suites and 167 tests.
+
+## Deliberately not connected
+
+- Account profile editing remains deferred by product decision.
+- Email delivery for in-app notifications is not implemented; the Settings inbox is connected, and System Administrator announcements have a secured backend publishing route, but there is no Doctor-facing announcement composer.
+- Restore/import is not implemented. Downloads are intentionally one-way and account-only.
+- No privacy worker-health status is claimed until a durable heartbeat exists.

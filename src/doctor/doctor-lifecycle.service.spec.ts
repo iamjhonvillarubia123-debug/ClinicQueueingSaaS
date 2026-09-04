@@ -103,7 +103,9 @@ describe('DoctorLifecycleService', () => {
     });
     tx.$queryRaw.mockResolvedValue([{ id: 'doctor-1' }]);
 
-    await expect(service.disable('doctor-1', 'disable-key')).resolves.toEqual({
+    await expect(
+      service.disable('doctor-1', 'disable-key', 'current-password'),
+    ).resolves.toEqual({
       disabled: true,
       replayed: false,
     });
@@ -120,6 +122,21 @@ describe('DoctorLifecycleService', () => {
         createdAt: expect.any(Date) as unknown,
       }) as unknown,
     });
+  });
+
+  it('does not disable or replay a disable command with an incorrect password', async () => {
+    tx.user.findUnique.mockResolvedValue({
+      id: 'doctor-1',
+      role: UserRole.DOCTOR,
+      passwordHash: 'hash',
+    });
+    passwordSecurity.verify.mockResolvedValue(false);
+    await expect(
+      service.disable('doctor-1', 'disable-key', 'wrong'),
+    ).rejects.toThrow('Current password');
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.userSession.updateMany).not.toHaveBeenCalled();
+    expect(tx.commandIdempotency.findUnique).not.toHaveBeenCalled();
   });
 
   it('reactivates only a voluntarily disabled unrestricted Doctor and creates no session', async () => {

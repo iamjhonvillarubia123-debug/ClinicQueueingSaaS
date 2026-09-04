@@ -15,12 +15,15 @@ describe('DoctorDefaultsService', () => {
   let service: DoctorDefaultsService;
 
   const prismaMock = {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'owner' }]),
+    $transaction: jest.fn(),
     doctorProfile: { findUnique: jest.fn() },
     doctorServiceTemplate: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
     doctorBookingQuestionTemplate: {
       findMany: jest.fn(),
@@ -28,6 +31,7 @@ describe('DoctorDefaultsService', () => {
       count: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
   };
 
@@ -40,6 +44,9 @@ describe('DoctorDefaultsService', () => {
     }).compile();
     service = module.get(DoctorDefaultsService);
     jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(
+      (operation: (tx: typeof prismaMock) => unknown) => operation(prismaMock),
+    );
   });
 
   it('rejects non-Doctor users from Doctor-wide defaults', async () => {
@@ -47,6 +54,44 @@ describe('DoctorDefaultsService', () => {
     await expect(service.list('secretary-user')).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it('removes only the owning Doctor template, not clinic copies', async () => {
+    prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
+    prismaMock.doctorServiceTemplate.deleteMany.mockResolvedValue({ count: 1 });
+    await expect(
+      service.removeTemplate('doctor-user', 'services', 'template'),
+    ).resolves.toEqual({ removed: true, clinicCopiesUnchanged: true });
+    expect(prismaMock.doctorServiceTemplate.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'template', doctorProfileId: 'doctor-1' },
+    });
+  });
+
+  it('reorders with temporary unique positions and rejects incomplete or foreign selections', async () => {
+    prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
+    prismaMock.doctorBookingQuestionTemplate.findMany.mockResolvedValue([
+      { id: 'a', displayOrder: 0 },
+      { id: 'b', displayOrder: 1 },
+    ]);
+    await expect(
+      service.reorderQuestions('doctor-user', ['foreign', 'b']),
+    ).rejects.toThrow('list changed');
+    expect(
+      prismaMock.doctorBookingQuestionTemplate.update,
+    ).not.toHaveBeenCalled();
+    await service.reorderQuestions('doctor-user', ['b', 'a']);
+    expect(
+      prismaMock.doctorBookingQuestionTemplate.update,
+    ).toHaveBeenNthCalledWith(3, {
+      where: { id: 'b' },
+      data: { displayOrder: 0 },
+    });
+    expect(
+      prismaMock.doctorBookingQuestionTemplate.update,
+    ).toHaveBeenNthCalledWith(4, {
+      where: { id: 'a' },
+      data: { displayOrder: 1 },
+    });
   });
 
   it('creates a bounded Service template for the owning Doctor', async () => {

@@ -14,6 +14,9 @@ import {
 } from './SettingsShared';
 
 type Notification = {
+  title?: string | null;
+  message?: string | null;
+  affectedSecretaryName?: string;
   id: string;
   notificationType: string;
   affectedSecretaryUserId: string | null;
@@ -25,9 +28,10 @@ const notes = [
   'Important clinic activity appears here.',
   'Unread notifications are highlighted.',
   'Patient communications are managed separately.',
-  'This inbox currently supports secretary account disablement and deletion notices.',
+  'Account security, payments, invitations, and administrator updates appear here.',
 ];
 function title(item: Notification) {
+  if (item.title) return item.title;
   return item.notificationType === 'SECRETARY_ACCOUNT_DISABLED'
     ? 'Secretary account disabled'
     : item.notificationType === 'SECRETARY_ACCOUNT_DELETED'
@@ -145,12 +149,14 @@ export function NotificationSettings() {
                   {title(item)}
                 </button>
                 <p>
-                  A secretary is no longer available under this clinic
-                  assignment.
+                  {item.message ??
+                    'A secretary is no longer available under this clinic assignment.'}
                 </p>
                 <small>
-                  {clinicName(item.practiceLocationId)} ·{' '}
-                  {dateTime(item.createdAt)}
+                  {item.practiceLocationId
+                    ? clinicName(item.practiceLocationId)
+                    : 'Account'}{' '}
+                  · {dateTime(item.createdAt)}
                 </small>
               </div>
               <div className="ds-actions">
@@ -211,57 +217,71 @@ export function NotificationSettings() {
         </Card>
         <Card title="How You’ll Be Notified" icon="mail">
           <h3>Clinic & Staff Activity</h3>
-          <p>In-app notices for secretary account disablement and deletion.</p>
+          <p>
+            In-app notices for invitations, acceptance, cancellation, and
+            secretary account changes.
+          </p>
           <h3>Account & Security</h3>
           <p>
-            Email verification and password recovery are separate existing
-            workflows.
+            Password and account-status changes appear here. Email verification
+            and password recovery remain separate workflows.
           </p>
           <Note>
-            Billing, maintenance, and compliance notices are not connected to
-            this inbox yet.
+            Payment and refund updates appear here. Authorized administrators
+            can publish maintenance, developer, and compliance announcements.
           </Note>
         </Card>
         <Help title="Notification Guide" items={notes} />
       </aside>
       {selected && (
         <Drawer title={title(selected)} onClose={() => setSelected(null)}>
-          <div className="ds-row">
-            <span className="ds-icon">
-              <OperationsIcon name="person" />
-            </span>
-            <div>
-              <h3>Secretary</h3>
-              <small>
-                Profile details are not included in this notification.
-              </small>
+          {selected.notificationType !== 'ACCOUNT_ACTIVITY' && (
+            <div className="ds-row">
+              <span className="ds-icon">
+                <OperationsIcon name="person" />
+              </span>
+              <div>
+                <h3>Secretary</h3>
+                <small>
+                  {selected.affectedSecretaryName ??
+                    'Profile details are not included in this notification.'}
+                </small>
+              </div>
             </div>
-          </div>
+          )}
           <div className="ds-row">
             <OperationsIcon name="clinic" />
-            <h3>{clinicName(selected.practiceLocationId)}</h3>
+            <h3>
+              {selected.practiceLocationId
+                ? clinicName(selected.practiceLocationId)
+                : 'Account notification'}
+            </h3>
           </div>
           <h3>What happened</h3>
           <p>
-            {title(selected)}. The secretary is no longer available under this
-            clinic assignment.
+            {selected.message ??
+              `${title(selected)}. The secretary is no longer available under this clinic assignment.`}
           </p>
-          <h3>What this means</h3>
-          <Checklist
-            items={[
-              'This notification does not cancel your clinic or existing appointments.',
-              'You may operate the clinic directly.',
-              'You may assign another eligible secretary.',
-            ]}
-          />
+          {selected.notificationType !== 'ACCOUNT_ACTIVITY' && (
+            <>
+              <h3>What this means</h3>
+              <Checklist
+                items={[
+                  'This notification does not cancel your clinic or existing appointments.',
+                  'You may operate the clinic directly.',
+                  'You may assign another eligible secretary.',
+                ]}
+              />
+            </>
+          )}
           {selected.notificationType === 'SECRETARY_ACCOUNT_DELETED' && (
             <Note warning>
               The permanently deleted account cannot be reactivated.
             </Note>
           )}
           <Note>
-            This notification is for your awareness. No action is required
-            unless you want to assign a new secretary.
+            This notification is for your awareness. Review the related account
+            or clinic section if action is needed.
           </Note>
           <footer>
             {selected.practiceLocationId && (

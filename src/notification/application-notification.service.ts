@@ -8,18 +8,36 @@ const applicationNotificationSelect = {
   practiceLocationId: true,
   createdAt: true,
   readAt: true,
+  title: true,
+  message: true,
 } as const;
 
 @Injectable()
 export class ApplicationNotificationService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listForRecipient(recipientUserId: string) {
-    return this.prisma.applicationNotification.findMany({
+  async listForRecipient(recipientUserId: string) {
+    const rows = await this.prisma.applicationNotification.findMany({
       where: { recipientUserId },
-      select: applicationNotificationSelect,
+      select: {
+        ...applicationNotificationSelect,
+        affectedSecretaryUser: {
+          select: { firstName: true, lastName: true, accountStatus: true },
+        },
+      },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+    return rows.map(({ affectedSecretaryUser, ...item }) =>
+      affectedSecretaryUser
+        ? {
+            ...item,
+            affectedSecretaryName:
+              affectedSecretaryUser.accountStatus === 'PERMANENTLY_CLOSED'
+                ? 'Closed secretary account'
+                : `${affectedSecretaryUser.firstName} ${affectedSecretaryUser.lastName}`.trim(),
+          }
+        : item,
+    );
   }
 
   async unreadCount(recipientUserId: string): Promise<{ unreadCount: number }> {

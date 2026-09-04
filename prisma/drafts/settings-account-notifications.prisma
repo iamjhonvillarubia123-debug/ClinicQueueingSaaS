@@ -1,0 +1,5 @@
+// Reviewed additive extension; see ../reviews/settings-account-notifications.md.
+// ApplicationNotificationType adds ACCOUNT_ACTIVITY.
+// ApplicationNotification adds optional title String @db.VarChar(200),
+// message String @db.VarChar(2000), and sourceActorUserId String (internal audit ID).
+// No new patient relations or secrets. Actor field has no external API write access.

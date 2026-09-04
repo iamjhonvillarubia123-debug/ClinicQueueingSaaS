@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { CopyDefaults } from './CopyDefaults';
+import { AccountDataDownload } from './AccountDataDownload';
+import { Link } from 'react-router-dom';
 import { apiRequest } from '../../api/client';
 import {
   Card,
@@ -9,7 +11,6 @@ import {
   Help,
   LoadState,
   Note,
-  Unconnected,
   useSettingsData,
 } from './SettingsShared';
 
@@ -66,12 +67,18 @@ export function DefaultSettings() {
   const [message, setMessage] = useState('');
   const [previewValue, setPreviewValue] = useState('');
   const [previewEnabled, setPreviewEnabled] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<{
+    kind: 'services' | 'booking-questions';
+    id: string;
+    name: string;
+  } | null>(null);
   function open(value: string) {
     setPanel(value);
     setError('');
     setMessage('');
     setEditingService(null);
     setEditingQuestion(null);
+    setPendingRemoval(null);
     setPreviewValue(
       value.includes('Timezone')
         ? (settings.data?.defaultTimeZone ?? '')
@@ -101,6 +108,55 @@ export function DefaultSettings() {
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'Unable to save default.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function removeTemplate() {
+    if (!pendingRemoval) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest(
+        `/doctor/defaults/${pendingRemoval.kind}/${pendingRemoval.id}`,
+        { method: 'DELETE' },
+      );
+      setPendingRemoval(null);
+      setEditingService(null);
+      setEditingQuestion(null);
+      defaults.reload();
+      setMessage('Default removed. Existing clinic copies were not changed.');
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : 'Unable to remove default.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function moveQuestion(index: number, direction: number) {
+    const ids = defaults.data!.bookingQuestions.map((item) => item.id);
+    [ids[index], ids[index + direction]] = [ids[index + direction], ids[index]];
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest('/doctor/defaults/booking-questions/reorder', {
+        method: 'POST',
+        body: { templateIds: ids },
+      });
+      defaults.reload();
+      setEditingQuestion(null);
+      setMessage(
+        'Default question order saved. Existing clinic order was not changed.',
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to reorder defaults.',
       );
     } finally {
       setBusy(false);
@@ -288,7 +344,7 @@ export function DefaultSettings() {
                   Maximum advance booking (days)
                   <input
                     type="number"
-                    min="1"
+                    min="0"
                     max="365"
                     value={previewValue}
                     onChange={(event) => setPreviewValue(event.target.value)}
@@ -312,8 +368,9 @@ export function DefaultSettings() {
                   busy ||
                   (panel.includes('Timezone') && !previewValue) ||
                   (panel.includes('Advance') &&
-                    (!Number.isInteger(Number(previewValue)) ||
-                      Number(previewValue) < 1 ||
+                    (!previewValue ||
+                      !Number.isInteger(Number(previewValue)) ||
+                      Number(previewValue) < 0 ||
                       Number(previewValue) > 365))
                 }
                 onClick={() => void saveGeneral()}
@@ -440,6 +497,22 @@ export function DefaultSettings() {
                   <button className="ds-primary" disabled={busy}>
                     {busy ? 'Saving…' : 'Save Service'}
                   </button>{' '}
+                  {editingService.id && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="ds-danger-text"
+                      onClick={() =>
+                        setPendingRemoval({
+                          kind: 'services',
+                          id: editingService.id,
+                          name: editingService.name,
+                        })
+                      }
+                    >
+                      Remove Default
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busy}
@@ -478,7 +551,7 @@ export function DefaultSettings() {
               >
                 + Add Question
               </button>
-              {defaults.data?.bookingQuestions.map((question) => (
+              {defaults.data?.bookingQuestions.map((question, index) => (
                 <div className="ds-row" key={question.id}>
                   <div>
                     <strong>{question.questionText}</strong>
@@ -495,6 +568,23 @@ export function DefaultSettings() {
                     }}
                   >
                     Edit
+                  </button>
+                  <button
+                    disabled={busy || index === 0}
+                    aria-label={`Move ${question.questionText} up`}
+                    onClick={() => void moveQuestion(index, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    disabled={
+                      busy ||
+                      index === defaults.data!.bookingQuestions.length - 1
+                    }
+                    aria-label={`Move ${question.questionText} down`}
+                    onClick={() => void moveQuestion(index, 1)}
+                  >
+                    ↓
                   </button>
                 </div>
               ))}
@@ -746,6 +836,22 @@ export function DefaultSettings() {
                   <button className="ds-primary" disabled={busy}>
                     {busy ? 'Saving…' : 'Save Question'}
                   </button>{' '}
+                  {editingQuestion.id && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="ds-danger-text"
+                      onClick={() =>
+                        setPendingRemoval({
+                          kind: 'booking-questions',
+                          id: editingQuestion.id,
+                          name: editingQuestion.questionText,
+                        })
+                      }
+                    >
+                      Remove Default
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busy}
@@ -757,10 +863,36 @@ export function DefaultSettings() {
               )}
             </>
           )}
-          {['Export My Data', 'Backup Settings', 'Activity Sessions'].includes(
-            panel,
-          ) && (
-            <Unconnected reason="No existing endpoint exposes this feature." />
+          {['Export My Data', 'Backup Settings'].includes(panel) && (
+            <AccountDataDownload
+              settingsOnly={panel === 'Backup Settings'}
+              busy={busy}
+              setBusy={setBusy}
+            />
+          )}
+          {panel === 'Activity Sessions' && (
+            <Link to="/app/settings?tab=account">
+              Manage active sessions in Account &amp; Security
+            </Link>
+          )}
+          {pendingRemoval && (
+            <section className="ds-editor" aria-label="Confirm default removal">
+              <Note warning>
+                Remove “{pendingRemoval.name}” from your reusable defaults? This
+                cannot be undone. Existing clinic copies and booking history are
+                not removed or modified.
+              </Note>
+              <button disabled={busy} onClick={() => setPendingRemoval(null)}>
+                Keep Default
+              </button>{' '}
+              <button
+                disabled={busy}
+                className="ds-danger"
+                onClick={() => void removeTemplate()}
+              >
+                Confirm Remove Default
+              </button>
+            </section>
           )}
           {error && (
             <p role="alert" className="ds-error">

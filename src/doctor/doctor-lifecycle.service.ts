@@ -36,7 +36,11 @@ export class DoctorLifecycleService {
     private readonly closureFinancialSettlement: DoctorClosureFinancialSettlementService,
   ) {}
 
-  async disable(userId: string, idempotencyKey: string) {
+  async disable(
+    userId: string,
+    idempotencyKey: string,
+    currentPassword: string,
+  ) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     return this.prisma.$transaction(async (transaction) => {
       const commandType = CommandType.DOCTOR_DISABLE_ACCOUNT;
@@ -44,6 +48,23 @@ export class DoctorLifecycleService {
       const requestFingerprint = this.hash(`${commandType}|${userId}`);
 
       await this.acquireCommandLock(transaction, commandIdentityKey);
+
+      await this.lockUser(transaction, userId);
+      const credentials = await transaction.user.findUnique({
+        where: { id: userId },
+        select: { role: true, passwordHash: true },
+      });
+      if (
+        !credentials ||
+        credentials.role !== UserRole.DOCTOR ||
+        !currentPassword ||
+        !(await this.passwordSecurityService.verify(
+          currentPassword,
+          credentials.passwordHash,
+        ))
+      ) {
+        throw new UnauthorizedException('Current password is incorrect.');
+      }
 
       const replay = await transaction.commandIdempotency.findUnique({
         where: { commandIdentityKey },

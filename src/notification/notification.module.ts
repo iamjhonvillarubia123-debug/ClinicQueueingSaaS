@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AccountAnnouncementController } from './account-announcement.controller';
+import { AccountAnnouncementService } from './account-announcement.service';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
@@ -23,8 +25,12 @@ import { ScheduledReminderHandoffService } from './scheduled-reminder-handoff.se
 
 @Module({
   imports: [AuthModule, ConfigModule, MobileNumberModule],
-  controllers: [ApplicationNotificationController],
+  controllers: [
+    ApplicationNotificationController,
+    AccountAnnouncementController,
+  ],
   providers: [
+    AccountAnnouncementService,
     ApplicationNotificationService,
     NotificationPayloadService,
     OtpNotificationOutboxService,

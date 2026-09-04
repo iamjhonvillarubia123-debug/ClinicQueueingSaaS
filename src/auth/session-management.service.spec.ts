@@ -16,8 +16,10 @@ describe('SessionManagementService', () => {
     role: UserRole.DOCTOR,
   };
   const transaction = {
+    $executeRaw: jest.fn(),
     $queryRaw: jest.fn(),
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), update: jest.fn() },
+    passwordReset: { updateMany: jest.fn() },
     userSession: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -30,7 +32,11 @@ describe('SessionManagementService', () => {
         callback(transaction),
     ),
   };
-  const passwords = { verify: jest.fn() };
+  const passwords = {
+    verify: jest.fn(),
+    assertStrong: jest.fn(),
+    hashStrong: jest.fn(),
+  };
   const service = new SessionManagementService(
     prisma as unknown as PrismaService,
     passwords as unknown as PasswordSecurityService,
@@ -60,6 +66,53 @@ describe('SessionManagementService', () => {
     ]);
     transaction.userSession.updateMany.mockResolvedValue({ count: 2 });
     passwords.verify.mockResolvedValue(true);
+  });
+  it('requires correct current password and matching new passwords before mutation', async () => {
+    await expect(
+      service.changePassword(
+        actor,
+        'current',
+        'long new password',
+        'different',
+      ),
+    ).rejects.toThrow('do not match');
+    passwords.verify.mockResolvedValueOnce(false);
+    await expect(
+      service.changePassword(
+        actor,
+        'wrong',
+        'long new password',
+        'long new password',
+      ),
+    ).rejects.toThrow('incorrect');
+    expect(transaction.user.update).not.toHaveBeenCalled();
+    expect(transaction.userSession.updateMany).not.toHaveBeenCalled();
+  });
+  it('changes the password, revokes all sessions and pending recovery tokens atomically', async () => {
+    passwords.verify.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    passwords.hashStrong.mockResolvedValue('new-hash');
+    await expect(
+      service.changePassword(
+        actor,
+        'current',
+        'long new password',
+        'long new password',
+      ),
+    ).resolves.toEqual({ changed: true, signInRequired: true });
+    expect(transaction.user.update).toHaveBeenCalledWith({
+      where: { id: actor.userId },
+      data: { passwordHash: 'new-hash' },
+    });
+    expect(transaction.passwordReset.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: actor.userId, status: 'PENDING' },
+      }),
+    );
+    expect(transaction.userSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: actor.userId, revokedAt: null },
+      }),
+    );
   });
   it('lists only owned live sessions using an explicit safe field selection', async () => {
     const result = await service.list(actor);

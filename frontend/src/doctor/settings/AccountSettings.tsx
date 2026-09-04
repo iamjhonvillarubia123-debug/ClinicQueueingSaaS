@@ -51,6 +51,42 @@ export function AccountSettings() {
   function close() {
     if (!busy) open('');
   }
+  async function accountAction(action: 'disable' | 'password') {
+    setBusy(true);
+    setError('');
+    try {
+      await apiRequest(
+        action === 'disable'
+          ? '/doctor/account/disable'
+          : '/auth/account/change-password',
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': key },
+          body:
+            action === 'disable'
+              ? { currentPassword: password }
+              : {
+                  currentPassword: password,
+                  newPassword,
+                  confirmNewPassword: confirmation,
+                },
+        },
+      );
+      setPassword('');
+      setNewPassword('');
+      setConfirmation('');
+      await refresh();
+      navigate('/login', { replace: true });
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Unable to update your account.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   async function permanentlyDelete() {
     setBusy(true);
     setError('');
@@ -223,23 +259,33 @@ export function AccountSettings() {
                   onChange={setConfirmation}
                   newPassword
                 />
-                <Unconnected reason="There is no signed-in change-password endpoint. Email-based password recovery is a separate workflow." />
                 <div className="ds-editor">
-                  <h3>Password requirements in the approved design</h3>
+                  <h3>Choose a strong passphrase</h3>
                   <Checklist
                     items={[
-                      'At least 8 characters',
-                      'Uppercase and lowercase letters',
-                      'At least one number',
-                      'At least one special character',
+                      '15 to 128 characters; spaces and Unicode are supported.',
+                      'Avoid predictable or reused passwords.',
+                      'All sessions will end after a successful password change.',
                     ]}
                   />
                   <small>
-                    These proposed requirements are not yet enforced by a
-                    change-password backend.
+                    Your current password and new passphrase are validated on
+                    the server.
                   </small>
                 </div>
-                <button disabled>Update Password</button>
+                <button
+                  className="ds-primary"
+                  disabled={
+                    busy ||
+                    !password ||
+                    [...newPassword].length < 15 ||
+                    [...newPassword].length > 128 ||
+                    newPassword !== confirmation
+                  }
+                  onClick={() => void accountAction('password')}
+                >
+                  Update Password
+                </button>
               </>
             )}
             {panel === 'Disable Account' && (
@@ -260,8 +306,13 @@ export function AccountSettings() {
                   value={password}
                   onChange={setPassword}
                 />
-                <Unconnected reason="Disablement exists, but its endpoint does not verify the password required by this design. It is intentionally not called here." />
-                <button disabled>Disable Account</button>
+                <button
+                  className="ds-primary"
+                  disabled={busy || !password}
+                  onClick={() => void accountAction('disable')}
+                >
+                  Disable Account
+                </button>
               </>
             )}
             {panel === 'Permanently Delete Account' && (
@@ -317,11 +368,6 @@ export function AccountSettings() {
                   I understand that this account cannot be reactivated and this
                   action is irreversible.
                 </label>
-                {error && (
-                  <p role="alert" className="ds-error">
-                    {error}
-                  </p>
-                )}
                 <button
                   className="ds-danger"
                   disabled={busy || !acknowledged || !password || !email}
@@ -329,6 +375,11 @@ export function AccountSettings() {
                   {busy ? 'Deleting…' : 'Permanently Delete My Account'}
                 </button>
               </form>
+            )}
+            {error && (
+              <p role="alert" className="ds-error">
+                {error}
+              </p>
             )}
             <footer>
               <button onClick={close} disabled={busy}>

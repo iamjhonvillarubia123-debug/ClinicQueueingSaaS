@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { DoctorAccountDataController } from './doctor-account-data.controller';
+import { DoctorAccountDataService } from './doctor-account-data.service';
+import { DoctorAuditService } from './doctor-audit.service';
+import { DoctorAuditController } from './doctor-audit.controller';
 import { AuthModule } from '../auth/auth.module';
 import { FinancialModule } from '../financial/financial.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -13,13 +17,19 @@ import { DoctorService } from './doctor.service';
 @Module({
   imports: [PrismaModule, AuthModule, FinancialModule, MobileNumberModule],
   providers: [
+    DoctorAccountDataService,
+    DoctorAuditService,
     DoctorService,
     DoctorLifecycleService,
     DoctorDefaultsService,
     DoctorDefaultsApplyService,
     DoctorDataRetentionService,
   ],
-  controllers: [DoctorController],
+  controllers: [
+    DoctorController,
+    DoctorAccountDataController,
+    DoctorAuditController,
+  ],
   exports: [DoctorDataRetentionService],
 })
 export class DoctorModule {}

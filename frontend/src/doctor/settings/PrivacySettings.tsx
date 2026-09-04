@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AccountDataDownload } from './AccountDataDownload';
 import { apiRequest } from '../../api/client';
 import {
   Card,
@@ -8,7 +9,6 @@ import {
   Help,
   LoadState,
   Note,
-  Unconnected,
   useSettingsData,
 } from './SettingsShared';
 
@@ -28,6 +28,35 @@ const privacyNotes = [
   'Clinics cannot extend patient retention themselves.',
   'This system is not permanent medical-record storage.',
 ];
+
+function AccountInventory() {
+  const inventory = useSettingsData<{
+    exportedCategories: string[];
+    excludedCategories: string[];
+    erasureWorker: { status: string; explanation: string };
+  }>('/doctor/account/data-inventory');
+  return (
+    <>
+      <LoadState
+        error={inventory.error}
+        loading={!inventory.data}
+        retry={inventory.reload}
+      />
+      {inventory.data && (
+        <>
+          <h3>Account data available to you</h3>
+          <Checklist items={inventory.data.exportedCategories} />
+          <h3>Excluded from downloads</h3>
+          <Checklist items={inventory.data.excludedCategories} />
+          <Note>
+            Erasure-worker status: {inventory.data.erasureWorker.status}.{' '}
+            {inventory.data.erasureWorker.explanation}
+          </Note>
+        </>
+      )}
+    </>
+  );
+}
 
 export function PrivacySettings({ onAccount }: { onAccount: () => void }) {
   const privacy = useSettingsData<PrivacyProfile>(
@@ -236,8 +265,7 @@ export function PrivacySettings({ onAccount }: { onAccount: () => void }) {
                 Request a summary of your Doctor account and practice
                 information.
               </p>
-              <Unconnected reason="No account-data request or export endpoint exists in the current API." />
-              <button disabled>Submit Request</button>
+              <AccountDataDownload busy={busy} setBusy={setBusy} />
             </>
           ) : (
             <>
@@ -301,7 +329,7 @@ export function PrivacySettings({ onAccount }: { onAccount: () => void }) {
                 </>
               )}
               {panel === 'Account & Practice Privacy Information' && (
-                <Unconnected reason="The policy is available, but a personalized account and practice data inventory is not exposed by the backend." />
+                <AccountInventory />
               )}
             </>
           )}

@@ -39,7 +39,70 @@ afterEach(() => {
 });
 
 describe('Doctor Settings', () => {
-  it('shows all five sections without inventing account data and safely blocks disablement', async () => {
+  it('sends password-confirmed disablement and preserves the dialog after a rejected password', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (_url, options) =>
+        options?.method
+          ? response({ message: 'Current password is incorrect.' }, 401)
+          : response({ sessions: [] }),
+      );
+    const user = mount();
+    await user.click(screen.getByRole('button', { name: 'Disable Account' }));
+    await user.type(
+      screen.getByLabelText('Password', { exact: true }),
+      'wrong-password',
+    );
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Disable Account',
+      }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const call = fetchMock.mock.calls.find(
+      ([, options]) => options?.method === 'POST',
+    )!;
+    expect(String(call[0])).toContain('/doctor/account/disable');
+    expect(JSON.parse(String(call[1]?.body))).toEqual({
+      currentPassword: 'wrong-password',
+    });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('shows account notification details without claiming a secretary was removed', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+      response(
+        String(url).endsWith('/practice-location')
+          ? []
+          : [
+              {
+                id: 'notice',
+                notificationType: 'ACCOUNT_ACTIVITY',
+                title: 'Password changed',
+                message: 'Your password was changed.',
+                affectedSecretaryUserId: null,
+                practiceLocationId: null,
+                createdAt: '2026-09-03T12:00:00Z',
+                readAt: null,
+              },
+            ],
+      ),
+    );
+    const user = mount('notifications');
+    await user.click(
+      await screen.findByRole('button', { name: 'View Details' }),
+    );
+    expect(
+      within(screen.getByRole('dialog')).getByText(
+        'Your password was changed.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).queryByText(/no longer available/),
+    ).not.toBeInTheDocument();
+  });
+  it('shows all five sections without inventing account data and requires a password for disablement', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async () => response({ sessions: [] }));
@@ -60,9 +123,6 @@ describe('Doctor Settings', () => {
         name: 'Disable Account',
       }),
     ).toBeDisabled();
-    expect(
-      within(dialog).getByText(/does not verify the password/),
-    ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(
@@ -70,7 +130,7 @@ describe('Doctor Settings', () => {
     );
   });
 
-  it('leaves password change unconnected and requires a password for other-session revocation', async () => {
+  it('requires complete password fields and a password for other-session revocation', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async () =>
@@ -446,14 +506,32 @@ describe('Doctor Settings', () => {
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ acknowledged: true });
   });
 
-  it('shows an honest audit placeholder and no invented totals', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
+  it('loads real audit totals and permits printing only loaded results', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async () =>
+        response({
+          items: [],
+          page: 1,
+          total: 0,
+          clinics: 0,
+          actors: 0,
+          coverage: 'Recorded events only.',
+        }),
+      );
     mount('audit');
     expect(
-      screen.getByText('Audit history is not connected yet'),
+      screen.queryByRole('button', { name: 'Print this page' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('No recorded events in this range.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Print this page' }),
+    ).toBeEnabled();
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      '/doctor/audit-log?from=',
+    );
   });
 
   it('handles retained notifications without a clinic reference', async () => {
@@ -492,9 +570,17 @@ describe('Doctor Settings', () => {
       'Unable to load',
     );
     await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
-    fetchMock.mockImplementation(async (url) => response(String(url).endsWith('/account/settings')
-      ? { defaultTimeZone: 'Asia/Manila', maximumAdvanceBookingDays: 30, allowOnlineBooking: true }
-      : { services: [], bookingQuestions: [] }));
+    fetchMock.mockImplementation(async (url) =>
+      response(
+        String(url).endsWith('/account/settings')
+          ? {
+              defaultTimeZone: 'Asia/Manila',
+              maximumAdvanceBookingDays: 30,
+              allowOnlineBooking: true,
+            }
+          : { services: [], bookingQuestions: [] },
+      ),
+    );
     for (const button of screen.getAllByRole('button', { name: 'Retry' }))
       await user.click(button);
     await waitFor(() =>

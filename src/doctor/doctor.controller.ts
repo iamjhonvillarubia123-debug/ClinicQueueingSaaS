@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
   Patch,
   Post,
+  ParseUUIDPipe,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +17,7 @@ import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { RateLimit } from '../rate-limit/rate-limit.decorator';
+import { RevokeOtherSessionsDto } from '../auth/session-management.controller';
 import { DoctorDataRetentionService } from './doctor-data-retention.service';
 import { DoctorDefaultsApplyService } from './doctor-defaults-apply.service';
 import { DoctorDefaultsService } from './doctor-defaults.service';
@@ -28,6 +31,7 @@ import { RegisterDoctorDto } from './dto/register-doctor.dto';
 import { SaveDoctorBookingQuestionTemplateDto } from './dto/save-doctor-booking-question-template.dto';
 import { SaveDoctorServiceTemplateDto } from './dto/save-doctor-service-template.dto';
 import { UpdateDoctorAccountSettingsDto } from './dto/update-doctor-account-settings.dto';
+import { ReorderDoctorQuestionsDto } from './dto/reorder-doctor-questions.dto';
 
 @Controller('doctor')
 export class DoctorController {
@@ -166,14 +170,60 @@ export class DoctorController {
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('defaults/booking-questions/reorder')
+  reorderQuestions(
+    @Request() request: AuthenticatedRequest,
+    @Body() dto: ReorderDoctorQuestionsDto,
+  ) {
+    return this.doctorDefaultsService.reorderQuestions(
+      request.user.userId,
+      dto.templateIds,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Delete('defaults/services/:templateId')
+  removeService(
+    @Request() request: AuthenticatedRequest,
+    @Param('templateId', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.doctorDefaultsService.removeTemplate(
+      request.user.userId,
+      'services',
+      id,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Delete('defaults/booking-questions/:templateId')
+  removeQuestion(
+    @Request() request: AuthenticatedRequest,
+    @Param('templateId', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.doctorDefaultsService.removeTemplate(
+      request.user.userId,
+      'questions',
+      id,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @RateLimit({
+    id: 'doctor-disable-password',
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'NONE' },
+  })
   @Post('account/disable')
   disableAccount(
     @Request() request: AuthenticatedRequest,
     @Headers('idempotency-key') idempotencyKey: string,
+    @Body() dto: RevokeOtherSessionsDto,
   ) {
     return this.doctorLifecycleService.disable(
       request.user.userId,
       idempotencyKey,
+      dto.currentPassword,
     );
   }
 
