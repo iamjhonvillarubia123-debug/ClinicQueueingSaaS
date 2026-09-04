@@ -19,7 +19,7 @@ describe('Doctor Reports', () => {
     expect(await screen.findByRole('option', { name: 'Main Clinic' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Cebu Clinic' })).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
-    expect(screen.getByText(/range reporting is not connected yet/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/range reporting is not connected yet/i).length).toBeGreaterThan(0);
   });
 
   it('moves through Overview, Queue Performance, and Services without backend writes', async () => {
