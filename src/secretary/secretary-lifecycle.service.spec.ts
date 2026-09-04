@@ -72,6 +72,7 @@ describe('SecretaryLifecycleService', () => {
       id: 'secretary-1',
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
     });
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
     tx.$queryRaw
@@ -98,12 +99,13 @@ describe('SecretaryLifecycleService', () => {
       ]);
 
     await expect(
-      service.disable('secretary-1', 'disable-key'),
+      service.disable('secretary-1', 'disable-key', 'password'),
     ).resolves.toEqual({
       disabled: true,
       replayed: false,
     });
 
+    expect(passwordSecurity.verify).toHaveBeenCalledWith('password', 'hash');
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'secretary-1' },
       data: { accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED },
@@ -167,6 +169,7 @@ describe('SecretaryLifecycleService', () => {
       id: 'secretary-1',
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
     });
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
     tx.$queryRaw
@@ -174,15 +177,36 @@ describe('SecretaryLifecycleService', () => {
       .mockResolvedValueOnce([]);
 
     await expect(
-      service.disable('secretary-1', 'disable-key'),
+      service.disable('secretary-1', 'disable-key', 'password'),
     ).resolves.toEqual({
       disabled: true,
       replayed: false,
     });
 
+    expect(passwordSecurity.verify).toHaveBeenCalledWith('password', 'hash');
     expect(tx.practiceStaff.updateMany).not.toHaveBeenCalled();
     expect(tx.clinicDay.updateMany).not.toHaveBeenCalled();
     expect(tx.applicationNotification.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects Secretary disable when the current password is invalid', async () => {
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+    tx.$queryRaw.mockResolvedValueOnce([{ id: 'secretary-1' }]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
+    });
+    passwordSecurity.verify.mockResolvedValue(false);
+
+    await expect(
+      service.disable('secretary-1', 'disable-key', 'bad-password'),
+    ).rejects.toThrow(UnauthorizedException);
+
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.practiceStaff.updateMany).not.toHaveBeenCalled();
+    expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
   });
 
   it('replays a committed Disable without repeating authority-loss effects', async () => {
@@ -194,7 +218,7 @@ describe('SecretaryLifecycleService', () => {
     });
 
     await expect(
-      service.disable('secretary-1', 'disable-key'),
+      service.disable('secretary-1', 'disable-key', 'password'),
     ).resolves.toEqual({
       disabled: true,
       replayed: true,
@@ -212,11 +236,12 @@ describe('SecretaryLifecycleService', () => {
       id: 'doctor-1',
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
     });
 
-    await expect(service.disable('doctor-1', 'disable-key')).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.disable('doctor-1', 'disable-key', 'password'),
+    ).rejects.toThrow(ConflictException);
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
   });
 
