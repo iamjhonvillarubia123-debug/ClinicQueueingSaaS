@@ -1,7 +1,7 @@
 import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
-type WorkspaceIconName = 'overview' | 'profile' | 'clinics' | 'calendar' | 'secretaries' | 'settings' | 'billing' | 'signout';
+type WorkspaceIconName = 'overview' | 'profile' | 'clinics' | 'calendar' | 'secretaries' | 'reports' | 'settings' | 'billing' | 'signout';
 
 type WorkspaceNavItem = {
   to: string;
@@ -15,6 +15,7 @@ const doctorNavigation: WorkspaceNavItem[] = [
   { to: '/app/clinics', label: 'Clinics', icon: 'clinics' },
   { to: '/app/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/app/secretaries', label: 'Secretaries', icon: 'secretaries' },
+  { to: '/app/reports', label: 'Reports', icon: 'reports' },
   { to: '/app/settings', label: 'Settings', icon: 'settings' },
   { to: '/app/billing', label: 'Billing', icon: 'billing' },
 ];
@@ -43,6 +44,8 @@ function WorkspaceIcon({ name }: { name: WorkspaceIconName }) {
       return <svg {...common}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" /></svg>;
     case 'secretaries':
       return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+    case 'reports':
+      return <svg {...common}><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M22 20H2" /></svg>;
     case 'settings':
       return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.5 19.3a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2V9.6h.1A1.7 1.7 0 0 0 3.7 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.1 4.1a1.7 1.7 0 0 0 1-.6A1.7 1.7 0 0 0 9.5 2H14v.1a1.7 1.7 0 0 0 1.1 1.6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.5 8.1c.16.37.43.7.78.94.34.24.75.37 1.17.37H22v4h-.1A1.7 1.7 0 0 0 20.3 14c-.4.28-.7.62-.9 1Z" /></svg>;
     case 'billing':
