@@ -17,9 +17,12 @@ describe('PasswordSecurityService', () => {
     ['lowercase', 'EXAMPLE1!'],
     ['number', 'Example!'],
     ['special character', 'Example1'],
-  ])('rejects a password missing the shared %s requirement', (_requirement, password) => {
-    expect(() => service.assertValid(password)).toThrow(BadRequestException);
-  });
+  ])(
+    'rejects a password missing the shared %s requirement',
+    (_requirement, password) => {
+      expect(() => service.assertValid(password)).toThrow(BadRequestException);
+    },
+  );
 
   it('hashes an accepted password with the shared bcrypt work factor', async () => {
     bcryptHash.mockResolvedValue('hashed' as never);
