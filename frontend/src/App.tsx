@@ -224,6 +224,7 @@ export function App() {
           <Route element={<SecretaryWorkspaceShell />}>
             <Route path="/app/secretary" element={<Navigate to="/app/secretary/overview" replace />} />
             <Route path="/app/secretary/overview" element={<SecretaryWorkspacePlaceholder title="Overview" description="Your Secretary overview will be designed and connected here later." />} />
+            <Route path="/app/secretary/profile" element={<SecretaryWorkspacePlaceholder title="Profile" description="Your Secretary profile UI will be implemented here after Product Owner design approval." />} />
             <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
             <Route path="/app/secretary/clinics/:clinicId" element={<SecretaryClinicWorkspacePage />} />
             <Route path="/app/secretary/invitations" element={<SecretaryInvitationsPage />} />
