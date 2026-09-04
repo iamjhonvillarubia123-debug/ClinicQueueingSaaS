@@ -265,6 +265,15 @@ export function App() {
                 />
               }
             />
+            <Route
+              path="/app/profile"
+              element={
+                <DoctorWorkspacePlaceholder
+                  title="Profile"
+                  description="Your approved doctor profile interface will be connected here in the profile implementation slice."
+                />
+              }
+            />
             <Route path="/app/clinics" element={<ClinicTabPage />} />
             <Route
               path="/app/clinics/:clinicId/operations"
