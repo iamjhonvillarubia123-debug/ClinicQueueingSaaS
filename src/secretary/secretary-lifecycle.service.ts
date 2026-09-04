@@ -42,7 +42,11 @@ export class SecretaryLifecycleService {
     private readonly passwordSecurityService: PasswordSecurityService,
   ) {}
 
-  async disable(userId: string, idempotencyKey: string) {
+  async disable(
+    userId: string,
+    idempotencyKey: string,
+    currentPassword: string,
+  ) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
 
     return this.prisma.$transaction(async (transaction) => {
@@ -70,6 +74,7 @@ export class SecretaryLifecycleService {
           id: true,
           role: true,
           accountStatus: true,
+          passwordHash: true,
         },
       });
 
@@ -81,6 +86,16 @@ export class SecretaryLifecycleService {
         throw new ConflictException(
           'Secretary account cannot be disabled from its current state.',
         );
+      }
+
+      if (
+        !currentPassword ||
+        !(await this.passwordSecurityService.verify(
+          currentPassword,
+          user.passwordHash,
+        ))
+      ) {
+        throw new UnauthorizedException('Current password is incorrect.');
       }
 
       const assignments = await this.lockActiveAssignments(
