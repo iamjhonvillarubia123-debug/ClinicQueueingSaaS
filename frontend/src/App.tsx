@@ -32,6 +32,7 @@ import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
 import { DoctorCalendarPage } from './doctor/DoctorCalendarPage';
+import { DoctorProfilePage } from './doctor/DoctorProfilePage';
 import { DoctorSettingsPage } from './doctor/DoctorSettingsPage';
 import { ClinicTabPage } from './doctor/ClinicTab';
 import {
@@ -261,15 +262,7 @@ export function App() {
                 />
               }
             />
-            <Route
-              path="/app/profile"
-              element={
-                <DoctorWorkspacePlaceholder
-                  title="Profile"
-                  description="Your approved doctor profile interface will be connected here in the profile implementation slice."
-                />
-              }
-            />
+            <Route path="/app/profile" element={<DoctorProfilePage />} />
             <Route path="/app/clinics" element={<ClinicTabPage />} />
             <Route
               path="/app/clinics/:clinicId/operations"
