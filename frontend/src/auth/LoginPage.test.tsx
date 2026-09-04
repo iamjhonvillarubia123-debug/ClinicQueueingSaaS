@@ -63,6 +63,27 @@ describe('approved sign-in experience', () => {
     expect(await screen.findByText('Clinics destination')).toBeInTheDocument();
   });
 
+  it('keeps account reactivation navigable after a failed sign-in', async () => {
+    loginMock.mockRejectedValueOnce(new Error('invalid credentials'));
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/account/reactivate" element={<div>Reactivation destination</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText('Email address'), 'disabled@example.com');
+    await user.type(screen.getByLabelText('Password'), 'wrong-password');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to sign in. Please try again.');
+    await user.click(screen.getByRole('link', { name: 'Reactivate Account' }));
+    expect(await screen.findByText('Reactivation destination')).toBeInTheDocument();
+  });
+
   it('remembers only the email address when requested', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><LoginPage /></MemoryRouter>);
