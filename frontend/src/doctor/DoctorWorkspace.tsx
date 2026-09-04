@@ -1,7 +1,7 @@
 import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 
-type WorkspaceIconName = 'overview' | 'clinics' | 'calendar' | 'secretaries' | 'settings' | 'billing' | 'signout';
+type WorkspaceIconName = 'overview' | 'profile' | 'clinics' | 'calendar' | 'secretaries' | 'settings' | 'billing' | 'signout';
 
 type WorkspaceNavItem = {
   to: string;
@@ -11,6 +11,7 @@ type WorkspaceNavItem = {
 
 const doctorNavigation: WorkspaceNavItem[] = [
   { to: '/app/overview', label: 'Overview', icon: 'overview' },
+  { to: '/app/profile', label: 'Profile', icon: 'profile' },
   { to: '/app/clinics', label: 'Clinics', icon: 'clinics' },
   { to: '/app/calendar', label: 'Calendar', icon: 'calendar' },
   { to: '/app/secretaries', label: 'Secretaries', icon: 'secretaries' },
@@ -34,6 +35,8 @@ function WorkspaceIcon({ name }: { name: WorkspaceIconName }) {
   switch (name) {
     case 'overview':
       return <svg {...common}><path d="M3 10.5 12 3l9 7.5" /><path d="M5.5 9.5V21h13V9.5" /><path d="M9.5 21v-7h5v7" /></svg>;
+    case 'profile':
+      return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4.5 21a7.5 7.5 0 0 1 15 0" /></svg>;
     case 'clinics':
       return <svg {...common}><path d="M4 21V8h6v13" /><path d="M10 21V4h10v17" /><path d="M2 21h20" /><path d="M13 8h4M15 6v4M7 11h1M7 15h1M13 14h1M17 14h1M13 18h1M17 18h1" /></svg>;
     case 'calendar':
