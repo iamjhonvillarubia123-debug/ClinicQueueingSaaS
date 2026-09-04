@@ -9,6 +9,7 @@ interface AuthContextValue {
   status: AuthStatus;
   profile: SessionProfile | null;
   refresh: () => Promise<void>;
+  clearSession: () => void;
   login: (email: string, password: string) => Promise<SessionProfile>;
   logout: () => Promise<void>;
 }
@@ -19,6 +20,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [profile, setProfile] = useState<SessionProfile | null>(null);
 
+  const clearSession = useCallback(() => {
+    setProfile(null);
+    setStatus('anonymous');
+  }, []);
+
   const refresh = useCallback(async () => {
     try {
       const nextProfile = await apiRequest<SessionProfile>('/auth/profile');
@@ -28,10 +34,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error instanceof ApiError && error.status !== 401) {
         console.error('Session profile check failed without exposing response data.');
       }
-      setProfile(null);
-      setStatus('anonymous');
+      clearSession();
     }
-  }, []);
+  }, [clearSession]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -47,12 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await apiRequest('/auth/logout', { method: 'POST' });
     } finally {
-      setProfile(null);
-      setStatus('anonymous');
+      clearSession();
     }
-  }, []);
+  }, [clearSession]);
 
-  const value = useMemo(() => ({ status, profile, refresh, login, logout }), [status, profile, refresh, login, logout]);
+  const value = useMemo(() => ({ status, profile, refresh, clearSession, login, logout }), [status, profile, refresh, clearSession, login, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
