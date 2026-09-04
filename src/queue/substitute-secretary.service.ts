@@ -12,6 +12,7 @@ import {
   ClinicDayOperatingStaffChangeType,
   ClinicDayStatus,
   CommandType,
+  PracticeLocationLifecycleStatus,
   PracticeStaffRole,
   Prisma,
   UserAccountStatus,
@@ -32,7 +33,13 @@ type LockedClinicDay = {
   serviceDate: Date;
   status: ClinicDayStatus;
   operatingPracticeStaffId: string | null;
-  currentRegularPracticeStaffId: string | null;
+  lifecycleStatus: PracticeLocationLifecycleStatus;
+  doctorUserId: string;
+};
+
+type LockedLocation = {
+  id: string;
+  lifecycleStatus: PracticeLocationLifecycleStatus;
   doctorUserId: string;
 };
 
@@ -56,12 +63,31 @@ export class SubstituteSecretaryService {
     dto: AssignSubstituteSecretaryDto,
     idempotencyKey: string,
   ) {
-    return this.applySubstitute(
+    if (dto.clinicDayId) {
+      if (dto.practiceLocationId || dto.serviceDate) {
+        throw new BadRequestException(
+          'Provide either clinicDayId or practiceLocationId with serviceDate, not both.',
+        );
+      }
+      return this.applyOperatingSecretary(
+        authenticatedUserId,
+        dto.clinicDayId,
+        dto.userId,
+        idempotencyKey,
+        CommandType.CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY,
+      );
+    }
+    if (!dto.practiceLocationId || !dto.serviceDate) {
+      throw new BadRequestException(
+        'practiceLocationId and serviceDate are required when clinicDayId is not provided.',
+      );
+    }
+    return this.assignForServiceDate(
       authenticatedUserId,
-      dto.clinicDayId,
+      dto.practiceLocationId,
+      dto.serviceDate,
       dto.userId,
       idempotencyKey,
-      CommandType.CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY,
     );
   }
 
@@ -70,7 +96,7 @@ export class SubstituteSecretaryService {
     dto: ReplaceSubstituteSecretaryDto,
     idempotencyKey: string,
   ) {
-    return this.applySubstitute(
+    return this.applyOperatingSecretary(
       authenticatedUserId,
       dto.clinicDayId,
       dto.userId,
@@ -111,49 +137,32 @@ export class SubstituteSecretaryService {
           replay.requestFingerprint,
           requestFingerprint,
         );
-        return { ended: true, replayed: true };
+        return { cleared: true, replayed: true };
       }
 
-      this.assertClinicDayAllowsStaffing(clinicDay.status);
+      this.assertClinicDayAllowsAssignmentOrClear(clinicDay.status);
       if (!clinicDay.operatingPracticeStaffId) {
         throw new ConflictException(
-          'Clinic day has no active substitute secretary to end.',
-        );
-      }
-      if (
-        clinicDay.currentRegularPracticeStaffId &&
-        clinicDay.operatingPracticeStaffId ===
-          clinicDay.currentRegularPracticeStaffId
-      ) {
-        throw new ConflictException(
-          'Clinic day is currently operating under the regular secretary, not a substitute.',
+          'Clinic day has no operating secretary to clear.',
         );
       }
 
-      const regular = clinicDay.currentRegularPracticeStaffId
-        ? await this.lockStaffById(
-            transaction,
-            clinicDay.currentRegularPracticeStaffId,
-          )
-        : null;
-      const restoredRegularId =
-        regular && this.isOperationallyReady(regular) ? regular.id : null;
+      const previousOperatingPracticeStaffId =
+        clinicDay.operatingPracticeStaffId;
       const now = new Date();
 
       await transaction.clinicDay.update({
         where: { id: clinicDay.id },
-        data: { operatingPracticeStaffId: restoredRegularId },
+        data: { operatingPracticeStaffId: null },
       });
       await transaction.clinicDayOperatingStaffAudit.create({
         data: {
           clinicDayId: clinicDay.id,
           practiceLocationId: clinicDay.practiceLocationId,
           serviceDate: clinicDay.serviceDate,
-          changeType: restoredRegularId
-            ? ClinicDayOperatingStaffChangeType.REPLACED
-            : ClinicDayOperatingStaffChangeType.CLEARED,
-          previousOperatingPracticeStaffId: clinicDay.operatingPracticeStaffId,
-          newOperatingPracticeStaffId: restoredRegularId,
+          changeType: ClinicDayOperatingStaffChangeType.CLEARED,
+          previousOperatingPracticeStaffId,
+          newOperatingPracticeStaffId: null,
           actorUserId: authenticatedUserId,
           createdAt: now,
         },
@@ -173,15 +182,145 @@ export class SubstituteSecretaryService {
         },
       });
 
+      return { cleared: true, replayed: false };
+    });
+  }
+
+  private async assignForServiceDate(
+    authenticatedUserId: string,
+    practiceLocationId: string,
+    serviceDateInput: string,
+    secretaryUserId: string,
+    idempotencyKey: string,
+  ) {
+    const serviceDate = this.parseServiceDate(serviceDateInput);
+    const key = this.normalizeIdempotencyKey(idempotencyKey);
+    const commandType = CommandType.CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY;
+    const commandIdentityKey = this.hash(
+      `${commandType}|${authenticatedUserId}|${practiceLocationId}|${serviceDateInput}|${key}`,
+    );
+    const requestFingerprint = this.hash(
+      `${commandType}|${authenticatedUserId}|${practiceLocationId}|${serviceDateInput}|${secretaryUserId}`,
+    );
+
+    return this.prisma.$transaction(async (transaction) => {
+      await this.acquireCommandLock(transaction, commandIdentityKey);
+      await this.acquireClinicDayScopeLock(
+        transaction,
+        practiceLocationId,
+        serviceDateInput,
+      );
+      await this.lockUsers(transaction, [authenticatedUserId, secretaryUserId]);
+      const location = await this.lockLocation(transaction, practiceLocationId);
+      await this.assertOwningDoctorForLocation(
+        transaction,
+        authenticatedUserId,
+        location,
+      );
+
+      const replay = await transaction.commandIdempotency.findUnique({
+        where: { commandIdentityKey },
+      });
+      if (replay) {
+        this.assertCompatibleReplay(
+          replay.requestFingerprint,
+          requestFingerprint,
+        );
+        return {
+          assigned: true,
+          replayed: true,
+          commandType,
+        };
+      }
+
+      let clinicDay = await this.lockClinicDayByScope(
+        transaction,
+        practiceLocationId,
+        serviceDate,
+      );
+      if (!clinicDay) {
+        const created = await transaction.clinicDay.create({
+          data: {
+            practiceLocationId,
+            serviceDate,
+            status: ClinicDayStatus.NOT_STARTED,
+          },
+          select: {
+            id: true,
+            practiceLocationId: true,
+            serviceDate: true,
+            status: true,
+            operatingPracticeStaffId: true,
+          },
+        });
+        clinicDay = {
+          ...created,
+          lifecycleStatus: location.lifecycleStatus,
+          doctorUserId: location.doctorUserId,
+        };
+      }
+
+      this.assertClinicDayAllowsAssignmentOrClear(clinicDay.status);
+      if (clinicDay.operatingPracticeStaffId) {
+        throw new ConflictException(
+          'Clinic day already has an operating secretary. Use Replace Operating Secretary.',
+        );
+      }
+
+      const selectedStaff = await this.lockStaffByUserAndLocation(
+        transaction,
+        secretaryUserId,
+        practiceLocationId,
+      );
+      if (!selectedStaff || !this.isOperationallyReady(selectedStaff)) {
+        throw new ForbiddenException(
+          'Selected secretary is not operationally ready for this practice location.',
+        );
+      }
+
+      const now = new Date();
+      await transaction.clinicDay.update({
+        where: { id: clinicDay.id },
+        data: { operatingPracticeStaffId: selectedStaff.id },
+      });
+      await transaction.clinicDayOperatingStaffAudit.create({
+        data: {
+          clinicDayId: clinicDay.id,
+          practiceLocationId,
+          serviceDate,
+          changeType: ClinicDayOperatingStaffChangeType.ASSIGNED,
+          previousOperatingPracticeStaffId: null,
+          newOperatingPracticeStaffId: selectedStaff.id,
+          actorUserId: authenticatedUserId,
+          createdAt: now,
+        },
+      });
+      await transaction.commandIdempotency.create({
+        data: {
+          idempotencyKey: key,
+          commandIdentityKey,
+          commandType,
+          requestFingerprint,
+          practiceLocationId,
+          serviceDate,
+          actorUserId: authenticatedUserId,
+          accountUserId: secretaryUserId,
+          completedAt: now,
+          expiresAt: new Date(now.getTime() + IDEMPOTENCY_RETENTION_MS),
+          createdAt: now,
+        },
+      });
+
       return {
-        ended: true,
+        assigned: true,
         replayed: false,
-        restoredRegularSecretary: restoredRegularId !== null,
+        commandType,
+        clinicDayId: clinicDay.id,
       };
     });
   }
 
-  private async applySubstitute(
+  private async applyOperatingSecretary(
     authenticatedUserId: string,
     clinicDayId: string,
     secretaryUserId: string,
@@ -223,63 +362,55 @@ export class SubstituteSecretaryService {
         };
       }
 
-      this.assertClinicDayAllowsStaffing(clinicDay.status);
-      const substitute = await this.lockStaffByUserAndLocation(
+      if (commandType === CommandType.CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY) {
+        this.assertClinicDayAllowsAssignmentOrClear(clinicDay.status);
+        if (clinicDay.operatingPracticeStaffId) {
+          throw new ConflictException(
+            'Clinic day already has an operating secretary. Use Replace Operating Secretary.',
+          );
+        }
+      } else {
+        this.assertClinicDayAllowsReplacement(clinicDay.status);
+        if (!clinicDay.operatingPracticeStaffId) {
+          throw new ConflictException(
+            'Clinic day has no operating secretary to replace.',
+          );
+        }
+      }
+
+      const selectedStaff = await this.lockStaffByUserAndLocation(
         transaction,
         secretaryUserId,
         clinicDay.practiceLocationId,
       );
-      if (!substitute || !this.isOperationallyReady(substitute)) {
+      if (!selectedStaff || !this.isOperationallyReady(selectedStaff)) {
         throw new ForbiddenException(
           'Selected secretary is not operationally ready for this practice location.',
         );
       }
-      if (clinicDay.currentRegularPracticeStaffId === substitute.id) {
-        throw new ConflictException(
-          'The current regular secretary cannot be assigned as a substitute.',
-        );
-      }
-
-      const currentOperatingId = clinicDay.operatingPracticeStaffId;
-      if (
-        commandType === CommandType.CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY &&
-        currentOperatingId &&
-        currentOperatingId !== clinicDay.currentRegularPracticeStaffId
-      ) {
-        throw new ConflictException(
-          'A substitute secretary is already active for this clinic day. Use Replace Substitute instead.',
-        );
-      }
-      if (
-        commandType === CommandType.CLINIC_DAY_REPLACE_SUBSTITUTE_SECRETARY &&
-        (!currentOperatingId ||
-          currentOperatingId === clinicDay.currentRegularPracticeStaffId)
-      ) {
-        throw new ConflictException(
-          'Clinic day has no active substitute secretary to replace.',
-        );
-      }
-      if (currentOperatingId === substitute.id) {
+      if (clinicDay.operatingPracticeStaffId === selectedStaff.id) {
         throw new ConflictException(
           'The selected secretary is already the operating secretary for this clinic day.',
         );
       }
 
+      const previousOperatingPracticeStaffId =
+        clinicDay.operatingPracticeStaffId;
       const now = new Date();
       await transaction.clinicDay.update({
         where: { id: clinicDay.id },
-        data: { operatingPracticeStaffId: substitute.id },
+        data: { operatingPracticeStaffId: selectedStaff.id },
       });
       await transaction.clinicDayOperatingStaffAudit.create({
         data: {
           clinicDayId: clinicDay.id,
           practiceLocationId: clinicDay.practiceLocationId,
           serviceDate: clinicDay.serviceDate,
-          changeType: currentOperatingId
+          changeType: previousOperatingPracticeStaffId
             ? ClinicDayOperatingStaffChangeType.REPLACED
             : ClinicDayOperatingStaffChangeType.ASSIGNED,
-          previousOperatingPracticeStaffId: currentOperatingId,
-          newOperatingPracticeStaffId: substitute.id,
+          previousOperatingPracticeStaffId,
+          newOperatingPracticeStaffId: selectedStaff.id,
           actorUserId: authenticatedUserId,
           createdAt: now,
         },
@@ -319,7 +450,7 @@ export class SubstituteSecretaryService {
         cd."serviceDate",
         cd."status",
         cd."operatingPracticeStaffId",
-        pl."currentRegularPracticeStaffId",
+        pl."lifecycleStatus",
         dp."userId" AS "doctorUserId"
       FROM "ClinicDay" cd
       INNER JOIN "PracticeLocation" pl
@@ -335,6 +466,56 @@ export class SubstituteSecretaryService {
       throw new NotFoundException('Clinic day was not found.');
     }
     return clinicDay;
+  }
+
+  private async lockClinicDayByScope(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+    serviceDate: Date,
+  ): Promise<LockedClinicDay | null> {
+    const rows = await transaction.$queryRaw<LockedClinicDay[]>(Prisma.sql`
+      SELECT
+        cd."id",
+        cd."practiceLocationId",
+        cd."serviceDate",
+        cd."status",
+        cd."operatingPracticeStaffId",
+        pl."lifecycleStatus",
+        dp."userId" AS "doctorUserId"
+      FROM "ClinicDay" cd
+      INNER JOIN "PracticeLocation" pl
+        ON pl."id" = cd."practiceLocationId"
+      INNER JOIN "DoctorProfile" dp
+        ON dp."id" = pl."doctorProfileId"
+      WHERE cd."practiceLocationId" = ${practiceLocationId}
+        AND cd."serviceDate" = ${serviceDate}
+      LIMIT 1
+      FOR UPDATE OF cd, pl
+    `);
+    return rows[0] ?? null;
+  }
+
+  private async lockLocation(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+  ): Promise<LockedLocation> {
+    const rows = await transaction.$queryRaw<LockedLocation[]>(Prisma.sql`
+      SELECT
+        pl."id",
+        pl."lifecycleStatus",
+        dp."userId" AS "doctorUserId"
+      FROM "PracticeLocation" pl
+      INNER JOIN "DoctorProfile" dp
+        ON dp."id" = pl."doctorProfileId"
+      WHERE pl."id" = ${practiceLocationId}
+      LIMIT 1
+      FOR UPDATE OF pl
+    `);
+    const location = rows[0];
+    if (!location) {
+      throw new NotFoundException('Practice location was not found.');
+    }
+    return location;
   }
 
   private async lockStaffByUserAndLocation(
@@ -362,29 +543,6 @@ export class SubstituteSecretaryService {
     return rows[0] ?? null;
   }
 
-  private async lockStaffById(
-    transaction: TransactionClient,
-    practiceStaffId: string,
-  ): Promise<EligibleStaff | null> {
-    const rows = await transaction.$queryRaw<EligibleStaff[]>(Prisma.sql`
-      SELECT
-        ps."id",
-        ps."userId",
-        ps."practiceLocationId",
-        ps."staffRole",
-        ps."isActive",
-        u."role" AS "userRole",
-        u."accountStatus" AS "userAccountStatus",
-        u."emailVerifiedAt"
-      FROM "PracticeStaff" ps
-      INNER JOIN "User" u ON u."id" = ps."userId"
-      WHERE ps."id" = ${practiceStaffId}
-      LIMIT 1
-      FOR UPDATE OF ps, u
-    `);
-    return rows[0] ?? null;
-  }
-
   private isOperationallyReady(staff: EligibleStaff): boolean {
     return (
       staff.staffRole === PracticeStaffRole.SECRETARY &&
@@ -400,6 +558,32 @@ export class SubstituteSecretaryService {
     authenticatedUserId: string,
     clinicDay: LockedClinicDay,
   ): Promise<void> {
+    this.assertOperationalLocation(clinicDay.lifecycleStatus);
+    await this.assertOwningDoctorIdentity(
+      transaction,
+      authenticatedUserId,
+      clinicDay.doctorUserId,
+    );
+  }
+
+  private async assertOwningDoctorForLocation(
+    transaction: TransactionClient,
+    authenticatedUserId: string,
+    location: LockedLocation,
+  ): Promise<void> {
+    this.assertOperationalLocation(location.lifecycleStatus);
+    await this.assertOwningDoctorIdentity(
+      transaction,
+      authenticatedUserId,
+      location.doctorUserId,
+    );
+  }
+
+  private async assertOwningDoctorIdentity(
+    transaction: TransactionClient,
+    authenticatedUserId: string,
+    doctorUserId: string,
+  ): Promise<void> {
     const actor = await transaction.user.findUnique({
       where: { id: authenticatedUserId },
       select: {
@@ -414,15 +598,27 @@ export class SubstituteSecretaryService {
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
       actor.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      clinicDay.doctorUserId !== authenticatedUserId
+      doctorUserId !== authenticatedUserId
     ) {
       throw new ForbiddenException(
-        'Only the eligible owning doctor may manage substitute secretary authority.',
+        'Only the eligible owning doctor may manage operating secretary authority.',
       );
     }
   }
 
-  private assertClinicDayAllowsStaffing(status: ClinicDayStatus): void {
+  private assertOperationalLocation(
+    lifecycleStatus: PracticeLocationLifecycleStatus,
+  ): void {
+    if (lifecycleStatus !== PracticeLocationLifecycleStatus.ACTIVE) {
+      throw new ConflictException(
+        'Practice location is not active for operating secretary assignment.',
+      );
+    }
+  }
+
+  private assertClinicDayAllowsAssignmentOrClear(
+    status: ClinicDayStatus,
+  ): void {
     if (
       status === ClinicDayStatus.CLOSED ||
       status === ClinicDayStatus.CANCELLED
@@ -433,12 +629,31 @@ export class SubstituteSecretaryService {
     }
   }
 
+  private assertClinicDayAllowsReplacement(status: ClinicDayStatus): void {
+    if (status !== ClinicDayStatus.STARTED) {
+      throw new ConflictException(
+        'Operating Secretary replacement is allowed only after the clinic day has started.',
+      );
+    }
+  }
+
   private async acquireCommandLock(
     transaction: TransactionClient,
     commandIdentityKey: string,
   ): Promise<void> {
     await transaction.$executeRaw(Prisma.sql`
       SELECT pg_advisory_xact_lock(hashtextextended(${commandIdentityKey}, 0))
+    `);
+  }
+
+  private async acquireClinicDayScopeLock(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+    serviceDate: string,
+  ): Promise<void> {
+    const scope = `clinic-day-operating-secretary|${practiceLocationId}|${serviceDate}`;
+    await transaction.$executeRaw(Prisma.sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${scope}, 0))
     `);
   }
 
@@ -461,6 +676,20 @@ export class SubstituteSecretaryService {
       ORDER BY "id"
       FOR UPDATE
     `);
+  }
+
+  private parseServiceDate(value: string): Date {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      throw new BadRequestException('serviceDate must use YYYY-MM-DD.');
+    }
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== value
+    ) {
+      throw new BadRequestException('serviceDate is invalid.');
+    }
+    return date;
   }
 
   private normalizeIdempotencyKey(value: string): string {

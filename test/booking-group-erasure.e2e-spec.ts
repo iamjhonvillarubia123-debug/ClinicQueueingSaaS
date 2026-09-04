@@ -58,6 +58,7 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
 
   async function createFixture() {
     const unique = randomUUID();
+    const liveExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const doctor = await prisma.user.create({
       data: {
         email: `m12-group-erasure-${unique}@example.test`,
@@ -155,7 +156,7 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
         bookingGroupId: group.id,
         tokenHash,
         purpose: 'CONTROLLER_ACCESS',
-        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+        expiresAt: liveExpiry,
       },
     });
 
@@ -171,7 +172,7 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
         status: 'COMPLETED',
         verifiedAt: new Date('2026-08-20T01:00:00.000Z'),
         completedAt: new Date('2026-08-20T01:01:00.000Z'),
-        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+        expiresAt: liveExpiry,
       },
     });
 
@@ -187,8 +188,8 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
         recipientMobileEncrypted: 'group-outbox-mobile',
         messageBodyEncrypted: 'group-confirmation-payload',
         providerIdempotencyKey: `provider-${unique}`,
-        nextAttemptAt: new Date('2026-08-20T00:05:00.000Z'),
-        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+        nextAttemptAt: new Date(),
+        expiresAt: liveExpiry,
       },
     });
     await prisma.notificationLog.create({
@@ -199,9 +200,9 @@ describe('BookingGroup final privacy erasure boundary (e2e)', () => {
         channel: 'SMS',
         outcome: 'SUCCESS',
         retryRecommended: false,
-        submittedAt: new Date('2026-08-20T00:01:00.000Z'),
-        resolvedAt: new Date('2026-08-20T00:01:01.000Z'),
-        expiresAt: new Date('2026-08-27T00:00:00.000Z'),
+        submittedAt: new Date(),
+        resolvedAt: new Date(),
+        expiresAt: liveExpiry,
       },
     });
 

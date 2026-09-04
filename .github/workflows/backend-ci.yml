@@ -1,0 +1,98 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'prisma/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  verify-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install
+      - run: npm run prisma:generate
+      - run: npm run prisma:validate
+      - name: Lint frontend-facing backend integration
+        run: >-
+          npx eslint
+          src/booking/booking.controller.ts
+          src/booking/booking.module.ts
+          src/booking/booking.service.ts
+          src/booking/booking-confirmation.service.ts
+          src/booking/public-booking-entry.service.ts
+          src/booking/public-booking-entry.service.spec.ts
+          src/booking/public-booking-replacement.service.ts
+          src/booking/public-booking-replacement.service.spec.ts
+          src/booking/public-booking-duplicate-use-existing.service.ts
+          src/booking/public-booking-duplicate-use-existing.service.spec.ts
+          src/booking/dto/create-booking-draft.dto.ts
+          src/booking/dto/create-public-booking-draft.dto.ts
+          src/booking/dto/replace-public-booking-draft.dto.ts
+          src/public-routing/public-routing.module.ts
+          src/patient-access/appointment-recovery.controller.ts
+          src/patient-access/booking-group-recovery.controller.ts
+          src/patient-access/public-booking-recovery.controller.ts
+          src/patient-access/public-booking-recovery.service.ts
+          src/patient-access/patient-access.module.ts
+          src/practice-location/practice-location-configuration-apply.service.ts
+          src/practice-location/practice-location-configuration-apply.service.spec.ts
+          src/practice-location/practice-location-protected-activation.service.ts
+          src/practice-location/practice-location-protected-activation.service.spec.ts
+          src/practice-location/dto/apply-practice-location-configuration-draft.dto.ts
+          src/practice-location/dto/activate-practice-location.dto.ts
+      - name: Lint Open Clinic operations service
+        run: >-
+          npx eslint
+          src/practice-location/practice-location-operations.service.ts
+          src/practice-location/practice-location-operations-context.service.ts
+          src/practice-location/practice-location-staff-read.service.ts
+          src/practice-location/practice-location-staff.controller.ts
+          src/practice-location/practice-location.controller.ts
+          src/practice-location/practice-location.module.ts
+          src/queue/substitute-secretary.service.ts
+          src/queue/substitute-secretary.controller.ts
+          src/queue/start-clinic.service.ts
+          src/queue/dto/assign-substitute-secretary.dto.ts
+      - name: Lint Open Clinic operations tests
+        run: >-
+          npx eslint
+          src/practice-location/practice-location-operations.service.spec.ts
+          src/practice-location/practice-location-operations-context.service.spec.ts
+          src/practice-location/practice-location-staff-read.service.spec.ts
+          src/queue/substitute-secretary.service.spec.ts
+          src/queue/start-clinic-operating-secretary.service.spec.ts
+      - name: Check development acceptance scripts
+        run: |
+          node --check scripts/create-dev-public-fixture.cjs
+          node --check scripts/show-dev-latest-booking-otp.cjs
+          node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
+          node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
+          node --check scripts/wire-clinic-activation-ui.mjs
+      - name: Test public booking, patient recovery, clinic configuration, open clinic reads, and operating staff authority
+        run: >-
+          npm test -- --runInBand
+          public-booking-entry.service.spec.ts
+          public-booking-replacement.service.spec.ts
+          public-booking-duplicate-use-existing.service.spec.ts
+          appointment-recovery.service.spec.ts
+          booking-group-recovery.service.spec.ts
+          practice-location.service.spec.ts
+          practice-location.controller.spec.ts
+          practice-location-configuration-draft.service.spec.ts
+          practice-location-configuration-apply.service.spec.ts
+          practice-location-protected-activation.service.spec.ts
+          practice-location-operations.service.spec.ts
+          practice-location-operations-context.service.spec.ts
+          practice-location-staff-read.service.spec.ts
+          substitute-secretary.service.spec.ts
+          start-clinic-operating-secretary.service.spec.ts
+      - run: npm run build

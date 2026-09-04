@@ -6,6 +6,8 @@ import {
   UserAccountStatus,
   UserRole,
 } from './../generated/prisma/client';
+import { NotificationPayloadService } from './../src/notification/notification-payload.service';
+import { OtpNotificationOutboxService } from './../src/notification/otp-notification-outbox.service';
 import { OtpGenerator } from './../src/otp/otp.generator';
 import { OtpService } from './../src/otp/otp.service';
 import { PrismaService } from './../src/prisma/prisma.service';
@@ -21,6 +23,8 @@ describe('Booking OTP concurrency controls (e2e)', () => {
     const values: Record<string, string> = {
       OTP_HMAC_KEY_V1: Buffer.alloc(32, 3).toString('base64'),
       OTP_HMAC_ACTIVE_KEY_ID: 'v1',
+      MOBILE_ENCRYPTION_KEY_V1: Buffer.alloc(32, 4).toString('base64'),
+      MOBILE_ENCRYPTION_ACTIVE_KEY_ID: 'e2e-mobile-v1',
     };
     const config = {
       getOrThrow: (name: string) => {
@@ -29,8 +33,17 @@ describe('Booking OTP concurrency controls (e2e)', () => {
         return value;
       },
     } as unknown as ConfigService;
+    const notificationPayload = new NotificationPayloadService(config);
+    const otpNotificationOutbox = new OtpNotificationOutboxService(
+      notificationPayload,
+    );
 
-    otpService = new OtpService(new OtpGenerator(), config, prisma);
+    otpService = new OtpService(
+      new OtpGenerator(),
+      config,
+      prisma,
+      otpNotificationOutbox,
+    );
   });
 
   afterAll(async () => {
@@ -74,6 +87,7 @@ describe('Booking OTP concurrency controls (e2e)', () => {
         practiceLocationId: location.id,
         firstName: 'Concurrent',
         lastName: 'Patient',
+        mobileNumberEncrypted: `e2e-encrypted-${scope}`,
         mobileNumberHash: scope.repeat(2),
         mobileNumberLastFour: '4567',
         serviceDate: new Date('2026-08-17T00:00:00.000Z'),
@@ -113,11 +127,34 @@ describe('Booking OTP concurrency controls (e2e)', () => {
     const active = challenges.filter(
       (challenge) => challenge.activeContextKey !== null,
     );
+    const outboxes = await prisma.notificationOutbox.findMany({
+      where: {
+        otpVerificationId: { in: challenges.map((challenge) => challenge.id) },
+      },
+      select: {
+        otpVerificationId: true,
+        notificationType: true,
+        recipientMobileEncrypted: true,
+        messageBodyEncrypted: true,
+      },
+    });
 
     expect(challenges).toHaveLength(2);
     expect(active).toHaveLength(1);
     expect(active[0]?.activeContextKey).toBe(`BOOKING:${draft.id}`);
     expect(challenges[0]?.invalidatedAt).not.toBeNull();
     expect(challenges[0]?.otpHash).toBeNull();
+    expect(outboxes).toHaveLength(2);
+    expect(
+      new Set(outboxes.map((outbox) => outbox.otpVerificationId)).size,
+    ).toBe(2);
+    expect(
+      outboxes.every(
+        (outbox) =>
+          outbox.notificationType === 'OTP_VERIFICATION' &&
+          outbox.recipientMobileEncrypted !== null &&
+          outbox.messageBodyEncrypted !== null,
+      ),
+    ).toBe(true);
   });
 });

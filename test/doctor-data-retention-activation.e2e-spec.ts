@@ -129,7 +129,11 @@ describe('Doctor Data Retention activation boundary (e2e)', () => {
     await expect(
       activation.activate(
         doctor.id,
-        { practiceLocationId: location.id },
+        {
+          practiceLocationId: location.id,
+          password: 'e2e-not-used',
+          confirmActivation: true,
+        },
         `m12s8-activate-${unique}`,
       ),
     ).resolves.toEqual({ activated: true, replayed: false });

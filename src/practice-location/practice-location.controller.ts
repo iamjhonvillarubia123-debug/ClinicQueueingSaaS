@@ -3,7 +3,11 @@ import {
   Controller,
   Get,
   Headers,
+  Param,
+  Query,
+  Patch,
   Post,
+  Put,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -13,25 +17,168 @@ import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 
 import { ActivatePracticeLocationDto } from './dto/activate-practice-location.dto';
+import { ApplyPracticeLocationConfigurationDraftDto } from './dto/apply-practice-location-configuration-draft.dto';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 import { DisablePracticeLocationDto } from './dto/disable-practice-location.dto';
 import { PermanentlyDeletePracticeLocationDto } from './dto/permanently-delete-practice-location.dto';
 import { ReactivatePracticeLocationDto } from './dto/reactivate-practice-location.dto';
+import { SaveDoctorClinicConfigurationDraftDto } from './dto/save-doctor-clinic-configuration-draft.dto';
+import { SaveDraftPracticeScheduleDto } from './dto/save-draft-practice-schedule.dto';
+import { UpdatePracticeLocationDto } from './dto/update-practice-location.dto';
+import { ValidatePracticeScheduleDto } from './dto/validate-practice-schedule.dto';
 import { PracticeLocationActivationService } from './practice-location-activation.service';
+import { PracticeLocationConfigurationApplyService } from './practice-location-configuration-apply.service';
+import { PracticeLocationConfigurationDraftService } from './practice-location-configuration-draft.service';
 import { PracticeLocationDataRetentionGateService } from './practice-location-data-retention-gate.service';
+import { PracticeLocationDraftScheduleService } from './practice-location-draft-schedule.service';
 import { PracticeLocationLifecycleService } from './practice-location-lifecycle.service';
+import { PracticeLocationOperationsContextService } from './practice-location-operations-context.service';
 import { PracticeLocationPermanentDeleteService } from './practice-location-permanent-delete.service';
+import { PracticeLocationProtectedActivationService } from './practice-location-protected-activation.service';
 import { PracticeLocationService } from './practice-location.service';
+import { PracticeLocationOperationsService } from './practice-location-operations.service';
+import { PracticeSchedulePreflightService } from './practice-schedule-preflight.service';
 
 @Controller('practice-location')
 export class PracticeLocationController {
   constructor(
     private readonly practiceLocationService: PracticeLocationService,
     private readonly practiceLocationActivationService: PracticeLocationActivationService,
+    private readonly practiceLocationProtectedActivationService: PracticeLocationProtectedActivationService,
+    private readonly practiceLocationConfigurationApplyService: PracticeLocationConfigurationApplyService,
+    private readonly practiceLocationConfigurationDraftService: PracticeLocationConfigurationDraftService,
     private readonly practiceLocationDataRetentionGateService: PracticeLocationDataRetentionGateService,
+    private readonly practiceLocationDraftScheduleService: PracticeLocationDraftScheduleService,
     private readonly practiceLocationLifecycleService: PracticeLocationLifecycleService,
+    private readonly practiceLocationOperationsContextService: PracticeLocationOperationsContextService,
     private readonly practiceLocationPermanentDeleteService: PracticeLocationPermanentDeleteService,
+    private readonly practiceSchedulePreflightService: PracticeSchedulePreflightService,
+    private readonly practiceLocationOperationsService: PracticeLocationOperationsService,
   ) {}
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/context')
+  operationsContext(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsContextService.getContext(
+      request.user.userId,
+      practiceLocationId,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/overview')
+  operationsOverview(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getOverview(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/queue')
+  operationsQueue(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getQueue(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/appointments')
+  operationsAppointments(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getAppointments(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/appointments/:appointmentId')
+  operationsAppointmentDetails(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Param('appointmentId') appointmentId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getAppointmentDetails(
+      request.user.userId,
+      practiceLocationId,
+      appointmentId,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Get(':practiceLocationId/operations/appointment-report')
+  operationsAppointmentReport(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Query('serviceDate') serviceDate: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationOperationsService.getDailyAppointmentReport(
+      request.user.userId,
+      practiceLocationId,
+      serviceDate,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Put(':practiceLocationId/configuration-draft')
+  saveConfigurationDraft(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Body() dto: SaveDoctorClinicConfigurationDraftDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationConfigurationDraftService.save(
+      request.user.userId,
+      practiceLocationId,
+      dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('apply-configuration-draft')
+  applyConfigurationDraft(
+    @Body() dto: ApplyPracticeLocationConfigurationDraftDto,
+    @Headers('idempotency-key') idempotencyKey: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationConfigurationApplyService.apply(
+      request.user.userId,
+      dto,
+      idempotencyKey,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Put(':practiceLocationId/draft-schedule')
+  saveDraftSchedule(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Body() dto: SaveDraftPracticeScheduleDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationDraftScheduleService.replaceDraftSchedule(
+      request.user.userId,
+      practiceLocationId,
+      dto,
+    );
+  }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post()
@@ -46,6 +193,32 @@ export class PracticeLocationController {
   }
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch(':practiceLocationId')
+  update(
+    @Param('practiceLocationId') practiceLocationId: string,
+    @Body() dto: UpdatePracticeLocationDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceLocationService.updateOwned(
+      request.user.userId,
+      practiceLocationId,
+      dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post('schedule-preflight')
+  validateSchedule(
+    @Body() dto: ValidatePracticeScheduleDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.practiceSchedulePreflightService.validate(
+      request.user.userId,
+      dto,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('activate')
   async activate(
     @Body() dto: ActivatePracticeLocationDto,
@@ -55,7 +228,7 @@ export class PracticeLocationController {
     await this.practiceLocationDataRetentionGateService.assertCurrentAcknowledgement(
       request.user.userId,
     );
-    return this.practiceLocationActivationService.activate(
+    return this.practiceLocationProtectedActivationService.activate(
       request.user.userId,
       dto,
       idempotencyKey,

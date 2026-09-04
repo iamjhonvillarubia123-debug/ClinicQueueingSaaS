@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { EstablishPatientBookingAccessDto } from './dto/establish-patient-booking-access.dto';
 import {
   PATIENT_BOOKING_GROUP_ACCESS_COOKIE,
@@ -21,6 +22,12 @@ export class PatientBookingGroupAccessController {
     private readonly patientBookingGroupAccess: PatientBookingGroupAccessService,
   ) {}
 
+  @RateLimit({
+    id: 'patient-booking-group-access-establish',
+    limit: 30,
+    windowMs: 5 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'token' },
+  })
   @UseGuards(CsrfOriginGuard)
   @Post('access')
   async establish(

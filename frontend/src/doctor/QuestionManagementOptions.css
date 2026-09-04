@@ -1,0 +1,141 @@
+.question-management-options {
+  padding: 14px 16px 16px;
+  border-bottom: 1px solid #e8ebef;
+  background: #fbfcfd;
+}
+
+.question-management-options-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.question-management-options-heading strong {
+  color: #171717;
+  font-size: 12px;
+}
+
+.question-management-options-heading span {
+  color: #667085;
+  font-size: 11px;
+}
+
+.question-management-option-list {
+  display: grid;
+  gap: 7px;
+}
+
+.question-management-option-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid #dfe4ea;
+  border-radius: 7px;
+  background: #fff;
+  padding: 3px 5px 3px 8px;
+  transition: opacity 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.question-management-option-row.is-dragging {
+  opacity: 0.45;
+}
+
+.question-management-option-row.is-drag-over {
+  border-color: #111;
+  box-shadow: inset 0 2px 0 #111;
+}
+
+.question-management-option-handle {
+  display: inline-flex;
+  width: 22px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  color: #98a2b3;
+  cursor: grab;
+  font-size: 14px;
+  letter-spacing: -4px;
+  line-height: 1;
+  user-select: none;
+}
+
+.question-management-option-row:active .question-management-option-handle {
+  cursor: grabbing;
+}
+
+.question-management-option-row input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  padding: 7px 2px;
+  outline: none;
+}
+
+.question-management-option-row input::placeholder {
+  color: #98a2b3;
+}
+
+.question-management-option-delete {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+.question-management-option-delete:hover {
+  background: #f4f5f6;
+  color: #111;
+}
+
+.question-management-option-delete svg,
+.question-management-option-delete svg path {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.9 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+.question-management-add-option {
+  margin-top: 10px;
+}
+
+.question-management-options > small {
+  display: block;
+  margin-top: 6px;
+  color: #667085;
+  font-size: 11px;
+}
+
+.question-management-option-error {
+  margin-top: 8px;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .question-management-options-heading {
+    display: grid;
+    gap: 3px;
+  }
+
+  .question-management-option-row {
+    grid-template-columns: 18px minmax(0, 1fr) 34px;
+  }
+}

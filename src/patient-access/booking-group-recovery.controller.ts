@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
+import { RateLimit } from '../rate-limit/rate-limit.decorator';
 import { BookingGroupRecoveryService } from './booking-group-recovery.service';
 import {
   RequestBookingGroupRecoveryDto,
@@ -20,6 +21,12 @@ import { PATIENT_BOOKING_GROUP_ACCESS_COOKIE } from './patient-booking-group-acc
 export class BookingGroupRecoveryController {
   constructor(private readonly recovery: BookingGroupRecoveryService) {}
 
+  @RateLimit({
+    id: 'booking-group-recovery-request',
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+    subject: { kind: 'BODY', field: 'mobileNumber' },
+  })
   @UseGuards(CsrfOriginGuard)
   @Post('request')
   request(@Body() dto: RequestBookingGroupRecoveryDto) {

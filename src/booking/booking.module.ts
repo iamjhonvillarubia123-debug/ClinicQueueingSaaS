@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { FinancialModule } from '../financial/financial.module';
 import { IdempotencyModule } from '../idempotency/idempotency.module';
 import { NotificationModule } from '../notification/notification.module';
 import { OtpModule } from '../otp/otp.module';
 import { PatientAccessModule } from '../patient-access/patient-access.module';
+import { PublicRoutingModule } from '../public-routing/public-routing.module';
 import { QueueModule } from '../queue/queue.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
@@ -14,6 +16,8 @@ import { BookingConfigurationService } from './booking-configuration.service';
 import { BookingConfirmationAdmissionService } from './booking-confirmation-admission.service';
 import { BookingConfirmationService } from './booking-confirmation.service';
 import { BookingController } from './booking.controller';
+import { StaffAppointmentController } from './staff-appointment.controller';
+import { StaffAppointmentService } from './staff-appointment.service';
 import { BookingDraftCleanupService } from './booking-draft-cleanup.service';
 import { BookingDraftControlService } from './booking-draft-control.service';
 import { BookingDraftEditService } from './booking-draft-edit.service';
@@ -26,26 +30,36 @@ import { BookingReferenceGenerator } from './booking-reference.generator';
 import { BookingService } from './booking.service';
 import { IndividualBookingConfirmationService } from './individual-booking-confirmation.service';
 import { MultiPersonBookingConfirmationService } from './multi-person-booking-confirmation.service';
+import { PublicBookingDuplicateUseExistingController } from './public-booking-duplicate-use-existing.controller';
+import { PublicBookingDuplicateUseExistingService } from './public-booking-duplicate-use-existing.service';
+import { PublicBookingEntryService } from './public-booking-entry.service';
+import { PublicBookingReplacementService } from './public-booking-replacement.service';
 
 @Module({
   imports: [
+    AuthModule,
     MobileNumberModule,
     OtpModule,
     ScheduleModule,
     IdempotencyModule,
     NotificationModule,
     PatientAccessModule,
+    PublicRoutingModule,
     QueueModule,
     FinancialModule,
   ],
   controllers: [
     BookingController,
+    StaffAppointmentController,
+    PublicBookingDuplicateUseExistingController,
     BookingGroupAddPersonController,
     BookingGroupMemberCancellationController,
   ],
   providers: [
     BookingService,
+    StaffAppointmentService,
     BookingConfigurationService,
+    PublicBookingEntryService,
     BookingAnswerValidationService,
     BookingDraftCleanupService,
     BookingDraftControlService,
@@ -59,6 +73,8 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
+    PublicBookingReplacementService,
+    PublicBookingDuplicateUseExistingService,
     BookingConfirmationService,
   ],
   exports: [
@@ -70,6 +86,8 @@ import { MultiPersonBookingConfirmationService } from './multi-person-booking-co
     BookingGroupMemberCancellationService,
     IndividualBookingConfirmationService,
     MultiPersonBookingConfirmationService,
+    PublicBookingReplacementService,
+    PublicBookingDuplicateUseExistingService,
     BookingConfirmationService,
   ],
 })

@@ -209,6 +209,8 @@ enum NotificationAttemptOutcome {
 enum CommandType {
   CONVERT_BOOKING_DRAFT
   CREATE_STAFF_APPOINTMENT
+  START_CLINIC_DAY_OPERATIONAL_NOTICE
+  END_CLINIC_DAY_OPERATIONAL_NOTICE
   START_CLINIC
   NEXT_PATIENT
   SELF_SERVICE_REINSERTION
@@ -258,6 +260,16 @@ enum CommandType {
   SYSTEM_ADMIN_COMPLETE_REFUND
   SYSTEM_ADMIN_FAIL_REFUND
   DOCTOR_RECOVER_SUBSCRIPTION_CREDIT
+}
+
+enum ClinicDayOperationalNoticeKind {
+  DELAYED_OPENING
+  SERVING_BREAK
+}
+
+enum ClinicDayOperationalNoticeStatus {
+  ACTIVE
+  ENDED
 }
 
 enum SubscriptionPurchaseStatus {
@@ -470,6 +482,8 @@ model User {
   queueEvents                      QueueEvent[]
   cancelledClinicDays              ClinicDay[]                          @relation("ClinicDayCancelledByUser")
   clinicDayOperatingStaffAudits    ClinicDayOperatingStaffAudit[]       @relation("ClinicDayOperatingStaffAuditActor")
+  clinicDayOperationalNoticesCreated ClinicDayOperationalNotice[]       @relation("ClinicDayOperationalNoticeCreatedBy")
+  clinicDayOperationalNoticesEnded   ClinicDayOperationalNotice[]       @relation("ClinicDayOperationalNoticeEndedBy")
   userSessions                     UserSession[]
   emailVerifications               EmailVerification[]
   passwordResets                   PasswordReset[]
@@ -520,16 +534,16 @@ model DoctorProfile {
 }
 
 model DoctorAccountSettings {
-  id                         String   @id @default(uuid())
-  doctorProfileId            String   @unique
-  defaultTimeZone            String   @default("Asia/Manila") @db.VarChar(100)
-  defaultConsultationMinutes Int      @default(30)
+  id                                       String   @id @default(uuid())
+  doctorProfileId                          String   @unique
+  defaultTimeZone                          String   @default("Asia/Manila") @db.VarChar(100)
+  defaultConsultationMinutes               Int      @default(30)
   maximumEstimatedServiceMinutesPerPatient Int?
-  maximumAdvanceBookingDays  Int      @default(30)
-  allowOnlineBooking         Boolean  @default(true)
-  noClinicOnRegularHolidays  Boolean  @default(false)
-  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt                  DateTime @updatedAt @db.Timestamptz(3)
+  maximumAdvanceBookingDays                Int      @default(30)
+  allowOnlineBooking                       Boolean  @default(true)
+  noClinicOnRegularHolidays                Boolean  @default(false)
+  createdAt                                DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                                DateTime @updatedAt @db.Timestamptz(3)
 
   doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
 }
@@ -564,7 +578,7 @@ model EmailVerification {
 
   status EmailVerificationStatus @default(PENDING)
 
-  expiresAt DateTime @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
   verifiedAt DateTime? @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
 
@@ -590,9 +604,9 @@ model PasswordReset {
 
   status PasswordResetStatus @default(PENDING)
 
-  expiresAt DateTime @db.Timestamptz(3)
+  expiresAt  DateTime  @db.Timestamptz(3)
   consumedAt DateTime? @db.Timestamptz(3)
-  revokedAt DateTime? @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -605,7 +619,6 @@ model PasswordReset {
   @@index([status, expiresAt])
   @@index([userId, createdAt])
 }
-
 
 model DoctorDataRetentionAcknowledgement {
   id String @id @default(uuid())
@@ -628,7 +641,6 @@ model AccountPermanentClosureAudit {
   previousAccountStatus UserAccountStatus
   occurredAt            DateTime                    @default(now()) @db.Timestamptz(3)
 
-  // Wired to CommandIdempotency when the canonical idempotency model is installed.
   commandIdempotencyId String?
 
   accountUser User @relation("AccountPermanentClosureAuditAccountUser", fields: [accountUserId], references: [id], onDelete: Restrict)
@@ -676,7 +688,6 @@ model AdministrativeAccountActionScope {
   administrativeAccountActionId String
   practiceLocationId            String
 
-  // Wired to ClinicDay when the canonical ClinicDay model is installed.
   clinicDayId String?
   clinicDay   ClinicDay? @relation(fields: [clinicDayId], references: [id], onDelete: Restrict)
 
@@ -697,7 +708,6 @@ model ApplicationNotification {
   practiceLocationId      String?
   notificationIdentityKey String                      @unique @db.Char(64)
 
-  // Wired to CommandIdempotency when the canonical idempotency model is installed.
   commandIdempotencyId String?
 
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
@@ -721,30 +731,24 @@ model PracticeLocation {
   id              String @id @default(uuid())
   doctorProfileId String
 
-  // Phase 5 stable public-route identity. It is not an auth credential.
   publicIdentifier String @unique @default(uuid()) @db.VarChar(64)
-
-  // Phase 3 lifecycle authority. Legacy PracticeLocation.isActive is removed.
   lifecycleStatus PracticeLocationLifecycleStatus @default(DRAFT)
-
-  // Public online-booking control remains independent from lifecycle.
   isBookingEnabled Boolean @default(true)
 
-  // DRAFT locations may be incomplete. Activation-time application validation
-  // requires the effective fields needed for operation/public presentation.
-  name             String? @db.VarChar(200)
-  addressLine1     String? @db.VarChar(255)
-  addressLine2     String? @db.VarChar(255)
-  cityMunicipality String? @db.VarChar(120)
-  province         String? @db.VarChar(120)
-  postalCode       String? @db.VarChar(20)
-  contactNumber    String? @db.VarChar(30)
+  name              String? @db.VarChar(200)
+  shortCode         String? @db.VarChar(40)
+  addressLine1      String? @db.VarChar(255)
+  addressLine2      String? @db.VarChar(255)
+  cityMunicipality  String? @db.VarChar(120)
+  province          String? @db.VarChar(120)
+  postalCode        String? @db.VarChar(20)
+  contactNumber     String? @db.VarChar(30)
+  clinicEmail       String? @db.VarChar(255)
+  clinicDescription String? @db.VarChar(250)
 
-  // Authoritative after configuration; DRAFT may still be incomplete.
   countryCode String? @db.Char(2)
   timeZone    String? @db.VarChar(100)
 
-  // Exactly zero or one current regular Secretary assignment.
   currentRegularPracticeStaffId String? @unique
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -758,26 +762,29 @@ model PracticeLocation {
   secretarySettingsDrafts SecretarySettingsDraft[]
   services                PracticeLocationService[]
   practiceSchedules       PracticeSchedule[]
+  doctorScheduleDraft     DoctorPracticeScheduleDraft?
   scheduleExceptions      ScheduleException[]
 
-  bookingDrafts                BookingDraft[]
-  appointments                 Appointment[]
-  bookingGroups                BookingGroup[]
-  clinicDays                   ClinicDay[]
+  bookingDrafts                 BookingDraft[]
+  appointments                  Appointment[]
+  bookingGroups                 BookingGroup[]
+  clinicDays                    ClinicDay[]
   clinicDayOperatingStaffAudits ClinicDayOperatingStaffAudit[]
-  queueCounters                QueueCounter[]
-  queueEvents                  QueueEvent[]
-  bookingQuestions             BookingQuestion[]
-  bookingRecoveryAttempts      BookingRecoveryAttempt[]
-  bookingGroupRecoveryAttempts BookingGroupRecoveryAttempt[]
-  scheduledReminders           ScheduledReminder[]
-  notificationOutboxes         NotificationOutbox[]
+  clinicDayOperationalNotices   ClinicDayOperationalNotice[]
+  queueCounters                 QueueCounter[]
+  queueEvents                   QueueEvent[]
+  bookingQuestions              BookingQuestion[]
+  bookingRecoveryAttempts       BookingRecoveryAttempt[]
+  bookingGroupRecoveryAttempts  BookingGroupRecoveryAttempt[]
+  scheduledReminders            ScheduledReminder[]
+  notificationOutboxes          NotificationOutbox[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
   commandIdempotencies              CommandIdempotency[]               @relation("CommandIdempotencyPracticeLocation")
   queueAnalyticsDaily               QueueAnalyticsDaily[]
 
+  @@unique([doctorProfileId, shortCode])
   @@index([doctorProfileId])
   @@index([lifecycleStatus])
   @@index([doctorProfileId, lifecycleStatus])
@@ -788,8 +795,6 @@ model PracticeStaff {
   userId             String
   practiceLocationId String
   staffRole          PracticeStaffRole @default(SECRETARY)
-
-  // Valid domain-specific assignment eligibility flag.
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -798,8 +803,6 @@ model PracticeStaff {
   user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
 
-  // Current regular-Secretary authority is held by PracticeLocation's
-  // one-to-one pointer; historical PracticeStaff rows remain preserved.
   regularSecretaryFor PracticeLocation? @relation("PracticeLocationCurrentRegularSecretary")
 
   capabilities                    PracticeStaffCapability[]
@@ -817,26 +820,17 @@ model PracticeStaffCapability {
   id String @id @default(uuid())
 
   practiceStaffId String
-
   capabilityType PracticeStaffCapabilityType
   status         PracticeStaffCapabilityStatus @default(ACTIVE)
-
-  // Derived backend key representing the one currently active grant for the
-  // assignment + capability type. Cleared on revocation.
   activeCapabilityKey String? @unique @db.VarChar(64)
-
   grantedByUserId String
   grantedAt       DateTime @db.Timestamptz(3)
-
   revokedByUserId String?
   revokedAt       DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   practiceStaff PracticeStaff @relation(fields: [practiceStaffId], references: [id], onDelete: Restrict)
-
   grantedByUser User @relation("PracticeStaffCapabilityGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Restrict)
-
   revokedByUser User? @relation("PracticeStaffCapabilityRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict)
 
   @@index([practiceStaffId, status])
@@ -846,32 +840,18 @@ model PracticeStaffCapability {
 
 model SecretarySettingsDraft {
   id String @id @default(uuid())
-
   practiceLocationId    String
   authorPracticeStaffId String
-
   status SecretarySettingsDraftStatus @default(DRAFT)
-
-  // Submission/review timestamps express the workflow boundary.
-  // No expiry field exists because SUBMITTED drafts do not expire by age.
   submittedAt DateTime? @db.Timestamptz(3)
   reviewedAt  DateTime? @db.Timestamptz(3)
-
-  // Doctor reviewer exists only after a Doctor decision.
   reviewedByUserId String?
-
-  // Optional Doctor comment for REJECTED / RETURNED_FOR_REWORK.
   reviewComment String? @db.VarChar(1000)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
-  // Historical authorship remains attached to the original PracticeStaff row
-  // even after current regular-Secretary replacement.
   authorPracticeStaff PracticeStaff @relation(fields: [authorPracticeStaffId], references: [id], onDelete: Restrict)
-
   reviewedByUser User? @relation("SecretarySettingsDraftReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
 
   proposedServices           SecretarySettingsDraftService[]
@@ -887,48 +867,32 @@ model SecretarySettingsDraft {
 
 model DoctorServiceTemplate {
   id String @id @default(uuid())
-
   doctorProfileId String
-
   name            String                    @db.VarChar(150)
+  description     String?                   @db.VarChar(250)
   durationMinutes Int
   status          ServiceAvailabilityStatus @default(ACTIVE)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
-
   @@index([doctorProfileId, status])
   @@index([doctorProfileId, name])
 }
 
 model PracticeLocationService {
   id String @id @default(uuid())
-
   practiceLocationId String
-
-  // Optional provenance only. Once copied, this location Service is fully
-  // independent and never synchronizes back to the Doctor-wide template.
   sourceDoctorServiceTemplateId String?
-
   name            String                    @db.VarChar(150)
+  description     String?                   @db.VarChar(250)
   durationMinutes Int
   status          ServiceAvailabilityStatus @default(ACTIVE)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
-  // No FK is intentionally used for sourceDoctorServiceTemplateId.
-  // Template deletion/retirement must never block or mutate copied location
-  // Services. Provenance is informational only.
-
   draftProposals            SecretarySettingsDraftService[]
   bookingDraftSelections    BookingDraftServiceSelection[]
   appointmentBookedServices AppointmentBookedService[]
-
   @@index([practiceLocationId, status])
   @@index([practiceLocationId, name])
   @@index([sourceDoctorServiceTemplateId])
@@ -936,27 +900,16 @@ model PracticeLocationService {
 
 model SecretarySettingsDraftService {
   id String @id @default(uuid())
-
   secretarySettingsDraftId String
-
-  // Existing effective Service being proposed for edit/deactivation.
-  // NULL means the proposal creates a new location-only/copied Service.
   practiceLocationServiceId String?
-
-  // Optional Doctor template selected as the copy source for a proposed
-  // location Service. It is provenance only, not synchronization authority.
   sourceDoctorServiceTemplateId String?
-
   proposedName            String                    @db.VarChar(150)
   proposedDurationMinutes Int
   proposedStatus          ServiceAvailabilityStatus @default(ACTIVE)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   secretarySettingsDraft  SecretarySettingsDraft   @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
   practiceLocationService PracticeLocationService? @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
-
   @@index([secretarySettingsDraftId])
   @@index([practiceLocationServiceId])
   @@index([sourceDoctorServiceTemplateId])
@@ -964,163 +917,182 @@ model SecretarySettingsDraftService {
 
 model PracticeSchedule {
   id String @id @default(uuid())
-
   practiceLocationId String
   weekday            Weekday
-
   isOpen Boolean @default(false)
-
-  // Local wall-clock values interpreted only through PracticeLocation.timeZone.
   opensAtLocal  DateTime? @db.Time(0)
   closesAtLocal DateTime? @db.Time(0)
-
-  // Optional additional public automated-admission cutoff.
-  // NULL means no separate cutoff at this layer.
   maximumOnlineBookingUntilLocal DateTime? @db.Time(0)
-
-  // Independent workload/capacity ceiling for the Service Date.
-  // It is not clinic closing time and may differ from closesAtLocal.
   maximumOperatingUntilLocal DateTime? @db.Time(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   @@unique([practiceLocationId, weekday])
   @@index([practiceLocationId])
 }
 
-model ScheduleException {
+model DoctorPracticeScheduleDraft {
   id String @id @default(uuid())
+  practiceLocationId String @unique
+  name              String? @db.VarChar(200)
+  shortCode         String? @db.VarChar(40)
+  addressLine1      String? @db.VarChar(255)
+  addressLine2      String? @db.VarChar(255)
+  cityMunicipality  String? @db.VarChar(120)
+  province          String? @db.VarChar(120)
+  postalCode        String? @db.VarChar(20)
+  contactNumber     String? @db.VarChar(30)
+  clinicEmail       String? @db.VarChar(255)
+  clinicDescription String? @db.VarChar(250)
+  countryCode       String? @db.Char(2)
+  timeZone          String? @db.VarChar(100)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  schedules        DoctorPracticeScheduleDraftRow[]
+  services         DoctorPracticeConfigurationDraftService[]
+  bookingQuestions DoctorPracticeConfigurationDraftBookingQuestion[]
+}
 
-  practiceLocationId String
-  serviceDate        DateTime @db.Date
-
-  // Complete date-specific replacement of recurring schedule for this date.
-  isOpen Boolean
-
+model DoctorPracticeScheduleDraftRow {
+  id String @id @default(uuid())
+  doctorPracticeScheduleDraftId String
+  weekday                       Weekday
+  isOpen                         Boolean
   opensAtLocal                   DateTime? @db.Time(0)
   closesAtLocal                  DateTime? @db.Time(0)
   maximumOnlineBookingUntilLocal DateTime? @db.Time(0)
-
-  // Date-specific override of the recurring maximumOperatingUntil.
-  // NULL means no date-specific maximum-operating override is stored here.
-  maximumOperatingUntilLocal DateTime? @db.Time(0)
-
+  maximumOperatingUntilLocal     DateTime? @db.Time(0)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  doctorPracticeScheduleDraft DoctorPracticeScheduleDraft @relation(fields: [doctorPracticeScheduleDraftId], references: [id], onDelete: Cascade)
+  @@unique([doctorPracticeScheduleDraftId, weekday])
+  @@index([doctorPracticeScheduleDraftId])
+}
 
+model DoctorPracticeConfigurationDraftService {
+  id String @id @default(uuid())
+  doctorPracticeScheduleDraftId String
+  effectiveServiceId String?
+  sourceDoctorServiceTemplateId String?
+  name            String                    @db.VarChar(150)
+  description     String?                   @db.VarChar(250)
+  durationMinutes Int
+  status          ServiceAvailabilityStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  doctorPracticeScheduleDraft DoctorPracticeScheduleDraft @relation(fields: [doctorPracticeScheduleDraftId], references: [id], onDelete: Cascade)
+  @@index([doctorPracticeScheduleDraftId])
+  @@index([effectiveServiceId])
+}
+
+model DoctorPracticeConfigurationDraftBookingQuestion {
+  id String @id @default(uuid())
+  doctorPracticeScheduleDraftId String
+  effectiveBookingQuestionId String?
+  sourceDoctorBookingQuestionTemplateId String?
+  questionText String @db.VarChar(500)
+  type BookingQuestionType
+  isRequired Boolean @default(false)
+  displayOrder Int
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  doctorPracticeScheduleDraft DoctorPracticeScheduleDraft @relation(fields: [doctorPracticeScheduleDraftId], references: [id], onDelete: Cascade)
+  @@unique([doctorPracticeScheduleDraftId, displayOrder])
+  @@index([doctorPracticeScheduleDraftId])
+  @@index([effectiveBookingQuestionId])
+}
+
+model ScheduleException {
+  id String @id @default(uuid())
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+  isOpen Boolean
+  opensAtLocal                   DateTime? @db.Time(0)
+  closesAtLocal                  DateTime? @db.Time(0)
+  maximumOnlineBookingUntilLocal DateTime? @db.Time(0)
+  maximumOperatingUntilLocal DateTime? @db.Time(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   @@unique([practiceLocationId, serviceDate])
   @@index([practiceLocationId, serviceDate])
 }
 
 model SecretarySettingsDraftPracticeSchedule {
   id String @id @default(uuid())
-
   secretarySettingsDraftId String
   weekday                  Weekday
-
   proposedIsOpen                         Boolean
   proposedOpensAtLocal                   DateTime? @db.Time(0)
   proposedClosesAtLocal                  DateTime? @db.Time(0)
   proposedMaximumOnlineBookingUntilLocal DateTime? @db.Time(0)
   proposedMaximumOperatingUntilLocal     DateTime? @db.Time(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   secretarySettingsDraft SecretarySettingsDraft @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
-
   @@unique([secretarySettingsDraftId, weekday])
   @@index([secretarySettingsDraftId])
 }
 
 model SecretarySettingsDraftScheduleException {
   id String @id @default(uuid())
-
   secretarySettingsDraftId String
   serviceDate              DateTime @db.Date
-
   proposedIsOpen                         Boolean
   proposedOpensAtLocal                   DateTime? @db.Time(0)
   proposedClosesAtLocal                  DateTime? @db.Time(0)
   proposedMaximumOnlineBookingUntilLocal DateTime? @db.Time(0)
   proposedMaximumOperatingUntilLocal     DateTime? @db.Time(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   secretarySettingsDraft SecretarySettingsDraft @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
-
   @@unique([secretarySettingsDraftId, serviceDate])
   @@index([secretarySettingsDraftId, serviceDate])
 }
 
 model DoctorBookingQuestionTemplate {
   id String @id @default(uuid())
-
   doctorProfileId String
-
   questionText String              @db.VarChar(500)
   helpText     String?             @db.VarChar(500)
   type         BookingQuestionType
   isRequired   Boolean             @default(false)
   displayOrder Int
   isActive     Boolean             @default(true)
-
   estimatedMinutesAdjustment Int @default(0)
-
   textMaximumLength Int?
   numberMinimum     Decimal?
   numberMaximum     Decimal?
   selectOptions     Json?
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
-
   @@unique([doctorProfileId, displayOrder])
   @@index([doctorProfileId, isActive, displayOrder])
 }
 
 model SecretarySettingsDraftBookingQuestion {
   id String @id @default(uuid())
-
   secretarySettingsDraftId String
-
-  // Existing effective BookingQuestion being proposed for edit/deactivation.
-  // NULL means the proposal creates a new PracticeLocation BookingQuestion.
   bookingQuestionId String?
-
-  // Optional Doctor template provenance for an explicit Apply/copy proposal.
-  // No FK is used because copied runtime configuration must not remain
-  // synchronized to the Doctor-wide template.
   sourceDoctorBookingQuestionTemplateId String?
-
   proposedQuestionText String              @db.VarChar(500)
   proposedHelpText     String?             @db.VarChar(500)
   proposedType         BookingQuestionType
   proposedIsRequired   Boolean             @default(false)
   proposedDisplayOrder Int
   proposedIsActive     Boolean             @default(true)
-
   proposedEstimatedMinutesAdjustment Int @default(0)
-
   proposedTextMaximumLength Int?
   proposedNumberMinimum     Decimal?
   proposedNumberMaximum     Decimal?
   proposedSelectOptions     Json?
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   secretarySettingsDraft SecretarySettingsDraft @relation(fields: [secretarySettingsDraftId], references: [id], onDelete: Restrict)
   bookingQuestion        BookingQuestion?       @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
-
   @@index([secretarySettingsDraftId])
   @@index([bookingQuestionId])
   @@index([sourceDoctorBookingQuestionTemplateId])
@@ -1128,34 +1100,24 @@ model SecretarySettingsDraftBookingQuestion {
 
 model DoctorCalendarRule {
   id String @id @default(uuid())
-
   doctorProfileId String
   recurrenceType  DoctorCalendarRecurrenceType
   status          DoctorCalendarRuleStatus     @default(ACTIVE)
-
   startDate DateTime  @db.Date
   endDate   DateTime? @db.Date
-
   timeZone String @db.VarChar(100)
-
   isWholeDay    Boolean   @default(true)
   startsAtLocal DateTime? @db.Time(0)
   endsAtLocal   DateTime? @db.Time(0)
-
   monthlyDayOfMonth Int?
-
   labelType   DoctorCalendarLabelType @default(PERSONAL)
   customLabel String?                 @db.VarChar(50)
-
   createdAt DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt DateTime  @updatedAt @db.Timestamptz(3)
   retiredAt DateTime? @db.Timestamptz(3)
-
   doctorProfile DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Restrict)
-
   weeklyWeekdays      DoctorCalendarRuleWeekday[]
   occurrenceOverrides DoctorCalendarOccurrenceOverride[]
-
   @@index([doctorProfileId, status])
   @@index([doctorProfileId, startDate, endDate])
   @@index([recurrenceType, status])
@@ -1163,52 +1125,40 @@ model DoctorCalendarRule {
 
 model DoctorCalendarRuleWeekday {
   id String @id @default(uuid())
-
   doctorCalendarRuleId String
   weekday              Weekday
-
   doctorCalendarRule DoctorCalendarRule @relation(fields: [doctorCalendarRuleId], references: [id], onDelete: Restrict)
-
   @@unique([doctorCalendarRuleId, weekday])
   @@index([doctorCalendarRuleId])
 }
 
 model DoctorCalendarOccurrenceOverride {
   id String @id @default(uuid())
-
   doctorCalendarRuleId String
   occurrenceDate       DateTime @db.Date
   isAvailable          Boolean  @default(true)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-
   doctorCalendarRule DoctorCalendarRule @relation(fields: [doctorCalendarRuleId], references: [id], onDelete: Restrict)
-
   @@unique([doctorCalendarRuleId, occurrenceDate])
   @@index([doctorCalendarRuleId, occurrenceDate])
 }
 
 model BookingGroup {
   id String @id @default(uuid())
-
   practiceLocationId String
   serviceDate        DateTime @db.Date
-
   controllingMobileNumberEncrypted String?
   controllingMobileNumberHash      String?
   controllingMobileLastFour        String? @db.VarChar(4)
-
   servingProtectionEndedAt DateTime? @db.Timestamptz(3)
   createdAt                DateTime  @default(now()) @db.Timestamptz(3)
-
   practiceLocation             PracticeLocation              @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointments                 Appointment[]
-  notificationOutboxes          NotificationOutbox[]
+  notificationOutboxes         NotificationOutbox[]
   accessTokens                 BookingGroupAccessToken[]
   recoveryAttempts             BookingGroupRecoveryAttempt[]
   commandIdempotenciesAsScope  CommandIdempotency[]          @relation("CommandIdempotencyBookingGroupScope")
   commandIdempotenciesAsResult CommandIdempotency[]          @relation("CommandIdempotencyResultBookingGroup")
-
   @@index([practiceLocationId, serviceDate])
   @@index([controllingMobileNumberHash, practiceLocationId, serviceDate])
 }
@@ -1216,52 +1166,37 @@ model BookingGroup {
 model Appointment {
   id               String @id @default(uuid())
   bookingReference String @unique @db.VarChar(64)
-
   practiceLocationId String
   bookingGroupId     String?
-
   serviceDate             DateTime @db.Date
   estimatedServiceMinutes Int
   queueNumber             Int
-
   status AppointmentStatus @default(WAITING)
-
   servingOrderKey      Decimal?              @db.Decimal(38, 18)
   waitingPlacementType WaitingPlacementType?
-
   firstName  String? @db.VarChar(100)
   middleName String? @db.VarChar(100)
   lastName   String? @db.VarChar(100)
   suffix     String? @db.VarChar(30)
-
   existingPatientResponse ExistingPatientResponse?
-
   mobileNumberEncrypted String?
   mobileNumberHash      String?
   mobileNumberLastFour  String? @db.VarChar(4)
-
   activeAppointmentKey String? @unique @db.VarChar(64)
-
   calledAt     DateTime? @db.Timestamptz(3)
   completedAt  DateTime? @db.Timestamptz(3)
   cancelledAt  DateTime? @db.Timestamptz(3)
   terminalAt   DateTime? @db.Timestamptz(3)
   anonymizedAt DateTime? @db.Timestamptz(3)
-
   cancelledByType    AppointmentCancelledByType?
   cancellationReason String?                     @db.VarChar(255)
-
   createdByUserId String?
-
   selfServiceReinsertedAt DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   bookingGroup     BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)
   createdByUser    User?            @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
-
   bookingAccessTokens        BookingAccessToken[]
   bookingRecoveryAttempts    BookingRecoveryAttempt[]    @relation("BookingRecoveryCandidateAppointment")
   contactPreference          ContactPreference?
@@ -1272,7 +1207,6 @@ model Appointment {
   bookedServices             AppointmentBookedService[]
   commandIdempotencies       CommandIdempotency[]        @relation("CommandIdempotencyAppointmentScope")
   resultCommandIdempotencies CommandIdempotency[]        @relation("CommandIdempotencyResultAppointment")
-
   @@unique([practiceLocationId, serviceDate, queueNumber])
   @@index([practiceLocationId, serviceDate])
   @@index([practiceLocationId, status, serviceDate])
@@ -1286,35 +1220,25 @@ model Appointment {
 model OtpVerification {
   id      String     @id @default(uuid())
   purpose OtpPurpose
-
   bookingDraftId                String?
   bookingRecoveryAttemptId      String?
   bookingGroupRecoveryAttemptId String?
-
   mobileNumberHash     String? @db.VarChar(64)
   mobileHashKeyVersion Int?
-
   otpHash           String? @db.VarChar(64)
   otpHashKeyVersion Int?
-
   activeContextKey String? @unique @db.VarChar(100)
-
   attemptCount Int @default(0)
-
   expiresAt     DateTime  @db.Timestamptz(3)
   verifiedAt    DateTime? @db.Timestamptz(3)
   consumedAt    DateTime? @db.Timestamptz(3)
   invalidatedAt DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   bookingDraft BookingDraft? @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
-
   bookingRecoveryAttempt      BookingRecoveryAttempt?      @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
   bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation(fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: Restrict)
   notificationOutbox          NotificationOutbox?          @relation("OtpVerificationNotificationOutbox")
-
   @@index([bookingDraftId, createdAt], map: "OtpVerification_bookingDraft_created_idx")
   @@index([bookingRecoveryAttemptId, createdAt], map: "OtpVerification_recovery_created_idx")
   @@index([bookingGroupRecoveryAttemptId, createdAt], map: "OtpVerification_group_recovery_created_idx")
@@ -1324,22 +1248,15 @@ model OtpVerification {
 
 model BookingGroupAccessToken {
   id String @id @default(uuid())
-
   bookingGroupId String
   bookingGroup   BookingGroup @relation(fields: [bookingGroupId], references: [id], onDelete: Cascade)
-
   tokenHash String? @unique @db.VarChar(255)
-
   purpose BookingGroupAccessTokenPurpose @default(CONTROLLER_ACCESS)
-
   expiresAt DateTime @db.Timestamptz(3)
-
   lastUsedAt DateTime? @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
-
   createdAt                  DateTime             @default(now()) @db.Timestamptz(3)
   resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultBookingGroupAccessToken")
-
   @@index([bookingGroupId], map: "BookingGroupAccessToken_group_idx")
   @@index([expiresAt], map: "BookingGroupAccessToken_expires_idx")
   @@index([bookingGroupId, revokedAt, expiresAt], map: "BookingGroupAccessToken_active_lookup_idx")
@@ -1347,38 +1264,27 @@ model BookingGroupAccessToken {
 
 model BookingGroupRecoveryAttempt {
   id String @id @default(uuid())
-
   practiceLocationId String
   serviceDate        DateTime @db.Date
-
   mobileNumberEncrypted String?
   mobileNumberHash      String? @db.VarChar(64)
   mobileHashKeyVersion  Int?
   mobileNumberLastFour  String? @db.VarChar(4)
-
   bookingGroupId String?
-
   status BookingGroupRecoveryAttemptStatus @default(PENDING_OTP)
-
   verifiedAt  DateTime? @db.Timestamptz(3)
   completedAt DateTime? @db.Timestamptz(3)
   rejectedAt  DateTime? @db.Timestamptz(3)
   cancelledAt DateTime? @db.Timestamptz(3)
   expiredAt   DateTime? @db.Timestamptz(3)
-
   expiresAt DateTime @db.Timestamptz(3)
-
   protectedDataClearedAt DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   bookingGroup     BookingGroup?    @relation(fields: [bookingGroupId], references: [id], onDelete: SetNull)
-
   otpVerifications     OtpVerification[]
   commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyBookingGroupRecoveryAttempt")
-
   @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingGroupRecoveryAttempt_scope_mobile_created_idx")
   @@index([status, expiresAt], map: "BookingGroupRecoveryAttempt_status_expires_idx")
   @@index([bookingGroupId], map: "BookingGroupRecoveryAttempt_group_idx")
@@ -1387,24 +1293,14 @@ model BookingGroupRecoveryAttempt {
 
 model BookingAccessToken {
   id String @id @default(uuid())
-
   appointmentId String
   appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-
-  // Required when the credential is created/usable. Nullable only so approved
-  // security/privacy cleanup can destroy credential material without retaining
-  // a patient-correlating secret indefinitely.
   tokenHash String? @unique @db.VarChar(255)
-
   purpose BookingAccessTokenPurpose @default(VIEW_AND_MANAGE_BOOKING)
-
   expiresAt DateTime @db.Timestamptz(3)
-
   lastUsedAt DateTime? @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-
   @@index([appointmentId])
   @@index([expiresAt])
   @@index([appointmentId, revokedAt, expiresAt], map: "BookingAccessToken_active_lookup_idx")
@@ -1412,39 +1308,28 @@ model BookingAccessToken {
 
 model BookingRecoveryAttempt {
   id String @id @default(uuid())
-
   practiceLocationId String
   serviceDate        DateTime @db.Date
-
   mobileNumberEncrypted String?
   mobileNumberHash      String? @db.VarChar(64)
   mobileHashKeyVersion  Int?
   mobileNumberLastFour  String? @db.VarChar(4)
-
   status BookingRecoveryAttemptStatus @default(PENDING_OTP)
-
   candidateAppointmentId String?
-
   verifiedAt           DateTime? @db.Timestamptz(3)
   candidateConfirmedAt DateTime? @db.Timestamptz(3)
   completedAt          DateTime? @db.Timestamptz(3)
   rejectedAt           DateTime? @db.Timestamptz(3)
   cancelledAt          DateTime? @db.Timestamptz(3)
   expiredAt            DateTime? @db.Timestamptz(3)
-
   expiresAt DateTime @db.Timestamptz(3)
-
   protectedDataClearedAt DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   candidateAppointment Appointment?         @relation("BookingRecoveryCandidateAppointment", fields: [candidateAppointmentId], references: [id], onDelete: SetNull)
   otpVerifications     OtpVerification[]
   commandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyBookingRecoveryAttempt")
-
   @@index([practiceLocationId, serviceDate, mobileNumberHash, createdAt], map: "BookingRecoveryAttempt_scope_mobile_created_idx")
   @@index([status, expiresAt], map: "BookingRecoveryAttempt_status_expires_idx")
   @@index([candidateAppointmentId], map: "BookingRecoveryAttempt_candidate_idx")
@@ -1453,19 +1338,14 @@ model BookingRecoveryAttempt {
 
 model ContactPreference {
   id String @id @default(uuid())
-
   appointmentId String?      @unique
   appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-
   allowOperationalMessages Boolean @default(true)
   allowFollowUpReminder    Boolean @default(false)
   allowMarketingMessages   Boolean @default(false)
-
   acknowledgedAt DateTime  @db.Timestamptz(3)
   withdrawnAt    DateTime? @db.Timestamptz(3)
-
   privacyNoticeVersion String @db.VarChar(30)
-
   createdAt          DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
   scheduledReminders ScheduledReminder[]
@@ -1473,43 +1353,31 @@ model ContactPreference {
 
 model ScheduledReminder {
   id String @id @default(uuid())
-
   practiceLocationId  String
   sourceAppointmentId String?
   contactPreferenceId String
-
   recipientSource          ScheduledReminderRecipientSource
   recipientMobileEncrypted String?
   recipientMobileLastFour  String?                          @db.VarChar(4)
-
   status ScheduledReminderStatus @default(SCHEDULED)
-
   scheduledFor DateTime @db.Timestamptz(3)
   expiresAt    DateTime @db.Timestamptz(3)
-
   messageBody String?
-
   createdByUserId    String
   lastEditedByUserId String
-
   sentAt      DateTime? @db.Timestamptz(3)
   cancelledAt DateTime? @db.Timestamptz(3)
   failedAt    DateTime? @db.Timestamptz(3)
   expiredAt   DateTime? @db.Timestamptz(3)
-
   protectedDataClearedAt DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation  PracticeLocation  @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   sourceAppointment Appointment?      @relation(fields: [sourceAppointmentId], references: [id], onDelete: SetNull)
   contactPreference ContactPreference @relation(fields: [contactPreferenceId], references: [id], onDelete: Restrict)
-
   createdByUser      User                @relation("ScheduledReminderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   lastEditedByUser   User                @relation("ScheduledReminderLastEditedBy", fields: [lastEditedByUserId], references: [id], onDelete: Restrict)
   notificationOutbox NotificationOutbox? @relation("ScheduledReminderNotificationOutbox")
-
   @@index([practiceLocationId, status, scheduledFor], map: "ScheduledReminder_location_status_due_idx")
   @@index([status, scheduledFor], map: "ScheduledReminder_status_due_idx")
   @@index([sourceAppointmentId], map: "ScheduledReminder_sourceAppointment_idx")
@@ -1520,12 +1388,10 @@ model ScheduledReminder {
 
 model NotificationOutbox {
   id String @id @default(uuid())
-
   deliveryIdentityKey String                   @unique @db.VarChar(64)
   notificationType    NotificationType
   channel             NotificationChannel      @default(SMS)
   status              NotificationOutboxStatus @default(PENDING)
-
   practiceLocationId             String?
   appointmentId                  String?
   bookingGroupId                 String?
@@ -1540,38 +1406,27 @@ model NotificationOutbox {
   subscriptionPurchaseId         String?
   refundRequestId                String?
   administrativeAccountActionId  String?
-
   recipientMobileEncrypted String?
   recipientEmailEncrypted  String?
   messageBodyEncrypted     String?
-
   providerIdempotencyKey String @db.VarChar(128)
-
   attemptCount Int @default(0)
-
   processingStartedAt DateTime? @db.Timestamptz(3)
   leaseExpiresAt      DateTime? @db.Timestamptz(3)
   processingWorkerId  String?   @db.VarChar(100)
-
   nextAttemptAt DateTime @db.Timestamptz(3)
-
   sentAt      DateTime? @db.Timestamptz(3)
   failedAt    DateTime? @db.Timestamptz(3)
   cancelledAt DateTime? @db.Timestamptz(3)
-
   protectedPayloadPurgedAt DateTime? @db.Timestamptz(3)
   expiresAt                DateTime  @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation? @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointment      Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   bookingGroup     BookingGroup?     @relation(fields: [bookingGroupId], references: [id], onDelete: Restrict)
-
   emailVerification EmailVerification? @relation("EmailVerificationNotificationOutbox", fields: [emailVerificationId], references: [id], onDelete: Restrict)
   passwordReset     PasswordReset?     @relation("PasswordResetNotificationOutbox", fields: [passwordResetId], references: [id], onDelete: Restrict)
-
   scheduledReminder            ScheduledReminder?            @relation("ScheduledReminderNotificationOutbox", fields: [scheduledReminderId], references: [id], onDelete: Restrict)
   otpVerification              OtpVerification?              @relation("OtpVerificationNotificationOutbox", fields: [otpVerificationId], references: [id], onDelete: Restrict)
   commandIdempotency           CommandIdempotency?           @relation("CommandIdempotencyNotificationOutboxes", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
@@ -1580,9 +1435,7 @@ model NotificationOutbox {
   subscriptionPurchase         SubscriptionPurchase?         @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
   refundRequest                RefundRequest?                @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
   administrativeAccountAction  AdministrativeAccountAction?  @relation(fields: [administrativeAccountActionId], references: [id], onDelete: Restrict)
-
   notificationLogs NotificationLog[]
-
   @@index([status, nextAttemptAt], map: "NotificationOutbox_status_nextAttempt_idx")
   @@index([status, leaseExpiresAt], map: "NotificationOutbox_status_lease_idx")
   @@index([practiceLocationId, createdAt], map: "NotificationOutbox_location_created_idx")
@@ -1599,14 +1452,11 @@ model NotificationOutbox {
 
 model NotificationLog {
   id String @id @default(uuid())
-
   notificationOutboxId String
   attemptNumber        Int
-
   notificationType NotificationType
   channel          NotificationChannel
   outcome          NotificationAttemptOutcome
-
   providerName               String? @db.VarChar(100)
   providerReference          String? @db.VarChar(200)
   providerStatus             String? @db.VarChar(100)
@@ -1614,15 +1464,11 @@ model NotificationLog {
   failureDetailSanitized     String? @db.VarChar(500)
   retryRecommended           Boolean
   providerIdempotencyKeyUsed String? @db.VarChar(128)
-
   submittedAt DateTime  @db.Timestamptz(3)
   resolvedAt  DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   expiresAt DateTime @db.Timestamptz(3)
-
   notificationOutbox NotificationOutbox @relation(fields: [notificationOutboxId], references: [id], onDelete: Restrict)
-
   @@unique([notificationOutboxId, attemptNumber], map: "NotificationLog_outbox_attempt_key")
   @@index([outcome, createdAt], map: "NotificationLog_outcome_created_idx")
   @@index([providerName, providerReference], map: "NotificationLog_provider_reference_idx")
@@ -1631,19 +1477,13 @@ model NotificationLog {
 
 model DoctorFinancialAccount {
   id String @id @default(uuid())
-
   doctorUserId String @unique
-
   recoveryEmailEncrypted String?
   recoveryEmailHash      String? @db.VarChar(64)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   doctorUser User @relation(fields: [doctorUserId], references: [id], onDelete: Restrict)
-
   entitlement DoctorSubscriptionEntitlement?
-
   commandIdempotencies          CommandIdempotency[]           @relation("CommandIdempotencyDoctorFinancialAccount")
   subscriptionPurchases         SubscriptionPurchase[]
   creditEntries                 SubscriptionCreditEntry[]      @relation("SubscriptionCreditEntryOwner")
@@ -1651,56 +1491,42 @@ model DoctorFinancialAccount {
   refundRequests                RefundRequest[]
   financialAccessSessions       FinancialAccessSession[]
   subscriptionEntitlementEvents SubscriptionEntitlementEvent[]
-
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
 }
 
 model DoctorSubscriptionEntitlement {
   id String @id @default(uuid())
-
   doctorFinancialAccountId String @unique
-
   paidThrough DateTime @db.Timestamptz(3)
   graceEndsAt DateTime @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   doctorFinancialAccount DoctorFinancialAccount         @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   events                 SubscriptionEntitlementEvent[]
 }
 
 model SubscriptionPurchase {
   id String @id @default(uuid())
-
   doctorFinancialAccountId String
   purchasedByUserId        String
-
   monthsPurchased        Int
   monthlyPriceSnapshot   Decimal @db.Decimal(18, 2)
   grossAmount            Decimal @db.Decimal(18, 2)
   creditAmountApplied    Decimal @db.Decimal(18, 2)
   externalAmountRequired Decimal @db.Decimal(18, 2)
-
   periodStart DateTime @db.Timestamptz(3)
   periodEnd   DateTime @db.Timestamptz(3)
-
   status SubscriptionPurchaseStatus @default(PENDING)
-
   commandIdempotencyId String? @unique
-
   createdAt   DateTime  @default(now()) @db.Timestamptz(3)
   completedAt DateTime? @db.Timestamptz(3)
-
   doctorFinancialAccount DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   purchasedByUser        User                   @relation("SubscriptionPurchasePurchasedBy", fields: [purchasedByUserId], references: [id], onDelete: Restrict)
   commandIdempotency     CommandIdempotency?    @relation("SubscriptionPurchaseCommandIdempotency", fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
-
   payments             SubscriptionPayment[]
   creditEntries        SubscriptionCreditEntry[]
   notificationOutboxes NotificationOutbox[]
   entitlementEvents    SubscriptionEntitlementEvent[]
-
   @@index([doctorFinancialAccountId, createdAt], map: "SubscriptionPurchase_financialAccount_created_idx")
   @@index([purchasedByUserId, createdAt], map: "SubscriptionPurchase_purchasedBy_created_idx")
   @@index([status, createdAt], map: "SubscriptionPurchase_status_created_idx")
@@ -1708,24 +1534,17 @@ model SubscriptionPurchase {
 
 model SubscriptionPayment {
   id String @id @default(uuid())
-
   subscriptionPurchaseId String
-
   provider                 String  @db.VarChar(100)
   providerPaymentReference String  @db.VarChar(200)
   amount                   Decimal @db.Decimal(18, 2)
-
   status SubscriptionPaymentStatus @default(PENDING)
-
   initiatedAt DateTime  @db.Timestamptz(3)
   confirmedAt DateTime? @db.Timestamptz(3)
   failedAt    DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   subscriptionPurchase SubscriptionPurchase @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
-
   @@unique([provider, providerPaymentReference], map: "SubscriptionPayment_provider_reference_key")
   @@index([subscriptionPurchaseId, createdAt], map: "SubscriptionPayment_purchase_created_idx")
   @@index([status, createdAt], map: "SubscriptionPayment_status_created_idx")
@@ -1733,29 +1552,22 @@ model SubscriptionPayment {
 
 model SubscriptionCreditEntry {
   id String @id @default(uuid())
-
   doctorFinancialAccountId String
   entryType                SubscriptionCreditEntryType
   amount                   Decimal                     @db.Decimal(18, 2)
-
   subscriptionPurchaseId               String?
   refundRequestId                      String?
   counterpartyDoctorFinancialAccountId String?
   relatedCreditEntryId                 String?
   commandIdempotencyId                 String?
-
   occurredAt DateTime @db.Timestamptz(3)
-
   doctorFinancialAccount             DoctorFinancialAccount  @relation("SubscriptionCreditEntryOwner", fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   subscriptionPurchase               SubscriptionPurchase?   @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
   counterpartyDoctorFinancialAccount DoctorFinancialAccount? @relation("SubscriptionCreditEntryCounterparty", fields: [counterpartyDoctorFinancialAccountId], references: [id], onDelete: Restrict)
   commandIdempotency                 CommandIdempotency?     @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
-
   relatedCreditEntry SubscriptionCreditEntry?  @relation("SubscriptionCreditEntryRelated", fields: [relatedCreditEntryId], references: [id], onDelete: Restrict)
   relatedByEntries   SubscriptionCreditEntry[] @relation("SubscriptionCreditEntryRelated")
-
   refundRequest RefundRequest? @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
-
   @@index([doctorFinancialAccountId, occurredAt], map: "SubscriptionCreditEntry_financialAccount_occurred_idx")
   @@index([subscriptionPurchaseId], map: "SubscriptionCreditEntry_purchase_idx")
   @@index([refundRequestId], map: "SubscriptionCreditEntry_refundRequest_idx")
@@ -1766,38 +1578,28 @@ model SubscriptionCreditEntry {
 
 model RefundRequest {
   id String @id @default(uuid())
-
   doctorFinancialAccountId String
   requestedAmount          Decimal @db.Decimal(18, 2)
-
   reasonCode      String       @db.VarChar(100)
   otherReasonText String?      @db.VarChar(1000)
   method          RefundMethod
-
   accountNameProtected String
   destinationProtected String
   destinationLast4     String @db.VarChar(4)
-
   status RefundRequestStatus @default(PENDING)
-
   submittedAt DateTime  @db.Timestamptz(3)
   completedAt DateTime? @db.Timestamptz(3)
   failedAt    DateTime? @db.Timestamptz(3)
-
   processedBySystemAdminUserId String?
   completionReference          String? @db.VarChar(255)
   proofReference               String? @db.VarChar(500)
-
   commandIdempotencyId String? @unique
-
   doctorFinancialAccount     DoctorFinancialAccount @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   processedBySystemAdminUser User?                  @relation("RefundRequestProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
   commandIdempotency         CommandIdempotency?    @relation(fields: [commandIdempotencyId], references: [id], onDelete: SetNull)
-
   creditEntries        SubscriptionCreditEntry[]
   processingAttempts   RefundProcessingAttempt[]
   notificationOutboxes NotificationOutbox[]
-
   @@index([doctorFinancialAccountId, submittedAt], map: "RefundRequest_financialAccount_submitted_idx")
   @@index([status, submittedAt], map: "RefundRequest_status_submitted_idx")
   @@index([processedBySystemAdminUserId], map: "RefundRequest_processedBy_idx")
@@ -1805,21 +1607,16 @@ model RefundRequest {
 
 model RefundProcessingAttempt {
   id String @id @default(uuid())
-
   refundRequestId              String
   processedBySystemAdminUserId String?
-
   provider         String   @db.VarChar(100)
   attemptReference String   @db.VarChar(255)
   attemptedAt      DateTime @db.Timestamptz(3)
-
   outcome                String  @db.VarChar(100)
   failureCategory        String? @db.VarChar(100)
   failureDetailSanitized String? @db.VarChar(1000)
-
   refundRequest              RefundRequest @relation(fields: [refundRequestId], references: [id], onDelete: Restrict)
   processedBySystemAdminUser User?         @relation("RefundProcessingAttemptProcessedByAdmin", fields: [processedBySystemAdminUserId], references: [id], onDelete: Restrict)
-
   @@index([refundRequestId, attemptedAt], map: "RefundProcessingAttempt_refund_attempted_idx")
   @@index([processedBySystemAdminUserId, attemptedAt], map: "RefundProcessingAttempt_admin_attempted_idx")
   @@index([provider, attemptReference], map: "RefundProcessingAttempt_provider_reference_idx")
@@ -1827,59 +1624,48 @@ model RefundProcessingAttempt {
 
 model FinancialAccessChallenge {
   id String @id @default(uuid())
-
   recoveryEmailHash       String @db.VarChar(64)
   recipientEmailEncrypted String
   codeHash                String @db.VarChar(64)
-
   expiresAt     DateTime  @db.Timestamptz(3)
   attemptCount  Int       @default(0)
   verifiedAt    DateTime? @db.Timestamptz(3)
   consumedAt    DateTime? @db.Timestamptz(3)
   invalidatedAt DateTime? @db.Timestamptz(3)
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-
   sessions             FinancialAccessSession[]
   notificationOutboxes NotificationOutbox[]
-
   @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
   @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
 }
 
 model FinancialAccessSession {
   id String @id @default(uuid())
-
   doctorFinancialAccountId String
   sourceChallengeId        String @unique
   tokenHash                String @unique @db.VarChar(64)
-
   expiresAt  DateTime  @db.Timestamptz(3)
   revokedAt  DateTime? @db.Timestamptz(3)
   lastUsedAt DateTime? @db.Timestamptz(3)
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
-
   doctorFinancialAccount DoctorFinancialAccount   @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   sourceChallenge        FinancialAccessChallenge @relation(fields: [sourceChallengeId], references: [id], onDelete: Restrict)
-
   @@index([doctorFinancialAccountId, expiresAt], map: "FinancialAccessSession_financialAccount_expires_idx")
   @@index([expiresAt], map: "FinancialAccessSession_expires_idx")
 }
 
 model SubscriptionEntitlementEvent {
   id String @id @default(uuid())
-
   doctorSubscriptionEntitlementId String
   doctorFinancialAccountId        String
   eventType                       SubscriptionEntitlementEventType
   effectiveAt                     DateTime                         @db.Timestamptz(3)
   subscriptionPurchaseId          String?
   createdAt                       DateTime                         @default(now()) @db.Timestamptz(3)
-
   doctorSubscriptionEntitlement DoctorSubscriptionEntitlement @relation(fields: [doctorSubscriptionEntitlementId], references: [id], onDelete: Restrict)
   doctorFinancialAccount        DoctorFinancialAccount        @relation(fields: [doctorFinancialAccountId], references: [id], onDelete: Restrict)
   subscriptionPurchase          SubscriptionPurchase?         @relation(fields: [subscriptionPurchaseId], references: [id], onDelete: Restrict)
   notificationOutboxes          NotificationOutbox[]
-
   @@unique([doctorSubscriptionEntitlementId, eventType, effectiveAt], map: "SubscriptionEntitlementEvent_transition_occurrence_key")
   @@index([doctorFinancialAccountId, effectiveAt], map: "SubscriptionEntitlementEvent_financialAccount_effective_idx")
   @@index([doctorSubscriptionEntitlementId, effectiveAt], map: "SubscriptionEntitlementEvent_entitlement_effective_idx")
@@ -1888,12 +1674,10 @@ model SubscriptionEntitlementEvent {
 
 model CommandIdempotency {
   id String @id @default(uuid())
-
   idempotencyKey     String      @db.VarChar(100)
   commandIdentityKey String      @unique @db.VarChar(64)
   commandType        CommandType
   requestFingerprint String      @db.VarChar(64)
-
   practiceLocationId       String?
   serviceDate              DateTime? @db.Date
   appointmentId            String?
@@ -1901,37 +1685,29 @@ model CommandIdempotency {
   bookingRecoveryAttemptId String?
   actorUserId              String?
   accountUserId            String?
-
   bookingGroupId                String?
   bookingGroupRecoveryAttemptId String?
-
   doctorFinancialAccountId String?
-
   resultAppointmentId                 String?
   resultQueueEventId                  String?
   resultBookingGroupId                String?
   resultBookingGroupAccessTokenId     String?
   resultAdministrativeAccountActionId String?
-
   completedAt DateTime @db.Timestamptz(3)
   expiresAt   DateTime @db.Timestamptz(3)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
-
   practiceLocation PracticeLocation? @relation("CommandIdempotencyPracticeLocation", fields: [practiceLocationId], references: [id], onDelete: Restrict)
   appointment      Appointment?      @relation("CommandIdempotencyAppointmentScope", fields: [appointmentId], references: [id], onDelete: SetNull)
   actorUser        User?             @relation("CommandIdempotencyActorUser", fields: [actorUserId], references: [id], onDelete: Restrict)
   accountUser      User?             @relation("CommandIdempotencyAccountUser", fields: [accountUserId], references: [id], onDelete: Restrict)
-
   bookingRecoveryAttempt      BookingRecoveryAttempt?      @relation("CommandIdempotencyBookingRecoveryAttempt", fields: [bookingRecoveryAttemptId], references: [id], onDelete: SetNull)
   bookingGroupScope           BookingGroup?                @relation("CommandIdempotencyBookingGroupScope", fields: [bookingGroupId], references: [id], onDelete: SetNull)
   bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation("CommandIdempotencyBookingGroupRecoveryAttempt", fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: SetNull)
-
   resultAppointment                 Appointment?                 @relation("CommandIdempotencyResultAppointment", fields: [resultAppointmentId], references: [id], onDelete: SetNull)
   resultQueueEvent                  QueueEvent?                  @relation("CommandIdempotencyResultQueueEvent", fields: [resultQueueEventId], references: [id], onDelete: Restrict)
   resultBookingGroup                BookingGroup?                @relation("CommandIdempotencyResultBookingGroup", fields: [resultBookingGroupId], references: [id], onDelete: SetNull)
   resultBookingGroupAccessToken     BookingGroupAccessToken?     @relation("CommandIdempotencyResultBookingGroupAccessToken", fields: [resultBookingGroupAccessTokenId], references: [id], onDelete: SetNull)
   resultAdministrativeAccountAction AdministrativeAccountAction? @relation("CommandIdempotencyAdministrativeAccountActionResult", fields: [resultAdministrativeAccountActionId], references: [id], onDelete: Restrict)
-
   notificationOutboxes      NotificationOutbox[]           @relation("CommandIdempotencyNotificationOutboxes")
   applicationNotifications  ApplicationNotification[]      @relation("CommandIdempotencyApplicationNotifications")
   permanentClosureAudits    AccountPermanentClosureAudit[] @relation("CommandIdempotencyPermanentClosureAudits")
@@ -1939,7 +1715,6 @@ model CommandIdempotency {
   subscriptionPurchases     SubscriptionPurchase[]         @relation("SubscriptionPurchaseCommandIdempotency")
   subscriptionCreditEntries SubscriptionCreditEntry[]
   refundRequests            RefundRequest[]
-
   @@index([expiresAt], map: "CommandIdempotency_expires_idx")
   @@index([practiceLocationId, serviceDate], map: "CommandIdempotency_location_date_idx")
   @@index([appointmentId], map: "CommandIdempotency_appointment_idx")
@@ -1959,51 +1734,37 @@ model CommandIdempotency {
 
 model BookingDraft {
   id               String             @id @default(uuid())
-  bookingReference String? @unique @db.VarChar(20)
+  bookingReference String?            @unique @db.VarChar(20)
   mode             BookingDraftMode   @default(INDIVIDUAL)
   status           BookingDraftStatus @default(PENDING_OTP)
-
   practiceLocationId String
-
   existingPatientResponse ExistingPatientResponse?
-
   firstName  String? @db.VarChar(100)
   middleName String? @db.VarChar(100)
   lastName   String? @db.VarChar(100)
   suffix     String? @db.VarChar(20)
-
   mobileNumberEncrypted String?
   mobileNumberHash      String? @db.VarChar(128)
   mobileNumberLastFour  String? @db.Char(4)
-
   activeDraftKey String? @unique @db.VarChar(64)
-
   draftControlTokenHash String? @db.VarChar(64)
-
   privacyNoticeAcknowledgedAt DateTime? @db.Timestamptz(3)
-  privacyNoticeVersion String? @db.VarChar(50)
+  privacyNoticeVersion        String?   @db.VarChar(50)
   scheduledReminderOptIn      Boolean   @default(false)
-
   serviceDate DateTime @db.Date
-
   estimatedServiceMinutes Int?
-
   expiresAt              DateTime  @db.Timestamptz(3)
   consumedAt             DateTime? @db.Timestamptz(3)
   cancelledAt            DateTime? @db.Timestamptz(3)
   expiredAt              DateTime? @db.Timestamptz(3)
   protectedDataClearedAt DateTime? @db.Timestamptz(3)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   otpVerifications    OtpVerification[]
   bookingDraftMembers BookingDraftMember[]
   bookingDraftAnswers BookingDraftAnswer[]
   serviceSelections   BookingDraftServiceSelection[]
-
   @@index([practiceLocationId, serviceDate])
   @@index([mobileNumberHash, practiceLocationId, serviceDate, status])
   @@index([mode, status, expiresAt])
@@ -2013,26 +1774,19 @@ model BookingDraft {
 
 model BookingDraftMember {
   id String @id @default(uuid())
-
   bookingDraftId String
   memberOrder    Int
-
   firstName  String? @db.VarChar(100)
   middleName String? @db.VarChar(100)
   lastName   String? @db.VarChar(100)
   suffix     String? @db.VarChar(20)
-
   existingPatientResponse ExistingPatientResponse?
   estimatedServiceMinutes Int?
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   bookingDraft BookingDraft @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
-
   answers           BookingDraftAnswer[]
   serviceSelections BookingDraftServiceSelection[]
-
   @@unique([bookingDraftId, memberOrder])
   @@unique([id, bookingDraftId])
   @@index([bookingDraftId])
@@ -2040,17 +1794,13 @@ model BookingDraftMember {
 
 model BookingDraftServiceSelection {
   id String @id @default(uuid())
-
   bookingDraftId            String
   bookingDraftMemberId      String?
   practiceLocationServiceId String
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-
   bookingDraft            BookingDraft            @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
   bookingDraftMember      BookingDraftMember?     @relation(fields: [bookingDraftMemberId, bookingDraftId], references: [id, bookingDraftId], onDelete: Restrict)
   practiceLocationService PracticeLocationService @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
-
   @@index([bookingDraftId])
   @@index([bookingDraftMemberId])
   @@index([practiceLocationServiceId])
@@ -2058,68 +1808,74 @@ model BookingDraftServiceSelection {
 
 model ClinicDay {
   id String @id @default(uuid())
-
   practiceLocationId String
   serviceDate        DateTime @db.Date
-
   status ClinicDayStatus @default(NOT_STARTED)
-
   openingOverrideAt           DateTime? @db.Timestamptz(3)
   delayedOpeningDeclaredAt    DateTime? @db.Timestamptz(3)
   maximumOnlineBookingUntilAt DateTime? @db.Timestamptz(3)
-
   operatingPracticeStaffId String?
-
   startedAt DateTime? @db.Timestamptz(3)
   closedAt  DateTime? @db.Timestamptz(3)
-
   cancelledAt        DateTime?                    @db.Timestamptz(3)
   cancelledByUserId  String?
   cancellationReason ClinicDayCancellationReason?
   cancellationNote   String?                      @db.VarChar(500)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   operatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingPracticeStaff", fields: [operatingPracticeStaffId], references: [id], onDelete: Restrict)
-
   operatingStaffAudits ClinicDayOperatingStaffAudit[]
-
+  operationalNotices  ClinicDayOperationalNotice[]
   cancelledByUser User? @relation("ClinicDayCancelledByUser", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
-
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
-
   @@unique([practiceLocationId, serviceDate])
   @@index([status, serviceDate])
   @@index([operatingPracticeStaffId, serviceDate])
 }
 
-model ClinicDayOperatingStaffAudit {
+model ClinicDayOperationalNotice {
   id String @id @default(uuid())
-
   clinicDayId        String
   practiceLocationId String
   serviceDate        DateTime @db.Date
-
-  changeType ClinicDayOperatingStaffChangeType
-
-  previousOperatingPracticeStaffId String?
-  newOperatingPracticeStaffId      String?
-
-  actorUserId String
-
+  kind   ClinicDayOperationalNoticeKind
+  status ClinicDayOperationalNoticeStatus @default(ACTIVE)
+  reason  String @db.VarChar(120)
+  message String? @db.VarChar(500)
+  startsAt        DateTime  @db.Timestamptz(3)
+  expectedResumeAt DateTime @db.Timestamptz(3)
+  endedAt          DateTime? @db.Timestamptz(3)
+  createdByUserId String
+  endedByUserId   String?
+  activeNoticeKey String? @unique @db.VarChar(64)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   clinicDay        ClinicDay        @relation(fields: [clinicDayId], references: [id], onDelete: Restrict)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  createdByUser User  @relation("ClinicDayOperationalNoticeCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  endedByUser   User? @relation("ClinicDayOperationalNoticeEndedBy", fields: [endedByUserId], references: [id], onDelete: Restrict)
 
+  @@index([practiceLocationId, serviceDate, status])
+  @@index([clinicDayId, createdAt])
+}
+
+model ClinicDayOperatingStaffAudit {
+  id String @id @default(uuid())
+  clinicDayId        String
+  practiceLocationId String
+  serviceDate        DateTime @db.Date
+  changeType ClinicDayOperatingStaffChangeType
+  previousOperatingPracticeStaffId String?
+  newOperatingPracticeStaffId      String?
+  actorUserId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  clinicDay        ClinicDay        @relation(fields: [clinicDayId], references: [id], onDelete: Restrict)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   previousOperatingPracticeStaff PracticeStaff? @relation("ClinicDayOperatingStaffAuditPreviousStaff", fields: [previousOperatingPracticeStaffId], references: [id], onDelete: Restrict)
   newOperatingPracticeStaff      PracticeStaff? @relation("ClinicDayOperatingStaffAuditNewStaff", fields: [newOperatingPracticeStaffId], references: [id], onDelete: Restrict)
-
   actorUser User @relation("ClinicDayOperatingStaffAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
-
   @@index([clinicDayId, createdAt])
   @@index([practiceLocationId, serviceDate, createdAt])
   @@index([actorUserId, createdAt])
@@ -2132,67 +1888,48 @@ model QueueCounter {
   practiceLocationId  String
   serviceDate         DateTime @db.Date
   lastAllocatedNumber Int      @default(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   @@unique([practiceLocationId, serviceDate])
 }
 
 model QueueEvent {
   id String @id @default(uuid())
-
   practiceLocationId String
   serviceDate        DateTime @db.Date
   queueEventSequence BigInt
-
   type      QueueEventType
   actorType QueueEventActorType
-
   actorUserId String?
-
   previousPrimaryStatus   AppointmentStatus?
   newPrimaryStatus        AppointmentStatus?
   previousSecondaryStatus AppointmentStatus?
   newSecondaryStatus      AppointmentStatus?
-
   previousPrimaryOrderKey   Decimal? @db.Decimal(38, 18)
   newPrimaryOrderKey        Decimal? @db.Decimal(38, 18)
   previousSecondaryOrderKey Decimal? @db.Decimal(38, 18)
   newSecondaryOrderKey      Decimal? @db.Decimal(38, 18)
-
   previousPrimaryWaitingPlacementType   WaitingPlacementType?
   newPrimaryWaitingPlacementType        WaitingPlacementType?
   previousSecondaryWaitingPlacementType WaitingPlacementType?
   newSecondaryWaitingPlacementType      WaitingPlacementType?
-
   previousPrimaryTerminalAt   DateTime? @db.Timestamptz(3)
   newPrimaryTerminalAt        DateTime? @db.Timestamptz(3)
   previousSecondaryTerminalAt DateTime? @db.Timestamptz(3)
   newSecondaryTerminalAt      DateTime? @db.Timestamptz(3)
-
   previousPrimarySelfServiceReinsertedAt DateTime? @db.Timestamptz(3)
   newPrimarySelfServiceReinsertedAt      DateTime? @db.Timestamptz(3)
-
   clinicClosureDisposition ClinicClosureDisposition?
-
   reversesQueueEventId String? @unique
-
   metadata Json?
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   actorUser        User?            @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
-
   appointmentLinks QueueEventAppointmentLink[]
-
   reversesQueueEvent         QueueEvent?          @relation("QueueEventReversal", fields: [reversesQueueEventId], references: [id], onDelete: Restrict)
   reversedByQueueEvent       QueueEvent?          @relation("QueueEventReversal")
   resultCommandIdempotencies CommandIdempotency[] @relation("CommandIdempotencyResultQueueEvent")
-
   @@unique([practiceLocationId, serviceDate, queueEventSequence], map: "QueueEvent_scope_sequence_key")
   @@index([practiceLocationId, serviceDate, queueEventSequence], map: "QueueEvent_scope_sequence_idx")
   @@index([practiceLocationId, serviceDate, createdAt])
@@ -2202,16 +1939,12 @@ model QueueEvent {
 
 model QueueEventAppointmentLink {
   id String @id @default(uuid())
-
   queueEventId  String
   role          QueueEventAppointmentLinkRole
   appointmentId String
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-
   queueEvent  QueueEvent  @relation(fields: [queueEventId], references: [id], onDelete: Restrict)
   appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-
   @@unique([queueEventId, role])
   @@unique([queueEventId, appointmentId])
   @@index([appointmentId, createdAt])
@@ -2220,61 +1953,47 @@ model QueueEventAppointmentLink {
 
 model QueueAnalyticsDaily {
   id String @id @default(uuid())
-
   practiceLocationId String
   serviceDate        DateTime @db.Date
-
   bookedCount    Int @default(0)
   servedCount    Int @default(0)
   cancelledCount Int @default(0)
   absenceCount   Int @default(0)
-
   waitingDurationTotalSeconds BigInt @default(0)
   waitingDurationSampleCount  Int    @default(0)
   serviceDurationTotalSeconds BigInt @default(0)
   serviceDurationSampleCount  Int    @default(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
-
   @@unique([practiceLocationId, serviceDate], map: "QueueAnalyticsDaily_location_serviceDate_key")
   @@index([serviceDate], map: "QueueAnalyticsDaily_serviceDate_idx")
 }
 
 model PrivacyErasureLedger {
   id String @id @default(uuid())
-
   resourceType PrivacyErasureResourceType
   resourceId   String
-
   erasureCommittedAt DateTime @db.Timestamptz(3)
   backupReplayUntil  DateTime @db.Timestamptz(3)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
-
   @@unique([resourceType, resourceId], map: "PrivacyErasureLedger_resource_key")
   @@index([backupReplayUntil], map: "PrivacyErasureLedger_backupReplayUntil_idx")
 }
 
 model RetentionHold {
   id String @id @default(uuid())
-
   resourceType   RetentionResourceType
   resourceId     String
   reasonCategory RetentionHoldReasonCategory
-
   reference   String? @db.VarChar(255)
   explanation String  @db.VarChar(1000)
-
   createdByUserId String
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
   reviewAt        DateTime  @db.Timestamptz(3)
   expiresAt       DateTime  @db.Timestamptz(3)
   releasedAt      DateTime? @db.Timestamptz(3)
-
   createdByUser User @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
-
   @@index([resourceType, resourceId, releasedAt, expiresAt], map: "RetentionHold_resource_active_idx")
   @@index([reviewAt], map: "RetentionHold_reviewAt_idx")
   @@index([expiresAt], map: "RetentionHold_expiresAt_idx")
@@ -2290,22 +2009,17 @@ model BookingQuestion {
   isRequired         Boolean             @default(false)
   displayOrder       Int
   isActive           Boolean             @default(true)
-
   estimatedMinutesAdjustment Int @default(0)
-
   textMaximumLength Int?
   numberMinimum     Decimal?
   numberMaximum     Decimal?
   selectOptions     Json?
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   practiceLocation    PracticeLocation                        @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   bookingDraftAnswers BookingDraftAnswer[]
   appointmentAnswers  AppointmentAnswer[]
   draftProposals      SecretarySettingsDraftBookingQuestion[]
-
   @@unique([practiceLocationId, displayOrder])
   @@index([practiceLocationId, isActive, displayOrder])
 }
@@ -2315,22 +2029,16 @@ model BookingDraftAnswer {
   bookingDraftId       String
   bookingDraftMemberId String?
   bookingQuestionId    String
-
   answerText    String?
   answerNumber  Decimal?
   answerBoolean Boolean?
-
   selectedOptionValue String? @db.VarChar(100)
-
   estimatedMinutesAdjustment Int @default(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   bookingDraft       BookingDraft        @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
   bookingDraftMember BookingDraftMember? @relation(fields: [bookingDraftMemberId, bookingDraftId], references: [id, bookingDraftId], onDelete: Restrict)
   bookingQuestion    BookingQuestion     @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
-
   @@index([bookingDraftId])
   @@index([bookingDraftMemberId])
   @@index([bookingQuestionId])
@@ -2338,20 +2046,13 @@ model BookingDraftAnswer {
 
 model AppointmentBookedService {
   id String @id @default(uuid())
-
   appointmentId             String
   practiceLocationServiceId String
-
-  // Immutable confirmed-booking snapshots. Later Service edits or retirement
-  // must not rewrite what this Appointment originally booked.
   serviceNameSnapshot     String @db.VarChar(150)
   durationMinutesSnapshot Int
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
-
   appointment             Appointment             @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   practiceLocationService PracticeLocationService @relation(fields: [practiceLocationServiceId], references: [id], onDelete: Restrict)
-
   @@unique([appointmentId, practiceLocationServiceId], map: "AppointmentBookedService_appointment_service_key")
   @@index([appointmentId], map: "AppointmentBookedService_appointmentId_idx")
   @@index([practiceLocationServiceId], map: "AppointmentBookedService_serviceId_idx")
@@ -2361,21 +2062,15 @@ model AppointmentAnswer {
   id                String @id @default(uuid())
   appointmentId     String
   bookingQuestionId String
-
   answerText    String?
   answerNumber  Decimal?
   answerBoolean Boolean?
-
   selectedOptionValue String? @db.VarChar(100)
-
   estimatedMinutesAdjustment Int @default(0)
-
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
-
   appointment     Appointment     @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
   bookingQuestion BookingQuestion @relation(fields: [bookingQuestionId], references: [id], onDelete: Restrict)
-
   @@unique([appointmentId, bookingQuestionId])
   @@index([bookingQuestionId])
 }

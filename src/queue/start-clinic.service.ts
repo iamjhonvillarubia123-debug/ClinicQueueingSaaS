@@ -32,7 +32,6 @@ type StartContext = {
   practiceLocationId: string;
   lifecycleStatus: PracticeLocationLifecycleStatus;
   doctorUserId: string;
-  currentRegularPracticeStaffId: string | null;
 };
 
 type ActorState = {
@@ -236,6 +235,20 @@ export class StartClinicService {
             select: { id: true, status: true, startedAt: true },
           });
 
+      await transaction.clinicDayOperationalNotice.updateMany({
+        where: {
+          clinicDayId: clinicDay.id,
+          kind: 'DELAYED_OPENING',
+          status: 'ACTIVE',
+        },
+        data: {
+          status: 'ENDED',
+          endedAt: now,
+          endedByUserId: authenticatedUserId,
+          activeNoticeKey: null,
+        },
+      });
+
       const firstWaiting = await this.lockFirstWaitingAppointment(
         transaction,
         dto.practiceLocationId,
@@ -342,7 +355,6 @@ export class StartClinicService {
       SELECT
         pl."id" AS "practiceLocationId",
         pl."lifecycleStatus",
-        pl."currentRegularPracticeStaffId",
         dp."userId" AS "doctorUserId"
       FROM "PracticeLocation" pl
       INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
@@ -396,10 +408,7 @@ export class StartClinicService {
           'Current user cannot start this clinic day.',
         );
       }
-      return (
-        clinicDay?.operatingPracticeStaffId ??
-        context.currentRegularPracticeStaffId
-      );
+      return clinicDay?.operatingPracticeStaffId ?? null;
     }
 
     if (actor.role !== UserRole.SECRETARY) {
@@ -408,9 +417,7 @@ export class StartClinicService {
       );
     }
 
-    const expectedStaffId =
-      clinicDay?.operatingPracticeStaffId ??
-      context.currentRegularPracticeStaffId;
+    const expectedStaffId = clinicDay?.operatingPracticeStaffId ?? null;
     if (!expectedStaffId) {
       throw new ForbiddenException(
         'No operating secretary is assigned for this clinic day.',
