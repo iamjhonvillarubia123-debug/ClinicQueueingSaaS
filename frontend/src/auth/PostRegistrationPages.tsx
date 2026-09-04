@@ -100,7 +100,7 @@ export function RegistrationCheckEmailPage() {
 export function RegistrationAccountReadyPage() {
   const [searchParams] = useSearchParams();
   const role = readRole(searchParams.get('role'));
-  const next = role === 'DOCTOR' ? '/registration/doctor-onboarding' : '/registration/secretary-home';
+  const next = role === 'DOCTOR' ? '/app/profile' : '/app/secretary/profile';
   return (
     <JourneyFrame>
       <section className="registration-state-card registration-ready-card" aria-labelledby="account-ready-heading">
@@ -125,7 +125,7 @@ export function DoctorOnboardingPage() {
           <div><span><Icon name="building" /></span><p><strong>Create your clinic</strong><small>Set up your practice location</small></p></div>
           <div><span><Icon name="settings" /></span><p><strong>Configure settings</strong><small>Set your clinic preferences</small></p></div>
         </div>
-        <Link className="registration-primary-action" to="/app/settings">Start setup</Link>
+        <Link className="registration-primary-action" to="/app/profile">Start setup</Link>
       </section>
     </JourneyFrame>
   );
@@ -147,7 +147,7 @@ export function SecretaryNoAssignmentsPage() {
           <div><span><Icon name="calendar" /></span><p>Once assigned, you can manage appointments and queues</p></div>
           <div><span><Icon name="building" /></span><p>You can work with multiple clinics</p></div>
         </div>
-        <Link className="registration-primary-action" to="/app/secretary/settings">Continue to settings</Link>
+        <Link className="registration-primary-action" to="/app/secretary/profile">Continue to profile</Link>
       </section>
     </JourneyFrame>
   );
