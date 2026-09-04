@@ -99,10 +99,22 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
 
     const browserA = request.agent(app.getHttpServer());
     const browserB = request.agent(app.getHttpServer());
-    await browserA.post('/auth/login').send({ email, password: oldPassword }).expect(201);
-    await browserB.post('/auth/login').send({ email, password: oldPassword }).expect(201);
-    expect(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } })).toBe(2);
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
+    await browserA
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(201);
+    await browserB
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(201);
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(2);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
 
     await request(app.getHttpServer())
       .post('/auth/request-password-reset')
@@ -115,18 +127,32 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
       .send({ token, newPassword })
       .expect(201, { reset: true });
 
-    expect(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
     await browserA.get('/auth/profile').expect(401);
     await browserB.get('/auth/profile').expect(401);
-    await request(app.getHttpServer()).post('/auth/login').send({ email, password: oldPassword }).expect(401);
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: oldPassword })
+      .expect(401);
 
     const freshBrowser = request.agent(app.getHttpServer());
-    await freshBrowser.post('/auth/login').send({ email, password: newPassword }).expect(201);
+    await freshBrowser
+      .post('/auth/login')
+      .send({ email, password: newPassword })
+      .expect(201);
     const profile = await freshBrowser.get('/auth/profile').expect(200);
     expect(profile.body).toEqual({ userId: user.id, role: 'SECRETARY' });
-    const workspace = await freshBrowser.get('/secretary/workspace').expect(200);
+    const workspace = await freshBrowser
+      .get('/secretary/workspace')
+      .expect(200);
     expect(workspace.body).toEqual({ clinics: [], invitations: [] });
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
   });
 
   it('allows a VOLUNTARILY_DISABLED Secretary to reset credentials without reactivating the account', async () => {
@@ -161,10 +187,17 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
       .send({ token, newPassword })
       .expect(201, { reset: true });
 
-    const afterReset = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const afterReset = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
     expect(afterReset.accountStatus).toBe('VOLUNTARILY_DISABLED');
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
-    await request(app.getHttpServer()).post('/auth/login').send({ email, password: newPassword }).expect(401);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email, password: newPassword })
+      .expect(401);
 
     await request(app.getHttpServer())
       .post('/secretary/account/reactivate')
@@ -172,9 +205,17 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
       .send({ email, password: newPassword })
       .expect(201, { reactivated: true, replayed: false });
 
-    const reactivated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const reactivated = await prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+    });
     expect(reactivated.accountStatus).toBe('ACTIVE');
-    expect(await prisma.practiceStaff.count({ where: { userId: user.id } })).toBe(0);
-    expect(await prisma.userSession.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+    expect(
+      await prisma.practiceStaff.count({ where: { userId: user.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.userSession.count({
+        where: { userId: user.id, revokedAt: null },
+      }),
+    ).toBe(0);
   });
 });
