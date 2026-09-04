@@ -21,7 +21,8 @@ describe('Doctor Billing', () => {
     await user.click(screen.getByRole('button', { name: 'View Plan Details' }));
     const planDialog = screen.getByRole('dialog', { name: 'View Plan Details' });
     expect(planDialog).toBeInTheDocument();
-    await user.click(within(planDialog).getByRole('button', { name: 'Close', exact: true }));
+    const dialogCloseButtons = within(planDialog).getAllByRole('button', { name: 'Close' });
+    await user.click(dialogCloseButtons.at(-1)!);
     await user.click(screen.getByRole('button', { name: 'Manage Subscription' }));
     expect(screen.getByRole('dialog', { name: 'Manage Subscription' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
