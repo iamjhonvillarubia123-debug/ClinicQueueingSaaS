@@ -226,6 +226,7 @@ export function App() {
             <Route path="/app/secretary/clinics" element={<SecretaryClinicsPage />} />
             <Route path="/app/secretary/clinics/:clinicId" element={<SecretaryClinicWorkspacePage />} />
             <Route path="/app/secretary/invitations" element={<SecretaryInvitationsPage />} />
+            <Route path="/app/secretary/reports" element={<SecretaryWorkspacePlaceholder title="Reports" description="Reports for clinics within your authorized assignments will be implemented here from the approved Secretary Reports UI." />} />
             <Route path="/app/secretary/settings" element={<SecretaryWorkspacePlaceholder title="Settings" description="Secretary profile and account settings will be designed here next." />} />
           </Route>
         </Route>
