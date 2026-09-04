@@ -628,7 +628,7 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/reset-password')
-      .send({ token, newPassword: 'New disabled password' })
+      .send({ token, newPassword: 'NewDisabled1!' })
       .expect(201, { reset: true });
 
     const after = await prisma.user.findUniqueOrThrow({
