@@ -31,6 +31,7 @@ import { LoginPage } from './auth/LoginPage';
 import { IndividualBookingPage } from './booking/IndividualBookingPage';
 import { MultiPersonBookingPage } from './booking/MultiPersonBookingPage';
 import { AuthoritativeClinicOperationsRoutePage } from './doctor/AuthoritativeClinicOperationsRoutePage';
+import { DoctorBillingPage } from './doctor/DoctorBillingPage';
 import { DoctorCalendarPage } from './doctor/DoctorCalendarPage';
 import { DoctorProfilePage } from './doctor/DoctorProfilePage';
 import { DoctorReportsPage } from './doctor/DoctorReportsPage';
@@ -214,7 +215,7 @@ export function App() {
             <Route path="/app/secretaries" element={<GlobalSecretariesPage />} />
             <Route path="/app/reports" element={<DoctorReportsPage />} />
             <Route path="/app/settings" element={<DoctorSettingsPage />} />
-            <Route path="/app/billing" element={<DoctorWorkspacePlaceholder title="Billing" description="Subscription and financial controls will be connected here when the billing frontend slice is implemented." />} />
+            <Route path="/app/billing" element={<DoctorBillingPage />} />
           </Route>
         </Route>
 
