@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthoritativeClinicStaffTab } from './AuthoritativeClinicStaffTab';
@@ -54,7 +54,12 @@ describe('existing Secretary assignment API routing', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Assign Secretary' }));
+    const drawer = screen.getByRole('complementary', {
+      name: 'Assign Secretary drawer',
+    });
+    await user.click(
+      within(drawer).getByRole('button', { name: 'Assign Secretary' }),
+    );
 
     await waitFor(() =>
       expect(
@@ -71,9 +76,9 @@ describe('existing Secretary assignment API routing', () => {
     const direct = requests.find((request) =>
       request.url.includes('/practice-staff/regular/assign'),
     );
-    expect(String(direct?.init?.body)).toContain('"userId":"secretary-1"');
+    expect(String(direct?.init?.body)).toContain('\"userId\":\"secretary-1\"');
     expect(String(direct?.init?.body)).toContain(
-      '"authorityBundles":["QUEUE_AND_CLINIC_DAY_OPERATIONS"]',
+      '\"authorityBundles\":[\"QUEUE_AND_CLINIC_DAY_OPERATIONS\"]',
     );
   });
 });
