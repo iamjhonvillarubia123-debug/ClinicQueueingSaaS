@@ -908,10 +908,11 @@ export class ClinicSecretaryAuthorityService {
     actorUserId: string,
     now: Date,
   ): Promise<void> {
-    const activeCoverages = await transaction.substituteSecretaryCoverage.findMany({
-      where: { practiceStaffId, status: 'ACTIVE' },
-      select: { id: true },
-    });
+    const activeCoverages =
+      await transaction.substituteSecretaryCoverage.findMany({
+        where: { practiceStaffId, status: 'ACTIVE' },
+        select: { id: true },
+      });
     const activeCoverageIds = activeCoverages.map(({ id }) => id);
     if (!activeCoverageIds.length) return;
 
