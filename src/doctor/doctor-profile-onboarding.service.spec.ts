@@ -7,6 +7,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DoctorProfileOnboardingService } from './doctor-profile-onboarding.service';
 
+type DoctorProfileCreateArgs = {
+  data: Record<string, unknown>;
+  select: Record<string, unknown>;
+};
+
 describe('DoctorProfileOnboardingService', () => {
   let service: DoctorProfileOnboardingService;
 
@@ -29,7 +34,7 @@ describe('DoctorProfileOnboardingService', () => {
     user: { update: jest.fn() },
     doctorProfile: {
       findUnique: jest.fn(),
-      create: jest.fn(),
+      create: jest.fn<Promise<typeof profile>, [DoctorProfileCreateArgs]>(),
     },
     doctorAccountSettings: { create: jest.fn() },
   };
@@ -113,15 +118,8 @@ describe('DoctorProfileOnboardingService', () => {
       data: { firstName: 'Jane', middleName: 'Q', lastName: 'Doe' },
     });
 
-    const createProfileCall = transaction.doctorProfile.create.mock.calls[0]?.[0] as
-      | {
-          data: Record<string, unknown>;
-          select: Record<string, unknown>;
-        }
-      | undefined;
-
-    expect(createProfileCall).toBeDefined();
-    expect(createProfileCall?.data).toMatchObject({
+    const createProfileCall = transaction.doctorProfile.create.mock.calls[0]?.[0];
+    expect(createProfileCall?.data).toEqual({
       userId: 'doctor-user',
       middleName: 'Q',
       suffix: null,
@@ -131,7 +129,7 @@ describe('DoctorProfileOnboardingService', () => {
       profileDescription: 'Community practice',
       isProfilePublic: false,
     });
-    expect(createProfileCall?.select).toMatchObject({ id: true });
+    expect(createProfileCall?.select.id).toBe(true);
 
     expect(transaction.doctorAccountSettings.create).toHaveBeenCalledWith({
       data: { doctorProfileId: 'profile-1' },
