@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import {
   AdministrativeRestrictionStatus,
   PracticeLocationLifecycleStatus,
@@ -14,7 +14,13 @@ describe('PracticeLocationProtectedActivationService', () => {
   };
   const scheduleTime = { assertValidTimeZone: jest.fn() };
 
-  function buildTransaction() {
+  function buildTransaction(
+    locationOverrides: Partial<{
+      name: string | null;
+      addressLine1: string | null;
+      timeZone: string | null;
+    }> = {},
+  ) {
     return {
       $executeRaw: jest.fn().mockResolvedValue(0),
       $queryRaw: jest
@@ -28,6 +34,7 @@ describe('PracticeLocationProtectedActivationService', () => {
             name: 'Clinic A',
             addressLine1: '123 Main St',
             timeZone: 'Asia/Manila',
+            ...locationOverrides,
           },
         ])
         .mockResolvedValueOnce([{ id: 'doctor-1' }]),
@@ -97,7 +104,49 @@ describe('PracticeLocationProtectedActivationService', () => {
     expect(transaction.commandIdempotency.create).not.toHaveBeenCalled();
   });
 
-  it('activates atomically after password and schedule validation', async () => {
+  it('rejects activation until the clinic name is complete', async () => {
+    const transaction = buildTransaction({ name: '   ' });
+    passwordSecurity.verify.mockResolvedValue(true);
+    const service = buildService(transaction);
+
+    await expect(
+      service.activate(
+        'doctor-1',
+        {
+          practiceLocationId: 'location-1',
+          password: 'correct-password',
+          confirmActivation: true,
+        },
+        'activation-key',
+      ),
+    ).rejects.toThrow('Enter the clinic name before activation.');
+
+    expect(transaction.practiceLocation.update).not.toHaveBeenCalled();
+    expect(transaction.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects activation until the clinic address is complete', async () => {
+    const transaction = buildTransaction({ addressLine1: null });
+    passwordSecurity.verify.mockResolvedValue(true);
+    const service = buildService(transaction);
+
+    await expect(
+      service.activate(
+        'doctor-1',
+        {
+          practiceLocationId: 'location-1',
+          password: 'correct-password',
+          confirmActivation: true,
+        },
+        'activation-key',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.practiceLocation.update).not.toHaveBeenCalled();
+    expect(transaction.commandIdempotency.create).not.toHaveBeenCalled();
+  });
+
+  it('activates atomically after password, clinic identity, and schedule validation', async () => {
     const transaction = buildTransaction();
     passwordSecurity.verify.mockResolvedValue(true);
     const service = buildService(transaction);
