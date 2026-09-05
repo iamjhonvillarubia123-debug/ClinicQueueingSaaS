@@ -165,7 +165,9 @@ export class DoctorProfileOnboardingService {
       ) {
         const rawTarget = error.meta?.target;
         const target = Array.isArray(rawTarget)
-          ? rawTarget.filter((value): value is string => typeof value === 'string').join(',')
+          ? rawTarget
+              .filter((value): value is string => typeof value === 'string')
+              .join(',')
           : typeof rawTarget === 'string'
             ? rawTarget
             : '';
@@ -181,14 +183,12 @@ export class DoctorProfileOnboardingService {
   }
 
   private assertEligibleDoctor(
-    user:
-      | {
-          role: UserRole;
-          accountStatus: UserAccountStatus;
-          administrativeRestrictionStatus: AdministrativeRestrictionStatus;
-          emailVerifiedAt: Date | null;
-        }
-      | null,
+    user: {
+      role: UserRole;
+      accountStatus: UserAccountStatus;
+      administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+      emailVerifiedAt: Date | null;
+    } | null,
   ): void {
     if (
       !user ||
