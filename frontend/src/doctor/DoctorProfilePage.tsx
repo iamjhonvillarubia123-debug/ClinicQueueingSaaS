@@ -358,7 +358,8 @@ export function DoctorProfilePage() {
           <div className="doctor-profile-license-row">
             <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} readOnly={!isOnboarding} /><button type="button" title={isOnboarding ? 'Enter your professional license number' : 'License-change workflow is not connected yet'} disabled={isOnboarding}>{isOnboarding ? 'Required' : 'Change License'}</button></div><small>{isOnboarding ? 'Required for initial Doctor onboarding. After onboarding, license changes use a separate protected workflow.' : 'Your current professional license number is protected from ordinary profile editing.'}</small></label>
           </div>
-          {isOnboarding ? <div className="doctor-profile-onboarding-actions"><button type="button" className="doctor-profile-primary" onClick={() => void saveInitialProfessionalProfile()} disabled={savingOnboarding}>{savingOnboarding ? 'Saving…' : 'Save Professional Profile'}</button>{saveError ? <p className="doctor-profile-save-error" role="alert">{saveError}</p> : null}{saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}</div> : null}
+          {isOnboarding ? <div className="doctor-profile-onboarding-actions"><button type="button" className="doctor-profile-primary" onClick={() => void saveInitialProfessionalProfile()} disabled={savingOnboarding}>{savingOnboarding ? 'Saving…' : 'Save Professional Profile'}</button>{saveError ? <p className="doctor-profile-save-error" role="alert">{saveError}</p> : null}</div> : null}
+          {saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}
         </section>
 
         <section className="doctor-profile-card">
