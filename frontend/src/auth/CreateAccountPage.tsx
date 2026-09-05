@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 import { meetsPasswordPolicy, passwordChecks } from './passwordPolicy';
@@ -28,7 +28,11 @@ function Icon({ name }: { name: IconName }) {
 
 export function CreateAccountPage() {
   const navigate = useNavigate();
-  const [accountType, setAccountType] = useState<AccountType>('DOCTOR');
+  const [searchParams] = useSearchParams();
+  const requestedRole = searchParams.get('role');
+  const [accountType, setAccountType] = useState<AccountType>(
+    requestedRole === 'SECRETARY' ? 'SECRETARY' : 'DOCTOR',
+  );
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
