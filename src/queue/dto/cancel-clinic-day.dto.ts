@@ -19,7 +19,10 @@ export class CancelClinicDayDto {
   @IsEnum(ClinicDayCancellationReason)
   reason!: ClinicDayCancellationReason;
 
-  @ValidateIf((dto: CancelClinicDayDto) => dto.reason === ClinicDayCancellationReason.OTHER)
+  @ValidateIf(
+    (dto: CancelClinicDayDto) =>
+      dto.reason === ClinicDayCancellationReason.OTHER,
+  )
   @IsString()
   @IsNotEmpty()
   @MaxLength(220)
