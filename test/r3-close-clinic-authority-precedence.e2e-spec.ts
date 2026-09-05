@@ -111,7 +111,7 @@ describe('R3 CLOSE CLINIC authorization precedence (e2e)', () => {
         `missing-bundle-${scope}`,
       ),
     ).rejects.toThrow(
-      'Regular Clinic Secretary requires QUEUE_AND_CLINIC_DAY_OPERATIONS authority.',
+      'Clinic Secretary lacks Queue and Clinic Day Operations authority.',
     );
   });
 
