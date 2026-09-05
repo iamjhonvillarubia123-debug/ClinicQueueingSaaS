@@ -85,15 +85,15 @@ describe('DoctorProfileOnboardingService', () => {
   });
 
   it('reports an eligible Doctor without a DoctorProfile as onboarding-incomplete', async () => {
-    await expect(service.getProfileState('doctor-user')).resolves.toEqual({
-      onboardingComplete: false,
-      user: {
-        firstName: 'Jane',
-        middleName: null,
-        lastName: 'Doe',
-      },
-      profile: null,
+    const result = await service.getProfileState('doctor-user');
+
+    expect(result.onboardingComplete).toBe(false);
+    expect(result.user).toEqual({
+      firstName: 'Jane',
+      middleName: null,
+      lastName: 'Doe',
     });
+    expect(result.profile).toBeNull();
   });
 
   it('creates DoctorProfile and DoctorAccountSettings atomically for the verified Doctor', async () => {
@@ -140,6 +140,7 @@ describe('DoctorProfileOnboardingService', () => {
       ...eligibleUser,
       role: UserRole.SECRETARY,
     });
+
     await expect(service.getProfileState('secretary-user')).rejects.toThrow(
       'Only an active verified Doctor may complete Doctor onboarding.',
     );
@@ -148,6 +149,7 @@ describe('DoctorProfileOnboardingService', () => {
       ...eligibleUser,
       emailVerifiedAt: null,
     });
+
     await expect(
       service.completeOnboarding('doctor-user', {
         firstName: 'Jane',
