@@ -202,7 +202,7 @@ describe('ClinicStaffView', () => {
     expect(screen.getByText('Maria Santos')).toBeInTheDocument();
     expect(screen.queryByText('Jane Reyes')).not.toBeInTheDocument();
   });
-  it('sends a pending relationship invitation for an existing Secretary instead of assigning immediately', async () => {
+  it('reviews an existing Secretary as an immediate clinic-scoped assignment', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     const withoutCurrent = {
@@ -227,12 +227,12 @@ describe('ClinicStaffView', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(
-      screen.getByRole('heading', { name: 'Review Invitation' }),
+      screen.getByRole('heading', { name: 'Review Assignment' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/No clinic authority is granted until/i),
+      screen.getByText(/creates or reactivates the clinic-scoped relationship immediately/i),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
+    await user.click(screen.getByRole('button', { name: 'Assign Secretary' }));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         role: 'CLINIC_SECRETARY',
