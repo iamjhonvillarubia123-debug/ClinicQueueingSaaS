@@ -112,19 +112,27 @@ describe('DoctorProfileOnboardingService', () => {
       where: { id: 'doctor-user' },
       data: { firstName: 'Jane', middleName: 'Q', lastName: 'Doe' },
     });
-    expect(transaction.doctorProfile.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        userId: 'doctor-user',
-        middleName: 'Q',
-        suffix: null,
-        professionalTitle: 'Doctor',
-        specialization: 'Family Medicine',
-        licenseNumber: 'LIC-123',
-        profileDescription: 'Community practice',
-        isProfilePublic: false,
-      }),
-      select: expect.objectContaining({ id: true }),
+
+    const createProfileCall = transaction.doctorProfile.create.mock.calls[0]?.[0] as
+      | {
+          data: Record<string, unknown>;
+          select: Record<string, unknown>;
+        }
+      | undefined;
+
+    expect(createProfileCall).toBeDefined();
+    expect(createProfileCall?.data).toMatchObject({
+      userId: 'doctor-user',
+      middleName: 'Q',
+      suffix: null,
+      professionalTitle: 'Doctor',
+      specialization: 'Family Medicine',
+      licenseNumber: 'LIC-123',
+      profileDescription: 'Community practice',
+      isProfilePublic: false,
     });
+    expect(createProfileCall?.select).toMatchObject({ id: true });
+
     expect(transaction.doctorAccountSettings.create).toHaveBeenCalledWith({
       data: { doctorProfileId: 'profile-1' },
     });
