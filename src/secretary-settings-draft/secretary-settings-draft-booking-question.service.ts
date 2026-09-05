@@ -13,6 +13,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SaveSecretarySettingsDraftBookingQuestionDto } from './dto/save-secretary-settings-draft-booking-question.dto';
+import { assertConfigurationDraftingAuthority } from './secretary-settings-draft-authority';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -38,6 +39,10 @@ export class SecretarySettingsDraftBookingQuestionService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        draft.currentRegularPracticeStaffId!,
+      );
       const proposed = this.normalizeProposal(dto);
 
       const saved =
@@ -69,6 +74,10 @@ export class SecretarySettingsDraftBookingQuestionService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        draft.currentRegularPracticeStaffId!,
+      );
       const proposed = this.normalizeProposal(dto);
 
       const effectiveQuestion = await transaction.bookingQuestion.findFirst({
@@ -138,6 +147,10 @@ export class SecretarySettingsDraftBookingQuestionService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        draft.currentRegularPracticeStaffId!,
+      );
       const proposed = this.normalizeProposal(dto);
 
       const proposal =
