@@ -25,7 +25,7 @@ describe('DoctorProfileOnboardingService', () => {
   };
 
   const transaction = {
-    $queryRaw: jest.fn(),
+    $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>(),
     user: { update: jest.fn() },
     doctorProfile: {
       findUnique: jest.fn(),
@@ -123,7 +123,7 @@ describe('DoctorProfileOnboardingService', () => {
         profileDescription: 'Community practice',
         isProfilePublic: false,
       }),
-      select: expect.any(Object),
+      select: expect.objectContaining({ id: true }),
     });
     expect(transaction.doctorAccountSettings.create).toHaveBeenCalledWith({
       data: { doctorProfileId: 'profile-1' },
@@ -148,13 +148,15 @@ describe('DoctorProfileOnboardingService', () => {
       ...eligibleUser,
       emailVerifiedAt: null,
     });
-    await expect(service.completeOnboarding('doctor-user', {
-      firstName: 'Jane',
-      lastName: 'Doe',
-      professionalTitle: 'Doctor',
-      specialization: 'Family Medicine',
-      licenseNumber: 'LIC-123',
-    })).rejects.toThrow(
+    await expect(
+      service.completeOnboarding('doctor-user', {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        professionalTitle: 'Doctor',
+        specialization: 'Family Medicine',
+        licenseNumber: 'LIC-123',
+      }),
+    ).rejects.toThrow(
       'Only an active verified Doctor may complete Doctor onboarding.',
     );
   });
@@ -165,13 +167,15 @@ describe('DoctorProfileOnboardingService', () => {
       doctorProfile: { id: 'existing-profile' },
     });
 
-    await expect(service.completeOnboarding('doctor-user', {
-      firstName: 'Jane',
-      lastName: 'Doe',
-      professionalTitle: 'Doctor',
-      specialization: 'Family Medicine',
-      licenseNumber: 'LIC-123',
-    })).rejects.toThrow('Doctor onboarding is already complete.');
+    await expect(
+      service.completeOnboarding('doctor-user', {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        professionalTitle: 'Doctor',
+        specialization: 'Family Medicine',
+        licenseNumber: 'LIC-123',
+      }),
+    ).rejects.toThrow('Doctor onboarding is already complete.');
 
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
   });
