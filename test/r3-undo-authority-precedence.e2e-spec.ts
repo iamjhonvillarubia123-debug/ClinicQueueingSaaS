@@ -103,7 +103,9 @@ describe('R3 UNDO authorization precedence (e2e)', () => {
         undoDto(serviceDate),
         `missing-bundle-${scope}`,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(
+      'Regular Clinic Secretary requires QUEUE_AND_CLINIC_DAY_OPERATIONS authority.',
+    );
   });
 
   it('allows the regular Clinic Secretary when the queue operations bundle is active', async () => {
@@ -228,8 +230,12 @@ describe('R3 UNDO authorization precedence (e2e)', () => {
       waitingPlacementType: WaitingPlacementType | null;
     },
   ) {
+    const identitySeed = `${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`;
     const activeAppointmentKey = createHash('sha256')
-      .update(`${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`)
+      .update(identitySeed)
+      .digest('hex');
+    const mobileNumberHash = createHash('sha256')
+      .update(`mobile|${identitySeed}`)
       .digest('hex');
     return prisma.appointment.create({
       data: {
@@ -242,6 +248,7 @@ describe('R3 UNDO authorization precedence (e2e)', () => {
         estimatedServiceMinutes: 30,
         queueNumber,
         activeAppointmentKey,
+        mobileNumberHash,
         firstName: 'Undo',
         lastName: discriminator,
         ...overrides,
