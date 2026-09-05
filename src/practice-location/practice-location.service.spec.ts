@@ -1,9 +1,12 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  AdministrativeRestrictionStatus,
   BookingQuestionType,
   PracticeLocationLifecycleStatus,
   ServiceAvailabilityStatus,
+  UserAccountStatus,
+  UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PracticeLocationService } from './practice-location.service';
@@ -26,6 +29,9 @@ describe('PracticeLocationService', () => {
   };
 
   const prismaServiceMock = {
+    user: {
+      findUnique: jest.fn(),
+    },
     doctorProfile: {
       findUnique: jest.fn(),
     },
@@ -38,6 +44,14 @@ describe('PracticeLocationService', () => {
     ),
   };
 
+  const eligibleDoctor = {
+    role: UserRole.DOCTOR,
+    accountStatus: UserAccountStatus.ACTIVE,
+    administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+    emailVerifiedAt: new Date('2026-09-01T00:00:00.000Z'),
+    doctorProfile: { id: 'doctor-profile-1' },
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -48,6 +62,7 @@ describe('PracticeLocationService', () => {
 
     service = module.get<PracticeLocationService>(PracticeLocationService);
     jest.clearAllMocks();
+    prismaServiceMock.user.findUnique.mockResolvedValue(eligibleDoctor);
     transactionMock.practiceLocation.findFirst.mockResolvedValue(null);
     transactionMock.doctorServiceTemplate.findMany.mockResolvedValue([]);
     transactionMock.doctorBookingQuestionTemplate.findMany.mockResolvedValue(
@@ -57,9 +72,6 @@ describe('PracticeLocationService', () => {
   });
 
   it('creates an intentionally blank PracticeLocation as DRAFT', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
-      id: 'doctor-profile-1',
-    });
     transactionMock.practiceLocation.create.mockResolvedValue({
       id: 'location-1',
       lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
@@ -89,9 +101,6 @@ describe('PracticeLocationService', () => {
   });
 
   it('copies current Doctor-wide defaults into a new location and stamps BookingQuestion provenance', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
-      id: 'doctor-profile-1',
-    });
     transactionMock.doctorServiceTemplate.findMany.mockResolvedValue([
       {
         id: 'service-template-1',
@@ -155,9 +164,6 @@ describe('PracticeLocationService', () => {
   });
 
   it('normalizes the complete Basic Info draft at creation', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
-      id: 'doctor-profile-1',
-    });
     transactionMock.practiceLocation.create.mockResolvedValue({
       id: 'location-1',
     });
@@ -180,7 +186,9 @@ describe('PracticeLocationService', () => {
       {
         where: {
           doctorProfileId: 'doctor-profile-1',
-          lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+          lifecycleStatus: {
+            not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
+          },
           name: { equals: 'Sample Clinic', mode: 'insensitive' },
           addressLine1: { equals: 'Main Street', mode: 'insensitive' },
         },
@@ -218,10 +226,22 @@ describe('PracticeLocationService', () => {
     );
   });
 
-  it('rejects a duplicate short code before creating another clinic', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue({
-      id: 'doctor-profile-1',
+  it('rejects a duplicate non-terminal clinic before creating another clinic', async () => {
+    transactionMock.practiceLocation.findFirst.mockResolvedValueOnce({
+      id: 'existing-location',
     });
+
+    await expect(
+      service.create('doctor-user-1', {
+        name: 'Sample Clinic',
+        addressLine1: 'Main Street',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transactionMock.practiceLocation.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a duplicate short code before creating another clinic', async () => {
     transactionMock.practiceLocation.findFirst.mockResolvedValueOnce({
       id: 'existing-location',
     });
@@ -233,10 +253,27 @@ describe('PracticeLocationService', () => {
     expect(transactionMock.practiceLocation.create).not.toHaveBeenCalled();
   });
 
-  it('rejects PracticeLocation creation when the authenticated User is not a Doctor owner', async () => {
-    prismaServiceMock.doctorProfile.findUnique.mockResolvedValue(null);
+  it('rejects PracticeLocation creation when the authenticated User is not an eligible Doctor owner', async () => {
+    prismaServiceMock.user.findUnique.mockResolvedValue({
+      ...eligibleDoctor,
+      role: UserRole.SECRETARY,
+      doctorProfile: null,
+    });
 
     await expect(service.create('secretary-user-1', {})).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects first clinic creation until Doctor email verification and professional onboarding are complete', async () => {
+    prismaServiceMock.user.findUnique.mockResolvedValue({
+      ...eligibleDoctor,
+      emailVerifiedAt: null,
+      doctorProfile: null,
+    });
+
+    await expect(service.create('doctor-user-1', {})).rejects.toBeInstanceOf(
       ForbiddenException,
     );
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
