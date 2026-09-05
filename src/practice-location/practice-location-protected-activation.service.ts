@@ -180,9 +180,7 @@ export class PracticeLocationProtectedActivationService {
 
   private assertRequiredClinicIdentity(location: LockedLocation): void {
     if (!location.name?.trim()) {
-      throw new ConflictException(
-        'Enter the clinic name before activation.',
-      );
+      throw new ConflictException('Enter the clinic name before activation.');
     }
     if (!location.addressLine1?.trim()) {
       throw new ConflictException(
