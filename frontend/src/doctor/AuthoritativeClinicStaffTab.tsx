@@ -462,33 +462,69 @@ export function AuthoritativeClinicStaffTab({
     setPending(true);
     setMessage('');
     try {
-      const assignmentType =
-        command.role === 'INVITE_NEW' ? command.assignmentType : command.role;
-      const roleConfiguration =
-        'authorityBundles' in command
-          ? {
+      if (command.role === 'INVITE_NEW') {
+        const roleConfiguration =
+          'authorityBundles' in command
+            ? {
+                authorityBundles: command.authorityBundles,
+                requestedCancelClinicDay: command.requestedCancelClinicDay,
+                password: command.password,
+              }
+            : {
+                coverageMode: command.coverageMode,
+                fromServiceDate: command.fromServiceDate,
+                toServiceDate: command.toServiceDate,
+              };
+        await apiRequest('/practice-staff/invitations', {
+          method: 'POST',
+          body: {
+            practiceLocationId: clinicId,
+            firstName: command.firstName,
+            lastName: command.lastName,
+            email: command.email,
+            mobileNumber: command.mobileNumber,
+            assignmentType: command.assignmentType,
+            ...roleConfiguration,
+          },
+        });
+        setMessage('Invitation sent successfully.');
+      } else if (command.role === 'CLINIC_SECRETARY') {
+        const replacing = data?.staffAssignments.some(
+          (item) => item.isClinicSecretary && item.assignmentActive,
+        );
+        await apiRequest(
+          `/practice-staff/regular/${replacing ? 'replace' : 'assign'}`,
+          {
+            method: 'POST',
+            headers: { 'Idempotency-Key': crypto.randomUUID() },
+            body: {
+              practiceLocationId: clinicId,
+              userId: command.userId,
               authorityBundles: command.authorityBundles,
               requestedCancelClinicDay: command.requestedCancelClinicDay,
-              password: command.password,
-            }
-          : {
-              coverageMode: command.coverageMode,
-              fromServiceDate: command.fromServiceDate,
-              toServiceDate: command.toServiceDate,
-            };
-      await apiRequest('/practice-staff/invitations', {
-        method: 'POST',
-        body: {
-          practiceLocationId: clinicId,
-          firstName: command.firstName,
-          lastName: command.lastName,
-          email: command.email,
-          mobileNumber: command.mobileNumber,
-          assignmentType,
-          ...roleConfiguration,
-        },
-      });
-      setMessage('Invitation sent successfully.');
+              ...(command.password ? { password: command.password } : {}),
+            },
+          },
+        );
+        setMessage(
+          replacing
+            ? 'Clinic Secretary replaced successfully.'
+            : 'Clinic Secretary assigned successfully.',
+        );
+      } else {
+        await apiRequest('/practice-staff/substitute-coverage/create', {
+          method: 'POST',
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          body: {
+            practiceLocationId: clinicId,
+            userId: command.userId,
+            coverageMode: command.coverageMode,
+            fromServiceDate: command.fromServiceDate,
+            toServiceDate: command.toServiceDate,
+          },
+        });
+        setMessage('Substitute Secretary coverage assigned successfully.');
+      }
       setRevision((value) => value + 1);
     } catch (cause) {
       setMessage(
