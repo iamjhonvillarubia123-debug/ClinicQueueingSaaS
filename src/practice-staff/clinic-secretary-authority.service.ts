@@ -429,9 +429,10 @@ export class ClinicSecretaryAuthorityService {
       const actor = await this.readDoctor(
         transaction,
         authenticatedUserId,
-        false,
+        true,
       );
       this.assertCurrentDoctor(actor);
+      await this.assertPassword(dto.password, actor?.passwordHash);
 
       const replay = await transaction.commandIdempotency.findUnique({
         where: { commandIdentityKey },
@@ -570,26 +571,12 @@ export class ClinicSecretaryAuthorityService {
           revokedAt: now,
         },
       });
-      const activeCoverages =
-        await transaction.substituteSecretaryCoverage.findMany({
-          where: { practiceStaffId: assignment.id, status: 'ACTIVE' },
-          select: { id: true },
-        });
-      const activeCoverageIds = activeCoverages.map(({ id }) => id);
-      if (activeCoverageIds.length) {
-        await transaction.substituteSecretaryCoverageDate.updateMany({
-          where: { coverageId: { in: activeCoverageIds }, status: 'ACTIVE' },
-          data: { status: 'CANCELLED', endedAt: now },
-        });
-        await transaction.substituteSecretaryCoverage.updateMany({
-          where: { id: { in: activeCoverageIds } },
-          data: {
-            status: 'CANCELLED',
-            endedByUserId: authenticatedUserId,
-            endedAt: now,
-          },
-        });
-      }
+      await this.cancelActiveSubstituteCoverage(
+        transaction,
+        assignment.id,
+        authenticatedUserId,
+        now,
+      );
       await transaction.practiceStaff.update({
         where: { id: assignment.id },
         data: {
@@ -899,6 +886,12 @@ export class ClinicSecretaryAuthorityService {
       WHERE "practiceStaffId" = ${practiceStaffId}
         AND "status" = 'ACTIVE'::"PracticeStaffAuthorityBundleStatus"
     `);
+    await this.cancelActiveSubstituteCoverage(
+      transaction,
+      practiceStaffId,
+      actorUserId,
+      now,
+    );
     await transaction.$executeRaw(Prisma.sql`
       UPDATE "PracticeStaff"
       SET
@@ -907,6 +900,33 @@ export class ClinicSecretaryAuthorityService {
         "updatedAt" = ${now}
       WHERE "id" = ${practiceStaffId}
     `);
+  }
+
+  private async cancelActiveSubstituteCoverage(
+    transaction: TransactionClient,
+    practiceStaffId: string,
+    actorUserId: string,
+    now: Date,
+  ): Promise<void> {
+    const activeCoverages = await transaction.substituteSecretaryCoverage.findMany({
+      where: { practiceStaffId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    const activeCoverageIds = activeCoverages.map(({ id }) => id);
+    if (!activeCoverageIds.length) return;
+
+    await transaction.substituteSecretaryCoverageDate.updateMany({
+      where: { coverageId: { in: activeCoverageIds }, status: 'ACTIVE' },
+      data: { status: 'CANCELLED', endedAt: now },
+    });
+    await transaction.substituteSecretaryCoverage.updateMany({
+      where: { id: { in: activeCoverageIds } },
+      data: {
+        status: 'CANCELLED',
+        endedByUserId: actorUserId,
+        endedAt: now,
+      },
+    });
   }
 
   private async reconcileOutgoingOperatingAuthority(
