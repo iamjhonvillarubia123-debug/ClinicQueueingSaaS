@@ -333,20 +333,34 @@ describe('R3 clinic day cancellation authority (e2e)', () => {
       ),
     ).rejects.toThrow('acknowledgement must match the exact Service Date');
 
-    const closedDate = '2027-02-07';
-    await createClinicDay(closedDate, ClinicDayStatus.CLOSED);
+    const terminalDate = '2027-02-07';
+    await createClinicDay(terminalDate, ClinicDayStatus.NOT_STARTED);
+    await service.cancel(
+      doctorUserId,
+      {
+        practiceLocationId,
+        serviceDate: terminalDate,
+        reason: ClinicDayCancellationReason.CLINIC_UNAVAILABLE,
+        acknowledgedServiceDate: terminalDate,
+        password: TEST_PASSWORD,
+      },
+      `doctor-terminal-setup-${scope}`,
+    );
+    expect((await readClinicDay(terminalDate)).status).toBe(
+      ClinicDayStatus.CANCELLED,
+    );
     await expect(
       service.cancel(
         doctorUserId,
         {
           practiceLocationId,
-          serviceDate: closedDate,
+          serviceDate: terminalDate,
           reason: ClinicDayCancellationReason.OTHER,
           note: 'Should not apply',
-          acknowledgedServiceDate: closedDate,
+          acknowledgedServiceDate: terminalDate,
           password: TEST_PASSWORD,
         },
-        `doctor-closed-${scope}`,
+        `doctor-terminal-retry-${scope}`,
       ),
     ).rejects.toThrow('not eligible for cancellation');
   });
