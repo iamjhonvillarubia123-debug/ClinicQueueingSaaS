@@ -201,24 +201,7 @@ describe('R3 START CLINIC authorization precedence (e2e)', () => {
   it('gives active planned Substitute coverage precedence when the ClinicDay starts', async () => {
     const serviceDate = '2026-12-17';
     const now = new Date();
-    await prisma.substituteSecretaryCoverage.create({
-      data: {
-        practiceLocationId,
-        practiceStaffId: substitutePracticeStaffId,
-        coverageMode: 'ONE_SERVICE_DATE',
-        fromServiceDate: dateValue(serviceDate),
-        toServiceDate: dateValue(serviceDate),
-        createdByUserId: doctorUserId,
-        createdAt: now,
-        serviceDates: {
-          create: {
-            practiceLocationId,
-            serviceDate: dateValue(serviceDate),
-            createdAt: now,
-          },
-        },
-      },
-    });
+    await createSubstituteCoverage(serviceDate, now);
 
     await expect(
       service.start(
@@ -237,6 +220,40 @@ describe('R3 START CLINIC authorization precedence (e2e)', () => {
       },
     });
     expect(clinicDay.operatingPracticeStaffId).toBe(substitutePracticeStaffId);
+  });
+
+  it('preserves an explicit ClinicDay handoff ahead of active planned Substitute coverage', async () => {
+    const serviceDate = '2026-12-18';
+    const now = new Date();
+    await prisma.clinicDay.create({
+      data: {
+        practiceLocationId,
+        serviceDate: dateValue(serviceDate),
+        status: ClinicDayStatus.NOT_STARTED,
+        operatingPracticeStaffId: handoffPracticeStaffId,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    await createSubstituteCoverage(serviceDate, now);
+
+    await expect(
+      service.start(
+        handoffSecretaryUserId,
+        { practiceLocationId, serviceDate },
+        `handoff-over-substitute-${scope}`,
+      ),
+    ).resolves.toMatchObject({ started: true, replayed: false });
+
+    const clinicDay = await prisma.clinicDay.findUniqueOrThrow({
+      where: {
+        practiceLocationId_serviceDate: {
+          practiceLocationId,
+          serviceDate: dateValue(serviceDate),
+        },
+      },
+    });
+    expect(clinicDay.operatingPracticeStaffId).toBe(handoffPracticeStaffId);
   });
 
   async function createSecretary(label: string, mobilePrefix: string) {
@@ -285,6 +302,27 @@ describe('R3 START CLINIC authorization precedence (e2e)', () => {
         ${now}
       )
     `);
+  }
+
+  async function createSubstituteCoverage(serviceDate: string, now: Date) {
+    await prisma.substituteSecretaryCoverage.create({
+      data: {
+        practiceLocationId,
+        practiceStaffId: substitutePracticeStaffId,
+        coverageMode: 'ONE_SERVICE_DATE',
+        fromServiceDate: dateValue(serviceDate),
+        toServiceDate: dateValue(serviceDate),
+        createdByUserId: doctorUserId,
+        createdAt: now,
+        serviceDates: {
+          create: {
+            practiceLocationId,
+            serviceDate: dateValue(serviceDate),
+            createdAt: now,
+          },
+        },
+      },
+    });
   }
 });
 
