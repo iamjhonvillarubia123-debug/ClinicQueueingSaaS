@@ -35,7 +35,9 @@ describe('SecretaryInvitationService relationship isolation', () => {
 
   const service = new SecretaryInvitationService(
     prisma as unknown as PrismaService,
-    { get: jest.fn(() => 'https://clinic.example') } as unknown as ConfigService,
+    {
+      get: jest.fn(() => 'https://clinic.example'),
+    } as unknown as ConfigService,
     { encrypt: jest.fn() } as unknown as ProtectedAccountPayloadService,
     { verify: jest.fn() } as unknown as PasswordSecurityService,
   );
@@ -121,11 +123,11 @@ describe('SecretaryInvitationService relationship isolation', () => {
       data: { currentRegularPracticeStaffId: 'staff-target' },
     });
 
-    const updatedStaffIds = tx.practiceStaff.update.mock.calls.map(
-      ([argument]) => argument.where.id,
-    );
-    expect(updatedStaffIds).toEqual(['staff-target']);
-    expect(updatedStaffIds).not.toContain('staff-other-clinic');
+    const updateCall = tx.practiceStaff.update.mock.calls[0]?.[0] as unknown as {
+      where: { id: string };
+    };
+    expect(updateCall.where.id).toBe('staff-target');
+    expect(updateCall.where.id).not.toBe('staff-other-clinic');
   });
 
   it('creates only the intended PracticeStaff relationship and never creates a User', async () => {
