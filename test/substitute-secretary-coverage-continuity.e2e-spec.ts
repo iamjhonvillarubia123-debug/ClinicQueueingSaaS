@@ -66,7 +66,9 @@ describe('Substitute Secretary coverage continuity (e2e)', () => {
     const first = await createReadySecretary('first', '0941');
     firstSecretaryUserId = first.userId;
     firstPracticeStaffId = first.practiceStaffId;
-    secondSecretaryUserId = (await createReadySecretary('second', '0942')).userId;
+    secondSecretaryUserId = (
+      await createReadySecretary('second', '0942')
+    ).userId;
   });
 
   afterAll(async () => {
@@ -111,7 +113,9 @@ describe('Substitute Secretary coverage continuity (e2e)', () => {
       },
       `continuity-create-${scope}`,
     );
-    if (!original.coverageId) throw new Error('Coverage creation was incomplete.');
+    if (!original.coverageId) {
+      throw new Error('Coverage creation was incomplete.');
+    }
 
     const replacement = await service.replace(
       doctorUserId,
@@ -124,9 +128,16 @@ describe('Substitute Secretary coverage continuity (e2e)', () => {
       },
       `continuity-replace-${scope}`,
     );
-    if (!replacement.coverageId) throw new Error('Coverage replacement was incomplete.');
+    if (!replacement.coverageId) {
+      throw new Error('Coverage replacement was incomplete.');
+    }
 
-    await assertOperationalStateUnchanged(clinicDay.id, called.id, waiting.id, startedAt);
+    await assertOperationalStateUnchanged(
+      clinicDay.id,
+      called.id,
+      waiting.id,
+      startedAt,
+    );
 
     await service.cancel(
       doctorUserId,
@@ -134,7 +145,12 @@ describe('Substitute Secretary coverage continuity (e2e)', () => {
       `continuity-cancel-${scope}`,
     );
 
-    await assertOperationalStateUnchanged(clinicDay.id, called.id, waiting.id, startedAt);
+    await assertOperationalStateUnchanged(
+      clinicDay.id,
+      called.id,
+      waiting.id,
+      startedAt,
+    );
   });
 
   async function assertOperationalStateUnchanged(
@@ -201,7 +217,9 @@ describe('Substitute Secretary coverage continuity (e2e)', () => {
     },
   ) {
     const activeAppointmentKey = createHash('sha256')
-      .update(`${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`)
+      .update(
+        `${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`,
+      )
       .digest('hex');
     return prisma.appointment.create({
       data: {
