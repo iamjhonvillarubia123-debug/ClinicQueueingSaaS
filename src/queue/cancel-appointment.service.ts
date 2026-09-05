@@ -402,6 +402,21 @@ export class CancelAppointmentService {
         'Secretary is not assigned to this Practice Location.',
       );
     }
+
+    const activeAppointmentBundle =
+      await transaction.practiceStaffAuthorityBundle.findFirst({
+        where: {
+          practiceStaffId: staff.id,
+          bundleType: 'APPOINTMENTS_AND_PATIENT_INTAKE',
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+    if (!activeAppointmentBundle) {
+      throw new ForbiddenException(
+        'Clinic Secretary lacks Appointments and Patient Intake authority.',
+      );
+    }
   }
 
   private isCancellableStatus(status: AppointmentStatus): boolean {
