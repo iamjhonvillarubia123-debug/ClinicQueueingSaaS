@@ -186,8 +186,8 @@ describe('Secretary workspace pages', () => {
       ],
       invitations: [],
     };
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      response(substituteWorkspace),
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(response(substituteWorkspace)),
     );
 
     const { unmount } = render(
@@ -216,7 +216,9 @@ describe('Secretary workspace pages', () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByRole('heading', { name: 'No active substitute coverage' }),
+      await screen.findByRole('heading', {
+        name: 'No active substitute coverage',
+      }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Queue' }),
