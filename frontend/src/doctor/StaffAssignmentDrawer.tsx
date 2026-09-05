@@ -379,12 +379,14 @@ export function StaffAssignmentDrawer({
             <div className="staff-replacement-warning">
               <strong>Replace current Clinic Secretary?</strong>
               <p>
-                If this invitation is accepted, {selectedName} will replace{' '}
-                {current.name} at {data.clinic.name}. {current.name}'s account
-                and unrelated clinic assignments remain unaffected.
+                {mode === 'INVITE'
+                  ? `If this invitation is accepted, ${selectedName} will replace ${current.name} at ${data.clinic.name}.`
+                  : `${selectedName} will replace ${current.name} at ${data.clinic.name} when you confirm this assignment.`}{' '}
+                {current.name}'s account and unrelated clinic assignments remain
+                unaffected.
               </p>
               <label>
-                Enter your current password to authorize this replacement intent
+                Enter your current password to authorize this replacement
                 <input
                   type="password"
                   value={password}
@@ -465,8 +467,12 @@ export function StaffAssignmentDrawer({
       ) : null}
       {step === 5 ? (
         <>
-          <h2>Review Invitation</h2>
-          <p>Please review the pending clinic relationship invitation.</p>
+          <h2>{mode === 'INVITE' ? 'Review Invitation' : 'Review Assignment'}</h2>
+          <p>
+            {mode === 'INVITE'
+              ? 'Please review the pending clinic relationship invitation.'
+              : 'Please review the clinic-scoped Secretary assignment.'}
+          </p>
           <dl className="staff-review">
             <div>
               <dt>Secretary</dt>
@@ -514,8 +520,11 @@ export function StaffAssignmentDrawer({
             )}
           </dl>
           <div className="staff-neutral-note">
-            No clinic authority is granted until the eligible Secretary accepts
-            this invitation.
+            {mode === 'INVITE'
+              ? 'No clinic authority is granted until the eligible Secretary accepts this invitation.'
+              : role === 'CLINIC_SECRETARY'
+                ? "This creates or reactivates the clinic-scoped relationship immediately. Today's ClinicDay operating Secretary remains a separate assignment."
+                : 'Coverage authority is limited to the selected Service Date period and does not grant Clinic Secretary authority bundles.'}
           </div>
         </>
       ) : null}
@@ -550,7 +559,15 @@ export function StaffAssignmentDrawer({
             disabled={pending}
             onClick={submit}
           >
-            {pending ? 'Sending…' : 'Send Invitation'}
+            {pending
+              ? mode === 'INVITE'
+                ? 'Sending…'
+                : 'Assigning…'
+              : mode === 'INVITE'
+                ? 'Send Invitation'
+                : current && role === 'CLINIC_SECRETARY'
+                  ? 'Replace Secretary'
+                  : 'Assign Secretary'}
           </button>
         )}
       </footer>
