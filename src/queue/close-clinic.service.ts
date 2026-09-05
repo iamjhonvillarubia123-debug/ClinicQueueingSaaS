@@ -31,6 +31,7 @@ type QueueContext = {
   practiceLocationId: string;
   lifecycleStatus: PracticeLocationLifecycleStatus;
   doctorUserId: string;
+  currentRegularPracticeStaffId: string | null;
 };
 
 type ClinicDayState = {
@@ -447,6 +448,7 @@ export class CloseClinicService {
   ): Promise<QueueContext> {
     const rows = await transaction.$queryRaw<QueueContext[]>(Prisma.sql`
       SELECT pl."id" AS "practiceLocationId", pl."lifecycleStatus",
+             pl."currentRegularPracticeStaffId",
              dp."userId" AS "doctorUserId"
       FROM "PracticeLocation" pl
       INNER JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
@@ -549,6 +551,24 @@ export class CloseClinicService {
     ) {
       throw new ForbiddenException(
         'Secretary is not the current operating secretary for this clinic day.',
+      );
+    }
+
+    if (context.currentRegularPracticeStaffId !== operatingStaff.id) {
+      return;
+    }
+
+    const activeQueueBundle = await transaction.practiceStaffAuthorityBundle.findFirst({
+      where: {
+        practiceStaffId: operatingStaff.id,
+        bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    if (!activeQueueBundle) {
+      throw new ForbiddenException(
+        'Clinic Secretary lacks Queue and Clinic Day Operations authority.',
       );
     }
   }
