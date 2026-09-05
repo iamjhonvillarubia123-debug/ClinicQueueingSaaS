@@ -83,13 +83,14 @@ export class ClinicSecretaryAuthorityService {
     idempotencyKey: string,
   ) {
     const bundles = this.normalizeBundles(dto.authorityBundles);
+    const requestedCancelClinicDay = dto.requestedCancelClinicDay === true;
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     const commandType = CommandType.PRACTICE_LOCATION_ASSIGN_REGULAR_SECRETARY;
     const commandIdentityKey = this.hash(
       `${commandType}|${authenticatedUserId}|${dto.practiceLocationId}|${key}`,
     );
     const requestFingerprint = this.hash(
-      `${commandType}|${authenticatedUserId}|${dto.practiceLocationId}|${dto.userId}|${bundles.join(',')}`,
+      `${commandType}|${authenticatedUserId}|${dto.practiceLocationId}|${dto.userId}|${bundles.join(',')}|cancel:${requestedCancelClinicDay}`,
     );
 
     return this.prisma.$transaction(async (transaction) => {
@@ -104,10 +105,18 @@ export class ClinicSecretaryAuthorityService {
       const actor = await this.readDoctor(
         transaction,
         authenticatedUserId,
-        false,
+        requestedCancelClinicDay,
       );
       const secretary = await this.readSecretary(transaction, dto.userId);
       this.assertCurrentDoctor(actor);
+      if (requestedCancelClinicDay) {
+        if (!dto.password) {
+          throw new UnauthorizedException(
+            'Current password is required to grant Cancel Clinic Day authority.',
+          );
+        }
+        await this.assertPassword(dto.password, actor?.passwordHash);
+      }
 
       const replay = await transaction.commandIdempotency.findUnique({
         where: { commandIdentityKey },
@@ -122,6 +131,7 @@ export class ClinicSecretaryAuthorityService {
           replayed: true,
           practiceStaffId: location.currentRegularPracticeStaffId,
           authorityBundles: bundles,
+          cancelClinicDayAllowed: requestedCancelClinicDay,
         };
       }
 
@@ -144,6 +154,13 @@ export class ClinicSecretaryAuthorityService {
         transaction,
         assignment.id,
         bundles,
+        authenticatedUserId,
+        now,
+      );
+      await this.replaceCancelClinicDayCapability(
+        transaction,
+        assignment.id,
+        requestedCancelClinicDay,
         authenticatedUserId,
         now,
       );
@@ -173,6 +190,7 @@ export class ClinicSecretaryAuthorityService {
         replayed: false,
         practiceStaffId: assignment.id,
         authorityBundles: bundles,
+        cancelClinicDayAllowed: requestedCancelClinicDay,
       };
     });
   }
@@ -183,13 +201,14 @@ export class ClinicSecretaryAuthorityService {
     idempotencyKey: string,
   ) {
     const bundles = this.normalizeBundles(dto.authorityBundles);
+    const requestedCancelClinicDay = dto.requestedCancelClinicDay === true;
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     const commandType = CommandType.PRACTICE_LOCATION_REPLACE_REGULAR_SECRETARY;
     const commandIdentityKey = this.hash(
       `${commandType}|${authenticatedUserId}|${dto.practiceLocationId}|${key}`,
     );
     const requestFingerprint = this.hash(
-      `${commandType}|${authenticatedUserId}|${dto.practiceLocationId}|${dto.userId}|${bundles.join(',')}`,
+      `${commandType}|${authenticatedUserId}|${dto.practiceLocationId}|${dto.userId}|${bundles.join(',')}|cancel:${requestedCancelClinicDay}`,
     );
 
     return this.prisma.$transaction(async (transaction) => {
@@ -228,6 +247,7 @@ export class ClinicSecretaryAuthorityService {
           replayed: true,
           practiceStaffId: current?.id ?? null,
           authorityBundles: bundles,
+          cancelClinicDayAllowed: requestedCancelClinicDay,
         };
       }
 
@@ -265,6 +285,13 @@ export class ClinicSecretaryAuthorityService {
         transaction,
         newAssignment.id,
         bundles,
+        authenticatedUserId,
+        now,
+      );
+      await this.replaceCancelClinicDayCapability(
+        transaction,
+        newAssignment.id,
+        requestedCancelClinicDay,
         authenticatedUserId,
         now,
       );
@@ -308,6 +335,7 @@ export class ClinicSecretaryAuthorityService {
         replayed: false,
         practiceStaffId: newAssignment.id,
         authorityBundles: bundles,
+        cancelClinicDayAllowed: requestedCancelClinicDay,
         disabledPracticeStaffId: previousAssignment.id,
       };
     });
@@ -745,6 +773,40 @@ export class ClinicSecretaryAuthorityService {
         )
       `);
     }
+  }
+
+  private async replaceCancelClinicDayCapability(
+    transaction: TransactionClient,
+    practiceStaffId: string,
+    allowCancelClinicDay: boolean,
+    actorUserId: string,
+    now: Date,
+  ): Promise<void> {
+    await transaction.practiceStaffCapability.updateMany({
+      where: {
+        practiceStaffId,
+        capabilityType: 'CANCEL_CLINIC_DAY',
+        status: PracticeStaffCapabilityStatus.ACTIVE,
+      },
+      data: {
+        status: PracticeStaffCapabilityStatus.REVOKED,
+        activeCapabilityKey: null,
+        revokedByUserId: actorUserId,
+        revokedAt: now,
+      },
+    });
+    if (!allowCancelClinicDay) return;
+    await transaction.practiceStaffCapability.create({
+      data: {
+        practiceStaffId,
+        capabilityType: 'CANCEL_CLINIC_DAY',
+        status: PracticeStaffCapabilityStatus.ACTIVE,
+        activeCapabilityKey: `${practiceStaffId}:CANCEL_CLINIC_DAY`,
+        grantedByUserId: actorUserId,
+        grantedAt: now,
+        createdAt: now,
+      },
+    });
   }
 
   private async prepareAssignment(
