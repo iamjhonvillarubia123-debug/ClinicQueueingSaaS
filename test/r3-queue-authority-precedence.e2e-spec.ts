@@ -179,7 +179,10 @@ describe('R3 queue authorization precedence (e2e)', () => {
     `);
   }
 
-  async function createQueue(serviceDate: string, operatingPracticeStaffId: string) {
+  async function createQueue(
+    serviceDate: string,
+    operatingPracticeStaffId: string,
+  ) {
     const date = dateValue(serviceDate);
     const now = new Date();
     await prisma.clinicDay.create({
@@ -217,12 +220,15 @@ describe('R3 queue authorization precedence (e2e)', () => {
       waitingPlacementType: WaitingPlacementType | null;
     },
   ) {
+    const dateKey = serviceDate.toISOString().slice(0, 10).replaceAll('-', '');
     const activeAppointmentKey = createHash('sha256')
-      .update(`${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`)
+      .update(
+        `${scope}|${serviceDate.toISOString()}|${queueNumber}|${discriminator}`,
+      )
       .digest('hex');
     return prisma.appointment.create({
       data: {
-        bookingReference: `R3A-${scope.slice(0, 8)}-${queueNumber}-${discriminator}`,
+        bookingReference: `R3A-${scope.slice(0, 8)}-${dateKey}-${queueNumber}-${discriminator}`,
         practiceLocationId,
         serviceDate,
         estimatedServiceMinutes: 30,
