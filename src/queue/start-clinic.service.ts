@@ -547,15 +547,19 @@ export class StartClinicService {
       SELECT ps."id"
       FROM "SubstituteSecretaryCoverageDate" coverageDate
       INNER JOIN "SubstituteSecretaryCoverage" coverage
-        ON coverage."id" = coverageDate."substituteSecretaryCoverageId"
+        ON coverage."id" = coverageDate."coverageId"
       INNER JOIN "PracticeStaff" ps
         ON ps."id" = coverage."practiceStaffId"
       INNER JOIN "User" u
         ON u."id" = ps."userId"
       WHERE coverageDate."practiceLocationId" = ${practiceLocationId}
         AND coverageDate."serviceDate" = ${serviceDate}
+        AND coverageDate."status" = 'ACTIVE'::"SubstituteSecretaryCoverageStatus"
+        AND coverage."status" = 'ACTIVE'::"SubstituteSecretaryCoverageStatus"
         AND coverage."endedAt" IS NULL
+        AND coverageDate."endedAt" IS NULL
         AND ps."isActive" = TRUE
+        AND ps."disconnectedAt" IS NULL
         AND ps."staffRole" = ${PracticeStaffRole.SECRETARY}::"PracticeStaffRole"
         AND u."role" = ${UserRole.SECRETARY}::"UserRole"
         AND u."accountStatus" = ${UserAccountStatus.ACTIVE}::"UserAccountStatus"
@@ -563,7 +567,7 @@ export class StartClinicService {
         AND u."emailVerifiedAt" IS NOT NULL
       ORDER BY coverage."createdAt" DESC, coverage."id" ASC
       LIMIT 1
-      FOR UPDATE OF coverage, ps, u
+      FOR UPDATE OF coverage, coverageDate, ps, u
     `);
     return rows[0] ?? null;
   }
@@ -595,7 +599,7 @@ export class StartClinicService {
       WHERE "practiceLocationId" = ${practiceLocationId}
         AND "serviceDate" = ${serviceDate}
         AND "status" = ${AppointmentStatus.WAITING}::"AppointmentStatus"
-      ORDER BY "servingOrderKey" ASC NULLS LAST, "queueNumber" ASC
+      ORDER BY "servingOrderKey" ASC NULLS LAST, "queueNumber" ASC, "id" ASC
       LIMIT 1
       FOR UPDATE
     `);
@@ -607,10 +611,14 @@ export class StartClinicService {
     practiceLocationId: string,
     serviceDate: Date,
   ): Promise<bigint> {
-    const aggregate = await transaction.queueEvent.aggregate({
-      where: { practiceLocationId, serviceDate },
-      _max: { queueEventSequence: true },
-    });
-    return (aggregate._max.queueEventSequence ?? 0n) + 1n;
+    const rows = await transaction.$queryRaw<Array<{ nextSequence: bigint }>>(
+      Prisma.sql`
+        SELECT COALESCE(MAX("queueEventSequence"), 0)::bigint + 1 AS "nextSequence"
+        FROM "QueueEvent"
+        WHERE "practiceLocationId" = ${practiceLocationId}
+          AND "serviceDate" = ${serviceDate}
+      `,
+    );
+    return rows[0]?.nextSequence ?? 1n;
   }
 }
