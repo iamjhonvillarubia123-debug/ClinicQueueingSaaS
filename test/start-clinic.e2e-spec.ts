@@ -24,8 +24,8 @@ describe('START CLINIC controls (e2e)', () => {
   let doctorUserId: string;
   let practiceLocationId: string;
   let regularSecretaryUserId: string;
-  let regularPracticeStaffId: string;
   let otherSecretaryUserId: string;
+  let otherPracticeStaffId: string;
   let scope: string;
 
   beforeAll(async () => {
@@ -120,8 +120,6 @@ describe('START CLINIC controls (e2e)', () => {
         isActive: true,
       },
     });
-    regularPracticeStaffId = regularAssignment.id;
-
     await prisma.practiceLocation.update({
       where: { id: practiceLocationId },
       data: { currentRegularPracticeStaffId: regularAssignment.id },
@@ -142,7 +140,7 @@ describe('START CLINIC controls (e2e)', () => {
     });
     otherSecretaryUserId = otherSecretary.id;
 
-    await prisma.practiceStaff.create({
+    const otherAssignment = await prisma.practiceStaff.create({
       data: {
         userId: otherSecretary.id,
         practiceLocationId,
@@ -150,6 +148,7 @@ describe('START CLINIC controls (e2e)', () => {
         isActive: true,
       },
     });
+    otherPracticeStaffId = otherAssignment.id;
 
     for (const weekday of Object.values(Weekday)) {
       await prisma.practiceSchedule.upsert({
@@ -218,7 +217,7 @@ describe('START CLINIC controls (e2e)', () => {
     ]);
 
     expect(clinicDay.status).toBe('STARTED');
-    expect(clinicDay.operatingPracticeStaffId).toBe(regularPracticeStaffId);
+    expect(clinicDay.operatingPracticeStaffId).toBeNull();
     expect(queueEvent.type).toBe('START_CLINIC');
     expect(queueEvent.queueEventSequence).toBe(1n);
     expect(links).toHaveLength(0);
@@ -289,7 +288,7 @@ describe('START CLINIC controls (e2e)', () => {
         { practiceLocationId, serviceDate },
         `unauthorized-${scope}`,
       ),
-    ).rejects.toThrow('current operating secretary');
+    ).rejects.toThrow('No operating secretary is assigned');
 
     const [clinicDay, eventCount, commandCount] = await Promise.all([
       prisma.clinicDay.findUnique({
@@ -318,17 +317,18 @@ describe('START CLINIC controls (e2e)', () => {
     expect(commandCount).toBe(0);
   });
 
-  it('allows the current regular secretary to start the clinic', async () => {
+  it('does not implicitly grant ClinicDay operating authority to the current regular secretary', async () => {
     const serviceDate = '2026-08-27';
 
-    const result = await service.start(
-      regularSecretaryUserId,
-      { practiceLocationId, serviceDate },
-      `regular-secretary-${scope}`,
-    );
+    await expect(
+      service.start(
+        regularSecretaryUserId,
+        { practiceLocationId, serviceDate },
+        `regular-secretary-${scope}`,
+      ),
+    ).rejects.toThrow('No operating secretary is assigned');
 
-    expect(result.started).toBe(true);
-    const clinicDay = await prisma.clinicDay.findUniqueOrThrow({
+    const clinicDay = await prisma.clinicDay.findUnique({
       where: {
         practiceLocationId_serviceDate: {
           practiceLocationId,
@@ -336,7 +336,53 @@ describe('START CLINIC controls (e2e)', () => {
         },
       },
     });
-    expect(clinicDay.operatingPracticeStaffId).toBe(regularPracticeStaffId);
+    expect(clinicDay).toBeNull();
+  });
+
+  it('resolves active Substitute Secretary coverage when the covered ClinicDay starts', async () => {
+    const serviceDate = '2026-08-29';
+    const coverage = await prisma.substituteSecretaryCoverage.create({
+      data: {
+        practiceLocationId,
+        practiceStaffId: otherPracticeStaffId,
+        coverageMode: 'ONE_SERVICE_DATE',
+        fromServiceDate: dateValue(serviceDate),
+        toServiceDate: dateValue(serviceDate),
+        createdByUserId: doctorUserId,
+        serviceDates: {
+          create: {
+            practiceLocationId,
+            serviceDate: dateValue(serviceDate),
+          },
+        },
+      },
+    });
+
+    const result = await service.start(
+      otherSecretaryUserId,
+      { practiceLocationId, serviceDate },
+      `covered-secretary-${scope}`,
+    );
+
+    const [clinicDay, audit] = await Promise.all([
+      prisma.clinicDay.findUniqueOrThrow({
+        where: {
+          practiceLocationId_serviceDate: {
+            practiceLocationId,
+            serviceDate: dateValue(serviceDate),
+          },
+        },
+      }),
+      prisma.clinicDayOperatingStaffAudit.findFirstOrThrow({
+        where: {
+          clinicDayId: result.clinicDayId ?? undefined,
+          newOperatingPracticeStaffId: otherPracticeStaffId,
+        },
+      }),
+    ]);
+    expect(clinicDay.operatingPracticeStaffId).toBe(otherPracticeStaffId);
+    expect(audit.changeType).toBe('ASSIGNED');
+    expect(coverage.status).toBe('ACTIVE');
   });
 
   it('serializes concurrent distinct START_CLINIC commands so only one commit starts the day', async () => {

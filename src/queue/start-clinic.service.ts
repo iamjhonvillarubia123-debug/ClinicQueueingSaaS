@@ -7,6 +7,7 @@ import {
 import {
   AdministrativeRestrictionStatus,
   AppointmentStatus,
+  ClinicDayOperatingStaffChangeType,
   ClinicDayStatus,
   CommandType,
   PracticeLocationLifecycleStatus,
@@ -62,6 +63,7 @@ type OperatingStaff = {
   userRole: UserRole;
   userAccountStatus: UserAccountStatus;
   administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+  emailVerifiedAt: Date | null;
 };
 
 @Injectable()
@@ -201,6 +203,7 @@ export class StartClinicService {
           context,
           existingClinicDay,
           actor,
+          dateValue,
         );
 
       const now = new Date();
@@ -234,6 +237,28 @@ export class StartClinicService {
             },
             select: { id: true, status: true, startedAt: true },
           });
+
+      const previousOperatingPracticeStaffId =
+        existingClinicDay?.operatingPracticeStaffId ?? null;
+      if (
+        operatingPracticeStaffId &&
+        operatingPracticeStaffId !== previousOperatingPracticeStaffId
+      ) {
+        await transaction.clinicDayOperatingStaffAudit.create({
+          data: {
+            clinicDayId: clinicDay.id,
+            practiceLocationId: dto.practiceLocationId,
+            serviceDate: dateValue,
+            changeType: previousOperatingPracticeStaffId
+              ? ClinicDayOperatingStaffChangeType.REPLACED
+              : ClinicDayOperatingStaffChangeType.ASSIGNED,
+            previousOperatingPracticeStaffId,
+            newOperatingPracticeStaffId: operatingPracticeStaffId,
+            actorUserId: authenticatedUserId,
+            createdAt: now,
+          },
+        });
+      }
 
       await transaction.clinicDayOperationalNotice.updateMany({
         where: {
@@ -401,14 +426,25 @@ export class StartClinicService {
     context: StartContext,
     clinicDay: ExistingClinicDay | null,
     actor: ActorState,
+    serviceDate?: Date,
   ): Promise<string | null> {
+    const coveredStaff = serviceDate
+      ? await this.lockActiveCoveredOperatingStaff(
+          transaction,
+          context.practiceLocationId,
+          serviceDate,
+        )
+      : null;
+    const expectedStaffId =
+      coveredStaff?.id ?? clinicDay?.operatingPracticeStaffId ?? null;
+
     if (actor.role === UserRole.DOCTOR) {
       if (actor.id !== context.doctorUserId) {
         throw new ForbiddenException(
           'Current user cannot start this clinic day.',
         );
       }
-      return clinicDay?.operatingPracticeStaffId ?? null;
+      return expectedStaffId;
     }
 
     if (actor.role !== UserRole.SECRETARY) {
@@ -417,7 +453,6 @@ export class StartClinicService {
       );
     }
 
-    const expectedStaffId = clinicDay?.operatingPracticeStaffId ?? null;
     if (!expectedStaffId) {
       throw new ForbiddenException(
         'No operating secretary is assigned for this clinic day.',
@@ -432,7 +467,8 @@ export class StartClinicService {
         ps."staffRole",
         u."role" AS "userRole",
         u."accountStatus" AS "userAccountStatus",
-        u."administrativeRestrictionStatus"
+        u."administrativeRestrictionStatus",
+        u."emailVerifiedAt"
       FROM "PracticeStaff" ps
       INNER JOIN "User" u ON u."id" = ps."userId"
       WHERE ps."id" = ${expectedStaffId}
@@ -448,13 +484,59 @@ export class StartClinicService {
       operatingStaff.userRole !== UserRole.SECRETARY ||
       operatingStaff.userAccountStatus !== UserAccountStatus.ACTIVE ||
       operatingStaff.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE
+        AdministrativeRestrictionStatus.NONE ||
+      operatingStaff.emailVerifiedAt === null
     ) {
       throw new ForbiddenException(
         'Secretary is not the current operating secretary for this clinic day.',
       );
     }
     return operatingStaff.id;
+  }
+
+  private async lockActiveCoveredOperatingStaff(
+    transaction: TransactionClient,
+    practiceLocationId: string,
+    serviceDate: Date,
+  ): Promise<OperatingStaff | null> {
+    const rows = await transaction.$queryRaw<OperatingStaff[]>(Prisma.sql`
+      SELECT
+        ps."id",
+        ps."userId",
+        ps."isActive",
+        ps."staffRole",
+        u."role" AS "userRole",
+        u."accountStatus" AS "userAccountStatus",
+        u."administrativeRestrictionStatus",
+        u."emailVerifiedAt"
+      FROM "SubstituteSecretaryCoverageDate" scd
+      INNER JOIN "SubstituteSecretaryCoverage" sc
+        ON sc."id" = scd."coverageId"
+      INNER JOIN "PracticeStaff" ps ON ps."id" = sc."practiceStaffId"
+      INNER JOIN "User" u ON u."id" = ps."userId"
+      WHERE scd."practiceLocationId" = ${practiceLocationId}
+        AND scd."serviceDate" = ${serviceDate}
+        AND scd."status" = 'ACTIVE'::"SubstituteSecretaryCoverageStatus"
+        AND sc."status" = 'ACTIVE'::"SubstituteSecretaryCoverageStatus"
+      LIMIT 1
+      FOR UPDATE OF scd, sc, ps, u
+    `);
+    const staff = rows[0] ?? null;
+    if (
+      staff &&
+      (!staff.isActive ||
+        staff.staffRole !== PracticeStaffRole.SECRETARY ||
+        staff.userRole !== UserRole.SECRETARY ||
+        staff.userAccountStatus !== UserAccountStatus.ACTIVE ||
+        staff.administrativeRestrictionStatus !==
+          AdministrativeRestrictionStatus.NONE ||
+        staff.emailVerifiedAt === null)
+    ) {
+      throw new ConflictException(
+        'Planned Substitute Secretary is no longer operationally ready for this Clinic Day.',
+      );
+    }
+    return staff;
   }
 
   private async lockClinicDay(

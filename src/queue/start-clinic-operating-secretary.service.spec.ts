@@ -31,6 +31,7 @@ type AuthorityResolver = {
       accountStatus: UserAccountStatus;
       administrativeRestrictionStatus: AdministrativeRestrictionStatus;
     },
+    serviceDate?: Date,
   ) => Promise<string | null>;
 };
 
@@ -89,5 +90,37 @@ describe('StartClinicService operating secretary authority', () => {
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('resolves active Substitute Secretary coverage when an actual ClinicDay is started', async () => {
+    const transaction = {
+      $queryRaw: jest.fn().mockResolvedValue([
+        {
+          id: 'staff-substitute',
+          userId: 'secretary-substitute',
+          isActive: true,
+          staffRole: 'SECRETARY',
+          userRole: UserRole.SECRETARY,
+          userAccountStatus: UserAccountStatus.ACTIVE,
+          administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+          emailVerifiedAt: new Date('2026-08-30T00:00:00.000Z'),
+        },
+      ]),
+    };
+
+    await expect(
+      resolver.assertActorAuthorityAndResolveOperatingStaff(
+        transaction,
+        context,
+        null,
+        {
+          id: 'secretary-substitute',
+          role: UserRole.SECRETARY,
+          accountStatus: UserAccountStatus.ACTIVE,
+          administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+        },
+        new Date('2026-08-30T00:00:00.000Z'),
+      ),
+    ).resolves.toBe('staff-substitute');
   });
 });

@@ -33,6 +33,30 @@ enum PracticeStaffCapabilityStatus {
   REVOKED
 }
 
+enum PracticeStaffAuthorityBundleType {
+  QUEUE_AND_CLINIC_DAY_OPERATIONS
+  APPOINTMENTS_AND_PATIENT_INTAKE
+  CLINIC_CONFIGURATION_DRAFTING
+  REPORTS_VIEW_ONLY
+}
+
+enum PracticeStaffAuthorityBundleStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum SubstituteSecretaryCoverageMode {
+  ONE_SERVICE_DATE
+  DATE_RANGE
+}
+
+enum SubstituteSecretaryCoverageStatus {
+  ACTIVE
+  CANCELLED
+  SUPERSEDED
+  EXPIRED
+}
+
 enum ClinicDayOperatingStaffChangeType {
   ASSIGNED
   REPLACED
@@ -252,6 +276,10 @@ enum CommandType {
   CLINIC_DAY_ASSIGN_SUBSTITUTE_SECRETARY
   CLINIC_DAY_REPLACE_SUBSTITUTE_SECRETARY
   CLINIC_DAY_END_SUBSTITUTE_SECRETARY
+  PRACTICE_STAFF_UPDATE_AUTHORITY_BUNDLES
+  PRACTICE_LOCATION_CREATE_SUBSTITUTE_COVERAGE
+  PRACTICE_LOCATION_REPLACE_SUBSTITUTE_COVERAGE
+  PRACTICE_LOCATION_CANCEL_SUBSTITUTE_COVERAGE
   DOCTOR_DEFAULTS_APPLY
   DOCTOR_CALENDAR_UPDATE
 
@@ -475,6 +503,10 @@ model User {
   practiceStaffAssignments         PracticeStaff[]
   grantedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityGrantedBy")
   revokedPracticeStaffCapabilities PracticeStaffCapability[]            @relation("PracticeStaffCapabilityRevokedBy")
+  grantedPracticeStaffAuthorityBundles PracticeStaffAuthorityBundle[] @relation("PracticeStaffAuthorityBundleGrantedBy")
+  revokedPracticeStaffAuthorityBundles PracticeStaffAuthorityBundle[] @relation("PracticeStaffAuthorityBundleRevokedBy")
+  substituteCoveragesCreated SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageCreatedBy")
+  substituteCoveragesEnded SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageEndedBy")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
   createdScheduledReminders        ScheduledReminder[]                  @relation("ScheduledReminderCreatedBy")
@@ -778,6 +810,8 @@ model PracticeLocation {
   bookingGroupRecoveryAttempts  BookingGroupRecoveryAttempt[]
   scheduledReminders            ScheduledReminder[]
   notificationOutboxes          NotificationOutbox[]
+  substituteSecretaryCoverages SubstituteSecretaryCoverage[]
+  substituteSecretaryCoverageDates SubstituteSecretaryCoverageDate[]
 
   applicationNotifications          ApplicationNotification[]
   administrativeAccountActionScopes AdministrativeAccountActionScope[]
@@ -796,6 +830,8 @@ model PracticeStaff {
   practiceLocationId String
   staffRole          PracticeStaffRole @default(SECRETARY)
   isActive Boolean @default(true)
+  activatedAt DateTime @default(now()) @db.Timestamptz(3)
+  deactivatedAt DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
@@ -806,6 +842,8 @@ model PracticeStaff {
   regularSecretaryFor PracticeLocation? @relation("PracticeLocationCurrentRegularSecretary")
 
   capabilities                    PracticeStaffCapability[]
+  authorityBundles PracticeStaffAuthorityBundle[]
+  substituteSecretaryCoverages SubstituteSecretaryCoverage[]
   authoredSecretarySettingsDrafts SecretarySettingsDraft[]
   operatingClinicDays             ClinicDay[]                    @relation("ClinicDayOperatingPracticeStaff")
   priorOperatingStaffAudits       ClinicDayOperatingStaffAudit[] @relation("ClinicDayOperatingStaffAuditPreviousStaff")
@@ -814,6 +852,70 @@ model PracticeStaff {
   @@unique([userId, practiceLocationId])
   @@index([practiceLocationId, isActive])
   @@index([userId, isActive])
+  @@index([practiceLocationId, isActive, activatedAt], map: "PracticeStaff_location_active_activated_idx")
+}
+
+model PracticeStaffAuthorityBundle {
+  id String @id @default(uuid())
+  practiceStaffId String
+  bundleType PracticeStaffAuthorityBundleType
+  status PracticeStaffAuthorityBundleStatus @default(ACTIVE)
+  grantedByUserId String
+  grantedAt DateTime @db.Timestamptz(3)
+  revokedByUserId String?
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  practiceStaff PracticeStaff @relation(fields: [practiceStaffId], references: [id], onDelete: Restrict)
+  grantedByUser User @relation("PracticeStaffAuthorityBundleGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+  revokedByUser User? @relation("PracticeStaffAuthorityBundleRevokedBy", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+  // One ACTIVE row per assignment/type is enforced by the migration's partial unique index.
+  @@index([practiceStaffId, status], map: "PracticeStaffAuthorityBundle_staff_status_idx")
+  @@index([grantedByUserId, grantedAt], map: "PracticeStaffAuthorityBundle_granted_actor_idx")
+  @@index([revokedByUserId, revokedAt], map: "PracticeStaffAuthorityBundle_revoked_actor_idx")
+}
+
+model SubstituteSecretaryCoverage {
+  id String @id @default(uuid())
+  practiceLocationId String
+  practiceStaffId String
+  coverageMode SubstituteSecretaryCoverageMode
+  fromServiceDate DateTime @db.Date
+  toServiceDate DateTime @db.Date
+  status SubstituteSecretaryCoverageStatus @default(ACTIVE)
+  createdByUserId String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  endedByUserId String?
+  endedAt DateTime? @db.Timestamptz(3)
+  supersedesCoverageId String?
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  practiceStaff PracticeStaff @relation(fields: [practiceStaffId], references: [id], onDelete: Restrict)
+  createdByUser User @relation("SubstituteSecretaryCoverageCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  endedByUser User? @relation("SubstituteSecretaryCoverageEndedBy", fields: [endedByUserId], references: [id], onDelete: Restrict)
+  supersedesCoverage SubstituteSecretaryCoverage? @relation("SubstituteSecretaryCoverageSupersession", fields: [supersedesCoverageId], references: [id], onDelete: Restrict)
+  supersededBy SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageSupersession")
+  serviceDates SubstituteSecretaryCoverageDate[]
+  commandScopes CommandIdempotency[] @relation("CommandIdempotencySubstituteCoverage")
+  commandResults CommandIdempotency[] @relation("CommandIdempotencyResultSubstituteCoverage")
+  @@index([practiceLocationId, status, fromServiceDate, toServiceDate], map: "SubstituteSecretaryCoverage_location_status_dates_idx")
+  @@index([practiceStaffId, status, fromServiceDate, toServiceDate], map: "SubstituteSecretaryCoverage_staff_status_dates_idx")
+  @@index([createdByUserId, createdAt], map: "SubstituteSecretaryCoverage_created_actor_idx")
+  @@index([endedByUserId, endedAt], map: "SubstituteSecretaryCoverage_ended_actor_idx")
+}
+
+model SubstituteSecretaryCoverageDate {
+  id String @id @default(uuid())
+  coverageId String
+  practiceLocationId String
+  serviceDate DateTime @db.Date
+  status SubstituteSecretaryCoverageStatus @default(ACTIVE)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  endedAt DateTime? @db.Timestamptz(3)
+  coverage SubstituteSecretaryCoverage @relation(fields: [coverageId], references: [id], onDelete: Restrict)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  // One ACTIVE coverage per location/date is enforced by the migration's partial unique index.
+  @@unique([coverageId, serviceDate], map: "SubstituteSecretaryCoverageDate_coverage_date_unique")
+  @@index([coverageId, status], map: "SubstituteSecretaryCoverageDate_coverage_status_idx")
+  @@index([practiceLocationId, serviceDate, status], map: "SubstituteSecretaryCoverageDate_location_date_status_idx")
 }
 
 model PracticeStaffCapability {
@@ -1693,6 +1795,8 @@ model CommandIdempotency {
   resultBookingGroupId                String?
   resultBookingGroupAccessTokenId     String?
   resultAdministrativeAccountActionId String?
+  substituteSecretaryCoverageId String?
+  resultSubstituteSecretaryCoverageId String?
   completedAt DateTime @db.Timestamptz(3)
   expiresAt   DateTime @db.Timestamptz(3)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
@@ -1708,6 +1812,8 @@ model CommandIdempotency {
   resultBookingGroup                BookingGroup?                @relation("CommandIdempotencyResultBookingGroup", fields: [resultBookingGroupId], references: [id], onDelete: SetNull)
   resultBookingGroupAccessToken     BookingGroupAccessToken?     @relation("CommandIdempotencyResultBookingGroupAccessToken", fields: [resultBookingGroupAccessTokenId], references: [id], onDelete: SetNull)
   resultAdministrativeAccountAction AdministrativeAccountAction? @relation("CommandIdempotencyAdministrativeAccountActionResult", fields: [resultAdministrativeAccountActionId], references: [id], onDelete: Restrict)
+  substituteSecretaryCoverage SubstituteSecretaryCoverage? @relation("CommandIdempotencySubstituteCoverage", fields: [substituteSecretaryCoverageId], references: [id], onDelete: SetNull)
+  resultSubstituteSecretaryCoverage SubstituteSecretaryCoverage? @relation("CommandIdempotencyResultSubstituteCoverage", fields: [resultSubstituteSecretaryCoverageId], references: [id], onDelete: SetNull)
   notificationOutboxes      NotificationOutbox[]           @relation("CommandIdempotencyNotificationOutboxes")
   applicationNotifications  ApplicationNotification[]      @relation("CommandIdempotencyApplicationNotifications")
   permanentClosureAudits    AccountPermanentClosureAudit[] @relation("CommandIdempotencyPermanentClosureAudits")
@@ -1730,6 +1836,8 @@ model CommandIdempotency {
   @@index([resultBookingGroupId], map: "CommandIdempotency_resultBookingGroup_idx")
   @@index([resultBookingGroupAccessTokenId], map: "CommandIdempotency_resultGroupToken_idx")
   @@index([resultAdministrativeAccountActionId], map: "CommandIdempotency_resultAdminAction_idx")
+  @@index([substituteSecretaryCoverageId], map: "CommandIdempotency_substituteCoverage_idx")
+  @@index([resultSubstituteSecretaryCoverageId], map: "CommandIdempotency_resultSubstituteCoverage_idx")
 }
 
 model BookingDraft {

@@ -43,6 +43,11 @@ type LockedLocation = {
   doctorUserId: string;
 };
 
+type ClinicDayScope = {
+  practiceLocationId: string;
+  serviceDate: Date;
+};
+
 type EligibleStaff = {
   id: string;
   userId: string;
@@ -121,7 +126,14 @@ export class SubstituteSecretaryService {
 
     return this.prisma.$transaction(async (transaction) => {
       await this.acquireCommandLock(transaction, commandIdentityKey);
+      const scope = await this.readClinicDayScope(transaction, dto.clinicDayId);
+      await this.acquireClinicDayScopeLock(
+        transaction,
+        scope.practiceLocationId,
+        this.formatServiceDate(scope.serviceDate),
+      );
       const clinicDay = await this.lockClinicDay(transaction, dto.clinicDayId);
+      this.assertClinicDayScopeUnchanged(clinicDay, scope);
       await this.lockUser(transaction, authenticatedUserId);
       await this.assertOwningDoctor(
         transaction,
@@ -233,31 +245,15 @@ export class SubstituteSecretaryService {
         };
       }
 
-      let clinicDay = await this.lockClinicDayByScope(
+      const clinicDay = await this.lockClinicDayByScope(
         transaction,
         practiceLocationId,
         serviceDate,
       );
       if (!clinicDay) {
-        const created = await transaction.clinicDay.create({
-          data: {
-            practiceLocationId,
-            serviceDate,
-            status: ClinicDayStatus.NOT_STARTED,
-          },
-          select: {
-            id: true,
-            practiceLocationId: true,
-            serviceDate: true,
-            status: true,
-            operatingPracticeStaffId: true,
-          },
-        });
-        clinicDay = {
-          ...created,
-          lifecycleStatus: location.lifecycleStatus,
-          doctorUserId: location.doctorUserId,
-        };
+        throw new ConflictException(
+          'No actual Clinic Day exists for this Service Date. Create Substitute Secretary coverage instead.',
+        );
       }
 
       this.assertClinicDayAllowsAssignmentOrClear(clinicDay.status);
@@ -339,7 +335,14 @@ export class SubstituteSecretaryService {
 
     return this.prisma.$transaction(async (transaction) => {
       await this.acquireCommandLock(transaction, commandIdentityKey);
+      const scope = await this.readClinicDayScope(transaction, clinicDayId);
+      await this.acquireClinicDayScopeLock(
+        transaction,
+        scope.practiceLocationId,
+        this.formatServiceDate(scope.serviceDate),
+      );
       const clinicDay = await this.lockClinicDay(transaction, clinicDayId);
+      this.assertClinicDayScopeUnchanged(clinicDay, scope);
       await this.lockUsers(transaction, [authenticatedUserId, secretaryUserId]);
       await this.assertOwningDoctor(
         transaction,
@@ -466,6 +469,38 @@ export class SubstituteSecretaryService {
       throw new NotFoundException('Clinic day was not found.');
     }
     return clinicDay;
+  }
+
+  private async readClinicDayScope(
+    transaction: TransactionClient,
+    clinicDayId: string,
+  ): Promise<ClinicDayScope> {
+    const rows = await transaction.$queryRaw<ClinicDayScope[]>(Prisma.sql`
+      SELECT "practiceLocationId", "serviceDate"
+      FROM "ClinicDay"
+      WHERE "id" = ${clinicDayId}
+      LIMIT 1
+    `);
+    const scope = rows[0];
+    if (!scope) {
+      throw new NotFoundException('Clinic day was not found.');
+    }
+    return scope;
+  }
+
+  private assertClinicDayScopeUnchanged(
+    clinicDay: LockedClinicDay,
+    scope: ClinicDayScope,
+  ): void {
+    if (
+      clinicDay.practiceLocationId !== scope.practiceLocationId ||
+      this.formatServiceDate(clinicDay.serviceDate) !==
+        this.formatServiceDate(scope.serviceDate)
+    ) {
+      throw new ConflictException(
+        'Clinic day scope changed while operating authority was being updated.',
+      );
+    }
   }
 
   private async lockClinicDayByScope(
@@ -690,6 +725,10 @@ export class SubstituteSecretaryService {
       throw new BadRequestException('serviceDate is invalid.');
     }
     return date;
+  }
+
+  private formatServiceDate(value: Date): string {
+    return value.toISOString().slice(0, 10);
   }
 
   private normalizeIdempotencyKey(value: string): string {
