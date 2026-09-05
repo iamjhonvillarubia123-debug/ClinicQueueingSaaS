@@ -801,9 +801,7 @@ export class ClinicSecretaryAuthorityService {
         practiceStaffId,
         capabilityType: 'CANCEL_CLINIC_DAY',
         status: PracticeStaffCapabilityStatus.ACTIVE,
-        activeCapabilityKey: this.hash(
-          `${practiceStaffId}:CANCEL_CLINIC_DAY`,
-        ),
+        activeCapabilityKey: this.hash(`${practiceStaffId}:CANCEL_CLINIC_DAY`),
         grantedByUserId: actorUserId,
         grantedAt: now,
         createdAt: now,
