@@ -66,9 +66,7 @@ describe('Substitute Secretary coverage continuity (e2e)', () => {
     const first = await createReadySecretary('first', '0941');
     firstSecretaryUserId = first.userId;
     firstPracticeStaffId = first.practiceStaffId;
-    secondSecretaryUserId = (
-      await createReadySecretary('second', '0942')
-    ).userId;
+    secondSecretaryUserId = (await createReadySecretary('second', '0942')).userId;
   });
 
   afterAll(async () => {
