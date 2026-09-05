@@ -26,7 +26,6 @@ describe('START CLINIC controls (e2e)', () => {
   let practiceLocationId: string;
   let regularSecretaryUserId: string;
   let regularPracticeStaffId: string;
-  let regularPracticeStaffId: string;
   let otherSecretaryUserId: string;
   let otherPracticeStaffId: string;
   let scope: string;
@@ -125,21 +124,9 @@ describe('START CLINIC controls (e2e)', () => {
       },
     });
     regularPracticeStaffId = regularAssignment.id;
-    regularPracticeStaffId = regularAssignment.id;
     await prisma.practiceLocation.update({
       where: { id: practiceLocationId },
       data: { currentRegularPracticeStaffId: regularAssignment.id },
-    });
-    const queueBundleNow = new Date();
-    await prisma.practiceStaffAuthorityBundle.create({
-      data: {
-        practiceStaffId: regularAssignment.id,
-        bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
-        status: 'ACTIVE',
-        grantedByUserId: doctorUserId,
-        grantedAt: queueBundleNow,
-        createdAt: queueBundleNow,
-      },
     });
     const queueBundleNow = new Date();
     await prisma.practiceStaffAuthorityBundle.create({
@@ -440,9 +427,14 @@ describe('START CLINIC controls (e2e)', () => {
       1,
     );
 
-    const [clinicDays, events, commands, appointmentAfter] = await Promise.all([
-      prisma.clinicDay.findMany({
-        where: { practiceLocationId, serviceDate: date },
+    const [clinicDay, events, commands, finalAppointment] = await Promise.all([
+      prisma.clinicDay.findUniqueOrThrow({
+        where: {
+          practiceLocationId_serviceDate: {
+            practiceLocationId,
+            serviceDate: date,
+          },
+        },
       }),
       prisma.queueEvent.findMany({
         where: { practiceLocationId, serviceDate: date },
@@ -454,37 +446,34 @@ describe('START CLINIC controls (e2e)', () => {
           serviceDate: date,
         },
       }),
-      prisma.appointment.findUniqueOrThrow({
-        where: { id: appointment.id },
-      }),
+      prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } }),
     ]);
 
-    expect(clinicDays).toHaveLength(1);
-    expect(clinicDays[0]?.status).toBe('STARTED');
+    expect(clinicDay.status).toBe('STARTED');
     expect(events).toHaveLength(1);
     expect(commands).toHaveLength(1);
-    expect(appointmentAfter.status).toBe(AppointmentStatus.CALLED);
+    expect(finalAppointment.status).toBe(AppointmentStatus.CALLED);
   });
 
   async function createWaitingAppointment(
     serviceDate: Date,
-    order: number,
-    discriminator: string,
+    queueNumber: number,
+    suffix: string,
   ) {
+    const bookingReference = `M7S${suffix}${scope.slice(0, 8)}`;
     return prisma.appointment.create({
       data: {
-        bookingReference: `M7S-${scope.slice(0, 8)}-${serviceDate
-          .toISOString()
-          .slice(8, 10)}-${discriminator}`,
+        bookingReference,
         practiceLocationId,
         serviceDate,
-        estimatedServiceMinutes: 30,
-        queueNumber: order,
-        servingOrderKey: new Prisma.Decimal(order),
-        waitingPlacementType: WaitingPlacementType.ORDINARY,
         status: AppointmentStatus.WAITING,
+        estimatedServiceMinutes: 15,
+        queueNumber,
+        activeAppointmentKey: `M7S-ACTIVE-${suffix}-${scope}`,
         firstName: 'Queue',
-        lastName: discriminator,
+        lastName: suffix,
+        servingOrderKey: new Prisma.Decimal(queueNumber),
+        waitingPlacementType: WaitingPlacementType.ORDINARY,
       },
     });
   }
