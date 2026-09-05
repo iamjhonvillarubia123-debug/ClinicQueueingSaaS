@@ -30,10 +30,7 @@ describe('ClinicSecretaryAuthorityService direct existing Secretary assignment',
             currentRegularPracticeStaffId: null,
           },
         ])
-        .mockResolvedValueOnce([
-          { id: 'doctor-1' },
-          { id: 'secretary-1' },
-        ])
+        .mockResolvedValueOnce([{ id: 'doctor-1' }, { id: 'secretary-1' }])
         .mockResolvedValueOnce([]),
       user: {
         findUnique: jest
