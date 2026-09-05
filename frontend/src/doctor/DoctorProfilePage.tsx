@@ -38,6 +38,28 @@ type DoctorIdentity = {
   profilePhotoUrl: string | null;
 };
 
+type DoctorProfileStateResponse = {
+  onboardingComplete: boolean;
+  user: {
+    firstName: string;
+    middleName: string | null;
+    lastName: string;
+  };
+  profile: {
+    id: string;
+    middleName: string | null;
+    suffix: string | null;
+    professionalTitle: string;
+    specialization: string;
+    licenseNumber: string;
+    profileDescription: string | null;
+    profilePhotoUrl: string | null;
+    publicIdentifier: string;
+    publicSlug: string | null;
+    isProfilePublic: boolean;
+  } | null;
+};
+
 type PublicPracticeLocationRoute = {
   publicIdentifier: string;
   publicUrl: string;
@@ -79,7 +101,7 @@ function Icon({ name }: { name: 'location' | 'mail' | 'phone' | 'eye' | 'copy' |
     case 'print': return <svg {...common}><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="7" /></svg>;
     case 'camera': return <svg {...common}><path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="3" /></svg>;
     case 'lock': return <svg {...common}><rect x="5" y="10" width="14" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
-    case 'check': return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></svg>;
+    case 'check': return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="m8 12 2 2 4-4" /></svg>;
     case 'share': return <svg {...common}><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="m8.2 10.8 7.6-4.6M8.2 13.2l7.6 4.6" /></svg>;
     case 'shield': return <svg {...common}><path d="M12 3 20 6v5c0 5-3.3 8.4-8 10-4.7-1.6-8-5-8-10V6l8-3Z" /><path d="m9 12 2 2 4-4" /></svg>;
     case 'help': return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 1 1 3.6 2.1c-.9.5-1.4 1-1.4 2M12 17h.01" /></svg>;
@@ -99,9 +121,26 @@ function clinicLocation(clinic: PracticeLocationResponse | null) {
   return place ? `${clinic.name ?? 'Clinic'} · ${place}` : (clinic.name ?? clinic.addressLine1 ?? 'Clinic');
 }
 
-function profileInitials(doctor: DoctorIdentity | null) {
-  if (!doctor) return 'DR';
-  return `${doctor.firstName.charAt(0)}${doctor.lastName.charAt(0)}`.toUpperCase();
+function profileInitials(doctor: DoctorIdentity | null, firstName: string, lastName: string) {
+  if (doctor) return `${doctor.firstName.charAt(0)}${doctor.lastName.charAt(0)}`.toUpperCase();
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  return initials || 'DR';
+}
+
+function identityFromProfileState(state: DoctorProfileStateResponse): DoctorIdentity | null {
+  if (!state.profile) return null;
+  return {
+    publicIdentifier: state.profile.publicIdentifier,
+    publicSlug: state.profile.publicSlug,
+    firstName: state.user.firstName,
+    middleName: state.profile.middleName,
+    lastName: state.user.lastName,
+    suffix: state.profile.suffix,
+    professionalTitle: state.profile.professionalTitle,
+    specialization: state.profile.specialization,
+    profileDescription: state.profile.profileDescription,
+    profilePhotoUrl: state.profile.profilePhotoUrl,
+  };
 }
 
 export function DoctorProfilePage() {
@@ -111,6 +150,10 @@ export function DoctorProfilePage() {
   const [publicationState, setPublicationState] = useState<PublicationState>('loading');
   const [loadError, setLoadError] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [savingOnboarding, setSavingOnboarding] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saveMessage, setSaveMessage] = useState('');
 
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -118,13 +161,35 @@ export function DoctorProfilePage() {
   const [suffix, setSuffix] = useState('');
   const [professionalTitle, setProfessionalTitle] = useState('');
   const [specialization, setSpecialization] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
   const [description, setDescription] = useState('');
 
   useEffect(() => {
     let active = true;
 
-    async function loadConnectedProfileData() {
+    async function loadProfileAndClinicData() {
       try {
+        const profileState = await apiRequest<DoctorProfileStateResponse>('/doctor/profile');
+        if (!active) return;
+
+        setOnboardingComplete(profileState.onboardingComplete);
+        setFirstName(profileState.user.firstName);
+        setMiddleName(profileState.profile?.middleName ?? profileState.user.middleName ?? '');
+        setLastName(profileState.user.lastName);
+        setSuffix(profileState.profile?.suffix ?? '');
+        setProfessionalTitle(profileState.profile?.professionalTitle ?? '');
+        setSpecialization(profileState.profile?.specialization ?? '');
+        setLicenseNumber(profileState.profile?.licenseNumber ?? '');
+        setDescription(profileState.profile?.profileDescription ?? '');
+
+        const authenticatedDoctor = identityFromProfileState(profileState);
+        setDoctor(authenticatedDoctor);
+
+        if (!profileState.onboardingComplete) {
+          setPublicationState('private');
+          return;
+        }
+
         const locations = await apiRequest<PracticeLocationResponse[]>('/practice-location');
         if (!active) return;
 
@@ -132,41 +197,32 @@ export function DoctorProfilePage() {
         setPrimaryClinic(clinic);
 
         if (!clinic?.publicIdentifier) {
-          setPublicationState('unknown');
+          setPublicationState('private');
           return;
         }
 
-        const locationRoute = await apiRequest<PublicPracticeLocationRoute>(
-          `/public/practice-locations/${encodeURIComponent(clinic.publicIdentifier)}`,
-        );
-        if (!active) return;
-
-        const connectedDoctor = locationRoute.doctor;
-        setDoctor(connectedDoctor);
-        setProfileUrl(locationRoute.doctorPublicUrl);
-        setFirstName(connectedDoctor.firstName);
-        setMiddleName(connectedDoctor.middleName ?? '');
-        setLastName(connectedDoctor.lastName);
-        setSuffix(connectedDoctor.suffix ?? '');
-        setProfessionalTitle(connectedDoctor.professionalTitle);
-        setSpecialization(connectedDoctor.specialization);
-        setDescription(connectedDoctor.profileDescription ?? '');
-
         try {
-          const publicDoctor = await apiRequest<PublicDoctorRoute>(
-            `/public/doctors/${encodeURIComponent(connectedDoctor.publicIdentifier)}`,
+          const locationRoute = await apiRequest<PublicPracticeLocationRoute>(
+            `/public/practice-locations/${encodeURIComponent(clinic.publicIdentifier)}`,
           );
           if (!active) return;
-          setDoctor(publicDoctor.doctor);
-          setProfileUrl(publicDoctor.publicUrl);
-          setPublicationState('published');
+          setProfileUrl(locationRoute.doctorPublicUrl);
+
+          try {
+            const publicDoctor = await apiRequest<PublicDoctorRoute>(
+              `/public/doctors/${encodeURIComponent(locationRoute.doctor.publicIdentifier)}`,
+            );
+            if (!active) return;
+            setDoctor(publicDoctor.doctor);
+            setProfileUrl(publicDoctor.publicUrl);
+            setPublicationState('published');
+          } catch (error) {
+            if (!active) return;
+            setPublicationState(error instanceof ApiError && error.status === 404 ? 'private' : 'unknown');
+          }
         } catch (error) {
           if (!active) return;
-          if (error instanceof ApiError && error.status === 404) {
-            setPublicationState('private');
-          } else {
-            setPublicationState('unknown');
-          }
+          setPublicationState(error instanceof ApiError && error.status === 404 ? 'private' : 'unknown');
         }
       } catch {
         if (!active) return;
@@ -175,11 +231,12 @@ export function DoctorProfilePage() {
       }
     }
 
-    void loadConnectedProfileData();
+    void loadProfileAndClinicData();
     return () => { active = false; };
   }, []);
 
   const isPublished = publicationState === 'published';
+  const isOnboarding = onboardingComplete === false;
   const publicStatusLabel = publicationState === 'loading'
     ? 'Checking…'
     : publicationState === 'published'
@@ -188,13 +245,15 @@ export function DoctorProfilePage() {
         ? 'Private'
         : 'Unavailable';
 
-  const publicStatusCopy = publicationState === 'published'
-    ? 'Your public webpage is visible to patients.'
-    : publicationState === 'private'
-      ? 'Your public webpage is not published.'
-      : publicationState === 'loading'
-        ? 'Checking your public webpage status.'
-        : 'Public webpage status is not available right now.';
+  const publicStatusCopy = isOnboarding
+    ? 'Complete your professional profile before publishing your webpage.'
+    : publicationState === 'published'
+      ? 'Your public webpage is visible to patients.'
+      : publicationState === 'private'
+        ? 'Your public webpage is not published.'
+        : publicationState === 'loading'
+          ? 'Checking your public webpage status.'
+          : 'Public webpage status is not available right now.';
 
   const accountContact = useMemo(() => ({
     email: primaryClinic?.clinicEmail ?? null,
@@ -213,25 +272,63 @@ export function DoctorProfilePage() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  async function saveInitialProfessionalProfile() {
+    if (savingOnboarding || !isOnboarding) return;
+    setSaveError('');
+    setSaveMessage('');
+
+    if (!firstName.trim() || !lastName.trim() || !professionalTitle.trim() || !specialization.trim() || !licenseNumber.trim()) {
+      setSaveError('Complete all required professional information before saving your profile.');
+      return;
+    }
+
+    setSavingOnboarding(true);
+    try {
+      const completed = await apiRequest<DoctorProfileStateResponse>('/doctor/profile/onboarding', {
+        method: 'POST',
+        body: {
+          firstName,
+          middleName,
+          lastName,
+          suffix,
+          professionalTitle,
+          specialization,
+          licenseNumber,
+          profileDescription: description,
+        },
+      });
+      setOnboardingComplete(true);
+      setDoctor(identityFromProfileState(completed));
+      setLicenseNumber(completed.profile?.licenseNumber ?? licenseNumber.trim());
+      setSaveMessage('Professional profile saved. You can now create and configure your clinic.');
+      setPublicationState('private');
+    } catch (caught) {
+      setSaveError(caught instanceof ApiError ? caught.message : 'Unable to save your professional profile right now.');
+    } finally {
+      setSavingOnboarding(false);
+    }
+  }
+
   return (
     <div className="doctor-profile-page">
       <div className="doctor-profile-main">
         <header className="doctor-profile-heading">
           <h1>Professional Profile</h1>
           <p>Manage your professional information and how you appear to patients.</p>
-          {loadError ? <p className="doctor-profile-load-note" role="status">Connected profile data could not be loaded. The profile controls remain available for UI review.</p> : null}
+          {isOnboarding ? <p className="doctor-profile-onboarding-note" role="status">Complete the required professional information below. Your profile remains private until you choose to publish it later.</p> : null}
+          {loadError ? <p className="doctor-profile-load-note" role="status">Your authenticated Doctor profile could not be loaded. Try again before changing professional information.</p> : null}
         </header>
 
         <section className="doctor-profile-hero">
           <div className="doctor-profile-photo" aria-label="Profile photo">
-            {doctor?.profilePhotoUrl ? <img src={doctor.profilePhotoUrl} alt="" /> : <span>{profileInitials(doctor)}</span>}
-            <button type="button" className="doctor-profile-camera" aria-label="Change profile photo" title="Profile photo upload is not connected yet">
+            {doctor?.profilePhotoUrl ? <img src={doctor.profilePhotoUrl} alt="" /> : <span>{profileInitials(doctor, firstName, lastName)}</span>}
+            <button type="button" className="doctor-profile-camera" aria-label="Change profile photo" title="Profile photo upload is not connected yet" disabled={isOnboarding}>
               <Icon name="camera" />
             </button>
           </div>
           <div className="doctor-profile-identity">
-            <h2>{profileName(doctor)}</h2>
-            <strong>{doctor?.specialization ?? 'Specialization'}</strong>
+            <h2>{doctor ? profileName(doctor) : [professionalTitle || 'Doctor', firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || 'Doctor account'}</h2>
+            <strong>{doctor?.specialization ?? specialization || 'Specialization'}</strong>
             <p><Icon name="location" /> {clinicLocation(primaryClinic)}</p>
             <p><Icon name="mail" /> {accountContact.email ?? 'Clinic email not available'}</p>
             <p><Icon name="phone" /> {accountContact.phone ?? 'Clinic contact number not available'}</p>
@@ -246,20 +343,20 @@ export function DoctorProfilePage() {
         <section className="doctor-profile-card">
           <div className="doctor-profile-section-title">
             <span>1.</span>
-            <div><h3>Professional Information</h3><p>Information already available from your current profile is filled automatically.</p></div>
+            <div><h3>Professional Information</h3><p>{isOnboarding ? 'Your account details are prefilled. Add the professional information required to complete Doctor onboarding.' : 'Information already available from your current profile is filled automatically.'}</p></div>
           </div>
           <div className="doctor-profile-grid four">
-            <label>First Name<input type="text" placeholder="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} /></label>
-            <label>Middle Name <span>(Optional)</span><input type="text" placeholder="Middle name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} /></label>
-            <label>Last Name<input type="text" placeholder="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} /></label>
-            <label>Suffix <span>(Optional)</span><select value={suffix} onChange={(event) => setSuffix(event.target.value)}><option value="">Select suffix</option><option>Jr.</option><option>Sr.</option><option>III</option></select></label>
+            <label>First Name<input type="text" placeholder="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /></label>
+            <label>Middle Name <span>(Optional)</span><input type="text" placeholder="Middle name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /></label>
+            <label>Last Name<input type="text" placeholder="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /></label>
+            <label>Suffix <span>(Optional)</span><select value={suffix} onChange={(event) => setSuffix(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true}><option value="">Select suffix</option><option>Jr.</option><option>Sr.</option><option>III</option></select></label>
           </div>
           <div className="doctor-profile-grid two">
-            <label>Professional Title<input type="text" placeholder="Doctor" value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} /><small>e.g., Doctor, Medical Specialist</small></label>
-            <label>Specialization<input type="text" placeholder="Your area of medical practice" value={specialization} onChange={(event) => setSpecialization(event.target.value)} /><small>Your area of medical practice</small></label>
+            <label>Professional Title<input type="text" placeholder="Doctor" value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /><small>e.g., Doctor, Medical Specialist</small></label>
+            <label>Specialization<input type="text" placeholder="Your area of medical practice" value={specialization} onChange={(event) => setSpecialization(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /><small>Your area of medical practice</small></label>
           </div>
           <div className="doctor-profile-license-row">
-            <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" readOnly /><button type="button" title="License-change workflow is not connected yet">Change License</button></div><small>Your license remains protected because the current authenticated profile API does not expose it.</small></label>
+            <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} readOnly={!isOnboarding} disabled={onboardingComplete === null} />{onboardingComplete === true ? <button type="button" title="License-change workflow is not connected yet">Change License</button> : null}</div><small>{isOnboarding ? 'Required for initial Doctor profile setup. This value must be unique.' : 'Your registered professional license number.'}</small></label>
           </div>
         </section>
 
@@ -269,9 +366,11 @@ export function DoctorProfilePage() {
             <div><h3>About Me</h3><p>Write a short description about yourself and your approach to patient care.</p></div>
           </div>
           <label className="doctor-profile-full-label">Profile Description
-            <textarea maxLength={2000} placeholder="Write a short professional description that patients can read on your public webpage." value={description} onChange={(event) => setDescription(event.target.value)} />
-            <span className="doctor-profile-field-footer"><small>This description will appear on your public webpage once profile editing is connected.</small><small>Characters: {description.length}/2000</small></span>
+            <textarea maxLength={2000} placeholder="Write a short professional description that patients can read on your public webpage." value={description} onChange={(event) => setDescription(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} />
+            <span className="doctor-profile-field-footer"><small>{isOnboarding ? 'Optional during initial setup. You can complete it before publishing later.' : 'This description is part of your professional profile.'}</small><small>Characters: {description.length}/2000</small></span>
           </label>
+          {isOnboarding ? <div className="doctor-profile-onboarding-actions">{saveError ? <p className="doctor-profile-save-error" role="alert">{saveError}</p> : null}{saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}<button type="button" className="doctor-profile-primary" onClick={() => void saveInitialProfessionalProfile()} disabled={savingOnboarding}>{savingOnboarding ? 'Saving…' : 'Save Professional Profile'}</button></div> : null}
+          {!isOnboarding && saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}
         </section>
 
         <section className="doctor-profile-card doctor-profile-public-card">
@@ -292,9 +391,9 @@ export function DoctorProfilePage() {
           </div>
           <div className="doctor-profile-actions">
             <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={!isPublished || !profileUrl}><Icon name="eye" /> Preview Webpage</button>
-            <button type="button" className="doctor-profile-primary" title="Publishing is not connected yet">◎ Publish Webpage</button>
-            <button type="button" className="doctor-profile-secondary" title="Doctor-profile QR generation is not connected yet"><Icon name="qr" /> Generate QR</button>
-            <button type="button" className="doctor-profile-secondary" title="Calling-card printing is not connected yet"><Icon name="print" /> Print Calling Card</button>
+            <button type="button" className="doctor-profile-primary" title="Publishing is not connected yet" disabled={isOnboarding}>◎ Publish Webpage</button>
+            <button type="button" className="doctor-profile-secondary" title="Doctor-profile QR generation is not connected yet" disabled={isOnboarding}><Icon name="qr" /> Generate QR</button>
+            <button type="button" className="doctor-profile-secondary" title="Calling-card printing is not connected yet" disabled={isOnboarding}><Icon name="print" /> Print Calling Card</button>
           </div>
         </section>
       </div>
@@ -303,13 +402,13 @@ export function DoctorProfilePage() {
         <section className="doctor-profile-side-card">
           <h3>Profile Completeness</h3>
           <div className="doctor-profile-progress-row">
-            <div className="doctor-profile-progress"><strong>80%</strong></div>
-            <p>Complete your profile to publish your professional webpage.</p>
+            <div className="doctor-profile-progress"><strong>{isOnboarding ? '20%' : '80%'}</strong></div>
+            <p>{isOnboarding ? 'Complete your required professional information to continue Doctor setup.' : 'Complete your profile to publish your professional webpage.'}</p>
           </div>
           <div className="doctor-profile-checklist">
-            {profileChecklist.map((item) => <div key={item}><span className="doctor-profile-check"><Icon name="check" /></span><span>{item}</span><em>Completed</em></div>)}
+            {profileChecklist.map((item) => <div key={item}><span className="doctor-profile-check"><Icon name="check" /></span><span>{item}</span><em>{isOnboarding ? 'Pending' : 'Completed'}</em></div>)}
           </div>
-          <div className="doctor-profile-tip"><strong>ⓘ &nbsp;Almost there!</strong><p>Add your clinics and services with pricing to complete your public profile.</p></div>
+          <div className="doctor-profile-tip"><strong>ⓘ &nbsp;{isOnboarding ? 'First setup' : 'Almost there!'}</strong><p>{isOnboarding ? 'Save your professional information first. Clinic setup follows after your Doctor profile exists.' : 'Add your clinics and services with pricing to complete your public profile.'}</p></div>
         </section>
 
         <section className="doctor-profile-side-card">
