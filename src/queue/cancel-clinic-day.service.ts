@@ -9,7 +9,6 @@ import {
   AdministrativeRestrictionStatus,
   AppointmentCancelledByType,
   AppointmentStatus,
-  ClinicDayCancellationReason,
   ClinicDayStatus,
   CommandType,
   NotificationChannel,
@@ -382,8 +381,7 @@ export class CancelClinicDayService {
       !actor ||
       actor.accountStatus !== UserAccountStatus.ACTIVE ||
       actor.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE ||
-      !actor.emailVerifiedAt
+        AdministrativeRestrictionStatus.NONE
     ) {
       throw new ForbiddenException(
         'Current user cannot cancel this clinic day.',
@@ -407,7 +405,7 @@ export class CancelClinicDayService {
       return;
     }
 
-    if (actor.role !== UserRole.SECRETARY) {
+    if (actor.role !== UserRole.SECRETARY || !actor.emailVerifiedAt) {
       throw new ForbiddenException(
         'Current user cannot cancel this clinic day.',
       );
