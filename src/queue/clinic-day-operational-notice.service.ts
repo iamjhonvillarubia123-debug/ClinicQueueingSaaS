@@ -133,6 +133,7 @@ export class ClinicDayOperationalNoticeService {
           practiceLocationId: dto.practiceLocationId,
           serviceDate,
           actorUserId,
+          createdAt: now,
           ...times,
         },
       });
@@ -196,6 +197,7 @@ export class ClinicDayOperationalNoticeService {
           practiceLocationId: existing.practiceLocationId,
           serviceDate: existing.serviceDate,
           actorUserId,
+          createdAt: now,
           ...times,
         },
       });
