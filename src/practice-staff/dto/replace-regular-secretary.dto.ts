@@ -2,8 +2,10 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -24,6 +26,10 @@ export class ReplaceRegularSecretaryDto {
   @ArrayUnique()
   @IsEnum(ClinicSecretaryAuthorityBundle, { each: true })
   authorityBundles?: ClinicSecretaryAuthorityBundle[];
+
+  @IsOptional()
+  @IsBoolean()
+  requestedCancelClinicDay?: boolean;
 
   @IsString()
   @IsNotEmpty()
