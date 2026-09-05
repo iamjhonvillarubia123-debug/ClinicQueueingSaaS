@@ -117,17 +117,16 @@ describe('SecretaryInvitationService relationship isolation', () => {
         disconnectedAt: null,
       }) as unknown,
     });
+    expect(tx.practiceStaff.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'staff-other-clinic' },
+      }),
+    );
     expect(tx.practiceStaff.create).not.toHaveBeenCalled();
     expect(tx.practiceLocation.update).toHaveBeenCalledWith({
       where: { id: 'clinic-target' },
       data: { currentRegularPracticeStaffId: 'staff-target' },
     });
-
-    const updateCall = tx.practiceStaff.update.mock.calls[0]?.[0] as unknown as {
-      where: { id: string };
-    };
-    expect(updateCall.where.id).toBe('staff-target');
-    expect(updateCall.where.id).not.toBe('staff-other-clinic');
   });
 
   it('creates only the intended PracticeStaff relationship and never creates a User', async () => {
