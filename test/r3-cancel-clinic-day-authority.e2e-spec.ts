@@ -317,7 +317,7 @@ describe('R3 clinic day cancellation authority (e2e)', () => {
 
   it('rejects exact-date acknowledgement mismatch and terminal ClinicDay cancellation', async () => {
     const mismatchDate = '2027-02-06';
-    await createClinicDay(mismatchDate, ClinicDayStatus.DELAYED);
+    await createClinicDay(mismatchDate, ClinicDayStatus.NOT_STARTED);
     await expect(
       service.cancel(
         doctorUserId,
