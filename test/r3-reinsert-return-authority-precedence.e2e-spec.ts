@@ -23,8 +23,10 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
   let reinsertService: StaffReinsertService;
   let doctorUserId: string;
   let practiceLocationId: string;
-  let regularSecretaryUserId: string;
-  let regularPracticeStaffId: string;
+  let regularNoBundleUserId: string;
+  let regularNoBundleStaffId: string;
+  let regularBundledUserId: string;
+  let regularBundledStaffId: string;
   let handoffSecretaryUserId: string;
   let handoffPracticeStaffId: string;
   let scope: string;
@@ -82,17 +84,18 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
     });
     practiceLocationId = location.id;
 
-    const regular = await createSecretary('regular', '0971');
-    regularSecretaryUserId = regular.userId;
-    regularPracticeStaffId = regular.practiceStaffId;
-    const handoff = await createSecretary('handoff', '0972');
+    const regularNoBundle = await createSecretary('regular-no-bundle', '0971');
+    regularNoBundleUserId = regularNoBundle.userId;
+    regularNoBundleStaffId = regularNoBundle.practiceStaffId;
+
+    const regularBundled = await createSecretary('regular-bundled', '0972');
+    regularBundledUserId = regularBundled.userId;
+    regularBundledStaffId = regularBundled.practiceStaffId;
+    await grantQueueBundle(regularBundledStaffId);
+
+    const handoff = await createSecretary('handoff', '0973');
     handoffSecretaryUserId = handoff.userId;
     handoffPracticeStaffId = handoff.practiceStaffId;
-
-    await prisma.practiceLocation.update({
-      where: { id: practiceLocationId },
-      data: { currentRegularPracticeStaffId: regularPracticeStaffId },
-    });
   });
 
   afterAll(async () => {
@@ -101,7 +104,8 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
 
   it('denies regular Secretary RETURN TO QUEUE without queue authority', async () => {
     const serviceDate = '2027-01-04';
-    await createClinicDay(serviceDate, regularPracticeStaffId);
+    await setRegularSecretary(regularNoBundleStaffId);
+    await createClinicDay(serviceDate, regularNoBundleStaffId);
     const target = await createAppointment(
       serviceDate,
       1,
@@ -110,7 +114,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
     );
     await expect(
       returnService.returnToQueue(
-        regularSecretaryUserId,
+        regularNoBundleUserId,
         { practiceLocationId, serviceDate, appointmentId: target.id },
         `return-missing-${scope}`,
       ),
@@ -119,8 +123,8 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
 
   it('allows regular Secretary RETURN TO QUEUE with active queue authority', async () => {
     const serviceDate = '2027-01-05';
-    await grantQueueBundle();
-    await createClinicDay(serviceDate, regularPracticeStaffId);
+    await setRegularSecretary(regularBundledStaffId);
+    await createClinicDay(serviceDate, regularBundledStaffId);
     const target = await createAppointment(
       serviceDate,
       2,
@@ -129,7 +133,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
     );
     await expect(
       returnService.returnToQueue(
-        regularSecretaryUserId,
+        regularBundledUserId,
         { practiceLocationId, serviceDate, appointmentId: target.id },
         `return-active-${scope}`,
       ),
@@ -142,6 +146,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
 
   it('allows handoff Secretary RETURN TO QUEUE without regular bundles', async () => {
     const serviceDate = '2027-01-06';
+    await setRegularSecretary(regularBundledStaffId);
     await createClinicDay(serviceDate, handoffPracticeStaffId);
     const target = await createAppointment(
       serviceDate,
@@ -159,9 +164,9 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
   });
 
   it('denies regular Secretary STAFF REINSERT without queue authority', async () => {
-    await revokeQueueBundle();
     const serviceDate = '2027-01-07';
-    await createClinicDay(serviceDate, regularPracticeStaffId);
+    await setRegularSecretary(regularNoBundleStaffId);
+    await createClinicDay(serviceDate, regularNoBundleStaffId);
     const target = await createAppointment(
       serviceDate,
       4,
@@ -170,7 +175,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
     );
     await expect(
       reinsertService.reinsert(
-        regularSecretaryUserId,
+        regularNoBundleUserId,
         { practiceLocationId, serviceDate, appointmentId: target.id },
         `reinsert-missing-${scope}`,
       ),
@@ -179,8 +184,8 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
 
   it('allows regular Secretary STAFF REINSERT with active queue authority', async () => {
     const serviceDate = '2027-01-08';
-    await grantQueueBundle();
-    await createClinicDay(serviceDate, regularPracticeStaffId);
+    await setRegularSecretary(regularBundledStaffId);
+    await createClinicDay(serviceDate, regularBundledStaffId);
     const target = await createAppointment(
       serviceDate,
       5,
@@ -189,7 +194,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
     );
     await expect(
       reinsertService.reinsert(
-        regularSecretaryUserId,
+        regularBundledUserId,
         { practiceLocationId, serviceDate, appointmentId: target.id },
         `reinsert-active-${scope}`,
       ),
@@ -202,6 +207,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
 
   it('allows handoff Secretary STAFF REINSERT without regular bundles', async () => {
     const serviceDate = '2027-01-09';
+    await setRegularSecretary(regularBundledStaffId);
     await createClinicDay(serviceDate, handoffPracticeStaffId);
     const target = await createAppointment(
       serviceDate,
@@ -241,6 +247,13 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
       },
     });
     return { userId: user.id, practiceStaffId: staff.id };
+  }
+
+  async function setRegularSecretary(practiceStaffId: string) {
+    await prisma.practiceLocation.update({
+      where: { id: practiceLocationId },
+      data: { currentRegularPracticeStaffId: practiceStaffId },
+    });
   }
 
   async function createClinicDay(
@@ -288,8 +301,7 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
     });
   }
 
-  async function grantQueueBundle() {
-    await revokeQueueBundle();
+  async function grantQueueBundle(practiceStaffId: string) {
     const now = new Date();
     await prisma.$executeRaw(Prisma.sql`
       INSERT INTO "PracticeStaffAuthorityBundle" (
@@ -297,24 +309,13 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
         "grantedByUserId", "grantedAt", "createdAt"
       ) VALUES (
         ${randomUUID()},
-        ${regularPracticeStaffId},
+        ${practiceStaffId},
         'QUEUE_AND_CLINIC_DAY_OPERATIONS'::"PracticeStaffAuthorityBundleType",
         'ACTIVE'::"PracticeStaffAuthorityBundleStatus",
         ${doctorUserId},
         ${now},
         ${now}
       )
-    `);
-  }
-
-  async function revokeQueueBundle() {
-    await prisma.$executeRaw(Prisma.sql`
-      UPDATE "PracticeStaffAuthorityBundle"
-      SET "status" = 'REVOKED'::"PracticeStaffAuthorityBundleStatus",
-          "revokedAt" = ${new Date()}
-      WHERE "practiceStaffId" = ${regularPracticeStaffId}
-        AND "bundleType" = 'QUEUE_AND_CLINIC_DAY_OPERATIONS'::"PracticeStaffAuthorityBundleType"
-        AND "status" = 'ACTIVE'::"PracticeStaffAuthorityBundleStatus"
     `);
   }
 });
