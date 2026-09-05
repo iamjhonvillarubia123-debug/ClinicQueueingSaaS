@@ -94,6 +94,7 @@ export class StaffAppointmentService {
         where: { id: dto.practiceLocationId },
         select: {
           lifecycleStatus: true,
+          currentRegularPracticeStaffId: true,
           doctorProfile: {
             select: {
               id: true,
@@ -109,7 +110,7 @@ export class StaffAppointmentService {
               id: true,
               status: true,
               operatingPracticeStaff: {
-                select: { userId: true, isActive: true },
+                select: { id: true, userId: true, isActive: true },
               },
             },
             take: 1,
@@ -125,13 +126,15 @@ export class StaffAppointmentService {
         select: { accountStatus: true, administrativeRestrictionStatus: true },
       });
       const day = context.clinicDays[0];
+      const isOwningDoctor = context.doctorProfile.userId === actorUserId;
+      const isOperatingSecretary =
+        day?.operatingPracticeStaff?.isActive === true &&
+        day.operatingPracticeStaff.userId === actorUserId;
       const authorized =
         actor?.accountStatus === UserAccountStatus.ACTIVE &&
         actor.administrativeRestrictionStatus ===
           AdministrativeRestrictionStatus.NONE &&
-        (context.doctorProfile.userId === actorUserId ||
-          (day?.operatingPracticeStaff?.isActive &&
-            day.operatingPracticeStaff.userId === actorUserId));
+        (isOwningDoctor || isOperatingSecretary);
       if (!authorized)
         throw new ForbiddenException(
           'Current user cannot create staff-assisted appointments for this clinic day.',
@@ -140,6 +143,26 @@ export class StaffAppointmentService {
         throw new ConflictException(
           'Staff-assisted booking requires a started clinic day.',
         );
+
+      if (
+        !isOwningDoctor &&
+        day.operatingPracticeStaff?.id === context.currentRegularPracticeStaffId
+      ) {
+        const intakeAuthority =
+          await transaction.practiceStaffAuthorityBundle.findFirst({
+            where: {
+              practiceStaffId: day.operatingPracticeStaff.id,
+              bundleType: 'APPOINTMENTS_AND_PATIENT_INTAKE',
+              status: 'ACTIVE',
+            },
+            select: { id: true },
+          });
+        if (!intakeAuthority) {
+          throw new ForbiddenException(
+            'Regular Clinic Secretary requires APPOINTMENTS_AND_PATIENT_INTAKE authority.',
+          );
+        }
+      }
 
       await transaction.$executeRaw(Prisma.sql`
         SELECT pg_advisory_xact_lock(
