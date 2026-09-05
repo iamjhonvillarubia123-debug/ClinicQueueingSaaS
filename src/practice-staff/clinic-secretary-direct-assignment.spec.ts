@@ -7,6 +7,13 @@ import {
 import { ClinicSecretaryAuthorityService } from './clinic-secretary-authority.service';
 import { ClinicSecretaryAuthorityBundle } from './secretary-authority.types';
 
+type CapabilityCreateInput = {
+  data: {
+    activeCapabilityKey: string;
+    capabilityType: string;
+  };
+};
+
 describe('ClinicSecretaryAuthorityService direct existing Secretary assignment', () => {
   const passwords = { verify: jest.fn() };
 
@@ -23,7 +30,10 @@ describe('ClinicSecretaryAuthorityService direct existing Secretary assignment',
             currentRegularPracticeStaffId: null,
           },
         ])
-        .mockResolvedValueOnce([{ id: 'doctor-1' }, { id: 'secretary-1' }])
+        .mockResolvedValueOnce([
+          { id: 'doctor-1' },
+          { id: 'secretary-1' },
+        ])
         .mockResolvedValueOnce([]),
       user: {
         findUnique: jest
@@ -32,7 +42,8 @@ describe('ClinicSecretaryAuthorityService direct existing Secretary assignment',
             id: 'doctor-1',
             role: UserRole.DOCTOR,
             accountStatus: UserAccountStatus.ACTIVE,
-            administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+            administrativeRestrictionStatus:
+              AdministrativeRestrictionStatus.NONE,
             passwordHash: 'doctor-hash',
           })
           .mockResolvedValueOnce({
@@ -102,8 +113,9 @@ describe('ClinicSecretaryAuthorityService direct existing Secretary assignment',
       'doctor-hash',
     );
     expect(transaction.practiceStaffCapability.create).toHaveBeenCalledTimes(1);
-    const capability = transaction.practiceStaffCapability.create.mock.calls[0][0]
-      .data as { activeCapabilityKey: string; capabilityType: string };
+    const capabilityCall = transaction.practiceStaffCapability.create.mock
+      .calls[0] as [CapabilityCreateInput];
+    const capability = capabilityCall[0].data;
     expect(capability.capabilityType).toBe('CANCEL_CLINIC_DAY');
     expect(capability.activeCapabilityKey).toHaveLength(64);
     expect(transaction.practiceLocation.update).toHaveBeenCalledTimes(1);
