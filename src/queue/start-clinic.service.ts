@@ -35,6 +35,7 @@ type StartContext = {
   lifecycleStatus: PracticeLocationLifecycleStatus;
   doctorProfileId: string;
   doctorUserId: string;
+  currentRegularPracticeStaffId: string | null;
 };
 
 type ActorState = {
@@ -402,6 +403,7 @@ export class StartClinicService {
       SELECT
         pl."id" AS "practiceLocationId",
         pl."lifecycleStatus",
+        pl."currentRegularPracticeStaffId",
         dp."id" AS "doctorProfileId",
         dp."userId" AS "doctorUserId"
       FROM "PracticeLocation" pl
@@ -459,7 +461,9 @@ export class StartClinicService {
         )
       : null;
     const expectedStaffId =
-      coveredStaff?.id ?? clinicDay?.operatingPracticeStaffId ?? null;
+      coveredStaff?.id ??
+      clinicDay?.operatingPracticeStaffId ??
+      context.currentRegularPracticeStaffId;
 
     if (actor.role === UserRole.DOCTOR) {
       if (actor.id !== context.doctorUserId) {
@@ -514,6 +518,24 @@ export class StartClinicService {
         'Secretary is not the current operating secretary for this clinic day.',
       );
     }
+
+    if (operatingStaff.id === context.currentRegularPracticeStaffId) {
+      const activeQueueBundle =
+        await transaction.practiceStaffAuthorityBundle.findFirst({
+          where: {
+            practiceStaffId: operatingStaff.id,
+            bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        });
+      if (!activeQueueBundle) {
+        throw new ForbiddenException(
+          'Regular Clinic Secretary requires QUEUE_AND_CLINIC_DAY_OPERATIONS authority.',
+        );
+      }
+    }
+
     return operatingStaff.id;
   }
 
