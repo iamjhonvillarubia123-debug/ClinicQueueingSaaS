@@ -5,9 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AdministrativeRestrictionStatus,
   BookingQuestionType,
   PracticeLocationLifecycleStatus,
   Prisma,
+  UserAccountStatus,
+  UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
@@ -21,17 +24,32 @@ export class PracticeLocationService {
     userId: string,
     createPracticeLocationDto: CreatePracticeLocationDto,
   ) {
-    const doctorProfile = await this.prisma.doctorProfile.findUnique({
-      where: { userId },
-      select: { id: true },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        emailVerifiedAt: true,
+        doctorProfile: { select: { id: true } },
+      },
     });
 
-    if (!doctorProfile) {
+    if (
+      !user ||
+      user.role !== UserRole.DOCTOR ||
+      user.accountStatus !== UserAccountStatus.ACTIVE ||
+      user.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
+      !user.emailVerifiedAt ||
+      !user.doctorProfile
+    ) {
       throw new ForbiddenException(
-        'Only a doctor may create a practice location.',
+        'A verified active Doctor with a completed professional profile is required to create a practice location.',
       );
     }
 
+    const doctorProfile = user.doctorProfile;
     const name = this.normalizeOptionalText(createPracticeLocationDto.name);
     const shortCode =
       this.normalizeOptionalText(
@@ -46,7 +64,9 @@ export class PracticeLocationService {
         const existingLocation = await transaction.practiceLocation.findFirst({
           where: {
             doctorProfileId: doctorProfile.id,
-            lifecycleStatus: PracticeLocationLifecycleStatus.ACTIVE,
+            lifecycleStatus: {
+              not: PracticeLocationLifecycleStatus.PERMANENTLY_DELETED,
+            },
             name: { equals: name, mode: 'insensitive' },
             addressLine1: { equals: addressLine1, mode: 'insensitive' },
           },
@@ -55,7 +75,7 @@ export class PracticeLocationService {
 
         if (existingLocation) {
           throw new ConflictException(
-            'An active practice location with this name and address already exists.',
+            'A practice location with this name and address already exists.',
           );
         }
       }
