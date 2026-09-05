@@ -76,9 +76,13 @@ describe('existing Secretary assignment API routing', () => {
     const direct = requests.find((request) =>
       request.url.includes('/practice-staff/regular/assign'),
     );
-    expect(String(direct?.init?.body)).toContain('\"userId\":\"secretary-1\"');
-    expect(String(direct?.init?.body)).toContain(
-      '\"authorityBundles\":[\"QUEUE_AND_CLINIC_DAY_OPERATIONS\"]',
-    );
+    const body = JSON.parse(String(direct?.init?.body)) as {
+      userId: string;
+      authorityBundles: string[];
+    };
+    expect(body.userId).toBe('secretary-1');
+    expect(body.authorityBundles).toEqual([
+      'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+    ]);
   });
 });
