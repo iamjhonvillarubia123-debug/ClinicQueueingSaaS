@@ -1,5 +1,9 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { UserRole } from '../../generated/prisma/client';
+import {
+  AdministrativeRestrictionStatus,
+  UserAccountStatus,
+  UserRole,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -9,10 +13,27 @@ export class SecretaryWorkspaceService {
   async getWorkspace(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        emailVerifiedAt: true,
+      },
     });
-    if (!user || user.role !== UserRole.SECRETARY)
-      throw new ForbiddenException('Secretary workspace access is required.');
+    if (
+      !user ||
+      user.role !== UserRole.SECRETARY ||
+      user.accountStatus !== UserAccountStatus.ACTIVE ||
+      user.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
+      !user.emailVerifiedAt
+    ) {
+      throw new ForbiddenException(
+        'An active verified Secretary account is required for this workspace.',
+      );
+    }
 
     const [assignments, invitations] = await Promise.all([
       this.prisma.practiceStaff.findMany({
