@@ -237,6 +237,7 @@ describe('R3 UNDO authorization precedence (e2e)', () => {
     const mobileNumberHash = createHash('sha256')
       .update(`mobile|${identitySeed}`)
       .digest('hex');
+    const mobileLastFour = queueNumber.toString().padStart(4, '0');
     return prisma.appointment.create({
       data: {
         bookingReference: `R3U-${scope.slice(0, 8)}-${serviceDate
@@ -248,7 +249,9 @@ describe('R3 UNDO authorization precedence (e2e)', () => {
         estimatedServiceMinutes: 30,
         queueNumber,
         activeAppointmentKey,
+        mobileNumberEncrypted: `test-encrypted-${identitySeed}`,
         mobileNumberHash,
+        mobileNumberLastFour: mobileLastFour,
         firstName: 'Undo',
         lastName: discriminator,
         ...overrides,
