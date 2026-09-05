@@ -94,6 +94,10 @@ function PageState({ loading, error }: { loading: boolean; error: string }) {
   return null;
 }
 
+function hasSubstituteCoverage(clinic: SecretaryClinic) {
+  return clinic.substituteCoverages.length > 0;
+}
+
 export function SecretaryClinicsPage() {
   const { data, error, loading } = useSecretaryWorkspace();
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'DISABLED'>('ALL');
@@ -112,7 +116,10 @@ export function SecretaryClinicsPage() {
     <section className="secretary-page">
       <header>
         <h1>Clinics</h1>
-        <p>Open clinics connected to your account and work within the authority granted by each Doctor.</p>
+        <p>
+          Open clinics connected to your account and work within the authority
+          granted by each Doctor.
+        </p>
       </header>
       {!data?.clinics.length ? (
         <div className="secretary-empty">
@@ -129,20 +136,43 @@ export function SecretaryClinicsPage() {
       ) : (
         <div className="secretary-clinic-browser">
           <div className="secretary-clinic-toolbar">
-            <div className="secretary-clinic-filters" aria-label="Clinic filters">
+            <div
+              className="secretary-clinic-filters"
+              aria-label="Clinic filters"
+            >
               {(['ALL', 'ACTIVE', 'DISABLED'] as const).map((value) => (
-                <button className={filter === value ? 'is-active' : ''} key={value} onClick={() => setFilter(value)}>
-                  {value === 'ALL' ? 'All Clinics' : value === 'ACTIVE' ? 'Active' : 'Disabled'}{' '}
-                  <span>{value === 'ALL' ? data.clinics.length : count(value)}</span>
+                <button
+                  className={filter === value ? 'is-active' : ''}
+                  key={value}
+                  onClick={() => setFilter(value)}
+                >
+                  {value === 'ALL'
+                    ? 'All Clinics'
+                    : value === 'ACTIVE'
+                      ? 'Active'
+                      : 'Disabled'}{' '}
+                  <span>
+                    {value === 'ALL' ? data.clinics.length : count(value)}
+                  </span>
                 </button>
               ))}
             </div>
-            <input aria-label="Search clinics" placeholder="Search clinics…" value={search} onChange={(event) => setSearch(event.target.value)} />
+            <input
+              aria-label="Search clinics"
+              placeholder="Search clinics…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
           </div>
           <div className="secretary-clinic-list">
             {clinics.map((clinic) => {
-              const canOpen = clinic.status === 'ACTIVE' &&
-                (clinic.assignmentType === 'SUBSTITUTE_SECRETARY' || clinic.authorityBundles.some((bundle) => bundle !== 'CLINIC_CONFIGURATION_DRAFTING'));
+              const canOpen =
+                clinic.status === 'ACTIVE' &&
+                (clinic.assignmentType === 'SUBSTITUTE_SECRETARY'
+                  ? hasSubstituteCoverage(clinic)
+                  : clinic.authorityBundles.some(
+                      (bundle) => bundle !== 'CLINIC_CONFIGURATION_DRAFTING',
+                    ));
               return (
                 <article key={clinic.practiceStaffId}>
                   <span className="secretary-clinic-mark">+</span>
@@ -151,18 +181,43 @@ export function SecretaryClinicsPage() {
                     <p>{clinic.address || 'Clinic address not provided'}</p>
                     <small>{clinic.timeZone}</small>
                   </div>
-                  <span className={`secretary-status is-${clinic.status.toLowerCase()}`}>{clinic.status}</span>
-                  <div className="secretary-clinic-doctor"><strong>Doctor</strong><span>{clinic.doctorName}</span></div>
-                  <div className="secretary-clinic-role"><strong>Role</strong><span>{clinic.assignmentType === 'CLINIC_SECRETARY' ? 'Clinic Secretary' : 'Substitute Secretary'}</span></div>
+                  <span
+                    className={`secretary-status is-${clinic.status.toLowerCase()}`}
+                  >
+                    {clinic.status}
+                  </span>
+                  <div className="secretary-clinic-doctor">
+                    <strong>Doctor</strong>
+                    <span>{clinic.doctorName}</span>
+                  </div>
+                  <div className="secretary-clinic-role">
+                    <strong>Role</strong>
+                    <span>
+                      {clinic.assignmentType === 'CLINIC_SECRETARY'
+                        ? 'Clinic Secretary'
+                        : 'Substitute Secretary'}
+                    </span>
+                  </div>
                   {canOpen ? (
-                    <Link className="secretary-open-clinic" to={`/app/secretary/clinics/${encodeURIComponent(clinic.clinicId)}`}>Open Clinic</Link>
+                    <Link
+                      className="secretary-open-clinic"
+                      to={`/app/secretary/clinics/${encodeURIComponent(clinic.clinicId)}`}
+                    >
+                      Open Clinic
+                    </Link>
                   ) : (
-                    <button className="secretary-open-clinic" disabled>{clinic.status === 'DISABLED' ? 'Access Disabled' : 'No Live Access'}</button>
+                    <button className="secretary-open-clinic" disabled>
+                      {clinic.status === 'DISABLED'
+                        ? 'Access Disabled'
+                        : 'No Live Access'}
+                    </button>
                   )}
                 </article>
               );
             })}
-            {!clinics.length ? <p className="secretary-no-results">No clinics match this view.</p> : null}
+            {!clinics.length ? (
+              <p className="secretary-no-results">No clinics match this view.</p>
+            ) : null}
           </div>
         </div>
       )}
@@ -293,6 +348,22 @@ export function SecretaryClinicWorkspacePage() {
         <div className="secretary-state is-error" role="alert">
           Your access at this clinic is disabled. Ask the Doctor to reactivate
           the relationship before opening clinic operations.
+        </div>
+      </section>
+    );
+  if (
+    clinic.assignmentType === 'SUBSTITUTE_SECRETARY' &&
+    !hasSubstituteCoverage(clinic)
+  )
+    return (
+      <section className="secretary-page">
+        <Link to="/app/secretary/clinics">← Back to Clinics</Link>
+        <div className="secretary-empty">
+          <h2>No active substitute coverage</h2>
+          <p>
+            This clinic relationship has no active Substitute Secretary coverage
+            plan, so no live clinic authority is available.
+          </p>
         </div>
       </section>
     );
