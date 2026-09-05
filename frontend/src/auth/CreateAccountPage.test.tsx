@@ -33,6 +33,17 @@ describe('approved create account UI', () => {
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
   });
 
+  it('preselects Secretary when account creation starts from a Secretary invitation', () => {
+    render(
+      <MemoryRouter initialEntries={['/register?role=SECRETARY']}>
+        <CreateAccountPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('radio', { name: /Secretary/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Doctor/i })).not.toBeChecked();
+  });
+
   it('allows switching the visible account type without creating clinic authority', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><CreateAccountPage /></MemoryRouter>);
