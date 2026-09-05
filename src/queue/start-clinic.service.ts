@@ -461,8 +461,8 @@ export class StartClinicService {
         )
       : null;
     const expectedStaffId =
-      coveredStaff?.id ??
       clinicDay?.operatingPracticeStaffId ??
+      coveredStaff?.id ??
       context.currentRegularPracticeStaffId;
 
     if (actor.role === UserRole.DOCTOR) {
@@ -519,69 +519,53 @@ export class StartClinicService {
       );
     }
 
-    if (operatingStaff.id === context.currentRegularPracticeStaffId) {
-      const activeQueueBundle =
-        await transaction.practiceStaffAuthorityBundle.findFirst({
-          where: {
-            practiceStaffId: operatingStaff.id,
-            bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
-            status: 'ACTIVE',
-          },
-          select: { id: true },
-        });
-      if (!activeQueueBundle) {
+    if (expectedStaffId === context.currentRegularPracticeStaffId) {
+      const authority = await transaction.practiceStaffAuthorityBundle.findFirst({
+        where: {
+          practiceStaffId: expectedStaffId,
+          bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+      if (!authority) {
         throw new ForbiddenException(
           'Regular Clinic Secretary requires QUEUE_AND_CLINIC_DAY_OPERATIONS authority.',
         );
       }
     }
 
-    return operatingStaff.id;
+    return expectedStaffId;
   }
 
   private async lockActiveCoveredOperatingStaff(
     transaction: TransactionClient,
     practiceLocationId: string,
     serviceDate: Date,
-  ): Promise<OperatingStaff | null> {
-    const rows = await transaction.$queryRaw<OperatingStaff[]>(Prisma.sql`
-      SELECT
-        ps."id",
-        ps."userId",
-        ps."isActive",
-        ps."staffRole",
-        u."role" AS "userRole",
-        u."accountStatus" AS "userAccountStatus",
-        u."administrativeRestrictionStatus",
-        u."emailVerifiedAt"
-      FROM "SubstituteSecretaryCoverageDate" scd
-      INNER JOIN "SubstituteSecretaryCoverage" sc
-        ON sc."id" = scd."coverageId"
-      INNER JOIN "PracticeStaff" ps ON ps."id" = sc."practiceStaffId"
-      INNER JOIN "User" u ON u."id" = ps."userId"
-      WHERE scd."practiceLocationId" = ${practiceLocationId}
-        AND scd."serviceDate" = ${serviceDate}
-        AND scd."status" = 'ACTIVE'::"SubstituteSecretaryCoverageStatus"
-        AND sc."status" = 'ACTIVE'::"SubstituteSecretaryCoverageStatus"
+  ): Promise<{ id: string } | null> {
+    const rows = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT ps."id"
+      FROM "SubstituteSecretaryCoverageDate" coverageDate
+      INNER JOIN "SubstituteSecretaryCoverage" coverage
+        ON coverage."id" = coverageDate."substituteSecretaryCoverageId"
+      INNER JOIN "PracticeStaff" ps
+        ON ps."id" = coverage."practiceStaffId"
+      INNER JOIN "User" u
+        ON u."id" = ps."userId"
+      WHERE coverageDate."practiceLocationId" = ${practiceLocationId}
+        AND coverageDate."serviceDate" = ${serviceDate}
+        AND coverage."endedAt" IS NULL
+        AND ps."isActive" = TRUE
+        AND ps."staffRole" = ${PracticeStaffRole.SECRETARY}::"PracticeStaffRole"
+        AND u."role" = ${UserRole.SECRETARY}::"UserRole"
+        AND u."accountStatus" = ${UserAccountStatus.ACTIVE}::"UserAccountStatus"
+        AND u."administrativeRestrictionStatus" = ${AdministrativeRestrictionStatus.NONE}::"AdministrativeRestrictionStatus"
+        AND u."emailVerifiedAt" IS NOT NULL
+      ORDER BY coverage."createdAt" DESC, coverage."id" ASC
       LIMIT 1
-      FOR UPDATE OF scd, sc, ps, u
+      FOR UPDATE OF coverage, ps, u
     `);
-    const staff = rows[0] ?? null;
-    if (
-      staff &&
-      (!staff.isActive ||
-        staff.staffRole !== PracticeStaffRole.SECRETARY ||
-        staff.userRole !== UserRole.SECRETARY ||
-        staff.userAccountStatus !== UserAccountStatus.ACTIVE ||
-        staff.administrativeRestrictionStatus !==
-          AdministrativeRestrictionStatus.NONE ||
-        staff.emailVerifiedAt === null)
-    ) {
-      throw new ConflictException(
-        'Planned Substitute Secretary is no longer operationally ready for this Clinic Day.',
-      );
-    }
-    return staff;
+    return rows[0] ?? null;
   }
 
   private async lockClinicDay(
@@ -606,17 +590,12 @@ export class StartClinicService {
     serviceDate: Date,
   ): Promise<FirstWaiting | null> {
     const rows = await transaction.$queryRaw<FirstWaiting[]>(Prisma.sql`
-      SELECT
-        "id",
-        "status",
-        "servingOrderKey",
-        "waitingPlacementType"
+      SELECT "id", "status", "servingOrderKey", "waitingPlacementType"
       FROM "Appointment"
       WHERE "practiceLocationId" = ${practiceLocationId}
         AND "serviceDate" = ${serviceDate}
-        AND "status" = 'WAITING'::"AppointmentStatus"
-        AND "servingOrderKey" IS NOT NULL
-      ORDER BY "servingOrderKey" ASC, "queueNumber" ASC, "id" ASC
+        AND "status" = ${AppointmentStatus.WAITING}::"AppointmentStatus"
+      ORDER BY "servingOrderKey" ASC NULLS LAST, "queueNumber" ASC
       LIMIT 1
       FOR UPDATE
     `);
@@ -628,14 +607,10 @@ export class StartClinicService {
     practiceLocationId: string,
     serviceDate: Date,
   ): Promise<bigint> {
-    const rows = await transaction.$queryRaw<Array<{ nextSequence: bigint }>>(
-      Prisma.sql`
-        SELECT COALESCE(MAX("queueEventSequence"), 0)::bigint + 1 AS "nextSequence"
-        FROM "QueueEvent"
-        WHERE "practiceLocationId" = ${practiceLocationId}
-          AND "serviceDate" = ${serviceDate}
-      `,
-    );
-    return rows[0]?.nextSequence ?? 1n;
+    const aggregate = await transaction.queueEvent.aggregate({
+      where: { practiceLocationId, serviceDate },
+      _max: { queueEventSequence: true },
+    });
+    return (aggregate._max.queueEventSequence ?? 0n) + 1n;
   }
 }
