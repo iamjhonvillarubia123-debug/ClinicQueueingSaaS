@@ -12,6 +12,7 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
+import { assertConfigurationDraftingAuthority } from './secretary-settings-draft-authority';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -37,6 +38,10 @@ export class SecretarySettingsDraftScheduleService {
     return this.prisma.$transaction(async (transaction) => {
       const draft = await this.lockEditableDraft(transaction, draftId);
       this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        draft.currentRegularPracticeStaffId!,
+      );
 
       const row = this.normalizeSchedule(dto);
       const saved =
