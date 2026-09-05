@@ -29,12 +29,17 @@ describe('DoctorProfileOnboardingService', () => {
     isProfilePublic: false,
   };
 
+  const createProfileMock = jest.fn<
+    Promise<typeof profile>,
+    [DoctorProfileCreateArgs]
+  >();
+
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>(),
     user: { update: jest.fn() },
     doctorProfile: {
       findUnique: jest.fn(),
-      create: jest.fn<Promise<typeof profile>, [DoctorProfileCreateArgs]>(),
+      create: createProfileMock,
     },
     doctorAccountSettings: { create: jest.fn() },
   };
@@ -83,7 +88,7 @@ describe('DoctorProfileOnboardingService', () => {
     ]);
     transaction.doctorProfile.findUnique.mockResolvedValue(null);
     transaction.user.update.mockResolvedValue({ id: eligibleUser.id });
-    transaction.doctorProfile.create.mockResolvedValue(profile);
+    createProfileMock.mockResolvedValue(profile);
     transaction.doctorAccountSettings.create.mockResolvedValue({
       id: 'settings-1',
     });
@@ -118,7 +123,7 @@ describe('DoctorProfileOnboardingService', () => {
       data: { firstName: 'Jane', middleName: 'Q', lastName: 'Doe' },
     });
 
-    const createProfileCall = transaction.doctorProfile.create.mock.calls[0]?.[0];
+    const createProfileCall = createProfileMock.mock.calls[0]?.[0];
     expect(createProfileCall?.data).toEqual({
       userId: 'doctor-user',
       middleName: 'Q',
