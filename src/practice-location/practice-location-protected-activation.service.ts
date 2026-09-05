@@ -115,6 +115,8 @@ export class PracticeLocationProtectedActivationService {
           throw new UnauthorizedException('Current password is invalid.');
         }
 
+        this.assertRequiredClinicIdentity(location);
+
         const timeZone = location.timeZone?.trim();
         if (!timeZone) {
           throw new ConflictException(
@@ -174,6 +176,19 @@ export class PracticeLocationProtectedActivationService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
+  }
+
+  private assertRequiredClinicIdentity(location: LockedLocation): void {
+    if (!location.name?.trim()) {
+      throw new ConflictException(
+        'Enter the clinic name before activation.',
+      );
+    }
+    if (!location.addressLine1?.trim()) {
+      throw new ConflictException(
+        'Enter the clinic address before activation.',
+      );
+    }
   }
 
   private async assertValidActivationSchedule(
