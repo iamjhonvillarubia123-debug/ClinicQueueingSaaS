@@ -114,12 +114,23 @@ describe('Appointment cancellation controls (e2e)', () => {
       },
     });
     secretaryUserId = secretary.id;
-    await prisma.practiceStaff.create({
+    const assignedStaff = await prisma.practiceStaff.create({
       data: {
         userId: secretary.id,
         practiceLocationId,
         staffRole: PracticeStaffRole.SECRETARY,
         isActive: true,
+      },
+    });
+    const intakeBundleNow = new Date();
+    await prisma.practiceStaffAuthorityBundle.create({
+      data: {
+        practiceStaffId: assignedStaff.id,
+        bundleType: 'APPOINTMENTS_AND_PATIENT_INTAKE',
+        status: 'ACTIVE',
+        grantedByUserId: doctorUserId,
+        grantedAt: intakeBundleNow,
+        createdAt: intakeBundleNow,
       },
     });
 
