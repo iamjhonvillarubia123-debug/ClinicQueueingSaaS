@@ -196,12 +196,15 @@ describe('R3 staff-assisted Appointment authorization precedence (e2e)', () => {
     serviceDate: string,
     operatingPracticeStaffId: string,
   ) {
+    const startedAt = new Date();
     await prisma.clinicDay.create({
       data: {
         practiceLocationId,
         serviceDate: dateValue(serviceDate),
         status: ClinicDayStatus.STARTED,
-        startedAt: new Date(),
+        startedAt,
+        createdAt: startedAt,
+        updatedAt: startedAt,
         operatingPracticeStaffId,
       },
     });
