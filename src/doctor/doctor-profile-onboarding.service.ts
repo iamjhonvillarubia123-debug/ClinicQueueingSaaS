@@ -163,9 +163,12 @@ export class DoctorProfileOnboardingService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const target = Array.isArray(error.meta?.target)
-          ? error.meta.target.join(',')
-          : String(error.meta?.target ?? '');
+        const rawTarget = error.meta?.target;
+        const target = Array.isArray(rawTarget)
+          ? rawTarget.filter((value): value is string => typeof value === 'string').join(',')
+          : typeof rawTarget === 'string'
+            ? rawTarget
+            : '';
         if (target.includes('licenseNumber')) {
           throw new ConflictException(
             'This professional license number is already registered.',
