@@ -1,4 +1,9 @@
 import { ForbiddenException } from '@nestjs/common';
+import {
+  AdministrativeRestrictionStatus,
+  UserAccountStatus,
+  UserRole,
+} from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecretaryWorkspaceService } from './secretary-workspace.service';
 
@@ -12,14 +17,19 @@ describe('SecretaryWorkspaceService', () => {
     prisma as unknown as PrismaService,
   );
 
+  const eligibleSecretary = {
+    id: 'secretary-1',
+    email: 'secretary@example.test',
+    role: UserRole.SECRETARY,
+    accountStatus: UserAccountStatus.ACTIVE,
+    administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+    emailVerifiedAt: new Date('2026-09-01T00:00:00Z'),
+  };
+
   beforeEach(() => jest.clearAllMocks());
 
   it('returns only the signed-in Secretary relationships and email invitations', async () => {
-    prisma.user.findUnique.mockResolvedValue({
-      id: 'secretary-1',
-      email: 'secretary@example.test',
-      role: 'SECRETARY',
-    });
+    prisma.user.findUnique.mockResolvedValue(eligibleSecretary);
     prisma.practiceStaff.findMany.mockResolvedValue([
       {
         id: 'staff-1',
@@ -92,14 +102,48 @@ describe('SecretaryWorkspaceService', () => {
     );
   });
 
-  it('rejects non-Secretary workspace access', async () => {
-    prisma.user.findUnique.mockResolvedValue({
-      id: 'doctor-1',
-      email: 'doctor@example.test',
-      role: 'DOCTOR',
+  it('allows an active verified Secretary to have a valid empty workspace', async () => {
+    prisma.user.findUnique.mockResolvedValue(eligibleSecretary);
+    prisma.practiceStaff.findMany.mockResolvedValue([]);
+    prisma.secretaryInvitation.findMany.mockResolvedValue([]);
+
+    await expect(service.getWorkspace('secretary-1')).resolves.toEqual({
+      clinics: [],
+      invitations: [],
     });
-    await expect(service.getWorkspace('doctor-1')).rejects.toBeInstanceOf(
+  });
+
+  it.each([
+    {
+      label: 'non-Secretary',
+      user: { ...eligibleSecretary, role: UserRole.DOCTOR },
+    },
+    {
+      label: 'disabled Secretary',
+      user: {
+        ...eligibleSecretary,
+        accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
+      },
+    },
+    {
+      label: 'restricted Secretary',
+      user: {
+        ...eligibleSecretary,
+        administrativeRestrictionStatus:
+          AdministrativeRestrictionStatus.SUSPENDED,
+      },
+    },
+    {
+      label: 'unverified Secretary',
+      user: { ...eligibleSecretary, emailVerifiedAt: null },
+    },
+  ])('rejects $label workspace access', async ({ user }) => {
+    prisma.user.findUnique.mockResolvedValue(user);
+
+    await expect(service.getWorkspace(user.id)).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+    expect(prisma.practiceStaff.findMany).not.toHaveBeenCalled();
+    expect(prisma.secretaryInvitation.findMany).not.toHaveBeenCalled();
   });
 });
