@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import {
   AdministrativeRestrictionStatus,
   AppointmentStatus,
@@ -469,7 +469,9 @@ describe('START CLINIC controls (e2e)', () => {
         status: AppointmentStatus.WAITING,
         estimatedServiceMinutes: 15,
         queueNumber,
-        activeAppointmentKey: `M7S-ACTIVE-${suffix}-${scope}`,
+        activeAppointmentKey: createHash('sha256')
+          .update(`M7S-ACTIVE-${suffix}-${scope}`)
+          .digest('hex'),
         firstName: 'Queue',
         lastName: suffix,
         servingOrderKey: new Prisma.Decimal(queueNumber),
