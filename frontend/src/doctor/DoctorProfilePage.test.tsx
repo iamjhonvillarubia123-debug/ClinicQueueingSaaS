@@ -149,11 +149,14 @@ describe('Doctor Profile', () => {
     expect(await screen.findByDisplayValue('Jane')).toBeInTheDocument();
     expect(screen.getByText(/Complete the required professional information below/i)).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Middle Name (Optional)'), 'Q');
-    await user.type(screen.getByLabelText('Professional Title'), 'Doctor');
-    await user.type(screen.getByLabelText('Specialization'), 'Family Medicine');
-    await user.type(screen.getByLabelText('License Number'), 'LIC-NEW');
-    await user.type(screen.getByLabelText('Profile Description'), 'Community practice');
+    await user.type(screen.getByPlaceholderText('Middle name'), 'Q');
+    await user.type(screen.getByPlaceholderText('Doctor'), 'Doctor');
+    await user.type(screen.getByPlaceholderText('Your area of medical practice'), 'Family Medicine');
+    await user.type(screen.getByPlaceholderText('Professional license number'), 'LIC-NEW');
+    await user.type(
+      screen.getByPlaceholderText('Write a short professional description that patients can read on your public webpage.'),
+      'Community practice',
+    );
     await user.click(screen.getByRole('button', { name: 'Save Professional Profile' }));
 
     expect(await screen.findByText(/Professional profile saved/i)).toBeInTheDocument();
