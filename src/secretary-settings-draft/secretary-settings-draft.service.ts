@@ -19,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSecretarySettingsDraftDto } from './dto/create-secretary-settings-draft.dto';
 import { ReviewSecretarySettingsDraftDto } from './dto/review-secretary-settings-draft.dto';
+import { assertConfigurationDraftingAuthority } from './secretary-settings-draft-authority';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -61,6 +62,10 @@ export class SecretarySettingsDraftService {
         dto.practiceLocationId,
       );
       this.assertCurrentRegularSecretary(authority, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        authority.currentRegularPracticeStaffId!,
+      );
 
       const existing = await transaction.secretarySettingsDraft.findFirst({
         where: {
@@ -102,6 +107,10 @@ export class SecretarySettingsDraftService {
         draft.practiceLocationId,
       );
       this.assertCurrentRegularSecretary(authority, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        authority.currentRegularPracticeStaffId!,
+      );
 
       if (
         draft.status !== SecretarySettingsDraftStatus.DRAFT &&
