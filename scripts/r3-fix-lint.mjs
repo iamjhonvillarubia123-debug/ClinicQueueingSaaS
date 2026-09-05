@@ -14,8 +14,12 @@ const filesToFormat = [
   'test/r3-start-clinic-authority-precedence.e2e-spec.ts',
 ];
 
+function readNormalized(path) {
+  return readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
+}
+
 function replaceRequired(path, from, to, label) {
-  const before = readFileSync(path, 'utf8');
+  const before = readNormalized(path);
   if (!before.includes(from)) {
     throw new Error(`Expected ${label} pattern was not found in ${path}.`);
   }
