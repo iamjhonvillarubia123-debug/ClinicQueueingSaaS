@@ -100,7 +100,9 @@ describe('R3 operational notice authorization precedence (e2e)', () => {
         },
         `notice-missing-${scope}`,
       ),
-    ).rejects.toThrow('Clinic Secretary lacks Queue and Clinic Day Operations authority.');
+    ).rejects.toThrow(
+      'Clinic Secretary lacks Queue and Clinic Day Operations authority.',
+    );
   });
 
   it('allows regular Clinic Secretary with active queue authority to start and end an operational notice', async () => {

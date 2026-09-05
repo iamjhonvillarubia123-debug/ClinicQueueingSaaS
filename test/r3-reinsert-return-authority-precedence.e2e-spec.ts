@@ -118,7 +118,9 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
         { practiceLocationId, serviceDate, appointmentId: target.id },
         `return-missing-${scope}`,
       ),
-    ).rejects.toThrow('Clinic Secretary lacks Queue and Clinic Day Operations authority.');
+    ).rejects.toThrow(
+      'Clinic Secretary lacks Queue and Clinic Day Operations authority.',
+    );
   });
 
   it('allows regular Secretary RETURN TO QUEUE with active queue authority', async () => {
@@ -179,7 +181,9 @@ describe('R3 reinsert/return authorization precedence (e2e)', () => {
         { practiceLocationId, serviceDate, appointmentId: target.id },
         `reinsert-missing-${scope}`,
       ),
-    ).rejects.toThrow('Clinic Secretary lacks Queue and Clinic Day Operations authority.');
+    ).rejects.toThrow(
+      'Clinic Secretary lacks Queue and Clinic Day Operations authority.',
+    );
   });
 
   it('allows regular Secretary STAFF REINSERT with active queue authority', async () => {

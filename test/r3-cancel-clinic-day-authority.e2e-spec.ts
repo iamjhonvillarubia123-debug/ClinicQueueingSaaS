@@ -6,7 +6,6 @@ import {
   AppointmentStatus,
   ClinicDayCancellationReason,
   ClinicDayStatus,
-  NotificationType,
   PracticeLocationLifecycleStatus,
   PracticeStaffCapabilityStatus,
   PracticeStaffCapabilityType,
@@ -144,7 +143,9 @@ describe('R3 clinic day cancellation authority (e2e)', () => {
           },
         }),
         prisma.appointment.findMany({
-          where: { id: { in: [waiting.id, called.id, absent.id, procedure.id] } },
+          where: {
+            id: { in: [waiting.id, called.id, absent.id, procedure.id] },
+          },
           orderBy: { queueNumber: 'asc' },
         }),
         prisma.appointment.findUniqueOrThrow({ where: { id: completed.id } }),
@@ -454,7 +455,9 @@ describe('R3 clinic day cancellation authority (e2e)', () => {
         firstName: 'Clinic',
         lastName: `Cancel${queueNumber}`,
         status,
-        servingOrderKey: inWaitingQueue ? new Prisma.Decimal(queueNumber) : null,
+        servingOrderKey: inWaitingQueue
+          ? new Prisma.Decimal(queueNumber)
+          : null,
         waitingPlacementType: inWaitingQueue
           ? WaitingPlacementType.ORDINARY
           : null,

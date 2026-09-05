@@ -36,9 +36,15 @@ describe('R3 START CLINIC authorization precedence (e2e)', () => {
     await prisma.$connect();
 
     const scheduleTime = new ScheduleTimeService();
-    const scheduleResolution = new ScheduleResolutionService(prisma, scheduleTime);
+    const scheduleResolution = new ScheduleResolutionService(
+      prisma,
+      scheduleTime,
+    );
     const entitlement = new SubscriptionEntitlementService(prisma);
-    const commercialGate = new SubscriptionCommercialGateService(prisma, entitlement);
+    const commercialGate = new SubscriptionCommercialGateService(
+      prisma,
+      entitlement,
+    );
     service = new StartClinicService(
       prisma,
       new CommandIdempotencyService(),

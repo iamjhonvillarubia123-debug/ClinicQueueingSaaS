@@ -34,7 +34,9 @@ describe('R3 configuration drafting authority (e2e)', () => {
     prisma = new PrismaService();
     await prisma.$connect();
     draftService = new SecretarySettingsDraftService(prisma);
-    serviceProposalService = new SecretarySettingsDraftServiceProposalService(prisma);
+    serviceProposalService = new SecretarySettingsDraftServiceProposalService(
+      prisma,
+    );
     scheduleService = new SecretarySettingsDraftScheduleService(prisma);
     exceptionService = new SecretarySettingsDraftExceptionService(
       prisma,
@@ -186,9 +188,9 @@ describe('R3 configuration drafting authority (e2e)', () => {
       }),
     ).rejects.toThrow(expected);
 
-    await expect(draftService.submit(secretaryUserId, draft.id)).rejects.toThrow(
-      expected,
-    );
+    await expect(
+      draftService.submit(secretaryUserId, draft.id),
+    ).rejects.toThrow(expected);
 
     const relationship = await prisma.practiceStaff.findUniqueOrThrow({
       where: { id: practiceStaffId },

@@ -520,14 +520,15 @@ export class StartClinicService {
     }
 
     if (expectedStaffId === context.currentRegularPracticeStaffId) {
-      const authority = await transaction.practiceStaffAuthorityBundle.findFirst({
-        where: {
-          practiceStaffId: expectedStaffId,
-          bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
-          status: 'ACTIVE',
-        },
-        select: { id: true },
-      });
+      const authority =
+        await transaction.practiceStaffAuthorityBundle.findFirst({
+          where: {
+            practiceStaffId: expectedStaffId,
+            bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+            status: 'ACTIVE',
+          },
+          select: { id: true },
+        });
       if (!authority) {
         throw new ForbiddenException(
           'Regular Clinic Secretary requires QUEUE_AND_CLINIC_DAY_OPERATIONS authority.',

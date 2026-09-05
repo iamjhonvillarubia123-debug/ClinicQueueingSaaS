@@ -558,14 +558,15 @@ export class CloseClinicService {
       return;
     }
 
-    const activeQueueBundle = await transaction.practiceStaffAuthorityBundle.findFirst({
-      where: {
-        practiceStaffId: operatingStaff.id,
-        bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
-        status: 'ACTIVE',
-      },
-      select: { id: true },
-    });
+    const activeQueueBundle =
+      await transaction.practiceStaffAuthorityBundle.findFirst({
+        where: {
+          practiceStaffId: operatingStaff.id,
+          bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
     if (!activeQueueBundle) {
       throw new ForbiddenException(
         'Clinic Secretary lacks Queue and Clinic Day Operations authority.',

@@ -31,8 +31,8 @@ describe('R3 staff-assisted Appointment authorization precedence (e2e)', () => {
       normalizeKey: (value?: string) => value ?? 'r3-staff-appointment-key',
       deriveIdentity: () => 'a'.repeat(64),
       fingerprint: () => 'b'.repeat(64),
-      acquireCommandLock: async () => undefined,
-      findReplay: async () => null,
+      acquireCommandLock: () => Promise.resolve(undefined),
+      findReplay: () => Promise.resolve(null),
     } as unknown as CommandIdempotencyService;
     const mobile = {
       protect: () => ({
