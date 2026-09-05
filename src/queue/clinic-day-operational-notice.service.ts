@@ -10,8 +10,10 @@ import {
   ClinicDayOperationalNoticeStatus,
   ClinicDayStatus,
   CommandType,
+  PracticeStaffRole,
   Prisma,
   UserAccountStatus,
+  UserRole,
 } from '../../generated/prisma/client';
 import { CommandIdempotencyService } from '../idempotency/command-idempotency.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -214,6 +216,7 @@ export class ClinicDayOperationalNoticeService {
     const location = await tx.practiceLocation.findUnique({
       where: { id: practiceLocationId },
       select: {
+        currentRegularPracticeStaffId: true,
         doctorProfile: { select: { userId: true } },
         clinicDays: {
           where: { serviceDate },
@@ -221,7 +224,12 @@ export class ClinicDayOperationalNoticeService {
             id: true,
             status: true,
             operatingPracticeStaff: {
-              select: { userId: true, isActive: true },
+              select: {
+                id: true,
+                userId: true,
+                isActive: true,
+                staffRole: true,
+              },
             },
           },
           take: 1,
@@ -232,21 +240,57 @@ export class ClinicDayOperationalNoticeService {
       throw new NotFoundException('Practice location was not found.');
     const actor = await tx.user.findUnique({
       where: { id: actorUserId },
-      select: { accountStatus: true, administrativeRestrictionStatus: true },
+      select: {
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+      },
     });
     const day = location.clinicDays[0];
-    const authorized =
+    if (!day) throw new ConflictException('Clinic day has not been created.');
+    const actorEligible =
       actor?.accountStatus === UserAccountStatus.ACTIVE &&
       actor.administrativeRestrictionStatus ===
-        AdministrativeRestrictionStatus.NONE &&
-      (location.doctorProfile.userId === actorUserId ||
-        (day?.operatingPracticeStaff?.isActive &&
-          day.operatingPracticeStaff.userId === actorUserId));
-    if (!authorized)
+        AdministrativeRestrictionStatus.NONE;
+    if (!actorEligible) {
       throw new ForbiddenException(
         'Current user cannot manage operational notices for this clinic day.',
       );
-    if (!day) throw new ConflictException('Clinic day has not been created.');
+    }
+    if (
+      actor.role === UserRole.DOCTOR &&
+      location.doctorProfile.userId === actorUserId
+    ) {
+      return day;
+    }
+    const operatingStaff = day.operatingPracticeStaff;
+    if (
+      actor.role !== UserRole.SECRETARY ||
+      !operatingStaff ||
+      !operatingStaff.isActive ||
+      operatingStaff.staffRole !== PracticeStaffRole.SECRETARY ||
+      operatingStaff.userId !== actorUserId
+    ) {
+      throw new ForbiddenException(
+        'Current user cannot manage operational notices for this clinic day.',
+      );
+    }
+    if (location.currentRegularPracticeStaffId !== operatingStaff.id) {
+      return day;
+    }
+    const activeQueueBundle = await tx.practiceStaffAuthorityBundle.findFirst({
+      where: {
+        practiceStaffId: operatingStaff.id,
+        bundleType: 'QUEUE_AND_CLINIC_DAY_OPERATIONS',
+        status: 'ACTIVE',
+      },
+      select: { id: true },
+    });
+    if (!activeQueueBundle) {
+      throw new ForbiddenException(
+        'Clinic Secretary lacks Queue and Clinic Day Operations authority.',
+      );
+    }
     return day;
   }
 
