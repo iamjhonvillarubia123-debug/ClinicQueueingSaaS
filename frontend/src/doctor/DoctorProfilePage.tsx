@@ -328,7 +328,7 @@ export function DoctorProfilePage() {
           </div>
           <div className="doctor-profile-identity">
             <h2>{doctor ? profileName(doctor) : [professionalTitle || 'Doctor', firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || 'Doctor account'}</h2>
-            <strong>{doctor?.specialization ?? specialization || 'Specialization'}</strong>
+            <strong>{doctor?.specialization ?? (specialization || 'Specialization')}</strong>
             <p><Icon name="location" /> {clinicLocation(primaryClinic)}</p>
             <p><Icon name="mail" /> {accountContact.email ?? 'Clinic email not available'}</p>
             <p><Icon name="phone" /> {accountContact.phone ?? 'Clinic contact number not available'}</p>
@@ -343,21 +343,22 @@ export function DoctorProfilePage() {
         <section className="doctor-profile-card">
           <div className="doctor-profile-section-title">
             <span>1.</span>
-            <div><h3>Professional Information</h3><p>{isOnboarding ? 'Your account details are prefilled. Add the professional information required to complete Doctor onboarding.' : 'Information already available from your current profile is filled automatically.'}</p></div>
+            <div><h3>Professional Information</h3><p>Information already available from your current profile is filled automatically.</p></div>
           </div>
           <div className="doctor-profile-grid four">
-            <label>First Name<input type="text" placeholder="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /></label>
-            <label>Middle Name <span>(Optional)</span><input type="text" placeholder="Middle name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /></label>
-            <label>Last Name<input type="text" placeholder="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /></label>
-            <label>Suffix <span>(Optional)</span><select value={suffix} onChange={(event) => setSuffix(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true}><option value="">Select suffix</option><option>Jr.</option><option>Sr.</option><option>III</option></select></label>
+            <label>First Name<input type="text" placeholder="First name" value={firstName} onChange={(event) => setFirstName(event.target.value)} disabled={!isOnboarding} /></label>
+            <label>Middle Name <span>(Optional)</span><input type="text" placeholder="Middle name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} disabled={!isOnboarding} /></label>
+            <label>Last Name<input type="text" placeholder="Last name" value={lastName} onChange={(event) => setLastName(event.target.value)} disabled={!isOnboarding} /></label>
+            <label>Suffix <span>(Optional)</span><select value={suffix} onChange={(event) => setSuffix(event.target.value)} disabled={!isOnboarding}><option value="">Select suffix</option><option>Jr.</option><option>Sr.</option><option>III</option></select></label>
           </div>
           <div className="doctor-profile-grid two">
-            <label>Professional Title<input type="text" placeholder="Doctor" value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /><small>e.g., Doctor, Medical Specialist</small></label>
-            <label>Specialization<input type="text" placeholder="Your area of medical practice" value={specialization} onChange={(event) => setSpecialization(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} /><small>Your area of medical practice</small></label>
+            <label>Professional Title<input type="text" placeholder="Doctor" value={professionalTitle} onChange={(event) => setProfessionalTitle(event.target.value)} disabled={!isOnboarding} /><small>e.g., Doctor, Medical Specialist</small></label>
+            <label>Specialization<input type="text" placeholder="Your area of medical practice" value={specialization} onChange={(event) => setSpecialization(event.target.value)} disabled={!isOnboarding} /><small>Your area of medical practice</small></label>
           </div>
           <div className="doctor-profile-license-row">
-            <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} readOnly={!isOnboarding} disabled={onboardingComplete === null} />{onboardingComplete === true ? <button type="button" title="License-change workflow is not connected yet">Change License</button> : null}</div><small>{isOnboarding ? 'Required for initial Doctor profile setup. This value must be unique.' : 'Your registered professional license number.'}</small></label>
+            <label>License Number<div className="doctor-profile-inline-field"><input type="text" placeholder="Professional license number" value={licenseNumber} onChange={(event) => setLicenseNumber(event.target.value)} readOnly={!isOnboarding} /><button type="button" title={isOnboarding ? 'Enter your professional license number' : 'License-change workflow is not connected yet'} disabled={isOnboarding}>{isOnboarding ? 'Required' : 'Change License'}</button></div><small>{isOnboarding ? 'Required for initial Doctor onboarding. After onboarding, license changes use a separate protected workflow.' : 'Your current professional license number is protected from ordinary profile editing.'}</small></label>
           </div>
+          {isOnboarding ? <div className="doctor-profile-onboarding-actions"><button type="button" className="doctor-profile-primary" onClick={() => void saveInitialProfessionalProfile()} disabled={savingOnboarding}>{savingOnboarding ? 'Saving…' : 'Save Professional Profile'}</button>{saveError ? <p className="doctor-profile-save-error" role="alert">{saveError}</p> : null}{saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}</div> : null}
         </section>
 
         <section className="doctor-profile-card">
@@ -366,11 +367,9 @@ export function DoctorProfilePage() {
             <div><h3>About Me</h3><p>Write a short description about yourself and your approach to patient care.</p></div>
           </div>
           <label className="doctor-profile-full-label">Profile Description
-            <textarea maxLength={2000} placeholder="Write a short professional description that patients can read on your public webpage." value={description} onChange={(event) => setDescription(event.target.value)} disabled={onboardingComplete === null || onboardingComplete === true} />
-            <span className="doctor-profile-field-footer"><small>{isOnboarding ? 'Optional during initial setup. You can complete it before publishing later.' : 'This description is part of your professional profile.'}</small><small>Characters: {description.length}/2000</small></span>
+            <textarea maxLength={2000} placeholder="Write a short professional description that patients can read on your public webpage." value={description} onChange={(event) => setDescription(event.target.value)} disabled={!isOnboarding} />
+            <span className="doctor-profile-field-footer"><small>{isOnboarding ? 'Optional during onboarding.' : 'Profile editing after onboarding will use the protected edit workflow.'}</small><small>Characters: {description.length}/2000</small></span>
           </label>
-          {isOnboarding ? <div className="doctor-profile-onboarding-actions">{saveError ? <p className="doctor-profile-save-error" role="alert">{saveError}</p> : null}{saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}<button type="button" className="doctor-profile-primary" onClick={() => void saveInitialProfessionalProfile()} disabled={savingOnboarding}>{savingOnboarding ? 'Saving…' : 'Save Professional Profile'}</button></div> : null}
-          {!isOnboarding && saveMessage ? <p className="doctor-profile-save-success" role="status">{saveMessage}</p> : null}
         </section>
 
         <section className="doctor-profile-card doctor-profile-public-card">
@@ -391,9 +390,9 @@ export function DoctorProfilePage() {
           </div>
           <div className="doctor-profile-actions">
             <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={!isPublished || !profileUrl}><Icon name="eye" /> Preview Webpage</button>
-            <button type="button" className="doctor-profile-primary" title="Publishing is not connected yet" disabled={isOnboarding}>◎ Publish Webpage</button>
-            <button type="button" className="doctor-profile-secondary" title="Doctor-profile QR generation is not connected yet" disabled={isOnboarding}><Icon name="qr" /> Generate QR</button>
-            <button type="button" className="doctor-profile-secondary" title="Calling-card printing is not connected yet" disabled={isOnboarding}><Icon name="print" /> Print Calling Card</button>
+            <button type="button" className="doctor-profile-primary" title="Publishing is not connected yet">◎ Publish Webpage</button>
+            <button type="button" className="doctor-profile-secondary" title="Doctor-profile QR generation is not connected yet"><Icon name="qr" /> Generate QR</button>
+            <button type="button" className="doctor-profile-secondary" title="Calling-card printing is not connected yet"><Icon name="print" /> Print Calling Card</button>
           </div>
         </section>
       </div>
@@ -402,13 +401,13 @@ export function DoctorProfilePage() {
         <section className="doctor-profile-side-card">
           <h3>Profile Completeness</h3>
           <div className="doctor-profile-progress-row">
-            <div className="doctor-profile-progress"><strong>{isOnboarding ? '20%' : '80%'}</strong></div>
-            <p>{isOnboarding ? 'Complete your required professional information to continue Doctor setup.' : 'Complete your profile to publish your professional webpage.'}</p>
+            <div className="doctor-profile-progress"><strong>80%</strong></div>
+            <p>Complete your profile to publish your professional webpage.</p>
           </div>
           <div className="doctor-profile-checklist">
-            {profileChecklist.map((item) => <div key={item}><span className="doctor-profile-check"><Icon name="check" /></span><span>{item}</span><em>{isOnboarding ? 'Pending' : 'Completed'}</em></div>)}
+            {profileChecklist.map((item) => <div key={item}><span className="doctor-profile-check"><Icon name="check" /></span><span>{item}</span><em>Completed</em></div>)}
           </div>
-          <div className="doctor-profile-tip"><strong>ⓘ &nbsp;{isOnboarding ? 'First setup' : 'Almost there!'}</strong><p>{isOnboarding ? 'Save your professional information first. Clinic setup follows after your Doctor profile exists.' : 'Add your clinics and services with pricing to complete your public profile.'}</p></div>
+          <div className="doctor-profile-tip"><strong>ⓘ &nbsp;Almost there!</strong><p>Add your clinics and services with pricing to complete your public profile.</p></div>
         </section>
 
         <section className="doctor-profile-side-card">
