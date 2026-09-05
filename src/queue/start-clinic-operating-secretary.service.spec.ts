@@ -32,7 +32,7 @@ type AuthorityResolver = {
       administrativeRestrictionStatus: AdministrativeRestrictionStatus;
     },
     serviceDate?: Date,
-  ) => Promise<string | null>;
+  ) => Promise<string | null | undefined>;
 };
 
 describe('StartClinicService operating secretary authority', () => {
@@ -59,7 +59,7 @@ describe('StartClinicService operating secretary authority', () => {
         accountStatus: UserAccountStatus.ACTIVE,
         administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
       }),
-    ).resolves.toBeNull();
+    ).resolves.toBeUndefined();
   });
 
   it('preserves an explicitly assigned Operating Secretary when the Doctor starts', async () => {
