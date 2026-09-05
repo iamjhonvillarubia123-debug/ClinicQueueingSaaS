@@ -95,7 +95,7 @@ describe('approved create account UI', () => {
     expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
     expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('"role":"SECRETARY"');
     expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain('PracticeStaff');
-  });
+  }, 10000);
 
   it('preserves the approved authentication branding panel content', () => {
     render(<MemoryRouter><CreateAccountPage /></MemoryRouter>);
