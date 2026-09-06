@@ -7,6 +7,7 @@ import {
   SubscriptionPurchaseStatus,
 } from '../../generated/prisma/client';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { DoctorClosureFinancialSettlementService } from './doctor-closure-financial-settlement.service';
 import { SubscriptionPeriodService } from './subscription-period.service';
 
@@ -15,6 +16,7 @@ describe('DoctorClosureFinancialSettlementService', () => {
 
   const transaction = {
     $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     subscriptionPurchase: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -22,15 +24,16 @@ describe('DoctorClosureFinancialSettlementService', () => {
     subscriptionPayment: {
       findFirst: jest.fn(),
     },
-    doctorFinancialAccount: {
-      update: jest.fn(),
-    },
     subscriptionCreditEntry: {
       create: jest.fn(),
     },
   };
   const protectedPayload = {
     encrypt: jest.fn((value: string) => `enc:${value}`),
+  };
+  const mobileNumberService = {
+    normalize: jest.fn((value: string) => ({ canonical: value })),
+    hashCanonical: jest.fn((value: string) => `hash:${value}`),
   };
 
   beforeEach(async () => {
@@ -41,6 +44,10 @@ describe('DoctorClosureFinancialSettlementService', () => {
         {
           provide: ProtectedAccountPayloadService,
           useValue: protectedPayload,
+        },
+        {
+          provide: MobileNumberService,
+          useValue: mobileNumberService,
         },
       ],
     }).compile();
@@ -101,7 +108,7 @@ describe('DoctorClosureFinancialSettlementService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
-  it('credits only fully unused future monthly periods at historical purchase price and snapshots recovery email', async () => {
+  it('credits only fully unused future monthly periods at historical purchase price and snapshots recovery identity', async () => {
     const closedAt = new Date('2026-08-21T12:00:00.000Z');
     transaction.subscriptionPurchase.findMany.mockResolvedValue([
       {
@@ -117,13 +124,16 @@ describe('DoctorClosureFinancialSettlementService', () => {
         periodStart: new Date('2026-11-01T12:00:00.000Z'),
       },
     ]);
-    transaction.doctorFinancialAccount.update.mockResolvedValue({});
+    transaction.$executeRaw.mockResolvedValue(1);
     transaction.subscriptionCreditEntry.create.mockResolvedValue({});
 
     await expect(
       service.settle(transaction as unknown as Prisma.TransactionClient, {
         doctorFinancialAccountId: 'financial-1',
-        recoveryEmail: ' Doctor@Example.com ',
+        recoveryIdentity: {
+          type: 'EMAIL',
+          value: ' Doctor@Example.com ',
+        },
         closureCommandId: 'command-1',
         closedAt,
       }),
@@ -133,13 +143,11 @@ describe('DoctorClosureFinancialSettlementService', () => {
       creditedFuturePeriods: 4,
     });
 
-    expect(transaction.doctorFinancialAccount.update).toHaveBeenCalledWith({
-      where: { id: 'financial-1' },
-      data: {
-        recoveryEmailEncrypted: 'enc:doctor@example.com',
-        recoveryEmailHash: expect.any(String) as unknown,
-      },
-    });
+    expect(transaction.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(protectedPayload.encrypt).toHaveBeenCalledWith(
+      'doctor@example.com',
+      expect.stringContaining('recovery-identifier'),
+    );
     expect(transaction.subscriptionCreditEntry.create).toHaveBeenCalledTimes(1);
     expect(transaction.subscriptionCreditEntry.create).toHaveBeenCalledWith({
       data: {
