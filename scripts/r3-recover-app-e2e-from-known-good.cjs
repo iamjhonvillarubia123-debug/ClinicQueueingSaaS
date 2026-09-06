@@ -14,34 +14,84 @@ function gitShow(spec) {
   });
 }
 
-function transformEndpoint(content, endpoint, transform) {
+function transformRequestBodies(content, endpoint, transform) {
   const marker = `.post('${endpoint}')`;
   let cursor = 0;
   let output = '';
+
   while (true) {
     const start = content.indexOf(marker, cursor);
     if (start < 0) {
       output += content.slice(cursor);
       return output;
     }
+
     output += content.slice(cursor, start);
+    const sendStart = content.indexOf('.send({', start + marker.length);
     const nextPost = content.indexOf('.post(', start + marker.length);
-    const end = nextPost < 0 ? content.length : nextPost;
-    output += transform(content.slice(start, end));
-    cursor = end;
+
+    if (sendStart < 0 || (nextPost >= 0 && sendStart > nextPost)) {
+      output += content.slice(start, nextPost < 0 ? content.length : nextPost);
+      cursor = nextPost < 0 ? content.length : nextPost;
+      if (cursor >= content.length) return output;
+      continue;
+    }
+
+    const sendEnd = content.indexOf('})', sendStart);
+    if (sendEnd < 0 || (nextPost >= 0 && sendEnd > nextPost)) {
+      throw new Error(`Could not isolate request body for ${endpoint}. No file was written.`);
+    }
+
+    output += content.slice(start, sendStart);
+    output += transform(content.slice(sendStart, sendEnd + 2));
+    cursor = sendEnd + 2;
   }
 }
 
-function identifierRequests(block) {
-  return block
+function replaceEmailKey(body) {
+  return body
     .replace(/\.send\(\{ email, password \}\)/g, '.send({ identifier: email, password })')
     .replace(/\.send\(\{ email, password: ([^}\r\n]+) \}\)/g, '.send({ identifier: email, password: $1 })')
     .replace(/\.send\(\{ email: ([^,}\r\n]+), password \}\)/g, '.send({ identifier: $1, password })')
     .replace(/\.send\(\{ email: ([^,}\r\n]+), password: ([^}\r\n]+) \}\)/g, '.send({ identifier: $1, password: $2 })')
     .replace(/\.send\(\{ email \}\)/g, '.send({ identifier: email })')
     .replace(/\.send\(\{ email: (.+) \}\)/g, '.send({ identifier: $1 })')
-    .replace(/(\.send\(\{\r?\n[\s\S]*?\r?\n)([ \t]+)email,(\r?\n)/g, '$1$2identifier: email,$3')
-    .replace(/(\.send\(\{\r?\n[\s\S]*?\r?\n)([ \t]+)email: ([^,\r\n]+),(\r?\n)/g, '$1$2identifier: $3,$4');
+    .replace(/\n([ \t]+)email,(\r?\n)/g, '\n$1identifier: email,$2')
+    .replace(/\n([ \t]+)email: ([^,\r\n]+),(\r?\n)/g, '\n$1identifier: $2,$3');
+}
+
+function replaceRegistrationIdentity(body) {
+  return body
+    .replace(/\n([ \t]+)email,(\r?\n)([ \t]+)mobileNumber: '[^']+',/g, '\n$1identifier: email,$2')
+    .replace(/\n([ \t]+)email: ([^,\r\n]+),(\r?\n)([ \t]+)mobileNumber: '[^']+',/g, '\n$1identifier: $2,$3');
+}
+
+function assertNoEmailBody(content, endpoint) {
+  const marker = `.post('${endpoint}')`;
+  let cursor = 0;
+
+  while (true) {
+    const start = content.indexOf(marker, cursor);
+    if (start < 0) return;
+
+    const sendStart = content.indexOf('.send({', start + marker.length);
+    const nextPost = content.indexOf('.post(', start + marker.length);
+    if (sendStart < 0 || (nextPost >= 0 && sendStart > nextPost)) {
+      cursor = nextPost < 0 ? content.length : nextPost;
+      if (cursor >= content.length) return;
+      continue;
+    }
+
+    const sendEnd = content.indexOf('})', sendStart);
+    if (sendEnd < 0) throw new Error(`Could not inspect request body for ${endpoint}.`);
+    const body = content.slice(sendStart, sendEnd + 2);
+
+    if (/\bemail\s*[:,}]/.test(body)) {
+      throw new Error(`Obsolete email request remains for ${endpoint}. No file was written.`);
+    }
+
+    cursor = sendEnd + 2;
+  }
 }
 
 let content = gitShow(`${knownGoodCommit}:test/app.e2e-spec.ts`);
@@ -57,14 +107,10 @@ for (const endpoint of [
   '/doctor/account/reactivate',
   '/doctor/account/permanent-delete',
 ]) {
-  content = transformEndpoint(content, endpoint, identifierRequests);
+  content = transformRequestBodies(content, endpoint, replaceEmailKey);
 }
 
-content = transformEndpoint(content, '/auth/register', (block) =>
-  block
-    .replace(/([ \t]*)email,\r?\n\1mobileNumber: '[^']+',\r?\n/g, '$1identifier: email,\n')
-    .replace(/([ \t]*)email: ([^,\n]+),\r?\n\1mobileNumber: '[^']+',\r?\n/g, '$1identifier: $2,\n'),
-);
+content = transformRequestBodies(content, '/auth/register', replaceRegistrationIdentity);
 
 content = content
   .replace(/emailVerificationRequired/g, 'verificationRequired')
@@ -81,16 +127,7 @@ for (const endpoint of [
   '/doctor/account/reactivate',
   '/doctor/account/permanent-delete',
 ]) {
-  const marker = `.post('${endpoint}')`;
-  let start = content.indexOf(marker);
-  while (start >= 0) {
-    const nextPost = content.indexOf('.post(', start + marker.length);
-    const block = content.slice(start, nextPost < 0 ? content.length : nextPost);
-    if (/\.send\(\{ email(?:[, }])/.test(block) || /\n\s+email,\n/.test(block)) {
-      throw new Error(`Obsolete email request remains for ${endpoint}. No file was written.`);
-    }
-    start = content.indexOf(marker, start + marker.length);
-  }
+  assertNoEmailBody(content, endpoint);
 }
 
 fs.writeFileSync(target, content, 'utf8');
