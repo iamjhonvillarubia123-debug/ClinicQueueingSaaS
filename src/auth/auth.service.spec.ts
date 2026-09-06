@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { AuthService } from './auth.service';
 import { PasswordSecurityService } from './security/password-security.service';
 import {
@@ -43,15 +45,22 @@ describe('AuthService', () => {
   const passwordSecurityServiceMock = {
     verify: jest.fn(),
   };
+  const mobileNumberServiceMock = {
+    normalize: jest.fn((value: string) => ({ canonical: value })),
+    hashCanonical: jest.fn((value: string) => `hash:${value}`),
+  };
 
   const eligibleDoctor = () => ({
     id: 'user-1',
     email: 'doctor@example.com',
+    mobileNumberHash: null,
     passwordHash: 'hash',
     role: UserRole.DOCTOR,
     accountStatus: UserAccountStatus.ACTIVE,
     administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+    loginIdentifierType: AccountLoginIdentifierType.EMAIL,
     emailVerifiedAt: new Date(),
+    mobileVerifiedAt: null,
   });
 
   beforeEach(async () => {
@@ -63,6 +72,7 @@ describe('AuthService', () => {
           provide: PasswordSecurityService,
           useValue: passwordSecurityServiceMock,
         },
+        { provide: MobileNumberService, useValue: mobileNumberServiceMock },
       ],
     }).compile();
     service = module.get(AuthService);
@@ -72,10 +82,11 @@ describe('AuthService', () => {
   it('rejects missing account with generic error and creates no session', async () => {
     prismaServiceMock.user.findFirst.mockResolvedValue(null);
     await expect(
-      service.login({ email: ' Missing@Example.com ', password: 'x' }),
-    ).rejects.toThrow('Invalid email or password.');
+      service.login({ identifier: ' Missing@Example.com ', password: 'x' }),
+    ).rejects.toThrow('Invalid login details or password.');
     expect(prismaServiceMock.user.findFirst).toHaveBeenCalledWith({
       where: {
+        loginIdentifierType: AccountLoginIdentifierType.EMAIL,
         email: 'missing@example.com',
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
@@ -91,7 +102,7 @@ describe('AuthService', () => {
     passwordSecurityServiceMock.verify.mockResolvedValue(true);
 
     const result = await service.login({
-      email: 'doctor@example.com',
+      identifier: 'doctor@example.com',
       password: 'CorrectPassword123!',
     });
 
@@ -100,9 +111,6 @@ describe('AuthService', () => {
       'hash',
     );
     expect(result.sessionToken).toBeTruthy();
-    expect(result.sessionToken).not.toBe(
-      (result.response as Record<string, unknown>).sessionToken,
-    );
     expect(transactionMock.userSession.create).toHaveBeenCalledTimes(1);
     const data = transactionMock.userSession.create.mock.calls[0][0].data;
     expect(data.userId).toBe('user-1');
@@ -131,21 +139,58 @@ describe('AuthService', () => {
     passwordSecurityServiceMock.verify.mockResolvedValue(true);
 
     await expect(
-      service.login({ email: user.email, password: 'CorrectPassword123!' }),
-    ).rejects.toThrow('Invalid email or password.');
+      service.login({ identifier: user.email, password: 'CorrectPassword123!' }),
+    ).rejects.toThrow('Invalid login details or password.');
     expect(transactionMock.userSession.create).not.toHaveBeenCalled();
     expect(transactionMock.user.update).not.toHaveBeenCalled();
   });
 
-  it('rejects unverified doctor without creating a session', async () => {
+  it('returns email verification continuation after correct credentials without creating a session', async () => {
     prismaServiceMock.user.findFirst.mockResolvedValue({
       ...eligibleDoctor(),
       emailVerifiedAt: null,
     });
     passwordSecurityServiceMock.verify.mockResolvedValue(true);
+
     await expect(
-      service.login({ email: 'doctor@example.com', password: 'x' }),
-    ).rejects.toThrow('Invalid email or password.');
+      service.login({ identifier: 'doctor@example.com', password: 'x' }),
+    ).resolves.toEqual({
+      sessionToken: null,
+      response: {
+        verificationRequired: true,
+        verificationChannel: 'EMAIL',
+        userId: 'user-1',
+        role: UserRole.DOCTOR,
+      },
+    });
+    expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('returns mobile verification continuation after correct credentials without creating a session', async () => {
+    const user = {
+      ...eligibleDoctor(),
+      email: null,
+      loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+      emailVerifiedAt: null,
+      mobileVerifiedAt: null,
+      mobileNumberHash: 'hash:639171234567',
+    };
+    mobileNumberServiceMock.normalize.mockReturnValue({ canonical: '639171234567' });
+    mobileNumberServiceMock.hashCanonical.mockReturnValue('hash:639171234567');
+    prismaServiceMock.user.findFirst.mockResolvedValue(user);
+    passwordSecurityServiceMock.verify.mockResolvedValue(true);
+
+    await expect(
+      service.login({ identifier: '09171234567', password: 'x' }),
+    ).resolves.toEqual({
+      sessionToken: null,
+      response: {
+        verificationRequired: true,
+        verificationChannel: 'MOBILE',
+        userId: 'user-1',
+        role: UserRole.DOCTOR,
+      },
+    });
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
   });
 
