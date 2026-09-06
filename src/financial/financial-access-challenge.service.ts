@@ -1,21 +1,23 @@
-import { createHash, randomInt } from 'crypto';
+import { createHash, randomInt, randomUUID } from 'crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
   NotificationChannel,
   NotificationOutboxStatus,
   NotificationType,
   Prisma,
-  UserAccountStatus,
 } from '../../generated/prisma/client';
+import { parseAccountIdentifier } from '../auth/security/account-identifier';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const OUTBOX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const RECIPIENT_EMAIL_PURPOSE = 'financial-access:recipient-email';
+const RECIPIENT_IDENTIFIER_PURPOSE = 'financial-access:recipient-identifier';
 
 @Injectable()
 export class FinancialAccessChallengeService {
@@ -24,63 +26,113 @@ export class FinancialAccessChallengeService {
     private readonly passwordSecurity: PasswordSecurityService,
     private readonly protectedPayload: ProtectedAccountPayloadService,
     private readonly notificationPayload: NotificationPayloadService,
+    private readonly mobileNumberService: MobileNumberService,
   ) {}
 
-  async request(rawEmail: string, now = new Date()) {
-    const email = this.normalizeEmail(rawEmail);
-    const recoveryEmailHash = this.sha256(email);
+  async request(rawIdentifier: string, now = new Date()) {
+    const identifier = parseAccountIdentifier(
+      rawIdentifier,
+      this.mobileNumberService,
+    );
+    const recoveryIdentifierHash =
+      identifier.type === 'EMAIL'
+        ? this.sha256(identifier.normalized)
+        : identifier.mobileHash;
 
     await this.prisma.$transaction(async (transaction) => {
-      const eligible = await transaction.doctorFinancialAccount.findFirst({
-        where: {
-          recoveryEmailHash,
-          doctorUser: { accountStatus: UserAccountStatus.PERMANENTLY_CLOSED },
-        },
-        select: { id: true },
-      });
+      const eligibleRows = await transaction.$queryRaw<Array<{ id: string }>>(
+        Prisma.sql`
+          SELECT dfa."id"
+          FROM "DoctorFinancialAccount" dfa
+          INNER JOIN "User" u ON u."id" = dfa."doctorUserId"
+          WHERE dfa."recoveryIdentifierType" = CAST(${identifier.type} AS "LoginIdentifierType")
+            AND dfa."recoveryIdentifierHash" = ${recoveryIdentifierHash}
+            AND u."accountStatus" = 'PERMANENTLY_CLOSED'
+          LIMIT 1
+        `,
+      );
 
-      await transaction.financialAccessChallenge.updateMany({
-        where: {
-          recoveryEmailHash,
-          verifiedAt: null,
-          consumedAt: null,
-          invalidatedAt: null,
-        },
-        data: { invalidatedAt: now },
-      });
+      await transaction.$executeRaw(
+        Prisma.sql`
+          UPDATE "FinancialAccessChallenge"
+          SET "invalidatedAt" = ${now}
+          WHERE "recoveryIdentifierType" = CAST(${identifier.type} AS "LoginIdentifierType")
+            AND "recoveryIdentifierHash" = ${recoveryIdentifierHash}
+            AND "verifiedAt" IS NULL
+            AND "consumedAt" IS NULL
+            AND "invalidatedAt" IS NULL
+        `,
+      );
 
-      if (!eligible) return;
+      if (!eligibleRows[0]) return;
 
       const rawCode = randomInt(100000, 1000000).toString();
       const codeHash = await this.passwordSecurity.hash(rawCode);
-      const recipientEmailEncrypted = this.protectedPayload.encrypt(
-        email,
-        RECIPIENT_EMAIL_PURPOSE,
+      const challengeId = randomUUID();
+      const recipientIdentifierEncrypted = this.protectedPayload.encrypt(
+        identifier.normalized,
+        `${RECIPIENT_IDENTIFIER_PURPOSE}:${identifier.type.toLowerCase()}`,
       );
-      const challenge = await transaction.financialAccessChallenge.create({
-        data: {
-          recoveryEmailHash,
-          recipientEmailEncrypted,
-          codeHash,
-          expiresAt: new Date(now.getTime() + CHALLENGE_TTL_MS),
-          createdAt: now,
-        },
-        select: { id: true },
-      });
+      const legacyRecipientEmailEncrypted =
+        identifier.type === 'EMAIL'
+          ? this.protectedPayload.encrypt(
+              identifier.normalized,
+              RECIPIENT_EMAIL_PURPOSE,
+            )
+          : null;
+      const legacyRecoveryEmailHash =
+        identifier.type === 'EMAIL'
+          ? this.sha256(identifier.normalized)
+          : null;
+      const expiresAt = new Date(now.getTime() + CHALLENGE_TTL_MS);
+
+      await transaction.$executeRaw(
+        Prisma.sql`
+          INSERT INTO "FinancialAccessChallenge" (
+            "id",
+            "recoveryEmailHash",
+            "recipientEmailEncrypted",
+            "recoveryIdentifierType",
+            "recoveryIdentifierHash",
+            "recipientIdentifierEncrypted",
+            "codeHash",
+            "expiresAt",
+            "attemptCount",
+            "createdAt"
+          ) VALUES (
+            ${challengeId},
+            ${legacyRecoveryEmailHash},
+            ${legacyRecipientEmailEncrypted},
+            CAST(${identifier.type} AS "LoginIdentifierType"),
+            ${recoveryIdentifierHash},
+            ${recipientIdentifierEncrypted},
+            ${codeHash},
+            ${expiresAt},
+            0,
+            ${now}
+          )
+        `,
+      );
 
       const deliveryIdentityKey = this.sha256(
-        `${NotificationType.FINANCIAL_ACCESS_VERIFICATION}|${challenge.id}`,
+        `${NotificationType.FINANCIAL_ACCESS_VERIFICATION}|${challengeId}`,
       );
       await transaction.notificationOutbox.create({
         data: {
           deliveryIdentityKey,
           notificationType: NotificationType.FINANCIAL_ACCESS_VERIFICATION,
-          channel: NotificationChannel.EMAIL,
+          channel:
+            identifier.type === 'EMAIL'
+              ? NotificationChannel.EMAIL
+              : NotificationChannel.SMS,
           status: NotificationOutboxStatus.PENDING,
           practiceLocationId: null,
-          financialAccessChallengeId: challenge.id,
-          recipientMobileEncrypted: null,
-          recipientEmailEncrypted,
+          financialAccessChallengeId: challengeId,
+          recipientMobileEncrypted:
+            identifier.type === 'MOBILE'
+              ? this.mobileNumberService.encrypt(identifier.normalized)
+              : null,
+          recipientEmailEncrypted: legacyRecipientEmailEncrypted,
           messageBodyEncrypted: this.notificationPayload.encryptMessage(
             `Your financial access verification code is ${rawCode}.`,
           ),
@@ -162,10 +214,6 @@ export class FinancialAccessChallengeService {
       });
       return { challengeId: verified.id, verifiedAt: verified.verifiedAt };
     });
-  }
-
-  private normalizeEmail(rawEmail: string): string {
-    return rawEmail.trim().toLowerCase();
   }
 
   private sha256(value: string): string {
