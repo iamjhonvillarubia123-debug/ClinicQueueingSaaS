@@ -4,6 +4,7 @@ import {
   ArrayUnique,
   IsBoolean,
   IsArray,
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -26,21 +27,20 @@ export class CreateSecretaryInvitationDto {
 
   @Transform(({ value, obj }: { value: unknown; obj: Record<string, unknown> }) =>
     typeof value === 'string' && value.trim()
-      ? value.trim()
+      ? value.trim().toLowerCase()
       : typeof obj.email === 'string' && obj.email.trim()
-        ? obj.email.trim()
-        : typeof obj.mobileNumber === 'string'
-          ? obj.mobileNumber.trim()
-          : value,
+        ? obj.email.trim().toLowerCase()
+        : value,
   )
-  @IsString()
+  @IsEmail()
   @IsNotEmpty()
   @MaxLength(255)
   identifier!: string;
 
   // Transitional wire compatibility for the existing clinic staff container.
   // The service ignores these profile fields and derives the Secretary's
-  // authoritative identity from the matched User account.
+  // authoritative identity from the matched User account. Mobile-only
+  // invitation input is intentionally not accepted.
   @IsOptional() @IsString() @MaxLength(100) firstName!: string;
   @IsOptional() @IsString() @MaxLength(100) lastName!: string;
   @IsOptional() @IsString() @MaxLength(255) email!: string;
@@ -83,6 +83,9 @@ export class CreateSecretaryInvitationDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   toServiceDate?: string;
 
+  // This is the current Doctor's re-authentication secret when replacement
+  // or Cancel Clinic Day authorization requires it. It is never a Secretary
+  // credential.
   @IsOptional()
   @IsString()
   @IsNotEmpty()
