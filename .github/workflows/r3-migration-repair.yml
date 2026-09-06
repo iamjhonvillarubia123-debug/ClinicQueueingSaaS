@@ -22,10 +22,6 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/r3-repair-financial-identity.mjs
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npx prisma validate
-      - run: npm run typecheck
       - name: Commit repair
         run: |
           git config user.name "github-actions[bot]"
