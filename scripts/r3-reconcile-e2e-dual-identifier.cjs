@@ -10,6 +10,7 @@ const targets = [
   'test/account-security-closure.e2e-spec.ts',
   'test/r1-auth-role-boundary.e2e-spec.ts',
   'test/r1-secretary-zero-assignment-account.e2e-spec.ts',
+  'test/rate-limit.e2e-spec.ts',
 ];
 
 function transformEndpoint(content, endpoint, transform) {
@@ -33,11 +34,13 @@ function transformEndpoint(content, endpoint, transform) {
 function identifierRequests(block) {
   return block
     .replace(/\.send\(\{ email, password \}\)/g, '.send({ identifier: email, password })')
-    .replace(/\.send\(\{ email, password: ([^}]+) \}\)/g, '.send({ identifier: email, password: $1 })')
-    .replace(/\.send\(\{ email: ([^,}]+), password \}\)/g, '.send({ identifier: $1, password })')
-    .replace(/\.send\(\{ email: ([^,}]+), password: ([^}]+) \}\)/g, '.send({ identifier: $1, password: $2 })')
+    .replace(/\.send\(\{ email, password: ([^}\r\n]+) \}\)/g, '.send({ identifier: email, password: $1 })')
+    .replace(/\.send\(\{ email: ([^,}\r\n]+), password \}\)/g, '.send({ identifier: $1, password })')
+    .replace(/\.send\(\{ email: ([^,}\r\n]+), password: ([^}\r\n]+) \}\)/g, '.send({ identifier: $1, password: $2 })')
     .replace(/\.send\(\{ email \}\)/g, '.send({ identifier: email })')
-    .replace(/\.send\(\{ email: ([^}]+) \}\)/g, '.send({ identifier: $1 })');
+    .replace(/\.send\(\{ email: (.+) \}\)/g, '.send({ identifier: $1 })')
+    .replace(/(\.send\(\{\r?\n[\s\S]*?\r?\n)([ \t]+)email,(\r?\n)/g, '$1$2identifier: email,$3')
+    .replace(/(\.send\(\{\r?\n[\s\S]*?\r?\n)([ \t]+)email: ([^,\r\n]+),(\r?\n)/g, '$1$2identifier: $3,$4');
 }
 
 for (const relativePath of targets) {
@@ -73,12 +76,23 @@ for (const relativePath of targets) {
 
   // Legacy /doctor/register is an onboarding compatibility endpoint with its own DTO. Leave it unchanged.
 
-  // Secretary workspace now deliberately returns the account summary as well as authority collections.
+  // Secretary workspace deliberately returns account identity plus authority collections.
   if (relativePath === 'test/r1-secretary-password-reset-parity.e2e-spec.ts') {
     content = content.replace(
       "expect(workspace.body).toEqual({ clinics: [], invitations: [] });",
       "expect(workspace.body).toEqual({\n      account: {\n        firstName: 'Reset',\n        lastName: 'Secretary',\n        email,\n        mobileNumber: '+639171234567',\n      },\n      clinics: [],\n      invitations: [],\n    });",
     );
+  }
+
+  if (relativePath === 'test/r1-secretary-disable-reactivate.e2e-spec.ts') {
+    content = content.replace(
+      "expect(workspace.body).toEqual({ clinics: [], invitations: [] });",
+      "expect(workspace.body).toEqual({\n      account: {\n        firstName: 'Maria',\n        lastName: 'Secretary',\n        email,\n        mobileNumber: '+639171234567',\n      },\n      clinics: [],\n      invitations: [],\n    });",
+    );
+  }
+
+  if (relativePath === 'test/r1-secretary-zero-assignment-account.e2e-spec.ts') {
+    content = content.replace("mobileNumber: '09171234567',", 'mobileNumber: null,');
   }
 
   fs.writeFileSync(filePath, content, 'utf8');
@@ -88,13 +102,18 @@ for (const relativePath of targets) {
 // Endpoint-aware guards. They intentionally do not flag legacy /doctor/register or Secretary lifecycle DTOs.
 for (const relativePath of targets) {
   const content = fs.readFileSync(path.join(root, relativePath), 'utf8');
-  for (const endpoint of ['/auth/login', '/auth/request-password-reset']) {
+  for (const endpoint of [
+    '/auth/login',
+    '/auth/request-password-reset',
+    '/doctor/account/reactivate',
+    '/doctor/account/permanent-delete',
+  ]) {
     const marker = `.post('${endpoint}')`;
     let start = content.indexOf(marker);
     while (start >= 0) {
       const nextPost = content.indexOf('.post(', start + marker.length);
       const block = content.slice(start, nextPost < 0 ? content.length : nextPost);
-      if (/\.send\(\{ email(?:[, }])/.test(block)) {
+      if (/\.send\(\{ email(?:[, }])/.test(block) || /\n\s+email,\n/.test(block)) {
         throw new Error(`${relativePath}: obsolete email request remains for ${endpoint}`);
       }
       start = content.indexOf(marker, start + marker.length);
