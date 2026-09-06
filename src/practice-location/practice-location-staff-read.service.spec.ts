@@ -81,7 +81,7 @@ describe('PracticeLocationStaffReadService', () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
-  it('returns active verified Secretary accounts as eligible existing candidates', async () => {
+  it('returns active Secretaries with a verified primary login identity as eligible existing candidates', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -106,7 +106,16 @@ describe('PracticeLocationStaffReadService', () => {
         where: expect.objectContaining({
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
-          emailVerifiedAt: { not: null },
+          OR: [
+            {
+              loginIdentifierType: 'EMAIL',
+              emailVerifiedAt: { not: null },
+            },
+            {
+              loginIdentifierType: 'MOBILE',
+              mobileVerifiedAt: { not: null },
+            },
+          ],
           practiceStaffAssignments: {
             some: {
               disconnectedAt: null,
