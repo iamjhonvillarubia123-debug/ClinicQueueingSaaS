@@ -77,7 +77,7 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
         <h2>Assign Secretary</h2>
         <p>Choose how you want to add or assign a Secretary to {data.clinic.name}.</p>
         <button type="button" className="staff-choice-card is-selected" onClick={() => { setMode('EXISTING'); setStep(2); }}><b>Assign Existing Secretary</b><span>Assign a Secretary who already has an account in the system.</span></button>
-        <button type="button" className="staff-choice-card" onClick={() => { setMode('INVITE'); setStep(2); }}><b>Invite Secretary to Clinic</b><span>Send a clinic invitation to an existing Secretary account.</span></button>
+        <button type="button" className="staff-choice-card" aria-label="Invite New Secretary to Clinic" onClick={() => { setMode('INVITE'); setStep(2); }}><b>Invite Secretary to Clinic</b><span>Send a clinic invitation to an existing Secretary account.</span></button>
       </> : null}
       {step === 2 && mode === 'EXISTING' ? <>
         <h2>Assign Existing Secretary</h2>
@@ -128,7 +128,7 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
       </> : null}
       {message ? <div className={`staff-drawer-message${messageIsError ? ' is-error' : ''}`} role={messageIsError ? 'alert' : 'status'}>{message}</div> : null}
       {accountEmailCorrectionVisible ? (
-        <div className="staff-invite-email-correction">
+        <div className="staff-invite-fields">
           <label>
             Secretary Email Address
             <input
@@ -137,7 +137,7 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
               onChange={(event) => setInvite({ ...invite, email: event.target.value })}
             />
           </label>
-          <button type="button" className="is-primary" disabled={pending || !invite.email.trim()} onClick={submit}>
+          <button type="button" className="clinic-staff-primary-button is-full" disabled={pending || !invite.email.trim()} onClick={submit}>
             {pending ? 'Retrying…' : 'Retry Invitation'}
           </button>
         </div>
