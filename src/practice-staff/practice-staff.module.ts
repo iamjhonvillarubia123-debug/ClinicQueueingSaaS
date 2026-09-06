@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module';
+import { NotificationModule } from '../notification/notification.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 
 import { ClinicSecretaryAuthorityService } from './clinic-secretary-authority.service';
 import { PracticeStaffService } from './practice-staff.service';
@@ -16,7 +18,7 @@ import { SecretaryWorkspaceController } from './secretary-workspace.controller';
 import { SecretaryWorkspaceService } from './secretary-workspace.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, NotificationModule, MobileNumberModule],
   providers: [
     PracticeStaffService,
     ClinicSecretaryAuthorityService,
