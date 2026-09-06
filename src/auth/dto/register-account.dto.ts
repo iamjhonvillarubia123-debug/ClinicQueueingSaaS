@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
 import {
-  IsEmail,
   IsIn,
   IsNotEmpty,
   IsString,
@@ -28,16 +27,10 @@ export class RegisterAccountDto {
   lastName!: string;
 
   @Transform(trimString)
-  @IsEmail()
-  @IsNotEmpty()
-  @MaxLength(255)
-  email!: string;
-
-  @Transform(trimString)
   @IsString()
   @IsNotEmpty()
-  @MaxLength(30)
-  mobileNumber!: string;
+  @MaxLength(255)
+  identifier!: string;
 
   @IsString()
   @IsNotEmpty()
