@@ -47,7 +47,7 @@ export function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      const result = await login(identifier, password);
+      await login(identifier, password);
       if (rememberMe) {
         localStorage.setItem(
           'clinic-queueing.remembered-identifier',
@@ -57,21 +57,6 @@ export function LoginPage() {
         localStorage.removeItem('clinic-queueing.remembered-identifier');
       }
       localStorage.removeItem('clinic-queueing.remembered-email');
-
-      if ('verificationRequired' in result && result.verificationRequired) {
-        const params = new URLSearchParams({
-          role: result.role,
-        });
-        if (result.verificationChannel === 'MOBILE') {
-          params.set('userId', result.userId);
-          navigate(`/registration/verify-mobile?${params.toString()}`, { replace: true });
-        } else {
-          params.set('email', identifier.trim());
-          navigate(`/registration/check-email?${params.toString()}`, { replace: true });
-        }
-        return;
-      }
-
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from || '/app', { replace: true });
     } catch (caught) {
