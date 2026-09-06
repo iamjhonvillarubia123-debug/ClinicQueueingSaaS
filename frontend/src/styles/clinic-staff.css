@@ -1,26 +1,7 @@
-.clinic-staff-shell {
-  display: grid;
-  min-height: 520px;
-}
-
-.clinic-staff-shell.has-drawer {
-  grid-template-columns: minmax(0, 1fr) 390px;
-  gap: 20px;
-}
-
-.clinic-staff-main {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-}
-
-.clinic-staff-intro {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-}
-
+.clinic-staff-shell { display: grid; min-height: 520px; }
+.clinic-staff-shell.has-drawer { grid-template-columns: minmax(0, 1fr) 390px; gap: 20px; }
+.clinic-staff-main { display: grid; gap: 14px; min-width: 0; }
+.clinic-staff-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; }
 .clinic-staff-intro h2 { margin: 0; font-size: 22px; }
 .clinic-staff-intro p { margin: 5px 0 0; color: #586270; font-size: 12px; }
 .global-secretaries-page { display: grid; gap: 18px; padding: 4px 0 30px; }
@@ -135,7 +116,14 @@
 .staff-candidate-list span { display: grid; gap: 3px; }
 .staff-candidate-list small { color: #5d6875; font-size: 8px; }
 .staff-bundle-list { display: grid; gap: 8px; }
-.staff-bundle-list label, .staff-radio { padding: 11px; border: 1px solid #dce2e8; border-radius: 6px; font-size: 10px; }
+.staff-bundle-item { border: 1px solid #dce2e8; border-radius: 6px; overflow: hidden; }
+.staff-bundle-row { display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; }
+.staff-bundle-row label { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 10px 11px; font-size: 10px; }
+.staff-bundle-expand { width: 34px; height: 34px; border: 0; background: transparent; color: #53606e; font-size: 15px; }
+.staff-bundle-expand:hover { background: #f3f5f7; color: #111; }
+.staff-bundle-details { padding: 0 11px 10px 34px; color: #5d6875; font-size: 9px; line-height: 1.45; }
+.staff-bundle-details span { display: block; }
+.staff-radio { padding: 11px; border: 1px solid #dce2e8; border-radius: 6px; font-size: 10px; }
 .staff-replacement-warning, .staff-neutral-note, .staff-drawer-message { margin-top: 14px; padding: 12px; border-radius: 6px; background: #fff7e8; color: #654c20; font-size: 9px; line-height: 1.5; }
 .staff-replacement-warning label { display: grid; gap: 5px; margin-top: 10px; }
 .staff-replacement-warning input, .staff-date-fields input { min-height: 34px; border: 1px solid #ccd4dd; border-radius: 5px; padding: 0 8px; }
