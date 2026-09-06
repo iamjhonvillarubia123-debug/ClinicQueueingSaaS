@@ -59,7 +59,9 @@ describe('DoctorLifecycleService', () => {
     encryptMessage: jest.fn((value: string) => `notification:${value}`),
   };
 
-  const currentEmailDoctor = (status = UserAccountStatus.ACTIVE) => ({
+  const currentEmailDoctor = (
+    status: UserAccountStatus = UserAccountStatus.ACTIVE,
+  ) => ({
     id: 'doctor-1',
     email: 'doctor@example.com',
     mobileNumber: null,
