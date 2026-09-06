@@ -1,10 +1,15 @@
-import { IsEmail, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+
+const trimString = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' ? value.trim() : value;
 
 export class LoginDto {
-  @IsEmail()
+  @Transform(trimString)
+  @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  email!: string;
+  identifier!: string;
 
   @IsString()
   @IsNotEmpty()
