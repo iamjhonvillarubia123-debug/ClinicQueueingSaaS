@@ -33,9 +33,11 @@ export class PracticeLocationStaffReadService {
                 lastName: true,
                 email: true,
                 mobileNumber: true,
+                loginIdentityType: true,
                 role: true,
                 accountStatus: true,
                 emailVerifiedAt: true,
+                mobileVerifiedAt: true,
               },
             },
             authorityBundles: {
@@ -87,7 +89,10 @@ export class PracticeLocationStaffReadService {
       where: {
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
-        emailVerifiedAt: { not: null },
+        OR: [
+          { loginIdentityType: 'EMAIL', emailVerifiedAt: { not: null } },
+          { loginIdentityType: 'MOBILE', mobileVerifiedAt: { not: null } },
+        ],
         practiceStaffAssignments: {
           some: {
             disconnectedAt: null,
@@ -119,7 +124,7 @@ export class PracticeLocationStaffReadService {
           assignment.staffRole === 'SECRETARY' &&
           assignment.user.role === 'SECRETARY' &&
           assignment.user.accountStatus === 'ACTIVE' &&
-          assignment.user.emailVerifiedAt !== null,
+          this.hasVerifiedPrimaryIdentity(assignment.user),
         isClinicSecretary:
           assignment.id === location.currentRegularPracticeStaffId,
         assignmentType:
@@ -170,6 +175,17 @@ export class PracticeLocationStaffReadService {
     serviceDateInput: string,
   ) {
     const serviceDate = this.parseServiceDate(serviceDateInput);
+    const staffUserSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      loginIdentityType: true,
+      role: true,
+      accountStatus: true,
+      emailVerifiedAt: true,
+      mobileVerifiedAt: true,
+    } as const;
     const location = await this.prisma.practiceLocation.findFirst({
       where: { id: practiceLocationId, doctorProfile: { userId } },
       select: {
@@ -183,17 +199,7 @@ export class PracticeLocationStaffReadService {
             isActive: true,
             createdAt: true,
             updatedAt: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                role: true,
-                accountStatus: true,
-                emailVerifiedAt: true,
-              },
-            },
+            user: { select: staffUserSelect },
           },
         },
         staffAssignments: {
@@ -205,17 +211,7 @@ export class PracticeLocationStaffReadService {
             isActive: true,
             createdAt: true,
             updatedAt: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                role: true,
-                accountStatus: true,
-                emailVerifiedAt: true,
-              },
-            },
+            user: { select: staffUserSelect },
           },
         },
         clinicDays: {
@@ -232,17 +228,7 @@ export class PracticeLocationStaffReadService {
                 isActive: true,
                 createdAt: true,
                 updatedAt: true,
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true,
-                    role: true,
-                    accountStatus: true,
-                    emailVerifiedAt: true,
-                  },
-                },
+                user: { select: staffUserSelect },
               },
             },
           },
@@ -289,10 +275,12 @@ export class PracticeLocationStaffReadService {
       id: string;
       firstName: string;
       lastName: string;
-      email: string;
+      email: string | null;
+      loginIdentityType: 'EMAIL' | 'MOBILE';
       role: string;
       accountStatus: string;
       emailVerifiedAt: Date | null;
+      mobileVerifiedAt: Date | null;
     };
   }) {
     return {
@@ -309,10 +297,20 @@ export class PracticeLocationStaffReadService {
         staff.staffRole === 'SECRETARY' &&
         staff.user.role === 'SECRETARY' &&
         staff.user.accountStatus === 'ACTIVE' &&
-        staff.user.emailVerifiedAt !== null,
+        this.hasVerifiedPrimaryIdentity(staff.user),
       assignedAt: staff.createdAt,
       updatedAt: staff.updatedAt,
     };
+  }
+
+  private hasVerifiedPrimaryIdentity(user: {
+    loginIdentityType: 'EMAIL' | 'MOBILE';
+    emailVerifiedAt: Date | null;
+    mobileVerifiedAt: Date | null;
+  }): boolean {
+    return user.loginIdentityType === 'EMAIL'
+      ? user.emailVerifiedAt !== null
+      : user.mobileVerifiedAt !== null;
   }
 
   private parseServiceDate(value: string): Date {
