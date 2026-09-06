@@ -31,12 +31,24 @@ const replacements = [
     ".post('/auth/register')\n      .send({\n        firstName: 'Jane',\n        lastName: 'Doe',\n        identifier: email,",
   ],
   [
-    '.post(\'/auth/login\')\n      .send({ email, password })',
-    '.post(\'/auth/login\')\n      .send({ identifier: email, password })',
+    ".post('/auth/login')\n      .send({ email, password })",
+    ".post('/auth/login')\n      .send({ identifier: email, password })",
   ],
   [
-    '.post(\'/auth/request-password-reset\')\n      .send({ email })',
-    '.post(\'/auth/request-password-reset\')\n      .send({ identifier: email })',
+    ".post('/auth/login')\n      .send({ email, password: oldPassword })",
+    ".post('/auth/login')\n      .send({ identifier: email, password: oldPassword })",
+  ],
+  [
+    ".post('/auth/login')\n      .send({ email, password: newPassword })",
+    ".post('/auth/login')\n      .send({ identifier: email, password: newPassword })",
+  ],
+  [
+    ".post('/auth/login').send({ email, password })",
+    ".post('/auth/login').send({ identifier: email, password })",
+  ],
+  [
+    ".post('/auth/request-password-reset')\n      .send({ email })",
+    ".post('/auth/request-password-reset')\n      .send({ identifier: email })",
   ],
   [
     ".post('/doctor/account/permanent-delete')\n      .set('Idempotency-Key', idempotencyKey)\n      .send({\n        email,",
@@ -49,12 +61,9 @@ const replacements = [
 ];
 
 for (const [from, to] of replacements) {
-  if (!repaired.includes(from)) {
-    throw new Error(
-      `Expected known-good request shape not found: ${from.split('\n')[0]}. No file was written.`,
-    );
+  if (repaired.includes(from)) {
+    repaired = repaired.replaceAll(from, to);
   }
-  repaired = repaired.replaceAll(from, to);
 }
 
 repaired = repaired
@@ -66,6 +75,17 @@ if (repairedTestCount !== 11) {
   throw new Error(
     `Recovered file should still contain 11 tests, found ${repairedTestCount}. No file was written.`,
   );
+}
+
+const remainingLoginEmailBodies = [
+  ".send({ email, password })",
+  ".send({ email, password: oldPassword })",
+  ".send({ email, password: newPassword })",
+];
+for (const stale of remainingLoginEmailBodies) {
+  if (repaired.includes(stale)) {
+    throw new Error(`Stale auth login request remains: ${stale}. No file was written.`);
+  }
 }
 
 fs.writeFileSync(target, repaired, 'utf8');
