@@ -6,7 +6,9 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
+  IsString,
   MaxLength,
   Matches,
   ValidateIf,
@@ -60,6 +62,12 @@ export class UpdateSecretaryInvitationDto {
   )
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   toServiceDate?: string;
+
+  // Current Doctor re-authentication secret. It is never a Secretary credential.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  password?: string;
 
   @IsOptional()
   @IsBoolean()
