@@ -129,7 +129,16 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
     expect(profile.body).toEqual({ userId, role: 'SECRETARY' });
 
     const workspace = await browser.get('/secretary/workspace').expect(200);
-    expect(workspace.body).toEqual({ clinics: [], invitations: [] });
+    expect(workspace.body).toEqual({
+      account: {
+        firstName: 'Maria',
+        lastName: 'Secretary',
+        email,
+        mobileNumber: '09171234567',
+      },
+      clinics: [],
+      invitations: [],
+    });
 
     expect(await prisma.practiceStaff.count({ where: { userId } })).toBe(0);
   });
