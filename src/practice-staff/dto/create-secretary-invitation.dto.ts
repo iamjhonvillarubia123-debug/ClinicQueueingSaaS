@@ -3,7 +3,6 @@ import {
   ArrayUnique,
   IsBoolean,
   IsArray,
-  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -24,18 +23,19 @@ export enum SecretaryInvitationAssignmentType {
 export class CreateSecretaryInvitationDto {
   @IsUUID() @IsNotEmpty() practiceLocationId!: string;
 
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   identifier!: string;
 
-  // Transitional compatibility fields for the superseded email-only service.
-  // New API callers do not provide these; the dual-identity service derives
-  // all Secretary identity data from the matched verified User account.
+  // Transitional wire compatibility for the existing clinic staff container.
+  // The dual-identity service ignores profile data and derives the Secretary's
+  // authoritative identity from the matched User account.
   @IsOptional() @IsString() @MaxLength(100) firstName!: string;
   @IsOptional() @IsString() @MaxLength(100) lastName!: string;
-  @IsOptional() @IsEmail() @MaxLength(255) email!: string;
-  @IsOptional() @IsString() @MaxLength(30) mobileNumber!: string;
+  @IsOptional() @IsString() @MaxLength(255) email!: string;
+  @IsOptional() @IsString() @MaxLength(255) mobileNumber!: string;
 
   @IsEnum(SecretaryInvitationAssignmentType)
   assignmentType!: SecretaryInvitationAssignmentType;
