@@ -67,6 +67,15 @@ export class AuthController {
   ) {
     const result = await this.authService.login(loginDto);
 
+    if (result.sessionToken === null) {
+      if (result.response.verificationChannel === 'MOBILE') {
+        await this.mobileVerificationService.resend(result.response.userId);
+      } else {
+        await this.emailVerificationService.resend(loginDto.identifier);
+      }
+      return result.response;
+    }
+
     response.cookie(SESSION_COOKIE_NAME, result.sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
