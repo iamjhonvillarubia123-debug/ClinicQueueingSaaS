@@ -4,6 +4,7 @@ import {
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -19,10 +20,12 @@ export class SecretaryWorkspaceService {
         firstName: true,
         lastName: true,
         mobileNumber: true,
+        loginIdentifierType: true,
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
         emailVerifiedAt: true,
+        mobileVerifiedAt: true,
       },
     });
     if (
@@ -31,12 +34,21 @@ export class SecretaryWorkspaceService {
       user.accountStatus !== UserAccountStatus.ACTIVE ||
       user.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      !user.emailVerifiedAt
+      !accountIdentifierIsVerified(user)
     ) {
       throw new ForbiddenException(
         'An active verified Secretary account is required for this workspace.',
       );
     }
+
+    const invitationIdentityWhere = user.email
+      ? {
+          OR: [
+            { targetUserId: user.id },
+            { targetUserId: null, normalizedEmail: user.email.trim().toLowerCase() },
+          ],
+        }
+      : { targetUserId: user.id };
 
     const [assignments, invitations] = await Promise.all([
       this.prisma.practiceStaff.findMany({
@@ -81,7 +93,7 @@ export class SecretaryWorkspaceService {
       }),
       this.prisma.secretaryInvitation.findMany({
         where: {
-          normalizedEmail: user.email.trim().toLowerCase(),
+          ...invitationIdentityWhere,
           status: 'PENDING',
           expiresAt: { gt: new Date() },
         },
