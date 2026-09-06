@@ -2,7 +2,8 @@ name: R3 Migration Repair
 
 on:
   push:
-    branches: [r3-dual-identity-staging]
+    branches:
+      - r3-dual-identity-staging
     paths:
       - .github/workflows/r3-migration-repair.yml
 
@@ -10,24 +11,8 @@ permissions:
   contents: write
 
 jobs:
-  repair-and-verify:
+  repair:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: clinic_queueing_r3_verify
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clinic_queueing_r3_verify
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,106 +21,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+      - run: node scripts/r3-repair-financial-identity.mjs
       - run: npm ci
-      - name: Repair R3 enum/schema alignment
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          for name in [
-              'prisma/migrations/20260906190500_r3_financial_primary_recovery_identity/migration.sql',
-              'src/financial/doctor-closure-financial-settlement.service.ts',
-              'src/financial/financial-access-challenge.service.ts',
-          ]:
-              path = Path(name)
-              text = path.read_text()
-              text = text.replace('"LoginIdentifierType"', '"AccountLoginIdentifierType"')
-              path.write_text(text)
-
-          path = Path('prisma/schema.prisma')
-          text = path.read_text()
-
-          old = '''model DoctorFinancialAccount {
-  id String @id @default(uuid())
-  doctorUserId String @unique
-  recoveryEmailEncrypted String?
-  recoveryEmailHash      String? @db.VarChar(64)
-'''
-          new = '''model DoctorFinancialAccount {
-  id String @id @default(uuid())
-  doctorUserId String @unique
-  recoveryEmailEncrypted      String?
-  recoveryEmailHash           String?                    @db.VarChar(64)
-  recoveryIdentifierType      AccountLoginIdentifierType?
-  recoveryIdentifierEncrypted String?
-  recoveryIdentifierHash      String?                    @db.VarChar(128)
-'''
-          if old not in text:
-              raise SystemExit('DoctorFinancialAccount anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''  @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
-}
-'''
-          new = '''  @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
-  @@index([recoveryIdentifierType, recoveryIdentifierHash], map: "DoctorFinancialAccount_recoveryIdentifier_idx")
-}
-'''
-          if old not in text:
-              raise SystemExit('DoctorFinancialAccount index anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''model FinancialAccessChallenge {
-  id String @id @default(uuid())
-  recoveryEmailHash       String @db.VarChar(64)
-  recipientEmailEncrypted String
-  codeHash                String @db.VarChar(64)
-'''
-          new = '''model FinancialAccessChallenge {
-  id String @id @default(uuid())
-  recoveryEmailHash             String?                    @db.VarChar(64)
-  recipientEmailEncrypted       String?
-  recoveryIdentifierType        AccountLoginIdentifierType?
-  recoveryIdentifierHash        String?                    @db.VarChar(128)
-  recipientIdentifierEncrypted  String?
-  codeHash                      String                     @db.VarChar(64)
-'''
-          if old not in text:
-              raise SystemExit('FinancialAccessChallenge anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''  @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
-  @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
-}
-'''
-          new = '''  @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
-  @@index([recoveryIdentifierType, recoveryIdentifierHash, createdAt], map: "FinancialAccessChallenge_identifier_created_idx")
-  @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
-}
-'''
-          if old not in text:
-              raise SystemExit('FinancialAccessChallenge index anchor not found')
-          text = text.replace(old, new, 1)
-
-          path.write_text(text)
-          PY
-      - name: Generate and validate Prisma
-        run: |
-          npx prisma generate
-          npx prisma validate
-      - name: Verify complete migration chain
-        run: npx prisma migrate reset --force
-      - name: Typecheck backend
-        run: npm run typecheck
-      - name: Commit verified repair
+      - run: npx prisma generate
+      - run: npx prisma validate
+      - run: npm run typecheck
+      - name: Commit repair
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add prisma/schema.prisma prisma/migrations/20260906190500_r3_financial_primary_recovery_identity/migration.sql src/financial/doctor-closure-financial-settlement.service.ts src/financial/financial-access-challenge.service.ts
-          if git diff --cached --quiet; then
-            echo "No repair changes needed"
-            exit 0
-          fi
           git commit -m "fix: align R3 financial recovery identity migration"
           git push origin HEAD:r3-dual-identity-staging
