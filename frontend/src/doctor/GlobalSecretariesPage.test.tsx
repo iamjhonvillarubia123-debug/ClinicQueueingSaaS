@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   SecretaryDirectoryView,
   type SecretaryDirectory,
@@ -28,7 +28,14 @@ const directory: SecretaryDirectory = {
       mobileNumber: '0917',
       clinic: { id: 'clinic-2', name: 'South Clinic' },
       status: 'PENDING',
+      assignmentType: 'CLINIC_SECRETARY',
+      authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
+      requestedCancelClinicDay: false,
+      coverageMode: null,
+      fromServiceDate: null,
+      toServiceDate: null,
       invitedAt: '2026-08-29T00:00:00Z',
+      expiresAt: '2026-09-05T00:00:00Z',
     },
   ],
 };
@@ -48,5 +55,27 @@ describe('SecretaryDirectoryView', () => {
     );
     expect(screen.getByText('Anna Cruz')).toBeInTheDocument();
     expect(screen.getByText('South Clinic')).toBeInTheDocument();
+  });
+  it('exposes edit remove and view actions for pending invitations', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    const onRemove = vi.fn();
+    const onView = vi.fn();
+    render(
+      <SecretaryDirectoryView
+        data={directory}
+        onInvitationEdit={onEdit}
+        onInvitationRemove={onRemove}
+        onInvitationView={onView}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Edit Anna Cruz' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Anna Cruz' }));
+    await user.click(screen.getByRole('button', { name: 'View Anna Cruz' }));
+
+    expect(onEdit).toHaveBeenCalledWith(directory.pendingInvitations[0]);
+    expect(onRemove).toHaveBeenCalledWith(directory.pendingInvitations[0]);
+    expect(onView).toHaveBeenCalledWith(directory.pendingInvitations[0]);
   });
 });
