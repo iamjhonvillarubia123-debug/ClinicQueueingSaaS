@@ -239,6 +239,8 @@ describe('SecretaryInvitationService', () => {
       id: 'invite-1',
       expiresAt: new Date(Date.now() + 60_000),
       practiceLocationId: 'clinic-1',
+      requestedAssignmentType:
+        SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
       normalizedIdentifier: 'jane@example.test',
       practiceLocation: { name: 'North Clinic' },
     });
@@ -277,6 +279,8 @@ describe('SecretaryInvitationService', () => {
       id: 'invite-1',
       expiresAt: new Date(Date.now() + 60_000),
       practiceLocationId: 'clinic-1',
+      requestedAssignmentType:
+        SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
       normalizedIdentifier: 'wrong@example.test',
       practiceLocation: { name: 'North Clinic' },
     });
@@ -342,6 +346,8 @@ describe('SecretaryInvitationService', () => {
       id: 'invite-1',
       expiresAt: new Date(Date.now() + 60_000),
       practiceLocationId: 'clinic-1',
+      requestedAssignmentType:
+        SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
       normalizedIdentifier: 'wrong@example.test',
       practiceLocation: { name: 'North Clinic' },
     });
@@ -365,6 +371,8 @@ describe('SecretaryInvitationService', () => {
       id: 'invite-1',
       expiresAt: new Date(Date.now() + 60_000),
       practiceLocationId: 'clinic-1',
+      requestedAssignmentType:
+        SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
       normalizedIdentifier: 'wrong@example.test',
       practiceLocation: { name: 'North Clinic' },
     });
