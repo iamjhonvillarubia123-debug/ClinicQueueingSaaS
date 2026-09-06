@@ -24,4 +24,8 @@ export class PermanentlyDeleteDoctorDto {
   @IsBoolean()
   @Equals(true)
   confirmPermanentDelete!: boolean;
+
+  get email(): string {
+    return this.identifier;
+  }
 }
