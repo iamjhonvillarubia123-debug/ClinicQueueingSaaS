@@ -13,7 +13,10 @@ import {
 import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
-import { parseAccountIdentifier } from './security/account-identifier';
+import {
+  AccountIdentifier,
+  parseAccountIdentifier,
+} from './security/account-identifier';
 import { PasswordSecurityService } from './security/password-security.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
 
@@ -33,7 +36,7 @@ export class PasswordResetService {
   ) {}
 
   async request(identifierInput: string): Promise<{ accepted: true }> {
-    let identifier;
+    let identifier: AccountIdentifier;
     try {
       identifier = parseAccountIdentifier(identifierInput, this.mobileNumbers);
     } catch {
@@ -265,7 +268,9 @@ export class PasswordResetService {
       user.loginIdentifierType === AccountLoginIdentifierType.EMAIL;
 
     if ((isEmail && !user.email) || (!isEmail && !user.mobileNumber)) {
-      throw new BadRequestException('Password recovery identity is unavailable.');
+      throw new BadRequestException(
+        'Password recovery identity is unavailable.',
+      );
     }
 
     await transaction.notificationOutbox.create({
@@ -320,17 +325,19 @@ export class PasswordResetService {
     if (outboxId) {
       await transaction.notificationOutbox.updateMany({
         where: { id: outboxId, status: NotificationOutboxStatus.PENDING },
-        data: { status: NotificationOutboxStatus.CANCELLED, cancelledAt: now },
+        data: {
+          status: NotificationOutboxStatus.CANCELLED,
+          cancelledAt: now,
+        },
       });
     }
   }
 
   private buildResetUrl(token: string): string {
-    const baseUrl = (
+    const baseUrl =
       this.configService.get<string>('PUBLIC_APP_BASE_URL') ??
-      'http://localhost:3000'
-    ).replace(/\/$/, '');
-    return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+      'http://localhost:3000';
+    return `${baseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
   }
 
   private sha256(value: string): string {
