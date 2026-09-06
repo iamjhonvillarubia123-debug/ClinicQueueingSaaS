@@ -16,11 +16,13 @@ import {
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { parseAccountIdentifier } from '../auth/security/account-identifier';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
-import { normalizeEmail } from '../auth/security/session-security';
 import { DoctorClosureFinancialSettlementService } from '../financial/doctor-closure-financial-settlement.service';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const OUTBOX_PROVISIONAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -34,6 +36,8 @@ export class DoctorLifecycleService {
     private readonly passwordSecurityService: PasswordSecurityService,
     private readonly protectedPayloadService: ProtectedAccountPayloadService,
     private readonly closureFinancialSettlement: DoctorClosureFinancialSettlementService,
+    private readonly mobileNumberService: MobileNumberService,
+    private readonly notificationPayload: NotificationPayloadService,
   ) {}
 
   async disable(
@@ -128,13 +132,21 @@ export class DoctorLifecycleService {
     });
   }
 
-  async reactivate(email: string, password: string, idempotencyKey: string) {
+  async reactivate(identifierInput: string, password: string, idempotencyKey: string) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
-    const normalizedEmail = normalizeEmail(email);
+    const identifier = parseAccountIdentifier(
+      identifierInput,
+      this.mobileNumberService,
+    );
 
     const currentUser = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        ...(identifier.type === 'EMAIL'
+          ? { email: identifier.normalized, loginIdentifierType: 'EMAIL' }
+          : {
+              mobileLoginHash: identifier.mobileHash,
+              loginIdentifierType: 'MOBILE',
+            }),
         role: UserRole.DOCTOR,
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
@@ -224,7 +236,7 @@ export class DoctorLifecycleService {
   }
 
   async permanentlyDelete(
-    email: string,
+    identifierInput: string,
     password: string,
     confirmPermanentDelete: boolean,
     idempotencyKey: string,
@@ -236,11 +248,19 @@ export class DoctorLifecycleService {
     }
 
     const key = this.normalizeIdempotencyKey(idempotencyKey);
-    const normalizedEmail = normalizeEmail(email);
+    const identifier = parseAccountIdentifier(
+      identifierInput,
+      this.mobileNumberService,
+    );
 
     const target = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        ...(identifier.type === 'EMAIL'
+          ? { email: identifier.normalized, loginIdentifierType: 'EMAIL' }
+          : {
+              mobileLoginHash: identifier.mobileHash,
+              loginIdentifierType: 'MOBILE',
+            }),
         role: UserRole.DOCTOR,
       },
       orderBy: { createdAt: 'desc' },
@@ -268,6 +288,10 @@ export class DoctorLifecycleService {
         select: {
           id: true,
           email: true,
+          mobileNumber: true,
+          loginIdentifierType: true,
+          emailVerifiedAt: true,
+          mobileVerifiedAt: true,
           role: true,
           accountStatus: true,
           passwordHash: true,
@@ -285,6 +309,8 @@ export class DoctorLifecycleService {
       if (!passwordMatches) {
         throw new UnauthorizedException('Unable to permanently close account.');
       }
+
+      const recoveryIdentity = this.primaryVerifiedIdentity(user);
 
       const replay = await transaction.commandIdempotency.findUnique({
         where: { commandIdentityKey },
@@ -352,7 +378,7 @@ export class DoctorLifecycleService {
 
       await this.closureFinancialSettlement.settle(transaction, {
         doctorFinancialAccountId: financialPreparation.doctorFinancialAccountId,
-        recoveryEmail: user.email,
+        recoveryIdentity,
         closureCommandId: command.id,
         closedAt: now,
       });
@@ -388,19 +414,25 @@ export class DoctorLifecycleService {
         data: {
           deliveryIdentityKey,
           notificationType: NotificationType.SECURITY_NOTIFICATION,
-          channel: NotificationChannel.EMAIL,
+          channel:
+            recoveryIdentity.type === 'EMAIL'
+              ? NotificationChannel.EMAIL
+              : NotificationChannel.SMS,
           status: NotificationOutboxStatus.PENDING,
           practiceLocationId: null,
           commandIdempotencyId: command.id,
-          recipientEmailEncrypted: this.protectedPayloadService.encrypt(
-            user.email,
-            'account-closure:recipient',
-          ),
-          recipientMobileEncrypted: null,
-          messageBodyEncrypted: this.protectedPayloadService.encrypt(
-            message,
-            'account-closure:message',
-          ),
+          recipientEmailEncrypted:
+            recoveryIdentity.type === 'EMAIL'
+              ? this.protectedPayloadService.encrypt(
+                  recoveryIdentity.value,
+                  'account-closure:recipient',
+                )
+              : null,
+          recipientMobileEncrypted:
+            recoveryIdentity.type === 'MOBILE'
+              ? this.mobileNumberService.encrypt(recoveryIdentity.value)
+              : null,
+          messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
           providerIdempotencyKey: `account-closure:${command.id}`,
           attemptCount: 0,
           nextAttemptAt: now,
@@ -415,6 +447,35 @@ export class DoctorLifecycleService {
         publicRouteRetired: true,
       };
     });
+  }
+
+  private primaryVerifiedIdentity(user: {
+    loginIdentifierType: 'EMAIL' | 'MOBILE';
+    email: string | null;
+    mobileNumber: string | null;
+    emailVerifiedAt: Date | null;
+    mobileVerifiedAt: Date | null;
+  }): { type: 'EMAIL' | 'MOBILE'; value: string } {
+    if (
+      user.loginIdentifierType === 'EMAIL' &&
+      user.email &&
+      user.emailVerifiedAt
+    ) {
+      return { type: 'EMAIL', value: user.email.trim().toLowerCase() };
+    }
+    if (
+      user.loginIdentifierType === 'MOBILE' &&
+      user.mobileNumber &&
+      user.mobileVerifiedAt
+    ) {
+      return {
+        type: 'MOBILE',
+        value: this.mobileNumberService.normalize(user.mobileNumber).canonical,
+      };
+    }
+    throw new ConflictException(
+      'A verified primary account identifier is required before permanent account closure.',
+    );
   }
 
   private normalizeIdempotencyKey(value: string): string {
