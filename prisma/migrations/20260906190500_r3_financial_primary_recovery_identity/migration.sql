@@ -3,7 +3,7 @@
 -- fields support both verified email and verified mobile recovery channels.
 
 ALTER TABLE "DoctorFinancialAccount"
-  ADD COLUMN "recoveryIdentifierType" "LoginIdentifierType",
+  ADD COLUMN "recoveryIdentifierType" "AccountLoginIdentifierType",
   ADD COLUMN "recoveryIdentifierEncrypted" TEXT,
   ADD COLUMN "recoveryIdentifierHash" VARCHAR(128);
 
@@ -19,7 +19,7 @@ CREATE INDEX "DoctorFinancialAccount_recoveryIdentifier_idx"
   ON "DoctorFinancialAccount"("recoveryIdentifierType", "recoveryIdentifierHash");
 
 ALTER TABLE "FinancialAccessChallenge"
-  ADD COLUMN "recoveryIdentifierType" "LoginIdentifierType",
+  ADD COLUMN "recoveryIdentifierType" "AccountLoginIdentifierType",
   ADD COLUMN "recoveryIdentifierHash" VARCHAR(128),
   ADD COLUMN "recipientIdentifierEncrypted" TEXT;
 

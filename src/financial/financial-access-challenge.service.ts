@@ -45,7 +45,7 @@ export class FinancialAccessChallengeService {
           SELECT dfa."id"
           FROM "DoctorFinancialAccount" dfa
           INNER JOIN "User" u ON u."id" = dfa."doctorUserId"
-          WHERE dfa."recoveryIdentifierType" = CAST(${identifier.type} AS "LoginIdentifierType")
+          WHERE dfa."recoveryIdentifierType" = CAST(${identifier.type} AS "AccountLoginIdentifierType")
             AND dfa."recoveryIdentifierHash" = ${recoveryIdentifierHash}
             AND u."accountStatus" = 'PERMANENTLY_CLOSED'
           LIMIT 1
@@ -56,7 +56,7 @@ export class FinancialAccessChallengeService {
         Prisma.sql`
           UPDATE "FinancialAccessChallenge"
           SET "invalidatedAt" = ${now}
-          WHERE "recoveryIdentifierType" = CAST(${identifier.type} AS "LoginIdentifierType")
+          WHERE "recoveryIdentifierType" = CAST(${identifier.type} AS "AccountLoginIdentifierType")
             AND "recoveryIdentifierHash" = ${recoveryIdentifierHash}
             AND "verifiedAt" IS NULL
             AND "consumedAt" IS NULL
@@ -103,7 +103,7 @@ export class FinancialAccessChallengeService {
             ${challengeId},
             ${legacyRecoveryEmailHash},
             ${legacyRecipientEmailEncrypted},
-            CAST(${identifier.type} AS "LoginIdentifierType"),
+            CAST(${identifier.type} AS "AccountLoginIdentifierType"),
             ${recoveryIdentifierHash},
             ${recipientIdentifierEncrypted},
             ${codeHash},

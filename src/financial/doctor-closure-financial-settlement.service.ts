@@ -125,7 +125,7 @@ export class DoctorClosureFinancialSettlementService {
       Prisma.sql`
         UPDATE "DoctorFinancialAccount"
         SET
-          "recoveryIdentifierType" = CAST(${recoveryIdentity.type} AS "LoginIdentifierType"),
+          "recoveryIdentifierType" = CAST(${recoveryIdentity.type} AS "AccountLoginIdentifierType"),
           "recoveryIdentifierEncrypted" = ${recoveryIdentifierEncrypted},
           "recoveryIdentifierHash" = ${recoveryIdentifierHash},
           "recoveryEmailEncrypted" = ${

@@ -1668,8 +1668,11 @@ model NotificationLog {
 model DoctorFinancialAccount {
   id String @id @default(uuid())
   doctorUserId String @unique
-  recoveryEmailEncrypted String?
-  recoveryEmailHash      String? @db.VarChar(64)
+  recoveryEmailEncrypted      String?
+  recoveryEmailHash           String?                     @db.VarChar(64)
+  recoveryIdentifierType      AccountLoginIdentifierType?
+  recoveryIdentifierEncrypted String?
+  recoveryIdentifierHash      String?                     @db.VarChar(128)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   doctorUser User @relation(fields: [doctorUserId], references: [id], onDelete: Restrict)
@@ -1682,6 +1685,7 @@ model DoctorFinancialAccount {
   financialAccessSessions       FinancialAccessSession[]
   subscriptionEntitlementEvents SubscriptionEntitlementEvent[]
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
+  @@index([recoveryIdentifierType, recoveryIdentifierHash], map: "DoctorFinancialAccount_recoveryIdentifier_idx")
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1814,9 +1818,12 @@ model RefundProcessingAttempt {
 
 model FinancialAccessChallenge {
   id String @id @default(uuid())
-  recoveryEmailHash       String @db.VarChar(64)
-  recipientEmailEncrypted String
-  codeHash                String @db.VarChar(64)
+  recoveryEmailHash            String?                     @db.VarChar(64)
+  recipientEmailEncrypted      String?
+  recoveryIdentifierType       AccountLoginIdentifierType?
+  recoveryIdentifierHash       String?                     @db.VarChar(128)
+  recipientIdentifierEncrypted String?
+  codeHash                     String                      @db.VarChar(64)
   expiresAt     DateTime  @db.Timestamptz(3)
   attemptCount  Int       @default(0)
   verifiedAt    DateTime? @db.Timestamptz(3)
@@ -1826,6 +1833,7 @@ model FinancialAccessChallenge {
   sessions             FinancialAccessSession[]
   notificationOutboxes NotificationOutbox[]
   @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
+  @@index([recoveryIdentifierType, recoveryIdentifierHash, createdAt], map: "FinancialAccessChallenge_identifier_created_idx")
   @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
 }
 
