@@ -47,6 +47,12 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
     ? bundles.length > 0 && (!current && !cancelClinicDay ? true : password.length > 0)
     : Boolean(fromDate && toDate && fromDate <= toDate && (coverageMode !== 'ONE_SERVICE_DATE' || fromDate === toDate));
   const messageIsError = Boolean(message && !message.toLowerCase().includes('successfully'));
+  const accountEmailCorrectionVisible = Boolean(
+    mode === 'INVITE' &&
+      step === 5 &&
+      messageIsError &&
+      (message.includes('Secretary account') || message.includes('email belongs to an account')),
+  );
   const toggleBundle = (bundle: string) => setBundles((value) => value.includes(bundle) ? value.filter((item) => item !== bundle) : [...value, bundle]);
 
   function submit() {
@@ -71,7 +77,7 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
         <h2>Assign Secretary</h2>
         <p>Choose how you want to add or assign a Secretary to {data.clinic.name}.</p>
         <button type="button" className="staff-choice-card is-selected" onClick={() => { setMode('EXISTING'); setStep(2); }}><b>Assign Existing Secretary</b><span>Assign a Secretary who already has an account in the system.</span></button>
-        <button type="button" className="staff-choice-card" onClick={() => { setMode('INVITE'); setStep(2); }}><b>Invite New Secretary</b><span>Send an invitation for a clinic relationship.</span></button>
+        <button type="button" className="staff-choice-card" onClick={() => { setMode('INVITE'); setStep(2); }}><b>Invite Secretary to Clinic</b><span>Send a clinic invitation to an existing Secretary account.</span></button>
       </> : null}
       {step === 2 && mode === 'EXISTING' ? <>
         <h2>Assign Existing Secretary</h2>
@@ -83,7 +89,7 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
       </> : null}
       {step === 2 && mode === 'INVITE' ? <>
         <h2>Invitation Details</h2>
-        <p>They will sign in to their own Secretary account, or create and verify one through the normal account flow before accepting.</p>
+        <p>Enter the Secretary details. The Secretary must already have an active, verified Secretary account before the clinic invitation can be sent.</p>
         <div className="staff-invite-fields">
           <label>First Name<input value={invite.firstName} onChange={(e) => setInvite({ ...invite, firstName: e.target.value })} /></label>
           <label>Last Name<input value={invite.lastName} onChange={(e) => setInvite({ ...invite, lastName: e.target.value })} /></label>
@@ -121,9 +127,24 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
         <div className="staff-neutral-note">{mode === 'INVITE' ? 'No clinic authority is granted until the eligible Secretary accepts this invitation.' : role === 'CLINIC_SECRETARY' ? "This creates or reactivates the clinic-scoped relationship immediately. Today's ClinicDay operating Secretary remains a separate assignment." : 'Coverage authority is limited to the selected Service Date period and does not grant Clinic Secretary authority bundles.'}</div>
       </> : null}
       {message ? <div className={`staff-drawer-message${messageIsError ? ' is-error' : ''}`} role={messageIsError ? 'alert' : 'status'}>{message}</div> : null}
+      {accountEmailCorrectionVisible ? (
+        <div className="staff-invite-email-correction">
+          <label>
+            Secretary Email Address
+            <input
+              type="email"
+              value={invite.email}
+              onChange={(event) => setInvite({ ...invite, email: event.target.value })}
+            />
+          </label>
+          <button type="button" className="is-primary" disabled={pending || !invite.email.trim()} onClick={submit}>
+            {pending ? 'Retrying…' : 'Retry Invitation'}
+          </button>
+        </div>
+      ) : null}
       <footer>
         <button type="button" onClick={step === 1 ? onClose : () => setStep((value) => value - 1)}>{step === 1 ? 'Cancel' : 'Back'}</button>
-        {step < 5 ? <button type="button" className="is-primary" disabled={(step === 2 && (mode === 'EXISTING' ? !userId : !detailsValid)) || (step === 4 && !configurationValid)} onClick={() => setStep((value) => value + 1)}>Next</button> : <button type="button" className="is-primary" disabled={pending} onClick={submit}>{pending ? mode === 'INVITE' ? 'Sending…' : 'Assigning…' : mode === 'INVITE' ? 'Send Invitation' : current && role === 'CLINIC_SECRETARY' ? 'Replace Secretary' : 'Assign Secretary'}</button>}
+        {step < 5 ? <button type="button" className="is-primary" disabled={(step === 2 && (mode === 'EXISTING' ? !userId : !detailsValid)) || (step === 4 && !configurationValid)} onClick={() => setStep((value) => value + 1)}>Next</button> : !accountEmailCorrectionVisible ? <button type="button" className="is-primary" disabled={pending} onClick={submit}>{pending ? mode === 'INVITE' ? 'Sending…' : 'Assigning…' : mode === 'INVITE' ? 'Send Invitation' : current && role === 'CLINIC_SECRETARY' ? 'Replace Secretary' : 'Assign Secretary'}</button> : null}
       </footer>
     </aside>
   );
