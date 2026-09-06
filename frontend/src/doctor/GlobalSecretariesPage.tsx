@@ -337,7 +337,10 @@ export function GlobalSecretariesPage() {
     : null;
 
   return (
-    <>
+    <div
+      className={`clinic-staff-shell${selectedInvitation ? ' has-drawer' : ''}`}
+      data-testid="global-secretaries-shell"
+    >
       <SecretaryDirectoryView
         data={data}
         onInvitationView={(invitation) => {
@@ -367,6 +370,6 @@ export function GlobalSecretariesPage() {
           onSubmit={handleInvitationAction}
         />
       ) : null}
-    </>
+    </div>
   );
 }
