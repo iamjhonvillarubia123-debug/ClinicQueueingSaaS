@@ -1,16 +1,21 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { LoginDto } from './dto/login.dto';
 import { PasswordSecurityService } from './security/password-security.service';
 import {
+  accountIdentifierIsVerified,
+  parseAccountIdentifier,
+} from './security/account-identifier';
+import {
   generateSessionToken,
   hashSessionToken,
-  normalizeEmail,
   SESSION_ABSOLUTE_LIFETIME_MS,
   SESSION_IDLE_LIFETIME_MS,
 } from './security/session-security';
@@ -28,14 +33,26 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordSecurityService: PasswordSecurityService,
+    private readonly mobileNumberService: MobileNumberService,
   ) {}
 
   async login(loginDto: LoginDto): Promise<LoginResult> {
-    const normalizedEmail = normalizeEmail(loginDto.email);
+    const identifier = parseAccountIdentifier(
+      loginDto.identifier,
+      this.mobileNumberService,
+    );
 
     const user = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        ...(identifier.type === 'EMAIL'
+          ? {
+              loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+              email: identifier.normalized,
+            }
+          : {
+              loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+              mobileNumberHash: identifier.mobileHash,
+            }),
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
     });
@@ -48,7 +65,7 @@ export class AuthService {
       : false;
 
     if (!user || !passwordMatches || !this.isOrdinaryLoginEligible(user)) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Invalid login details or password.');
     }
 
     const sessionToken = generateSessionToken();
@@ -67,7 +84,7 @@ export class AuthService {
         currentUser.passwordHash !== user.passwordHash ||
         !this.isOrdinaryLoginEligible(currentUser)
       ) {
-        throw new UnauthorizedException('Invalid email or password.');
+        throw new UnauthorizedException('Invalid login details or password.');
       }
 
       await transaction.userSession.create({
@@ -115,7 +132,9 @@ export class AuthService {
     role: UserRole;
     accountStatus: UserAccountStatus;
     administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+    loginIdentifierType: AccountLoginIdentifierType;
     emailVerifiedAt: Date | null;
+    mobileVerifiedAt: Date | null;
   }): boolean {
     if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
 
@@ -129,7 +148,7 @@ export class AuthService {
 
     if (
       (user.role === UserRole.DOCTOR || user.role === UserRole.SECRETARY) &&
-      user.emailVerifiedAt === null
+      !accountIdentifierIsVerified(user)
     ) {
       return false;
     }
