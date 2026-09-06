@@ -54,7 +54,10 @@ export class SecretaryInvitationService {
   ) {}
 
   async create(actorUserId: string, dto: CreateSecretaryInvitationDto) {
-    const identifier = parseAccountIdentifier(dto.identifier, this.mobileNumbers);
+    const identifier = parseAccountIdentifier(
+      dto.identifier,
+      this.mobileNumbers,
+    );
     const plan = this.validatePlan(dto);
 
     const actor = await this.prisma.user.findUnique({
@@ -238,7 +241,8 @@ export class SecretaryInvitationService {
             target.mobileNumber
               ? this.mobileNumbers.encryptCanonical(target.mobileNumber)
               : null,
-          messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
+          messageBodyEncrypted:
+            this.notificationPayload.encryptMessage(message),
           providerIdempotencyKey: `secretary-invitation:${created.id}`,
           nextAttemptAt: now,
           expiresAt,
@@ -481,7 +485,8 @@ export class SecretaryInvitationService {
               `${PAYLOAD_PURPOSE}:recipient`,
             ),
             recipientMobileEncrypted: null,
-            messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
+            messageBodyEncrypted:
+              this.notificationPayload.encryptMessage(message),
             providerIdempotencyKey: `secretary-invitation:${invitation.id}:retarget:${this.sha256(`${target.id}:${token}`).slice(0, 16)}`,
             attemptCount: 0,
             processingStartedAt: null,
@@ -932,7 +937,9 @@ export class SecretaryInvitationService {
     );
     const existing = rows[0];
     if (existing && existing.staffRole !== 'SECRETARY') {
-      throw new ConflictException('Existing practice staff role is incompatible.');
+      throw new ConflictException(
+        'Existing practice staff role is incompatible.',
+      );
     }
     if (existing) {
       if (!existing.isActive) {
@@ -1137,7 +1144,9 @@ export class SecretaryInvitationService {
       Number.isNaN(date.getTime()) ||
       date.toISOString().slice(0, 10) !== value
     ) {
-      throw new BadRequestException('Service Date is not a valid calendar date.');
+      throw new BadRequestException(
+        'Service Date is not a valid calendar date.',
+      );
     }
     return date;
   }

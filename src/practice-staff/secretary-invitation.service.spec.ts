@@ -143,7 +143,10 @@ describe('SecretaryInvitationService', () => {
       name: 'North Clinic',
       currentRegularPracticeStaffId: null,
     });
-    prisma.user.findFirst.mockResolvedValue({ ...activeSecretary, role: 'DOCTOR' });
+    prisma.user.findFirst.mockResolvedValue({
+      ...activeSecretary,
+      role: 'DOCTOR',
+    });
     await expect(service.create('doctor-1', clinicPlan)).rejects.toBeInstanceOf(
       ConflictException,
     );
