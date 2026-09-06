@@ -90,7 +90,7 @@ export class SecretaryInvitationService {
     });
     if (!existingUser) {
       throw new NotFoundException(
-        'No Secretary account was found for this email. Please review the email address or ask the Secretary to create and verify an account first.',
+        'No Secretary account was found for this email. Please review the email address for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
       );
     }
     if (existingUser.role !== UserRole.SECRETARY) {
