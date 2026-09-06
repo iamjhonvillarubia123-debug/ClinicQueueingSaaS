@@ -142,6 +142,7 @@ enum OtpPurpose {
   BOOKING
   APPOINTMENT_RECOVERY
   BOOKING_GROUP_RECOVERY
+  ACCOUNT_MOBILE_VERIFICATION
 }
 
 enum BookingAccessTokenPurpose {
@@ -376,6 +377,11 @@ enum PrivacyErasureResourceType {
   APPOINTMENT
 }
 
+enum AccountLoginIdentifierType {
+  EMAIL
+  MOBILE
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -501,22 +507,25 @@ enum BookingQuestionType {
 
 model User {
   id         String  @id @default(uuid())
-  email      String  @db.VarChar(255)
+  email      String? @db.VarChar(255)
   firstName  String  @db.VarChar(100)
   middleName String? @db.VarChar(100)
   lastName   String  @db.VarChar(100)
 
-  mobileNumber String @db.VarChar(30)
-  passwordHash String @db.VarChar(255)
+  mobileNumber     String? @db.VarChar(30)
+  mobileNumberHash String? @unique @db.VarChar(64)
+  passwordHash     String  @db.VarChar(255)
 
-  role                            UserRole
-  accountStatus                   UserAccountStatus               @default(ACTIVE)
-  administrativeRestrictionStatus AdministrativeRestrictionStatus @default(NONE)
+  loginIdentifierType            AccountLoginIdentifierType        @default(EMAIL)
+  role                           UserRole
+  accountStatus                  UserAccountStatus                  @default(ACTIVE)
+  administrativeRestrictionStatus AdministrativeRestrictionStatus  @default(NONE)
 
-  emailVerifiedAt DateTime? @db.Timestamptz(3)
-  lastLoginAt     DateTime? @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  emailVerifiedAt  DateTime? @db.Timestamptz(3)
+  mobileVerifiedAt DateTime? @db.Timestamptz(3)
+  lastLoginAt      DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
 
   doctorProfile                    DoctorProfile?
   practiceStaffAssignments         PracticeStaff[]
@@ -527,6 +536,7 @@ model User {
   substituteCoveragesCreated SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageCreatedBy")
   substituteCoveragesEnded SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageEndedBy")
   secretaryInvitationsSent SecretaryInvitation[] @relation("SecretaryInvitationInvitedBy")
+  targetedSecretaryInvitations SecretaryInvitation[] @relation("SecretaryInvitationTargetUser")
   acceptedSecretaryInvitations SecretaryInvitation[] @relation("SecretaryInvitationAcceptedUser")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
@@ -539,6 +549,7 @@ model User {
   clinicDayOperationalNoticesEnded   ClinicDayOperationalNotice[]       @relation("ClinicDayOperationalNoticeEndedBy")
   userSessions                     UserSession[]
   emailVerifications               EmailVerification[]
+  accountOtpVerifications          OtpVerification[]
   passwordResets                   PasswordReset[]
   dataRetentionAcknowledgements    DoctorDataRetentionAcknowledgement[]
 
@@ -886,10 +897,13 @@ model SecretaryInvitation {
   id String @id @default(uuid())
   practiceLocationId String
   invitedByUserId String
-  normalizedEmail String @db.VarChar(255)
+  targetUserId String?
+  identifierType AccountLoginIdentifierType @default(EMAIL)
+  normalizedIdentifier String @db.VarChar(255)
+  normalizedEmail String? @db.VarChar(255)
   firstName String @db.VarChar(100)
   lastName String @db.VarChar(100)
-  mobileNumber String @db.VarChar(30)
+  mobileNumber String? @db.VarChar(30)
   tokenHash String? @db.VarChar(64)
   activeInvitationKey String? @unique @db.VarChar(64)
   status SecretaryInvitationStatus @default(PENDING)
@@ -914,12 +928,14 @@ model SecretaryInvitation {
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   invitedByUser User @relation("SecretaryInvitationInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  targetUser User? @relation("SecretaryInvitationTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
   acceptedUser User? @relation("SecretaryInvitationAcceptedUser", fields: [acceptedUserId], references: [id], onDelete: Restrict)
   notificationOutbox NotificationOutbox?
   @@index([tokenHash])
   @@index([status, expiresAt])
   @@index([practiceLocationId, createdAt])
   @@index([invitedByUserId, createdAt])
+  @@index([targetUserId, createdAt])
   @@index([acceptedUserId])
 }
 
@@ -1390,6 +1406,7 @@ model Appointment {
 model OtpVerification {
   id      String     @id @default(uuid())
   purpose OtpPurpose
+  userId                        String?
   bookingDraftId                String?
   bookingRecoveryAttemptId      String?
   bookingGroupRecoveryAttemptId String?
@@ -1405,10 +1422,12 @@ model OtpVerification {
   invalidatedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
   bookingDraft BookingDraft? @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
   bookingRecoveryAttempt      BookingRecoveryAttempt?      @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
   bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation(fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: Restrict)
   notificationOutbox          NotificationOutbox?          @relation("OtpVerificationNotificationOutbox")
+  @@index([userId, createdAt], map: "OtpVerification_user_created_idx")
   @@index([bookingDraftId, createdAt], map: "OtpVerification_bookingDraft_created_idx")
   @@index([bookingRecoveryAttemptId, createdAt], map: "OtpVerification_recovery_created_idx")
   @@index([bookingGroupRecoveryAttemptId, createdAt], map: "OtpVerification_group_recovery_created_idx")
