@@ -120,12 +120,12 @@ export class SecretaryInvitationService {
 
     if (!target) {
       throw new NotFoundException(
-        'No Secretary account was found for this mobile number or email address. Please review the details for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
+        'No Secretary account was found for this email. Please review the email address for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
       );
     }
     if (target.role !== UserRole.SECRETARY) {
       throw new ConflictException(
-        'This mobile number or email address belongs to an account with an incompatible role.',
+        'This email address belongs to an account with an incompatible role.',
       );
     }
     if (
@@ -135,7 +135,7 @@ export class SecretaryInvitationService {
       !accountIdentifierIsVerified(target)
     ) {
       throw new ConflictException(
-        'The Secretary account must be active and its registered mobile number or email address must be verified before it can be invited.',
+        'The Secretary account must be active and its registered email address must be verified before it can be invited.',
       );
     }
 
@@ -325,13 +325,143 @@ export class SecretaryInvitationService {
         status: SecretaryInvitationStatus.PENDING,
         practiceLocation: { doctorProfile: { userId: actorUserId } },
       },
-      select: { id: true, expiresAt: true },
+      select: {
+        id: true,
+        expiresAt: true,
+        practiceLocationId: true,
+        normalizedIdentifier: true,
+        practiceLocation: { select: { name: true } },
+      },
     });
     if (!invitation) {
       throw new NotFoundException('Pending invitation was not found.');
     }
     if (invitation.expiresAt.getTime() <= Date.now()) {
       throw new ConflictException('This invitation has expired.');
+    }
+
+    const correctedIdentifier = dto.identifier?.trim().toLowerCase();
+    if (
+      correctedIdentifier &&
+      correctedIdentifier !== invitation.normalizedIdentifier
+    ) {
+      const target = await this.prisma.user.findFirst({
+        where: {
+          loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+          email: correctedIdentifier,
+          accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+        },
+        select: {
+          id: true,
+          role: true,
+          accountStatus: true,
+          administrativeRestrictionStatus: true,
+          loginIdentifierType: true,
+          email: true,
+          emailVerifiedAt: true,
+          mobileNumber: true,
+          mobileNumberHash: true,
+          mobileVerifiedAt: true,
+          firstName: true,
+          lastName: true,
+        },
+      });
+
+      if (!target) {
+        throw new NotFoundException(
+          'No Secretary account was found for this email. Please review the email address for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
+        );
+      }
+      if (target.role !== UserRole.SECRETARY) {
+        throw new ConflictException(
+          'This email address belongs to an account with an incompatible role.',
+        );
+      }
+      if (
+        target.accountStatus !== UserAccountStatus.ACTIVE ||
+        target.administrativeRestrictionStatus !==
+          AdministrativeRestrictionStatus.NONE ||
+        !accountIdentifierIsVerified(target) ||
+        !target.email
+      ) {
+        throw new ConflictException(
+          'The Secretary account must be active and its registered email address must be verified before it can be invited.',
+        );
+      }
+
+      const activeInvitationKey = this.sha256(
+        `${invitation.practiceLocationId}:${target.id}`,
+      );
+      const duplicate = await this.prisma.secretaryInvitation.findUnique({
+        where: { activeInvitationKey },
+        select: { id: true },
+      });
+      if (duplicate && duplicate.id !== invitation.id) {
+        throw new ConflictException(
+          'A pending invitation already exists for this Secretary at this clinic.',
+        );
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const now = new Date();
+      const url = `${this.publicAppBaseUrl()}/secretary-invitations/accept?token=${encodeURIComponent(token)}`;
+      const message = `You have been invited to join ${invitation.practiceLocation.name ?? 'a clinic'} as a ${plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY ? 'Clinic Secretary' : 'Substitute Secretary'}. Sign in to your active, verified Secretary account, then accept the clinic relationship: ${url}`;
+
+      const updated = await this.prisma.$transaction(async (transaction) => {
+        const retargeted = await transaction.secretaryInvitation.update({
+          where: { id: invitation.id },
+          data: {
+            targetUserId: target.id,
+            identifierType: AccountLoginIdentifierType.EMAIL,
+            normalizedIdentifier: target.email,
+            normalizedEmail: target.email,
+            firstName: target.firstName,
+            lastName: target.lastName,
+            mobileNumber: target.mobileNumber,
+            tokenHash: this.sha256(token),
+            activeInvitationKey,
+            requestedAssignmentType: plan.assignmentType,
+            requestedAuthorityBundles: plan.authorityBundles,
+            requestedCancelClinicDay: plan.requestedCancelClinicDay,
+            requestedCoverageMode: plan.coverageMode,
+            requestedFromServiceDate: plan.fromServiceDate,
+            requestedToServiceDate: plan.toServiceDate,
+          },
+          select: { id: true, status: true, updatedAt: true },
+        });
+
+        await transaction.notificationOutbox.updateMany({
+          where: { secretaryInvitationId: invitation.id },
+          data: {
+            channel: NotificationChannel.EMAIL,
+            status: NotificationOutboxStatus.PENDING,
+            recipientEmailEncrypted: this.protectedAccountPayload.encrypt(
+              target.email,
+              `${PAYLOAD_PURPOSE}:recipient`,
+            ),
+            recipientMobileEncrypted: null,
+            messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
+            providerIdempotencyKey: `secretary-invitation:${invitation.id}:retarget:${this.sha256(`${target.id}:${token}`).slice(0, 16)}`,
+            attemptCount: 0,
+            processingStartedAt: null,
+            leaseExpiresAt: null,
+            processingWorkerId: null,
+            nextAttemptAt: now,
+            sentAt: null,
+            failedAt: null,
+            cancelledAt: null,
+            protectedPayloadPurgedAt: null,
+          },
+        });
+
+        return retargeted;
+      });
+
+      return {
+        invitationId: updated.id,
+        status: updated.status,
+        updatedAt: updated.updatedAt,
+      };
     }
 
     const updated = await this.prisma.secretaryInvitation.update({
@@ -495,11 +625,15 @@ export class SecretaryInvitationService {
       } else if (
         invitation.identifierType === AccountLoginIdentifierType.EMAIL
       ) {
-        if (!user.email || user.email.trim().toLowerCase() !== invitation.normalizedIdentifier) {
+        if (
+          !user.email ||
+          user.email.trim().toLowerCase() !== invitation.normalizedIdentifier
+        ) {
           return { kind: 'identity' as const };
         }
       } else if (
-        !user.mobileNumber || user.mobileNumber !== invitation.normalizedIdentifier
+        !user.mobileNumber ||
+        user.mobileNumber !== invitation.normalizedIdentifier
       ) {
         return { kind: 'identity' as const };
       }
@@ -517,7 +651,6 @@ export class SecretaryInvitationService {
       if (!location || location.doctorUserId !== invitation.invitedByUserId) {
         return { kind: 'ownership' as const };
       }
-
       if (
         invitation.requestedAssignmentType ===
           SecretaryInvitationAssignmentType.CLINIC_SECRETARY &&
