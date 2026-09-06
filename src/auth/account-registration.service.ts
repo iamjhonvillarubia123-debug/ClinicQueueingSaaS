@@ -4,6 +4,7 @@ import {
   AdministrativeRestrictionStatus,
   Prisma,
   UserAccountStatus,
+  UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
@@ -11,7 +12,10 @@ import { AccountMobileVerificationService } from './account-mobile-verification.
 import { RegisterAccountDto } from './dto/register-account.dto';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordSecurityService } from './security/password-security.service';
-import { parseAccountIdentifier } from './security/account-identifier';
+import {
+  accountIdentifierIsVerified,
+  parseAccountIdentifier,
+} from './security/account-identifier';
 
 @Injectable()
 export class AccountRegistrationService {
@@ -34,14 +38,61 @@ export class AccountRegistrationService {
     const existingCurrentUser = await this.prisma.user.findFirst({
       where: {
         ...(identifier.type === 'EMAIL'
-          ? { email: identifier.normalized }
-          : { mobileNumberHash: identifier.mobileHash }),
+          ? {
+              loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+              email: identifier.normalized,
+            }
+          : {
+              loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+              mobileNumberHash: identifier.mobileHash,
+            }),
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        passwordHash: true,
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
+        emailVerifiedAt: true,
+        mobileVerifiedAt: true,
+      },
     });
 
     if (existingCurrentUser) {
+      const passwordMatches = await this.passwordSecurityService.verify(
+        dto.password,
+        existingCurrentUser.passwordHash,
+      );
+      const publicRole =
+        existingCurrentUser.role === UserRole.DOCTOR ||
+        existingCurrentUser.role === UserRole.SECRETARY;
+      const baseEligible =
+        existingCurrentUser.accountStatus === UserAccountStatus.ACTIVE &&
+        (existingCurrentUser.role !== UserRole.DOCTOR ||
+          existingCurrentUser.administrativeRestrictionStatus ===
+            AdministrativeRestrictionStatus.NONE);
+
+      if (
+        passwordMatches &&
+        publicRole &&
+        baseEligible &&
+        !accountIdentifierIsVerified(existingCurrentUser)
+      ) {
+        return {
+          registrationStatus: 'VERIFICATION_PENDING' as const,
+          userId: existingCurrentUser.id,
+          role: existingCurrentUser.role,
+          verificationChannel:
+            existingCurrentUser.loginIdentifierType ===
+            AccountLoginIdentifierType.EMAIL
+              ? ('EMAIL' as const)
+              : ('MOBILE' as const),
+          verificationRequired: true as const,
+        };
+      }
+
       throw new ConflictException(
         'A current account already uses this email address or mobile number.',
       );
@@ -83,10 +134,11 @@ export class AccountRegistrationService {
               identifier.normalized,
             );
           return {
+            registrationStatus: 'CREATED' as const,
             userId: user.id,
             role: user.role,
             verificationChannel: 'EMAIL' as const,
-            verificationRequired: true,
+            verificationRequired: true as const,
             verificationExpiresAt: verification.expiresAt,
           };
         }
@@ -99,10 +151,11 @@ export class AccountRegistrationService {
             identifier.mobileHash,
           );
         return {
+          registrationStatus: 'CREATED' as const,
           userId: user.id,
           role: user.role,
           verificationChannel: 'MOBILE' as const,
-          verificationRequired: true,
+          verificationRequired: true as const,
           verificationExpiresAt: verification.expiresAt,
         };
       });
