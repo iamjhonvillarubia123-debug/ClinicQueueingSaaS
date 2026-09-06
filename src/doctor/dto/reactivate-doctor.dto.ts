@@ -13,4 +13,8 @@ export class ReactivateDoctorDto {
 
   @IsString()
   password!: string;
+
+  get email(): string {
+    return this.identifier;
+  }
 }
