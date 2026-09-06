@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-
 const targets = [
   'test/app.e2e-spec.ts',
   'test/r1-secretary-password-reset-parity.e2e-spec.ts',
@@ -13,12 +12,32 @@ const targets = [
   'test/r1-secretary-zero-assignment-account.e2e-spec.ts',
 ];
 
-function replaceAllChecked(content, search, replacement, label, minimum = 1) {
-  const occurrences = content.split(search).length - 1;
-  if (occurrences < minimum) {
-    throw new Error(`${label}: expected at least ${minimum} occurrence(s), found ${occurrences}`);
+function transformEndpoint(content, endpoint, transform) {
+  const marker = `.post('${endpoint}')`;
+  let cursor = 0;
+  let output = '';
+  while (true) {
+    const start = content.indexOf(marker, cursor);
+    if (start < 0) {
+      output += content.slice(cursor);
+      return output;
+    }
+    output += content.slice(cursor, start);
+    const nextPost = content.indexOf('.post(', start + marker.length);
+    const end = nextPost < 0 ? content.length : nextPost;
+    output += transform(content.slice(start, end));
+    cursor = end;
   }
-  return content.split(search).join(replacement);
+}
+
+function identifierRequests(block) {
+  return block
+    .replace(/\.send\(\{ email, password \}\)/g, '.send({ identifier: email, password })')
+    .replace(/\.send\(\{ email, password: ([^}]+) \}\)/g, '.send({ identifier: email, password: $1 })')
+    .replace(/\.send\(\{ email: ([^,}]+), password \}\)/g, '.send({ identifier: $1, password })')
+    .replace(/\.send\(\{ email: ([^,}]+), password: ([^}]+) \}\)/g, '.send({ identifier: $1, password: $2 })')
+    .replace(/\.send\(\{ email \}\)/g, '.send({ identifier: email })')
+    .replace(/\.send\(\{ email: ([^}]+) \}\)/g, '.send({ identifier: $1 })');
 }
 
 for (const relativePath of targets) {
@@ -26,51 +45,61 @@ for (const relativePath of targets) {
   let content = fs.readFileSync(filePath, 'utf8');
   const original = content;
 
-  // Current F6 auth contracts use one primary identifier field for email or mobile.
-  content = content.replace(/\.send\(\{ email, password \}\)/g, '.send({ identifier: email, password })');
-  content = content.replace(/\.send\(\{ email, password: ([^}]+) \}\)/g, '.send({ identifier: email, password: $1 })');
-  content = content.replace(/\.send\(\{ email: ([^,}]+), password \}\)/g, '.send({ identifier: $1, password })');
-  content = content.replace(/\.send\(\{ email: ([^,}]+), password: ([^}]+) \}\)/g, '.send({ identifier: $1, password: $2 })');
-  content = content.replace(/\.send\(\{ email \}\)/g, '.send({ identifier: email })');
+  // Only endpoints whose approved/current DTO actually uses the dual identifier are changed.
+  content = transformEndpoint(content, '/auth/login', identifierRequests);
+  content = transformEndpoint(content, '/auth/request-password-reset', identifierRequests);
+  content = transformEndpoint(content, '/doctor/account/reactivate', identifierRequests);
+  content = transformEndpoint(content, '/doctor/account/permanent-delete', identifierRequests);
 
-  // Lifecycle pre-login endpoints now use the same primary-identifier contract.
-  content = content.replace(/\.send\(\{ email, password: ([^}]+) \}\)/g, '.send({ identifier: email, password: $1 })');
-
-  // Public account registration now accepts one identifier rather than separate email/mobile fields.
-  content = content.replace(
-    /([ \t]*)email,\r?\n\1mobileNumber: '[^']+',\r?\n/g,
-    '$1identifier: email,\n',
-  );
-  content = content.replace(
-    /([ \t]*)email: ([^,\n]+),\r?\n\1mobileNumber: '[^']+',\r?\n/g,
-    '$1identifier: $2,\n',
+  // Common F6 registration accepts one primary identifier and no second contact field.
+  content = transformEndpoint(content, '/auth/register', (block) =>
+    block
+      .replace(/([ \t]*)email,\r?\n\1mobileNumber: '[^']+',\r?\n/g, '$1identifier: email,\n')
+      .replace(/([ \t]*)email: ([^,\n]+),\r?\n\1mobileNumber: '[^']+',\r?\n/g, '$1identifier: $2,\n'),
   );
 
-  // A few lifecycle DTOs used an explicit email property rather than the shorthand form.
-  content = content.replace(/([ \t]*)email: email,\r?\n/g, '$1identifier: email,\n');
+  // Registration response names were generalized from email-only verification.
+  content = content
+    .replace(/emailVerificationRequired/g, 'verificationRequired')
+    .replace(/emailVerificationExpiresAt/g, 'verificationExpiresAt');
 
-  if (content !== original) {
-    fs.writeFileSync(filePath, content, 'utf8');
-    console.log(`updated ${relativePath}`);
-  } else {
-    console.log(`no changes ${relativePath}`);
+  // Secretary lifecycle endpoints still have their existing email DTO during this reconciliation slice.
+  content = transformEndpoint(content, '/secretary/account/reactivate', (block) =>
+    block.replace(/identifier: email/g, 'email'),
+  );
+  content = transformEndpoint(content, '/secretary/account/permanent-delete', (block) =>
+    block.replace(/identifier: email/g, 'email'),
+  );
+
+  // Legacy /doctor/register is an onboarding compatibility endpoint with its own DTO. Leave it unchanged.
+
+  // Secretary workspace now deliberately returns the account summary as well as authority collections.
+  if (relativePath === 'test/r1-secretary-password-reset-parity.e2e-spec.ts') {
+    content = content.replace(
+      "expect(workspace.body).toEqual({ clinics: [], invitations: [] });",
+      "expect(workspace.body).toEqual({\n      account: {\n        firstName: 'Reset',\n        lastName: 'Secretary',\n        email,\n        mobileNumber: '+639171234567',\n      },\n      clinics: [],\n      invitations: [],\n    });",
+    );
   }
+
+  fs.writeFileSync(filePath, content, 'utf8');
+  console.log(content === original ? `no changes ${relativePath}` : `updated ${relativePath}`);
 }
 
-// Guard against leaving the known obsolete HTTP request shapes in the affected files.
-const forbidden = [
-  /\.post\('\/auth\/login'\)[\s\S]{0,120}\.send\(\{ email[, }]/,
-  /\.post\('\/auth\/request-password-reset'\)[\s\S]{0,120}\.send\(\{ email[, }]/,
-  /\.post\('\/auth\/register'\)[\s\S]{0,220}\.send\(\{[\s\S]*?\n\s*email[, :]/,
-];
-
+// Endpoint-aware guards. They intentionally do not flag legacy /doctor/register or Secretary lifecycle DTOs.
 for (const relativePath of targets) {
   const content = fs.readFileSync(path.join(root, relativePath), 'utf8');
-  for (const pattern of forbidden) {
-    if (pattern.test(content)) {
-      throw new Error(`${relativePath}: obsolete dual-identifier HTTP request shape remains (${pattern})`);
+  for (const endpoint of ['/auth/login', '/auth/request-password-reset']) {
+    const marker = `.post('${endpoint}')`;
+    let start = content.indexOf(marker);
+    while (start >= 0) {
+      const nextPost = content.indexOf('.post(', start + marker.length);
+      const block = content.slice(start, nextPost < 0 ? content.length : nextPost);
+      if (/\.send\(\{ email(?:[, }])/.test(block)) {
+        throw new Error(`${relativePath}: obsolete email request remains for ${endpoint}`);
+      }
+      start = content.indexOf(marker, start + marker.length);
     }
   }
 }
 
-console.log('R3 E2E dual-identifier reconciliation complete.');
+console.log('R3 E2E endpoint-aware reconciliation complete.');
