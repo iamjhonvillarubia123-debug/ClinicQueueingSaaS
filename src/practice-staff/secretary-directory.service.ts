@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class SecretaryDirectoryService {
   constructor(private readonly prisma: PrismaService) {}
+
   async getDoctorDirectory(userId: string) {
     const clinics = await this.prisma.practiceLocation.findMany({
       where: { doctorProfile: { userId } },
@@ -27,9 +29,11 @@ export class SecretaryDirectoryService {
                 lastName: true,
                 email: true,
                 mobileNumber: true,
+                loginIdentifierType: true,
                 role: true,
                 accountStatus: true,
                 emailVerifiedAt: true,
+                mobileVerifiedAt: true,
               },
             },
             substituteSecretaryCoverages: {
@@ -51,6 +55,8 @@ export class SecretaryDirectoryService {
             id: true,
             firstName: true,
             lastName: true,
+            identifierType: true,
+            normalizedIdentifier: true,
             normalizedEmail: true,
             mobileNumber: true,
             status: true,
@@ -66,6 +72,7 @@ export class SecretaryDirectoryService {
         },
       },
     });
+
     return {
       assignments: clinics.flatMap((clinic) =>
         clinic.staffAssignments.map((staff) => ({
@@ -80,7 +87,7 @@ export class SecretaryDirectoryService {
             staff.isActive &&
             staff.user.role === 'SECRETARY' &&
             staff.user.accountStatus === 'ACTIVE' &&
-            staff.user.emailVerifiedAt !== null,
+            accountIdentifierIsVerified(staff.user),
           isClinicSecretary: staff.id === clinic.currentRegularPracticeStaffId,
           assignedAt: staff.activatedAt,
           deactivatedAt: staff.deactivatedAt,
@@ -91,6 +98,8 @@ export class SecretaryDirectoryService {
         clinic.secretaryInvitations.map((invitation) => ({
           invitationId: invitation.id,
           name: `${invitation.firstName} ${invitation.lastName}`.trim(),
+          identifierType: invitation.identifierType,
+          identifier: invitation.normalizedIdentifier,
           email: invitation.normalizedEmail,
           mobileNumber: invitation.mobileNumber,
           clinic: { id: clinic.id, name: clinic.name },
