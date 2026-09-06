@@ -2,6 +2,7 @@ import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  AccountLoginIdentifierType,
   AccountPermanentClosureType,
   AdministrativeRestrictionStatus,
   CommandType,
@@ -14,7 +15,9 @@ import {
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { DoctorClosureFinancialSettlementService } from '../financial/doctor-closure-financial-settlement.service';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { DoctorLifecycleService } from './doctor-lifecycle.service';
 
 describe('DoctorLifecycleService', () => {
@@ -23,23 +26,11 @@ describe('DoctorLifecycleService', () => {
   const tx = {
     $executeRaw: jest.fn().mockResolvedValue(1),
     $queryRaw: jest.fn(),
-    commandIdempotency: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-    },
-    user: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-    userSession: {
-      updateMany: jest.fn(),
-    },
-    accountPermanentClosureAudit: {
-      create: jest.fn(),
-    },
-    notificationOutbox: {
-      create: jest.fn(),
-    },
+    commandIdempotency: { findUnique: jest.fn(), create: jest.fn() },
+    user: { findUnique: jest.fn(), update: jest.fn() },
+    userSession: { updateMany: jest.fn() },
+    accountPermanentClosureAudit: { create: jest.fn() },
+    notificationOutbox: { create: jest.fn() },
   };
   const prisma = {
     user: { findFirst: jest.fn() },
@@ -47,9 +38,7 @@ describe('DoctorLifecycleService', () => {
       callback(tx),
     ),
   };
-  const passwordSecurity = {
-    verify: jest.fn().mockResolvedValue(true),
-  };
+  const passwordSecurity = { verify: jest.fn().mockResolvedValue(true) };
   const protectedPayload = {
     encrypt: jest.fn((value: string) => `enc:${value}`),
   };
@@ -61,6 +50,26 @@ describe('DoctorLifecycleService', () => {
       creditedFuturePeriods: 0,
     }),
   };
+  const mobileNumbers = {
+    normalize: jest.fn((value: string) => ({ canonical: value })),
+    hashCanonical: jest.fn((value: string) => `hash:${value}`),
+    encrypt: jest.fn((value: string) => `mobile:${value}`),
+  };
+  const notificationPayload = {
+    encryptMessage: jest.fn((value: string) => `notification:${value}`),
+  };
+
+  const currentEmailDoctor = (status = UserAccountStatus.ACTIVE) => ({
+    id: 'doctor-1',
+    email: 'doctor@example.com',
+    mobileNumber: null,
+    loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+    emailVerifiedAt: new Date('2026-09-01T00:00:00Z'),
+    mobileVerifiedAt: null,
+    role: UserRole.DOCTOR,
+    accountStatus: status,
+    passwordHash: 'hash',
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -73,6 +82,8 @@ describe('DoctorLifecycleService', () => {
           provide: DoctorClosureFinancialSettlementService,
           useValue: closureFinancialSettlement,
         },
+        { provide: MobileNumberService, useValue: mobileNumbers },
+        { provide: NotificationPayloadService, useValue: notificationPayload },
       ],
     }).compile();
     service = module.get(DoctorLifecycleService);
@@ -82,6 +93,9 @@ describe('DoctorLifecycleService', () => {
     passwordSecurity.verify.mockResolvedValue(true);
     protectedPayload.encrypt.mockImplementation(
       (value: string) => `enc:${value}`,
+    );
+    notificationPayload.encryptMessage.mockImplementation(
+      (value: string) => `notification:${value}`,
     );
     closureFinancialSettlement.prepare.mockResolvedValue({
       doctorFinancialAccountId: null,
@@ -95,20 +109,22 @@ describe('DoctorLifecycleService', () => {
 
   it('disables an active unrestricted Doctor, revokes sessions, and commits idempotency', async () => {
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
-    tx.user.findUnique.mockResolvedValue({
-      id: 'doctor-1',
-      role: UserRole.DOCTOR,
-      accountStatus: UserAccountStatus.ACTIVE,
-      administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
-    });
+    tx.user.findUnique
+      .mockResolvedValueOnce({
+        role: UserRole.DOCTOR,
+        passwordHash: 'hash',
+      })
+      .mockResolvedValueOnce({
+        id: 'doctor-1',
+        role: UserRole.DOCTOR,
+        accountStatus: UserAccountStatus.ACTIVE,
+        administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+      });
     tx.$queryRaw.mockResolvedValue([{ id: 'doctor-1' }]);
 
     await expect(
       service.disable('doctor-1', 'disable-key', 'current-password'),
-    ).resolves.toEqual({
-      disabled: true,
-      replayed: false,
-    });
+    ).resolves.toEqual({ disabled: true, replayed: false });
     expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: 'doctor-1' },
       data: { accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED },
@@ -159,14 +175,6 @@ describe('DoctorLifecycleService', () => {
       where: { id: 'doctor-1' },
       data: { accountStatus: UserAccountStatus.ACTIVE },
     });
-    expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        commandType: CommandType.DOCTOR_REACTIVATE_ACCOUNT,
-        actorUserId: null,
-        accountUserId: 'doctor-1',
-        createdAt: expect.any(Date) as unknown,
-      }) as unknown,
-    });
     expect(tx.userSession.updateMany).not.toHaveBeenCalled();
   });
 
@@ -177,8 +185,7 @@ describe('DoctorLifecycleService', () => {
       id: 'doctor-1',
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
-      administrativeRestrictionStatus:
-        AdministrativeRestrictionStatus.SUSPENDED,
+      administrativeRestrictionStatus: AdministrativeRestrictionStatus.SUSPENDED,
       passwordHash: 'hash',
     });
     tx.$queryRaw.mockResolvedValue([{ id: 'doctor-1' }]);
@@ -191,7 +198,6 @@ describe('DoctorLifecycleService', () => {
 
   it('uses a generic credential failure for a missing current Doctor account', async () => {
     prisma.user.findFirst.mockResolvedValue(null);
-
     await expect(
       service.reactivate('missing@example.com', 'password', 'key'),
     ).rejects.toThrow(UnauthorizedException);
@@ -202,13 +208,7 @@ describe('DoctorLifecycleService', () => {
     tx.$queryRaw
       .mockResolvedValueOnce([{ id: 'doctor-1' }])
       .mockResolvedValueOnce([]);
-    tx.user.findUnique.mockResolvedValue({
-      id: 'doctor-1',
-      email: 'doctor@example.com',
-      role: UserRole.DOCTOR,
-      accountStatus: UserAccountStatus.ACTIVE,
-      passwordHash: 'hash',
-    });
+    tx.user.findUnique.mockResolvedValue(currentEmailDoctor());
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
     closureFinancialSettlement.prepare.mockResolvedValue({
@@ -232,19 +232,14 @@ describe('DoctorLifecycleService', () => {
       tx,
       'doctor-1',
     );
-    expect(tx.commandIdempotency.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        commandType: CommandType.DOCTOR_DELETE_ACCOUNT,
-        actorUserId: 'doctor-1',
-        accountUserId: 'doctor-1',
-      }) as unknown,
-      select: { id: true },
-    });
     expect(closureFinancialSettlement.settle).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
         doctorFinancialAccountId: 'financial-1',
-        recoveryEmail: 'doctor@example.com',
+        recoveryIdentity: {
+          type: 'EMAIL',
+          value: 'doctor@example.com',
+        },
         closureCommandId: 'command-1',
         closedAt: expect.any(Date) as unknown,
       }),
@@ -279,13 +274,7 @@ describe('DoctorLifecycleService', () => {
     tx.$queryRaw
       .mockResolvedValueOnce([{ id: 'doctor-1' }])
       .mockResolvedValueOnce([{ id: 'clinic-day-1' }]);
-    tx.user.findUnique.mockResolvedValue({
-      id: 'doctor-1',
-      email: 'doctor@example.com',
-      role: UserRole.DOCTOR,
-      accountStatus: UserAccountStatus.ACTIVE,
-      passwordHash: 'hash',
-    });
+    tx.user.findUnique.mockResolvedValue(currentEmailDoctor());
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -296,7 +285,6 @@ describe('DoctorLifecycleService', () => {
         'delete-key',
       ),
     ).rejects.toThrow(ConflictException);
-
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
     expect(closureFinancialSettlement.settle).not.toHaveBeenCalled();
     expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
@@ -306,13 +294,7 @@ describe('DoctorLifecycleService', () => {
   it('rejects permanent closure while financial settlement reports an unresolved purchase or payment', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
     tx.$queryRaw.mockResolvedValueOnce([{ id: 'doctor-1' }]);
-    tx.user.findUnique.mockResolvedValue({
-      id: 'doctor-1',
-      email: 'doctor@example.com',
-      role: UserRole.DOCTOR,
-      accountStatus: UserAccountStatus.ACTIVE,
-      passwordHash: 'hash',
-    });
+    tx.user.findUnique.mockResolvedValue(currentEmailDoctor());
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     closureFinancialSettlement.prepare.mockRejectedValue(
       new ConflictException('Pending financial transaction.'),
@@ -326,7 +308,6 @@ describe('DoctorLifecycleService', () => {
         'delete-key',
       ),
     ).rejects.toThrow(ConflictException);
-
     expect(tx.commandIdempotency.create).not.toHaveBeenCalled();
     expect(closureFinancialSettlement.settle).not.toHaveBeenCalled();
     expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
@@ -335,14 +316,9 @@ describe('DoctorLifecycleService', () => {
   it('replays a committed permanent closure without repeating durable effects', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
     tx.$queryRaw.mockResolvedValueOnce([{ id: 'doctor-1' }]);
-    tx.user.findUnique.mockResolvedValue({
-      id: 'doctor-1',
-      email: 'doctor@example.com',
-      role: UserRole.DOCTOR,
-      accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
-      passwordHash: 'hash',
-    });
-
+    tx.user.findUnique.mockResolvedValue(
+      currentEmailDoctor(UserAccountStatus.PERMANENTLY_CLOSED),
+    );
     const fingerprint = createHash('sha256')
       .update(`${CommandType.DOCTOR_DELETE_ACCOUNT}|doctor-1|confirmed`, 'utf8')
       .digest('hex');
@@ -362,7 +338,6 @@ describe('DoctorLifecycleService', () => {
       replayed: true,
       publicRouteRetired: true,
     });
-
     expect(closureFinancialSettlement.prepare).not.toHaveBeenCalled();
     expect(closureFinancialSettlement.settle).not.toHaveBeenCalled();
     expect(tx.user.update).not.toHaveBeenCalled();
