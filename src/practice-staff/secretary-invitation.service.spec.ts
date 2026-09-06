@@ -75,6 +75,16 @@ describe('SecretaryInvitationService', () => {
       ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
     ],
   };
+  const activeSecretary = {
+    id: 'secretary-1',
+    role: 'SECRETARY',
+    accountStatus: 'ACTIVE',
+    administrativeRestrictionStatus: 'NONE',
+    emailVerifiedAt: new Date(),
+    firstName: 'Jane',
+    lastName: 'Reyes',
+    mobileNumber: '09183334444',
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -99,34 +109,56 @@ describe('SecretaryInvitationService', () => {
     );
   });
 
+  it('rejects an invitation when no Secretary account exists for the submitted email', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(service.create('doctor-1', clinicPlan)).rejects.toThrow(
+      'No Secretary account was found for this email',
+    );
+    expect(transaction.secretaryInvitation.create).not.toHaveBeenCalled();
+    expect(transaction.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
   it('rejects an existing account with an incompatible role', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
       currentRegularPracticeStaffId: null,
     });
-    prisma.user.findFirst.mockResolvedValue({ role: 'DOCTOR' });
+    prisma.user.findFirst.mockResolvedValue({ ...activeSecretary, role: 'DOCTOR' });
     await expect(service.create('doctor-1', clinicPlan)).rejects.toBeInstanceOf(
       ConflictException,
     );
   });
 
-  it('creates a pending relationship invitation without exposing an unrelated existing Secretary in the directory', async () => {
+  it('requires the matched Secretary account to be active and email-verified', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
       currentRegularPracticeStaffId: null,
     });
     prisma.user.findFirst.mockResolvedValue({
-      id: 'secretary-1',
-      role: 'SECRETARY',
-      accountStatus: 'ACTIVE',
-      administrativeRestrictionStatus: 'NONE',
-      emailVerifiedAt: new Date(),
-      firstName: 'Jane',
-      lastName: 'Reyes',
-      mobileNumber: '09183334444',
+      ...activeSecretary,
+      emailVerifiedAt: null,
     });
+    await expect(service.create('doctor-1', clinicPlan)).rejects.toThrow(
+      'must be active and email-verified before it can be invited',
+    );
+    expect(transaction.secretaryInvitation.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a pending relationship invitation for an eligible existing Secretary', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'North Clinic',
+      currentRegularPracticeStaffId: null,
+    });
+    prisma.user.findFirst.mockResolvedValue(activeSecretary);
     prisma.secretaryInvitation.findUnique.mockResolvedValue(null);
     transaction.secretaryInvitation.create.mockResolvedValue({
       id: 'invite-existing',
@@ -140,6 +172,9 @@ describe('SecretaryInvitationService', () => {
     expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         normalizedEmail: 'jane@example.test',
+        firstName: 'Jane',
+        lastName: 'Reyes',
+        mobileNumber: '09183334444',
         status: 'PENDING',
       }) as unknown,
     });
@@ -155,7 +190,7 @@ describe('SecretaryInvitationService', () => {
       name: 'North Clinic',
       currentRegularPracticeStaffId: 'staff-current',
     });
-    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findFirst.mockResolvedValue(activeSecretary);
     await expect(service.create('doctor-1', clinicPlan)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
@@ -171,7 +206,7 @@ describe('SecretaryInvitationService', () => {
       name: 'North Clinic',
       currentRegularPracticeStaffId: null,
     });
-    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findFirst.mockResolvedValue(activeSecretary);
     await expect(
       service.create('doctor-1', {
         ...clinicPlan,
@@ -259,7 +294,7 @@ describe('SecretaryInvitationService', () => {
       name: 'North Clinic',
       currentRegularPracticeStaffId: null,
     });
-    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findFirst.mockResolvedValue(activeSecretary);
     prisma.secretaryInvitation.findUnique.mockResolvedValue(null);
     transaction.secretaryInvitation.create.mockResolvedValue({
       id: 'invite-1',
