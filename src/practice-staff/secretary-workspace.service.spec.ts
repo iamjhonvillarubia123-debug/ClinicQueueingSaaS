@@ -20,6 +20,9 @@ describe('SecretaryWorkspaceService', () => {
   const eligibleSecretary = {
     id: 'secretary-1',
     email: 'secretary@example.test',
+    firstName: 'Maria',
+    lastName: 'Secretary',
+    mobileNumber: '09171234567',
     role: UserRole.SECRETARY,
     accountStatus: UserAccountStatus.ACTIVE,
     administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
@@ -90,6 +93,12 @@ describe('SecretaryWorkspaceService', () => {
         }) as unknown,
       }),
     );
+    expect(result.account).toEqual({
+      firstName: 'Maria',
+      lastName: 'Secretary',
+      email: 'secretary@example.test',
+      mobileNumber: '09171234567',
+    });
     expect(result.clinics[0]).toEqual(
       expect.objectContaining({
         clinicName: 'North Clinic',
@@ -108,6 +117,12 @@ describe('SecretaryWorkspaceService', () => {
     prisma.secretaryInvitation.findMany.mockResolvedValue([]);
 
     await expect(service.getWorkspace('secretary-1')).resolves.toEqual({
+      account: {
+        firstName: 'Maria',
+        lastName: 'Secretary',
+        email: 'secretary@example.test',
+        mobileNumber: '09171234567',
+      },
       clinics: [],
       invitations: [],
     });
