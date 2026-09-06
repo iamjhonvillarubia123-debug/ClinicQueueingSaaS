@@ -279,11 +279,12 @@ export function GlobalSecretariesPage() {
     setPending(true);
     setMessage('');
     try {
+      const { type: _type, ...payload } = command;
       await apiRequest(
         `/practice-staff/invitations/${encodeURIComponent(selectedInvitation.invitation.invitationId)}`,
         command.type === 'REMOVE'
           ? { method: 'DELETE' }
-          : { method: 'PATCH', body: command },
+          : { method: 'PATCH', body: payload },
       );
       setMessage(
         command.type === 'REMOVE'
