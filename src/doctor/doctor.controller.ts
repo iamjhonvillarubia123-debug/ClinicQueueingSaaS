@@ -142,12 +142,12 @@ export class DoctorController {
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Patch('defaults/booking-questions/:templateId')
-  updateBookingQuestionTemplate(
+  updateQuestionTemplate(
     @Request() request: AuthenticatedRequest,
     @Param('templateId') templateId: string,
     @Body() dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    return this.doctorDefaultsService.updateBookingQuestionTemplate(
+    return this.doctorDefaultsService.updateQuestionTemplate(
       request.user.userId,
       templateId,
       dto,
@@ -230,7 +230,7 @@ export class DoctorController {
     id: 'doctor-reactivate',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
   @Post('account/reactivate')
   reactivateAccount(
@@ -248,7 +248,7 @@ export class DoctorController {
     id: 'doctor-permanent-delete',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
   @Post('account/permanent-delete')
   permanentlyDeleteAccount(
