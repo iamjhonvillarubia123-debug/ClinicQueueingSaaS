@@ -47,6 +47,7 @@ jobs:
 
           path = 'frontend/src/auth/AccountAccessPages.test.tsx'
           replace(path, "screen.getByLabelText('Email address')", "screen.getByLabelText('Mobile # or email address')")
+          replace(path, "findByRole('heading', { name: 'Check your email' })", "findByRole('heading', { name: 'Check your messages' })")
 
           path = 'frontend/src/auth/CreateAccountPage.test.tsx'
           replace(path, "    expect(screen.getByPlaceholderText('Enter your email address')).toBeInTheDocument();\n    expect(screen.getByPlaceholderText('Enter your mobile number')).toBeInTheDocument();", "    expect(\n      screen.getByPlaceholderText('Enter mobile # or email address'),\n    ).toBeInTheDocument();")
