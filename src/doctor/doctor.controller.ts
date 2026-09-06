@@ -55,8 +55,7 @@ export class DoctorController {
     return this.accountRegistrationService.register({
       firstName: registerDoctorDto.firstName,
       lastName: registerDoctorDto.lastName,
-      email: registerDoctorDto.email,
-      mobileNumber: registerDoctorDto.mobileNumber,
+      identifier: registerDoctorDto.email,
       password: registerDoctorDto.password,
       role: UserRole.DOCTOR,
     });
