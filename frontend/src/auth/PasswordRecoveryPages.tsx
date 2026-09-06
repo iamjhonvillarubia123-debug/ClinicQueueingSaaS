@@ -37,20 +37,23 @@ function messageFor(error: unknown, fallback: string) {
 }
 
 export function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
-  const [submittedEmail, setSubmittedEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [submittedIdentifier, setSubmittedIdentifier] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   async function requestReset(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail || busy) return;
+    const normalizedIdentifier = identifier.trim();
+    if (!normalizedIdentifier || busy) return;
     setBusy(true);
     setError('');
     try {
-      await apiRequest('/auth/request-password-reset', { method: 'POST', body: { email: normalizedEmail } });
-      setSubmittedEmail(normalizedEmail);
+      await apiRequest('/auth/request-password-reset', {
+        method: 'POST',
+        body: { identifier: normalizedIdentifier },
+      });
+      setSubmittedIdentifier(normalizedIdentifier);
     } catch (caught) {
       setError(messageFor(caught, 'Unable to request a password reset right now.'));
     } finally {
@@ -58,20 +61,20 @@ export function ForgotPasswordPage() {
     }
   }
 
-  return <RecoveryFrame>{submittedEmail ? <section className="recovery-card recovery-email-card" aria-labelledby="check-email-heading">
+  return <RecoveryFrame>{submittedIdentifier ? <section className="recovery-card recovery-email-card" aria-labelledby="check-message-heading">
     <div className="recovery-success-symbol"><Icon name="mail" /><span><Icon name="check" /></span></div>
-    <header><h2 id="check-email-heading">Check your email</h2><p>We’ve sent a password reset link to</p><strong>{submittedEmail}</strong><p>The link will expire in 30 minutes<br />for security reasons.</p></header>
-    <aside><strong>Didn’t receive the email?</strong><p>Check your spam or junk folder.<br />If you still don’t see it, you can<br />request a new link.</p></aside>
+    <header><h2 id="check-message-heading">Check your messages</h2><p>If an eligible account matches</p><strong>{submittedIdentifier}</strong><p>a password reset link has been sent to its registered email address or mobile number. The link expires in 30 minutes.</p></header>
+    <aside><strong>Didn’t receive the message?</strong><p>Check your email spam folder or mobile messages. You can request a new link below.</p></aside>
     {error ? <div className="form-error" role="alert">{error}</div> : null}
     <button className="recovery-secondary" type="button" disabled={busy} onClick={() => void requestReset()}>{busy ? 'Sending…' : 'Resend reset link'}</button>
     <Link className="recovery-back-link" to="/login">Back to sign in</Link>
   </section> : <section className="recovery-card" aria-labelledby="forgot-password-heading">
-    <header><h2 id="forgot-password-heading">Forgot password?</h2><p>No problem. Enter your email<br />and we’ll send you a link to<br />reset your password.</p></header>
+    <header><h2 id="forgot-password-heading">Forgot password?</h2><p>Enter the mobile number or email address you use to sign in and we’ll send a password reset link to that registered account.</p></header>
     <form onSubmit={requestReset} noValidate>
-      <label htmlFor="recovery-email">Email address</label>
-      <div className="sign-in-input"><Icon name="mail" /><input id="recovery-email" type="email" required autoComplete="email" placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+      <label htmlFor="recovery-identifier">Mobile # or email address</label>
+      <div className="sign-in-input"><Icon name="mail" /><input id="recovery-identifier" type="text" required autoComplete="username" placeholder="Enter mobile # or email address" value={identifier} onChange={(event) => setIdentifier(event.target.value)} /></div>
       {error ? <div className="form-error" role="alert">{error}</div> : null}
-      <button className="sign-in-submit" type="submit" disabled={busy || !email.trim()}>{busy ? 'Sending…' : 'Send reset link'}</button>
+      <button className="sign-in-submit" type="submit" disabled={busy || !identifier.trim()}>{busy ? 'Sending…' : 'Send reset link'}</button>
       <Link className="recovery-back-link" to="/login">Back to sign in</Link>
     </form>
   </section>}</RecoveryFrame>;
