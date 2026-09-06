@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   ArrayNotEmpty,
   ArrayUnique,
@@ -23,14 +24,22 @@ export enum SecretaryInvitationAssignmentType {
 export class CreateSecretaryInvitationDto {
   @IsUUID() @IsNotEmpty() practiceLocationId!: string;
 
-  @IsOptional()
+  @Transform(({ value, obj }: { value: unknown; obj: Record<string, unknown> }) =>
+    typeof value === 'string' && value.trim()
+      ? value.trim()
+      : typeof obj.email === 'string' && obj.email.trim()
+        ? obj.email.trim()
+        : typeof obj.mobileNumber === 'string'
+          ? obj.mobileNumber.trim()
+          : value,
+  )
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   identifier!: string;
 
   // Transitional wire compatibility for the existing clinic staff container.
-  // The dual-identity service ignores profile data and derives the Secretary's
+  // The service ignores these profile fields and derives the Secretary's
   // authoritative identity from the matched User account.
   @IsOptional() @IsString() @MaxLength(100) firstName!: string;
   @IsOptional() @IsString() @MaxLength(100) lastName!: string;
