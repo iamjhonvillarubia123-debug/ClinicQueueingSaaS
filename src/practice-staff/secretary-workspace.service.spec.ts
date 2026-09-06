@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   UserAccountStatus,
   UserRole,
@@ -23,15 +24,17 @@ describe('SecretaryWorkspaceService', () => {
     firstName: 'Maria',
     lastName: 'Secretary',
     mobileNumber: '09171234567',
+    loginIdentifierType: AccountLoginIdentifierType.EMAIL,
     role: UserRole.SECRETARY,
     accountStatus: UserAccountStatus.ACTIVE,
     administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
     emailVerifiedAt: new Date('2026-09-01T00:00:00Z'),
+    mobileVerifiedAt: null,
   };
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('returns only the signed-in Secretary relationships and email invitations', async () => {
+  it('returns only the signed-in Secretary relationships and identity-bound invitations', async () => {
     prisma.user.findUnique.mockResolvedValue(eligibleSecretary);
     prisma.practiceStaff.findMany.mockResolvedValue([
       {
@@ -88,7 +91,13 @@ describe('SecretaryWorkspaceService', () => {
     expect(prisma.secretaryInvitation.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          normalizedEmail: 'secretary@example.test',
+          OR: [
+            { targetUserId: 'secretary-1' },
+            {
+              targetUserId: null,
+              normalizedEmail: 'secretary@example.test',
+            },
+          ],
           status: 'PENDING',
         }) as unknown,
       }),
