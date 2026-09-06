@@ -145,7 +145,7 @@ describe('AuthService', () => {
     expect(transactionMock.user.update).not.toHaveBeenCalled();
   });
 
-  it('returns email verification continuation after correct credentials without creating a session', async () => {
+  it('rejects an unverified account without creating a sign-in session', async () => {
     prismaServiceMock.user.findFirst.mockResolvedValue({
       ...eligibleDoctor(),
       emailVerifiedAt: null,
@@ -154,43 +154,7 @@ describe('AuthService', () => {
 
     await expect(
       service.login({ identifier: 'doctor@example.com', password: 'x' }),
-    ).resolves.toEqual({
-      sessionToken: null,
-      response: {
-        verificationRequired: true,
-        verificationChannel: 'EMAIL',
-        userId: 'user-1',
-        role: UserRole.DOCTOR,
-      },
-    });
-    expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('returns mobile verification continuation after correct credentials without creating a session', async () => {
-    const user = {
-      ...eligibleDoctor(),
-      email: null,
-      loginIdentifierType: AccountLoginIdentifierType.MOBILE,
-      emailVerifiedAt: null,
-      mobileVerifiedAt: null,
-      mobileNumberHash: 'hash:639171234567',
-    };
-    mobileNumberServiceMock.normalize.mockReturnValue({ canonical: '639171234567' });
-    mobileNumberServiceMock.hashCanonical.mockReturnValue('hash:639171234567');
-    prismaServiceMock.user.findFirst.mockResolvedValue(user);
-    passwordSecurityServiceMock.verify.mockResolvedValue(true);
-
-    await expect(
-      service.login({ identifier: '09171234567', password: 'x' }),
-    ).resolves.toEqual({
-      sessionToken: null,
-      response: {
-        verificationRequired: true,
-        verificationChannel: 'MOBILE',
-        userId: 'user-1',
-        role: UserRole.DOCTOR,
-      },
-    });
+    ).rejects.toThrow('Invalid login details or password.');
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
   });
 
