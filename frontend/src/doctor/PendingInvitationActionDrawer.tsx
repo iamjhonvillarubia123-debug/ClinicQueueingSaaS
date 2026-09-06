@@ -5,12 +5,14 @@ import { AUTHORITY_BUNDLES } from './StaffAssignmentDrawer';
 export type PendingInvitationActionCommand =
   | {
       type: 'UPDATE';
+      identifier: string;
       assignmentType: 'CLINIC_SECRETARY';
       authorityBundles: string[];
       requestedCancelClinicDay: boolean;
     }
   | {
       type: 'UPDATE';
+      identifier: string;
       assignmentType: 'SUBSTITUTE_SECRETARY';
       coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE';
       fromServiceDate: string;
@@ -35,6 +37,7 @@ export function PendingInvitationActionDrawer({
   onClose: () => void;
   onSubmit: (command: PendingInvitationActionCommand) => void | Promise<void>;
 }) {
+  const [identifier, setIdentifier] = useState(invitation.email.trim().toLowerCase());
   const [bundles, setBundles] = useState<string[]>(invitation.authorityBundles);
   const [cancelClinicDay, setCancelClinicDay] = useState(
     invitation.requestedCancelClinicDay === true,
@@ -49,9 +52,14 @@ export function PendingInvitationActionDrawer({
     invitation.toServiceDate?.slice(0, 10) ?? '',
   );
   const isClinic = invitation.assignmentType === 'CLINIC_SECRETARY';
-  const valid = isClinic
-    ? bundles.length > 0
-    : Boolean(fromDate && toDate && fromDate <= toDate);
+  const valid =
+    Boolean(identifier.trim()) &&
+    (isClinic
+      ? bundles.length > 0
+      : Boolean(fromDate && toDate && fromDate <= toDate));
+  const messageIsError = Boolean(
+    message && !message.toLowerCase().includes('success'),
+  );
 
   function toggleBundle(value: string) {
     setBundles((current) =>
@@ -62,9 +70,11 @@ export function PendingInvitationActionDrawer({
   }
 
   function submitEdit() {
+    const normalizedIdentifier = identifier.trim().toLowerCase();
     if (isClinic) {
       void onSubmit({
         type: 'UPDATE',
+        identifier: normalizedIdentifier,
         assignmentType: 'CLINIC_SECRETARY',
         authorityBundles: bundles,
         requestedCancelClinicDay: cancelClinicDay,
@@ -73,6 +83,7 @@ export function PendingInvitationActionDrawer({
     }
     void onSubmit({
       type: 'UPDATE',
+      identifier: normalizedIdentifier,
       assignmentType: 'SUBSTITUTE_SECRETARY',
       coverageMode,
       fromServiceDate: fromDate,
@@ -84,15 +95,30 @@ export function PendingInvitationActionDrawer({
     <aside className="staff-assignment-drawer" aria-label={`${mode} pending invitation drawer`}>
       <button type="button" className="staff-drawer-close" aria-label="Close invitation drawer" onClick={onClose}>×</button>
       <span className="staff-drawer-step">{mode === 'VIEW' ? '◉' : mode === 'EDIT' ? '✎' : '⌫'}</span>
-      <h2>{mode === 'VIEW' ? 'Invitation Details' : mode === 'EDIT' ? 'Edit Planned Authority' : 'Remove Pending Invitation'}</h2>
+      <h2>{mode === 'VIEW' ? 'Invitation Details' : mode === 'EDIT' ? 'Edit Pending Invitation' : 'Remove Pending Invitation'}</h2>
       <p>{invitation.name} · {clinicName}</p>
 
-      <dl className="staff-review">
-        <div><dt>Email</dt><dd>{invitation.email}</dd></div>
-        <div><dt>Mobile</dt><dd>{invitation.mobileNumber}</dd></div>
-        <div><dt>Status</dt><dd>Pending Invitation</dd></div>
-        <div><dt>Role</dt><dd>{isClinic ? 'Clinic Secretary' : 'Substitute Secretary'}</dd></div>
-      </dl>
+      {mode === 'EDIT' ? (
+        <div className="staff-invite-fields">
+          <label>
+            Secretary Email Address
+            <input
+              type="email"
+              autoComplete="email"
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
+            />
+          </label>
+          <small>Changing this email makes the system revalidate the target Secretary account before the invitation can be updated.</small>
+        </div>
+      ) : (
+        <dl className="staff-review">
+          <div><dt>Email</dt><dd>{invitation.email}</dd></div>
+          <div><dt>Mobile</dt><dd>{invitation.mobileNumber}</dd></div>
+          <div><dt>Status</dt><dd>Pending Invitation</dd></div>
+          <div><dt>Role</dt><dd>{isClinic ? 'Clinic Secretary' : 'Substitute Secretary'}</dd></div>
+        </dl>
+      )}
 
       {mode === 'VIEW' ? (
         <dl className="staff-review">
@@ -128,14 +154,21 @@ export function PendingInvitationActionDrawer({
             <label>To<input type="date" disabled={coverageMode === 'ONE_SERVICE_DATE'} value={toDate} onChange={(event) => setToDate(event.target.value)} /></label>
           </div>
         </>
-      ) : (
+      ) : mode === 'REMOVE' ? (
         <div className="staff-replacement-warning">
           <strong>Cancel and remove this pending invitation?</strong>
           <p>The invitation will disappear from the clinic staff list. Its link will show the Secretary that it was cancelled and will no longer allow acceptance. The audit record is preserved for traceability.</p>
         </div>
-      )}
+      ) : null}
 
-      {message ? <div className="staff-drawer-message" role="status">{message}</div> : null}
+      {message ? (
+        <div
+          className={`staff-drawer-message${messageIsError ? ' is-error' : ''}`}
+          role={messageIsError ? 'alert' : 'status'}
+        >
+          {message}
+        </div>
+      ) : null}
       <footer>
         <button type="button" onClick={onClose}>{mode === 'VIEW' ? 'Close' : 'Cancel'}</button>
         {mode !== 'VIEW' ? (
