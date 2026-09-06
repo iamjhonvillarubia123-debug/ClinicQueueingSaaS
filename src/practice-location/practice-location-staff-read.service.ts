@@ -33,7 +33,7 @@ export class PracticeLocationStaffReadService {
                 lastName: true,
                 email: true,
                 mobileNumber: true,
-                loginIdentityType: true,
+                loginIdentifierType: true,
                 role: true,
                 accountStatus: true,
                 emailVerifiedAt: true,
@@ -90,8 +90,14 @@ export class PracticeLocationStaffReadService {
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
         OR: [
-          { loginIdentityType: 'EMAIL', emailVerifiedAt: { not: null } },
-          { loginIdentityType: 'MOBILE', mobileVerifiedAt: { not: null } },
+          {
+            loginIdentifierType: 'EMAIL',
+            emailVerifiedAt: { not: null },
+          },
+          {
+            loginIdentifierType: 'MOBILE',
+            mobileVerifiedAt: { not: null },
+          },
         ],
         practiceStaffAssignments: {
           some: {
@@ -180,7 +186,7 @@ export class PracticeLocationStaffReadService {
       firstName: true,
       lastName: true,
       email: true,
-      loginIdentityType: true,
+      loginIdentifierType: true,
       role: true,
       accountStatus: true,
       emailVerifiedAt: true,
@@ -276,7 +282,7 @@ export class PracticeLocationStaffReadService {
       firstName: string;
       lastName: string;
       email: string | null;
-      loginIdentityType: 'EMAIL' | 'MOBILE';
+      loginIdentifierType: 'EMAIL' | 'MOBILE';
       role: string;
       accountStatus: string;
       emailVerifiedAt: Date | null;
@@ -304,11 +310,11 @@ export class PracticeLocationStaffReadService {
   }
 
   private hasVerifiedPrimaryIdentity(user: {
-    loginIdentityType: 'EMAIL' | 'MOBILE';
+    loginIdentifierType: 'EMAIL' | 'MOBILE';
     emailVerifiedAt: Date | null;
     mobileVerifiedAt: Date | null;
   }): boolean {
-    return user.loginIdentityType === 'EMAIL'
+    return user.loginIdentifierType === 'EMAIL'
       ? user.emailVerifiedAt !== null
       : user.mobileVerifiedAt !== null;
   }
