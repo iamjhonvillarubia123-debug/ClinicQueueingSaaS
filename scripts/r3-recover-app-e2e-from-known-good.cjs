@@ -55,12 +55,20 @@ const replacements = [
     ".post('/auth/request-password-reset')\n      .send({ identifier: `missing-${unique}@example.test` })",
   ],
   [
+    ".post('/auth/request-password-reset')\n        .send({ email })",
+    ".post('/auth/request-password-reset')\n        .send({ identifier: email })",
+  ],
+  [
     ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', reactivateKey)\n      .send({ email, password })",
     ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', reactivateKey)\n      .send({ identifier: email, password })",
   ],
   [
     ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `reactivate-closed-${unique}`)\n      .send({ email, password })",
     ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `reactivate-closed-${unique}`)\n      .send({ identifier: email, password })",
+  ],
+  [
+    ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `restricted-${unique}`)\n      .send({ email, password })",
+    ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `restricted-${unique}`)\n      .send({ identifier: email, password })",
   ],
   [
     ".post('/doctor/account/permanent-delete')\n      .set('Idempotency-Key', idempotencyKey)\n      .send({\n        email,",
@@ -95,8 +103,10 @@ const staleRequestPatterns = [
   ".post('/auth/login')\n      .send({ email, password: newPassword })",
   ".post('/auth/login').send({ email, password })",
   ".post('/auth/request-password-reset')\n      .send({ email: `missing-${unique}@example.test` })",
+  ".post('/auth/request-password-reset')\n        .send({ email })",
   ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', reactivateKey)\n      .send({ email, password })",
   ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `reactivate-closed-${unique}`)\n      .send({ email, password })",
+  ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `restricted-${unique}`)\n      .send({ email, password })",
 ];
 for (const stale of staleRequestPatterns) {
   if (repaired.includes(stale)) {
