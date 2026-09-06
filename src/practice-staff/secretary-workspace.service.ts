@@ -16,6 +16,9 @@ export class SecretaryWorkspaceService {
       select: {
         id: true,
         email: true,
+        firstName: true,
+        lastName: true,
+        mobileNumber: true,
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
@@ -111,6 +114,12 @@ export class SecretaryWorkspaceService {
     ]);
 
     return {
+      account: {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        mobileNumber: user.mobileNumber,
+      },
       clinics: assignments.map((assignment) => {
         const clinic = assignment.practiceLocation;
         const isClinicSecretary =
