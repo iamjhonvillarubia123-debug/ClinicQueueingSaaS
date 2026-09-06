@@ -10,7 +10,7 @@ export const AUTHORITY_BUNDLES = [
 
 const AUTHORITY_BUNDLE_DETAILS: Record<string, string[]> = {
   QUEUE_AND_CLINIC_DAY_OPERATIONS: ['Delayed Opening', 'Start Clinic', 'Call Again', 'Next Patient', 'Staff Reinsert', 'Return to Queue', 'Undo', 'Close Clinic'],
-  APPOINTMENTS_AND_PATIENT_INTAKE: ['Add Walk-in / Appointment', 'Patient Intake'],
+  APPOINTMENTS_AND_PATIENT_INTAKE: ['Add Walk-in / Appointment'],
   CLINIC_CONFIGURATION_DRAFTING: ['Prepare Draft', 'Edit Draft', 'Submit for Doctor Approval'],
   REPORTS_VIEW_ONLY: ['View Reports'],
 };
