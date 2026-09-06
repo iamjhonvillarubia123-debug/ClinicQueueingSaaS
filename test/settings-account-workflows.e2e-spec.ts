@@ -4,7 +4,7 @@ import { PasswordSecurityService } from '../src/auth/security/password-security.
 import { SessionManagementService } from '../src/auth/session-management.service';
 import { DoctorAccountDataService } from '../src/doctor/doctor-account-data.service';
 import { DoctorAuditService } from '../src/doctor/doctor-audit.service';
-import { UserRole } from '../generated/prisma/client';
+import { AccountLoginIdentifierType, UserRole } from '../generated/prisma/client';
 
 describe('Settings security, notifications, and account-only downloads (isolated database)', () => {
   const prisma = new PrismaService();
@@ -119,6 +119,8 @@ describe('Settings security, notifications, and account-only downloads (isolated
       data: {
         practiceLocationId: owner.clinic.id,
         invitedByUserId: owner.user.id,
+        identifierType: AccountLoginIdentifierType.EMAIL,
+        normalizedIdentifier: 'invitee@example.test',
         normalizedEmail: 'invitee@example.test',
         firstName: 'Invited',
         lastName: 'Secretary',
