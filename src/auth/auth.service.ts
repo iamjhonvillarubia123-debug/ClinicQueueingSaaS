@@ -20,13 +20,23 @@ import {
   SESSION_IDLE_LIFETIME_MS,
 } from './security/session-security';
 
-export interface LoginResult {
-  sessionToken: string;
-  response: {
-    user: { id: string; role: UserRole };
-    lastLoginAt: Date;
-  };
-}
+export type LoginResult =
+  | {
+      sessionToken: string;
+      response: {
+        user: { id: string; role: UserRole };
+        lastLoginAt: Date;
+      };
+    }
+  | {
+      sessionToken: null;
+      response: {
+        verificationRequired: true;
+        verificationChannel: 'EMAIL' | 'MOBILE';
+        userId: string;
+        role: UserRole;
+      };
+    };
 
 @Injectable()
 export class AuthService {
@@ -64,8 +74,26 @@ export class AuthService {
         )
       : false;
 
-    if (!user || !passwordMatches || !this.isOrdinaryLoginEligible(user)) {
+    if (!user || !passwordMatches || !this.isBaseLoginEligible(user)) {
       throw new UnauthorizedException('Invalid login details or password.');
+    }
+
+    if (
+      (user.role === UserRole.DOCTOR || user.role === UserRole.SECRETARY) &&
+      !accountIdentifierIsVerified(user)
+    ) {
+      return {
+        sessionToken: null,
+        response: {
+          verificationRequired: true,
+          verificationChannel:
+            user.loginIdentifierType === AccountLoginIdentifierType.EMAIL
+              ? 'EMAIL'
+              : 'MOBILE',
+          userId: user.id,
+          role: user.role,
+        },
+      };
     }
 
     const sessionToken = generateSessionToken();
@@ -128,13 +156,10 @@ export class AuthService {
     return { loggedOut: true };
   }
 
-  private isOrdinaryLoginEligible(user: {
+  private isBaseLoginEligible(user: {
     role: UserRole;
     accountStatus: UserAccountStatus;
     administrativeRestrictionStatus: AdministrativeRestrictionStatus;
-    loginIdentifierType: AccountLoginIdentifierType;
-    emailVerifiedAt: Date | null;
-    mobileVerifiedAt: Date | null;
   }): boolean {
     if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
 
@@ -145,6 +170,19 @@ export class AuthService {
     ) {
       return false;
     }
+
+    return true;
+  }
+
+  private isOrdinaryLoginEligible(user: {
+    role: UserRole;
+    accountStatus: UserAccountStatus;
+    administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+    loginIdentifierType: AccountLoginIdentifierType;
+    emailVerifiedAt: Date | null;
+    mobileVerifiedAt: Date | null;
+  }): boolean {
+    if (!this.isBaseLoginEligible(user)) return false;
 
     if (
       (user.role === UserRole.DOCTOR || user.role === UserRole.SECRETARY) &&
