@@ -42,7 +42,7 @@ jobs:
           }
           fs.writeFileSync(path, source);
           NODE
-      - run: npx eslint src/practice-staff/secretary-invitation.service.spec.ts
+      - run: npx eslint --fix src/practice-staff/secretary-invitation.service.spec.ts
       - run: npm test -- --runInBand secretary-invitation.service.spec.ts
       - name: Commit fixture correction
         run: |
