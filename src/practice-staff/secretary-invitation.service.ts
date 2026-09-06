@@ -88,15 +88,29 @@ export class SecretaryInvitationService {
         mobileNumber: true,
       },
     });
-    if (existingUser && existingUser.role !== UserRole.SECRETARY) {
+    if (!existingUser) {
+      throw new NotFoundException(
+        'No Secretary account was found for this email. Please review the email address or ask the Secretary to create and verify an account first.',
+      );
+    }
+    if (existingUser.role !== UserRole.SECRETARY) {
       throw new ConflictException(
         'This email belongs to an account with an incompatible role.',
       );
     }
-    const invitationFirstName = existingUser?.firstName ?? dto.firstName.trim();
-    const invitationLastName = existingUser?.lastName ?? dto.lastName.trim();
-    const invitationMobileNumber =
-      existingUser?.mobileNumber ?? dto.mobileNumber.trim();
+    if (
+      existingUser.accountStatus !== UserAccountStatus.ACTIVE ||
+      existingUser.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
+      !existingUser.emailVerifiedAt
+    ) {
+      throw new ConflictException(
+        'The Secretary account for this email must be active and email-verified before it can be invited.',
+      );
+    }
+    const invitationFirstName = existingUser.firstName;
+    const invitationLastName = existingUser.lastName;
+    const invitationMobileNumber = existingUser.mobileNumber;
     const expectedCurrentPracticeStaffId =
       plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY
         ? location.currentRegularPracticeStaffId
@@ -165,7 +179,7 @@ export class SecretaryInvitationService {
             `${PAYLOAD_PURPOSE}:recipient`,
           ),
           messageBodyEncrypted: this.payload.encrypt(
-            `You have been invited to join ${location.name} as a ${plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY ? 'Clinic Secretary' : 'Substitute Secretary'}. Create or sign in to your own verified Secretary account, then accept the clinic relationship: ${url}`,
+            `You have been invited to join ${location.name} as a ${plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY ? 'Clinic Secretary' : 'Substitute Secretary'}. Sign in to your active, verified Secretary account, then accept the clinic relationship: ${url}`,
             `${PAYLOAD_PURPOSE}:message`,
           ),
           providerIdempotencyKey: `secretary-invitation:${created.id}`,
