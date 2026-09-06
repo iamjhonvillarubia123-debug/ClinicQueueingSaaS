@@ -22,8 +22,9 @@ describe('approved create account UI', () => {
     expect(screen.getByRole('radio', { name: /Secretary/i })).not.toBeChecked();
     expect(screen.getByPlaceholderText('Enter your first name')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter your last name')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter your email address')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter your mobile number')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Enter mobile # or email address'),
+    ).toBeInTheDocument();
     expect(screen.getByText('At least 8 characters')).toBeInTheDocument();
     expect(screen.getByText('Uppercase letter')).toBeInTheDocument();
     expect(screen.getByText('Lowercase letter')).toBeInTheDocument();
@@ -59,6 +60,10 @@ describe('approved create account UI', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><CreateAccountPage /></MemoryRouter>);
 
+    await user.type(
+      screen.getByPlaceholderText('Enter mobile # or email address'),
+      'doctor@example.com',
+    );
     const password = screen.getByPlaceholderText('Create a password');
     const confirmation = screen.getByPlaceholderText('Re-enter your password');
     const submit = screen.getByRole('button', { name: 'Create account' });
@@ -78,8 +83,9 @@ describe('approved create account UI', () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
       userId: 'user-1',
       role: 'SECRETARY',
-      emailVerificationRequired: true,
-      emailVerificationExpiresAt: '2026-09-01T00:00:00.000Z',
+      verificationChannel: 'EMAIL',
+      verificationRequired: true,
+      verificationExpiresAt: '2026-09-01T00:00:00.000Z',
     }));
     const user = userEvent.setup();
     render(
@@ -94,8 +100,10 @@ describe('approved create account UI', () => {
     await user.click(screen.getByRole('radio', { name: /Secretary/i }));
     await user.type(screen.getByPlaceholderText('Enter your first name'), 'Maria');
     await user.type(screen.getByPlaceholderText('Enter your last name'), 'Santos');
-    await user.type(screen.getByPlaceholderText('Enter your email address'), 'secretary@example.com');
-    await user.type(screen.getByPlaceholderText('Enter your mobile number'), '09171234567');
+    await user.type(
+      screen.getByPlaceholderText('Enter mobile # or email address'),
+      'secretary@example.com',
+    );
     await user.type(screen.getByPlaceholderText('Create a password'), 'ExamplePass1!');
     await user.type(screen.getByPlaceholderText('Re-enter your password'), 'ExamplePass1!');
     await user.click(screen.getByRole('checkbox'));

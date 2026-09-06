@@ -28,13 +28,6 @@ const AUTHORITY_BUNDLE_DETAILS: Record<string, string[]> = {
   REPORTS_VIEW_ONLY: ['View Reports'],
 };
 
-type InviteWireCompatibility = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  mobileNumber: string;
-};
-
 export type StaffAssignmentCommand =
   | {
       role: 'CLINIC_SECRETARY';
@@ -58,22 +51,22 @@ export type StaffAssignmentCommand =
       fromServiceDate: string;
       toServiceDate: string;
     }
-  | ({
+  | {
       role: 'INVITE_NEW';
       identifier: string;
       assignmentType: 'CLINIC_SECRETARY';
       authorityBundles: string[];
       requestedCancelClinicDay: boolean;
       password?: string;
-    } & InviteWireCompatibility)
-  | ({
+    }
+  | {
       role: 'INVITE_NEW';
       identifier: string;
       assignmentType: 'SUBSTITUTE_SECRETARY';
       coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE';
       fromServiceDate: string;
       toServiceDate: string;
-    } & InviteWireCompatibility);
+    };
 
 export function StaffAssignmentDrawer({
   data,
@@ -163,18 +156,11 @@ export function StaffAssignmentDrawer({
   function submit() {
     if (mode === 'INVITE') {
       const identifier = inviteIdentifier.trim().toLowerCase();
-      const wireCompatibility: InviteWireCompatibility = {
-        firstName: '',
-        lastName: '',
-        email: identifier,
-        mobileNumber: '',
-      };
       void onSubmit(
         role === 'CLINIC_SECRETARY'
           ? {
               role: 'INVITE_NEW',
               identifier,
-              ...wireCompatibility,
               assignmentType: role,
               authorityBundles: bundles,
               requestedCancelClinicDay: cancelClinicDay,
@@ -183,7 +169,6 @@ export function StaffAssignmentDrawer({
           : {
               role: 'INVITE_NEW',
               identifier,
-              ...wireCompatibility,
               assignmentType: role,
               coverageMode,
               fromServiceDate: fromDate,

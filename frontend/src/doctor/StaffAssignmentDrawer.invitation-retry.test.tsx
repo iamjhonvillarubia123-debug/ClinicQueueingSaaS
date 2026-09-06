@@ -51,10 +51,10 @@ describe('StaffAssignmentDrawer invitation retry', () => {
     await user.click(
       screen.getByRole('button', { name: /Invite New Secretary to Clinic/i }),
     );
-    await user.type(screen.getByLabelText('First Name'), 'Anna');
-    await user.type(screen.getByLabelText('Last Name'), 'Dela Cruz');
-    await user.type(screen.getByLabelText('Email Address'), 'anna@example.ocm');
-    await user.type(screen.getByLabelText('Mobile Number'), '09181112222');
+    await user.type(
+      screen.getByLabelText('Secretary Email Address'),
+      'anna@example.ocm',
+    );
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -79,10 +79,7 @@ describe('StaffAssignmentDrawer invitation retry', () => {
       expect.objectContaining({
         role: 'INVITE_NEW',
         assignmentType: 'CLINIC_SECRETARY',
-        email: 'anna@example.com',
-        firstName: 'Anna',
-        lastName: 'Dela Cruz',
-        mobileNumber: '09181112222',
+        identifier: 'anna@example.com',
         authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }),
     );

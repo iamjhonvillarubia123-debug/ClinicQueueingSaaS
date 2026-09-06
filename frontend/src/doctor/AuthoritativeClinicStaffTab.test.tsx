@@ -263,13 +263,10 @@ describe('ClinicStaffView', () => {
     await user.click(
       screen.getByRole('button', { name: /Invite New Secretary/i }),
     );
-    await user.type(screen.getByLabelText('First Name'), 'Anna');
-    await user.type(screen.getByLabelText('Last Name'), 'Dela Cruz');
     await user.type(
-      screen.getByLabelText('Email Address'),
+      screen.getByLabelText('Secretary Email Address'),
       'anna@example.test',
     );
-    await user.type(screen.getByLabelText('Mobile Number'), '09181112222');
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(
@@ -288,7 +285,7 @@ describe('ClinicStaffView', () => {
       expect.objectContaining({
         role: 'INVITE_NEW',
         assignmentType: 'CLINIC_SECRETARY',
-        firstName: 'Anna',
+        identifier: 'anna@example.test',
         authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }),
     );
@@ -313,13 +310,10 @@ describe('ClinicStaffView', () => {
     await user.click(
       screen.getByRole('button', { name: /Invite New Secretary/i }),
     );
-    await user.type(screen.getByLabelText('First Name'), 'Anna');
-    await user.type(screen.getByLabelText('Last Name'), 'Dela Cruz');
     await user.type(
-      screen.getByLabelText('Email Address'),
+      screen.getByLabelText('Secretary Email Address'),
       'anna@example.test',
     );
-    await user.type(screen.getByLabelText('Mobile Number'), '09181112222');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByLabelText(/Allow Cancel Clinic Day/i));
