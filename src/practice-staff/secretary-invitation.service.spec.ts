@@ -8,7 +8,9 @@ import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { ClinicSecretaryAuthorityBundle } from './secretary-authority.types';
 import { SecretaryInvitationAssignmentType } from './dto/create-secretary-invitation.dto';
 import { SecretaryInvitationService } from './secretary-invitation.service';
@@ -55,21 +57,28 @@ describe('SecretaryInvitationService', () => {
     ),
   };
   const payload = { encrypt: jest.fn((value: string) => `encrypted:${value}`) };
+  const notificationPayload = {
+    encryptMessage: jest.fn((value: string) => `message:${value}`),
+  };
   const passwords = { verify: jest.fn() };
+  const mobileNumbers = {
+    normalize: jest.fn((value: string) => ({ canonical: value })),
+    hashCanonical: jest.fn((value: string) => `hash:${value}`),
+    encryptCanonical: jest.fn((value: string) => `mobile:${value}`),
+  };
   const service = new SecretaryInvitationService(
     prisma as unknown as PrismaService,
     {
       get: jest.fn(() => 'https://clinic.example'),
     } as unknown as ConfigService,
     payload as unknown as ProtectedAccountPayloadService,
+    notificationPayload as unknown as NotificationPayloadService,
     passwords as unknown as PasswordSecurityService,
+    mobileNumbers as unknown as MobileNumberService,
   );
   const clinicPlan = {
     practiceLocationId: 'clinic-1',
-    firstName: 'Jane',
-    lastName: 'Reyes',
-    email: 'jane@example.test',
-    mobileNumber: '09183334444',
+    identifier: 'jane@example.test',
     assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
     authorityBundles: [
       ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
@@ -80,10 +89,14 @@ describe('SecretaryInvitationService', () => {
     role: 'SECRETARY',
     accountStatus: 'ACTIVE',
     administrativeRestrictionStatus: 'NONE',
+    loginIdentifierType: 'EMAIL',
+    email: 'jane@example.test',
     emailVerifiedAt: new Date(),
+    mobileNumber: '09183334444',
+    mobileNumberHash: 'hash:09183334444',
+    mobileVerifiedAt: null,
     firstName: 'Jane',
     lastName: 'Reyes',
-    mobileNumber: '09183334444',
   };
 
   beforeEach(() => {
@@ -118,7 +131,7 @@ describe('SecretaryInvitationService', () => {
     prisma.user.findFirst.mockResolvedValue(null);
 
     await expect(service.create('doctor-1', clinicPlan)).rejects.toThrow(
-      'No Secretary account was found for this email',
+      'No Secretary account was found for this email. Please review the email address for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
     );
     expect(transaction.secretaryInvitation.create).not.toHaveBeenCalled();
     expect(transaction.notificationOutbox.create).not.toHaveBeenCalled();
@@ -136,7 +149,7 @@ describe('SecretaryInvitationService', () => {
     );
   });
 
-  it('requires the matched Secretary account to be active and email-verified', async () => {
+  it('requires the matched Secretary account to be active and its primary email verified', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -147,7 +160,7 @@ describe('SecretaryInvitationService', () => {
       emailVerifiedAt: null,
     });
     await expect(service.create('doctor-1', clinicPlan)).rejects.toThrow(
-      'must be active and email-verified before it can be invited',
+      'must be active and its registered email address must be verified',
     );
     expect(transaction.secretaryInvitation.create).not.toHaveBeenCalled();
   });
@@ -171,6 +184,8 @@ describe('SecretaryInvitationService', () => {
     await service.create('doctor-1', clinicPlan);
     expect(transaction.secretaryInvitation.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        targetUserId: 'secretary-1',
+        normalizedIdentifier: 'jane@example.test',
         normalizedEmail: 'jane@example.test',
         firstName: 'Jane',
         lastName: 'Reyes',
@@ -220,6 +235,9 @@ describe('SecretaryInvitationService', () => {
     prisma.secretaryInvitation.findFirst.mockResolvedValue({
       id: 'invite-1',
       expiresAt: new Date(Date.now() + 60_000),
+      practiceLocationId: 'clinic-1',
+      normalizedIdentifier: 'jane@example.test',
+      practiceLocation: { name: 'North Clinic' },
     });
     prisma.secretaryInvitation.update.mockResolvedValue({
       id: 'invite-1',
@@ -227,6 +245,7 @@ describe('SecretaryInvitationService', () => {
       updatedAt: new Date(),
     });
     await service.updatePending('doctor-1', 'invite-1', {
+      identifier: 'jane@example.test',
       assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
       authorityBundles: [
         ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
@@ -248,6 +267,123 @@ describe('SecretaryInvitationService', () => {
         }) as unknown,
       }),
     );
+  });
+
+  it('retargets a pending invitation only after resolving an eligible corrected email and rotates delivery', async () => {
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      practiceLocationId: 'clinic-1',
+      normalizedIdentifier: 'wrong@example.test',
+      practiceLocation: { name: 'North Clinic' },
+    });
+    prisma.user.findFirst.mockResolvedValue({
+      ...activeSecretary,
+      id: 'secretary-2',
+      email: 'correct@example.test',
+      firstName: 'Correct',
+    });
+    prisma.secretaryInvitation.findUnique.mockResolvedValue(null);
+    transaction.secretaryInvitation.update.mockResolvedValue({
+      id: 'invite-1',
+      status: 'PENDING',
+      updatedAt: new Date(),
+    });
+    transaction.notificationOutbox.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.updatePending('doctor-1', 'invite-1', {
+      identifier: 'correct@example.test',
+      assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
+      authorityBundles: [
+        ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+      ],
+    });
+
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          loginIdentifierType: 'EMAIL',
+          email: 'correct@example.test',
+        }) as unknown,
+      }),
+    );
+    expect(transaction.secretaryInvitation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          targetUserId: 'secretary-2',
+          identifierType: 'EMAIL',
+          normalizedIdentifier: 'correct@example.test',
+          normalizedEmail: 'correct@example.test',
+          tokenHash: expect.any(String) as unknown,
+          activeInvitationKey: expect.any(String) as unknown,
+          requestedAssignmentType: 'CLINIC_SECRETARY',
+        }) as unknown,
+      }),
+    );
+    expect(transaction.notificationOutbox.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { secretaryInvitationId: 'invite-1' },
+        data: expect.objectContaining({
+          channel: 'EMAIL',
+          status: 'PENDING',
+          recipientEmailEncrypted: 'encrypted:correct@example.test',
+          recipientMobileEncrypted: null,
+          attemptCount: 0,
+        }) as unknown,
+      }),
+    );
+  });
+
+  it('rejects a corrected email that has no eligible Secretary account without changing the invitation', async () => {
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      practiceLocationId: 'clinic-1',
+      normalizedIdentifier: 'wrong@example.test',
+      practiceLocation: { name: 'North Clinic' },
+    });
+    prisma.user.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.updatePending('doctor-1', 'invite-1', {
+        identifier: 'missing@example.test',
+        assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
+        authorityBundles: [
+          ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+        ],
+      }),
+    ).rejects.toThrow('No Secretary account was found for this email');
+    expect(transaction.secretaryInvitation.update).not.toHaveBeenCalled();
+    expect(transaction.notificationOutbox.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects retargeting to a Secretary who already has another pending invitation at the clinic', async () => {
+    prisma.secretaryInvitation.findFirst.mockResolvedValue({
+      id: 'invite-1',
+      expiresAt: new Date(Date.now() + 60_000),
+      practiceLocationId: 'clinic-1',
+      normalizedIdentifier: 'wrong@example.test',
+      practiceLocation: { name: 'North Clinic' },
+    });
+    prisma.user.findFirst.mockResolvedValue({
+      ...activeSecretary,
+      id: 'secretary-2',
+      email: 'correct@example.test',
+    });
+    prisma.secretaryInvitation.findUnique.mockResolvedValue({ id: 'invite-2' });
+
+    await expect(
+      service.updatePending('doctor-1', 'invite-1', {
+        identifier: 'correct@example.test',
+        assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
+        authorityBundles: [
+          ClinicSecretaryAuthorityBundle.QUEUE_AND_CLINIC_DAY_OPERATIONS,
+        ],
+      }),
+    ).rejects.toThrow(
+      'A pending invitation already exists for this Secretary at this clinic.',
+    );
+    expect(transaction.secretaryInvitation.update).not.toHaveBeenCalled();
   });
 
   it('revokes a pending invitation while preserving its audit row', async () => {
