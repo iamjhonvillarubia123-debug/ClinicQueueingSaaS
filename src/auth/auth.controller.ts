@@ -101,11 +101,11 @@ export class AuthController {
     id: 'auth-password-reset-request',
     limit: 5,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
   @Post('request-password-reset')
   requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
-    return this.passwordResetService.request(dto.email);
+    return this.passwordResetService.request(dto.identifier);
   }
 
   @Post('reset-password')
