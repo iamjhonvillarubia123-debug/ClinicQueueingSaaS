@@ -26,7 +26,7 @@ async function main() {
   try {
     await client.query('BEGIN READ ONLY');
     const userResult = await client.query(
-      `SELECT "email", "role", "accountStatus", "administrativeRestrictionStatus",
+      `SELECT "id", "email", "role", "accountStatus", "administrativeRestrictionStatus",
               "emailVerifiedAt", "firstName", "lastName"
          FROM "User"
         WHERE lower(trim("email")) = $1
@@ -34,17 +34,34 @@ async function main() {
       [normalizedEmail],
     );
     const invitationResult = await client.query(
-      `SELECT si."normalizedEmail", si."status", si."expiresAt", si."createdAt",
+      `SELECT si."id", si."normalizedEmail", si."status", si."expiresAt", si."createdAt",
               si."requestedAssignmentType", si."requestedAuthorityBundles",
-              pl."name" AS "clinicName"
+              pl."id" AS "clinicId", pl."name" AS "clinicName",
+              du."email" AS "doctorEmail"
          FROM "SecretaryInvitation" si
          JOIN "PracticeLocation" pl ON pl."id" = si."practiceLocationId"
+         JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
+         JOIN "User" du ON du."id" = dp."userId"
         WHERE lower(trim(si."normalizedEmail")) = $1
         ORDER BY si."createdAt" DESC`,
       [normalizedEmail],
     );
+    const clinicPendingResult = await client.query(
+      `SELECT si."id", si."normalizedEmail", si."status", si."expiresAt", si."createdAt",
+              si."requestedAssignmentType", si."requestedAuthorityBundles",
+              pl."id" AS "clinicId", pl."name" AS "clinicName",
+              du."email" AS "doctorEmail"
+         FROM "SecretaryInvitation" si
+         JOIN "PracticeLocation" pl ON pl."id" = si."practiceLocationId"
+         JOIN "DoctorProfile" dp ON dp."id" = pl."doctorProfileId"
+         JOIN "User" du ON du."id" = dp."userId"
+        WHERE si."status" = 'PENDING'
+        ORDER BY si."createdAt" DESC
+        LIMIT 50`,
+    );
     const now = new Date();
     const users = userResult.rows.map((row) => ({
+      userId: row.id,
       email: row.email,
       role: row.role,
       accountStatus: row.accountStatus,
@@ -53,7 +70,8 @@ async function main() {
       firstName: row.firstName,
       lastName: row.lastName,
     }));
-    const invitations = invitationResult.rows.map((row) => ({
+    const mapInvitation = (row) => ({
+      invitationId: row.id,
       normalizedEmail: row.normalizedEmail,
       status: row.status,
       expired: new Date(row.expiresAt).getTime() <= now.getTime(),
@@ -61,12 +79,16 @@ async function main() {
       createdAt: row.createdAt,
       assignmentType: row.requestedAssignmentType,
       authorityBundles: row.requestedAuthorityBundles,
+      clinicId: row.clinicId,
       clinicName: row.clinicName,
+      doctorEmail: row.doctorEmail,
       shouldAppearInWorkspace:
         row.normalizedEmail.trim().toLowerCase() === normalizedEmail &&
         row.status === 'PENDING' &&
         new Date(row.expiresAt).getTime() > now.getTime(),
-    }));
+    });
+    const invitations = invitationResult.rows.map(mapInvitation);
+    const pendingInvitationsAcrossClinics = clinicPendingResult.rows.map(mapInvitation);
 
     console.log(
       JSON.stringify(
@@ -76,6 +98,8 @@ async function main() {
           users,
           invitationCount: invitations.length,
           invitations,
+          pendingInvitationCountAcrossClinics: pendingInvitationsAcrossClinics.length,
+          pendingInvitationsAcrossClinics,
         },
         null,
         2,
