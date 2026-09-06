@@ -330,6 +330,8 @@ export class SecretaryInvitationService {
         expiresAt: true,
         practiceLocationId: true,
         normalizedIdentifier: true,
+        requestedAssignmentType: true,
+        requestedCancelClinicDay: true,
         practiceLocation: { select: { name: true } },
       },
     });
@@ -338,6 +340,44 @@ export class SecretaryInvitationService {
     }
     if (invitation.expiresAt.getTime() <= Date.now()) {
       throw new ConflictException('This invitation has expired.');
+    }
+    if (invitation.requestedAssignmentType !== plan.assignmentType) {
+      throw new ConflictException(
+        'A pending invitation cannot change between Clinic Secretary and Substitute Secretary. Cancel it and create a new invitation instead.',
+      );
+    }
+
+    const grantingCancelClinicDay =
+      !invitation.requestedCancelClinicDay && plan.requestedCancelClinicDay;
+    if (grantingCancelClinicDay) {
+      const actor = await this.prisma.user.findUnique({
+        where: { id: actorUserId },
+        select: {
+          role: true,
+          accountStatus: true,
+          administrativeRestrictionStatus: true,
+          passwordHash: true,
+        },
+      });
+      if (
+        !actor ||
+        actor.role !== UserRole.DOCTOR ||
+        actor.accountStatus !== UserAccountStatus.ACTIVE ||
+        actor.administrativeRestrictionStatus !==
+          AdministrativeRestrictionStatus.NONE
+      ) {
+        throw new ForbiddenException(
+          'Only an eligible current Doctor may update this invitation.',
+        );
+      }
+      if (!dto.password) {
+        throw new UnauthorizedException(
+          'Current password is required to grant Cancel Clinic Day authority.',
+        );
+      }
+      if (!(await this.passwords.verify(dto.password, actor.passwordHash))) {
+        throw new UnauthorizedException('Current password is incorrect.');
+      }
     }
 
     const correctedIdentifier = dto.identifier?.trim().toLowerCase();
@@ -388,6 +428,7 @@ export class SecretaryInvitationService {
           'The Secretary account must be active and its registered email address must be verified before it can be invited.',
         );
       }
+      const targetEmail = target.email;
 
       const activeInvitationKey = this.sha256(
         `${invitation.practiceLocationId}:${target.id}`,
@@ -413,8 +454,8 @@ export class SecretaryInvitationService {
           data: {
             targetUserId: target.id,
             identifierType: AccountLoginIdentifierType.EMAIL,
-            normalizedIdentifier: target.email,
-            normalizedEmail: target.email,
+            normalizedIdentifier: targetEmail,
+            normalizedEmail: targetEmail,
             firstName: target.firstName,
             lastName: target.lastName,
             mobileNumber: target.mobileNumber,
@@ -436,7 +477,7 @@ export class SecretaryInvitationService {
             channel: NotificationChannel.EMAIL,
             status: NotificationOutboxStatus.PENDING,
             recipientEmailEncrypted: this.protectedAccountPayload.encrypt(
-              target.email,
+              targetEmail,
               `${PAYLOAD_PURPOSE}:recipient`,
             ),
             recipientMobileEncrypted: null,
