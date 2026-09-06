@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  GlobalSecretariesPage,
   SecretaryDirectoryView,
   type SecretaryDirectory,
 } from './GlobalSecretariesPage';
@@ -39,7 +40,19 @@ const directory: SecretaryDirectory = {
     },
   ],
 };
-afterEach(cleanup);
+
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
 describe('SecretaryDirectoryView', () => {
   it('shows clinic context and only approved role labels', () => {
     render(<SecretaryDirectoryView data={directory} />);
@@ -47,6 +60,7 @@ describe('SecretaryDirectoryView', () => {
     expect(screen.getAllByText('Clinic Secretary').length).toBeGreaterThan(0);
     expect(screen.queryByText(/Regular Secretary/i)).not.toBeInTheDocument();
   });
+
   it('shows authoritative pending invitations', async () => {
     const user = userEvent.setup();
     render(<SecretaryDirectoryView data={directory} />);
@@ -56,6 +70,7 @@ describe('SecretaryDirectoryView', () => {
     expect(screen.getByText('Anna Cruz')).toBeInTheDocument();
     expect(screen.getByText('South Clinic')).toBeInTheDocument();
   });
+
   it('exposes edit remove and view actions for pending invitations', async () => {
     const user = userEvent.setup();
     const onEdit = vi.fn();
@@ -77,5 +92,29 @@ describe('SecretaryDirectoryView', () => {
     expect(onEdit).toHaveBeenCalledWith(directory.pendingInvitations[0]);
     expect(onRemove).toHaveBeenCalledWith(directory.pendingInvitations[0]);
     expect(onView).toHaveBeenCalledWith(directory.pendingInvitations[0]);
+  });
+});
+
+describe('GlobalSecretariesPage drawer layout', () => {
+  it('opens pending invitation removal in the approved right-side drawer shell', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(directory));
+    const user = userEvent.setup();
+    render(<GlobalSecretariesPage />);
+
+    await screen.findByText('Anna Cruz');
+    const shell = screen.getByTestId('global-secretaries-shell');
+    expect(shell).not.toHaveClass('has-drawer');
+
+    await user.click(screen.getByRole('button', { name: 'Remove Anna Cruz' }));
+
+    expect(shell).toHaveClass('has-drawer');
+    expect(
+      screen.getByRole('complementary', {
+        name: 'REMOVE pending invitation drawer',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Remove Pending Invitation' }),
+    ).toBeInTheDocument();
   });
 });
