@@ -3,6 +3,7 @@ import {
   ArrayUnique,
   IsBoolean,
   IsArray,
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -27,6 +28,14 @@ export class CreateSecretaryInvitationDto {
   @IsNotEmpty()
   @MaxLength(255)
   identifier!: string;
+
+  // Transitional compatibility fields for the superseded email-only service.
+  // New API callers do not provide these; the dual-identity service derives
+  // all Secretary identity data from the matched verified User account.
+  @IsOptional() @IsString() @MaxLength(100) firstName!: string;
+  @IsOptional() @IsString() @MaxLength(100) lastName!: string;
+  @IsOptional() @IsEmail() @MaxLength(255) email!: string;
+  @IsOptional() @IsString() @MaxLength(30) mobileNumber!: string;
 
   @IsEnum(SecretaryInvitationAssignmentType)
   assignmentType!: SecretaryInvitationAssignmentType;
