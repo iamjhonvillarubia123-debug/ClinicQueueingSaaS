@@ -142,12 +142,12 @@ export class DoctorController {
 
   @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Patch('defaults/booking-questions/:templateId')
-  updateQuestionTemplate(
+  updateBookingQuestionTemplate(
     @Request() request: AuthenticatedRequest,
     @Param('templateId') templateId: string,
     @Body() dto: SaveDoctorBookingQuestionTemplateDto,
   ) {
-    return this.doctorDefaultsService.updateQuestionTemplate(
+    return this.doctorDefaultsService.updateBookingQuestionTemplate(
       request.user.userId,
       templateId,
       dto,
