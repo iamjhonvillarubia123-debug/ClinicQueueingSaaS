@@ -3,13 +3,6 @@ import { ApiError, apiRequest } from '../api/client';
 
 export type UserRole = 'DOCTOR' | 'SECRETARY' | 'SYSTEM_ADMIN';
 export interface SessionProfile { userId: string; role: UserRole }
-export interface VerificationRequiredLogin {
-  verificationRequired: true;
-  verificationChannel: 'EMAIL' | 'MOBILE';
-  userId: string;
-  role: UserRole;
-}
-export type LoginOutcome = SessionProfile | VerificationRequiredLogin;
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
 interface AuthContextValue {
@@ -17,7 +10,7 @@ interface AuthContextValue {
   profile: SessionProfile | null;
   refresh: () => Promise<void>;
   clearSession: () => void;
-  login: (identifier: string, password: string) => Promise<LoginOutcome>;
+  login: (identifier: string, password: string) => Promise<SessionProfile>;
   logout: () => Promise<void>;
 }
 
@@ -48,21 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const login = useCallback(async (identifier: string, password: string) => {
-    const loginResult = await apiRequest<
-      | { user: { id: string; role: UserRole }; lastLoginAt: string }
-      | VerificationRequiredLogin
-    >('/auth/login', { method: 'POST', body: { identifier, password } });
-
-    if ('verificationRequired' in loginResult && loginResult.verificationRequired) {
-      clearSession();
-      return loginResult;
-    }
-
+    await apiRequest('/auth/login', { method: 'POST', body: { identifier, password } });
     const nextProfile = await apiRequest<SessionProfile>('/auth/profile');
     setProfile(nextProfile);
     setStatus('authenticated');
     return nextProfile;
-  }, [clearSession]);
+  }, []);
 
   const logout = useCallback(async () => {
     try {
