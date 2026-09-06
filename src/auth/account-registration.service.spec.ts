@@ -17,25 +17,27 @@ describe('AccountRegistrationService', () => {
       id: 'email-verification-1',
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
     }),
-  } as unknown as EmailVerificationService;
+  };
   const mobileVerificationService = {
     createInitialVerification: jest.fn().mockResolvedValue({
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
     }),
-  } as unknown as AccountMobileVerificationService;
+  };
   const mobileNumberService = {
     normalize: jest.fn().mockReturnValue({ canonical: '639171234567' }),
     hashCanonical: jest.fn().mockReturnValue('mobile-hash'),
-  } as unknown as MobileNumberService;
+  };
   const passwordSecurityService = {
     hash: jest.fn().mockResolvedValue('hashed-password'),
     verify: jest.fn().mockResolvedValue(false),
-  } as unknown as PasswordSecurityService;
+  };
 
   function buildService(existing: unknown = null) {
-    const userCreate = jest.fn().mockImplementation(({ data }) =>
-      Promise.resolve({ id: 'user-1', role: data.role }),
-    );
+    const userCreate = jest
+      .fn()
+      .mockImplementation((input: { data: { role: UserRole } }) =>
+        Promise.resolve({ id: 'user-1', role: input.data.role }),
+      );
     const transaction = { user: { create: userCreate } };
     const transactionMock = jest.fn(
       (callback: (tx: typeof transaction) => Promise<unknown>) =>
@@ -49,10 +51,10 @@ describe('AccountRegistrationService', () => {
     return {
       service: new AccountRegistrationService(
         prisma,
-        mobileNumberService,
-        emailVerificationService,
-        mobileVerificationService,
-        passwordSecurityService,
+        mobileNumberService as unknown as MobileNumberService,
+        emailVerificationService as unknown as EmailVerificationService,
+        mobileVerificationService as unknown as AccountMobileVerificationService,
+        passwordSecurityService as unknown as PasswordSecurityService,
       ),
       userCreate,
       transaction,
@@ -62,17 +64,17 @@ describe('AccountRegistrationService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (mobileNumberService.normalize as jest.Mock).mockReturnValue({
+    mobileNumberService.normalize.mockReturnValue({
       canonical: '639171234567',
     });
-    (mobileNumberService.hashCanonical as jest.Mock).mockReturnValue('mobile-hash');
-    (passwordSecurityService.hash as jest.Mock).mockResolvedValue('hashed-password');
-    (passwordSecurityService.verify as jest.Mock).mockResolvedValue(false);
-    (emailVerificationService.createInitialVerification as jest.Mock).mockResolvedValue({
+    mobileNumberService.hashCanonical.mockReturnValue('mobile-hash');
+    passwordSecurityService.hash.mockResolvedValue('hashed-password');
+    passwordSecurityService.verify.mockResolvedValue(false);
+    emailVerificationService.createInitialVerification.mockResolvedValue({
       id: 'email-verification-1',
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
     });
-    (mobileVerificationService.createInitialVerification as jest.Mock).mockResolvedValue({
+    mobileVerificationService.createInitialVerification.mockResolvedValue({
       expiresAt: new Date('2026-09-01T00:00:00.000Z'),
     });
   });
@@ -114,11 +116,9 @@ describe('AccountRegistrationService', () => {
         mobileVerifiedAt: null,
       },
     });
-    expect(emailVerificationService.createInitialVerification).toHaveBeenCalledWith(
-      transaction,
-      'user-1',
-      'person@example.com',
-    );
+    expect(
+      emailVerificationService.createInitialVerification,
+    ).toHaveBeenCalledWith(transaction, 'user-1', 'person@example.com');
     expect(JSON.stringify(transaction)).not.toContain('practiceStaff');
   });
 
@@ -142,7 +142,9 @@ describe('AccountRegistrationService', () => {
       verificationExpiresAt: new Date('2026-09-01T00:00:00.000Z'),
     });
 
-    expect(mobileVerificationService.createInitialVerification).toHaveBeenCalledWith(
+    expect(
+      mobileVerificationService.createInitialVerification,
+    ).toHaveBeenCalledWith(
       transaction,
       'user-1',
       '639171234567',
@@ -162,7 +164,7 @@ describe('AccountRegistrationService', () => {
       emailVerifiedAt: null,
       mobileVerifiedAt: null,
     };
-    (passwordSecurityService.verify as jest.Mock).mockResolvedValue(true);
+    passwordSecurityService.verify.mockResolvedValue(true);
     const { service, transactionMock } = buildService(existing);
 
     await expect(
@@ -200,7 +202,7 @@ describe('AccountRegistrationService', () => {
       emailVerifiedAt: null,
       mobileVerifiedAt: null,
     };
-    (passwordSecurityService.verify as jest.Mock).mockResolvedValue(true);
+    passwordSecurityService.verify.mockResolvedValue(true);
     const { service } = buildService(existing);
 
     await expect(
@@ -258,7 +260,7 @@ describe('AccountRegistrationService', () => {
       emailVerifiedAt: new Date(),
       mobileVerifiedAt: null,
     };
-    (passwordSecurityService.verify as jest.Mock).mockResolvedValue(true);
+    passwordSecurityService.verify.mockResolvedValue(true);
     const { service } = buildService(existing);
 
     await expect(
