@@ -51,6 +51,18 @@ const replacements = [
     ".post('/auth/request-password-reset')\n      .send({ identifier: email })",
   ],
   [
+    ".post('/auth/request-password-reset')\n      .send({ email: `missing-${unique}@example.test` })",
+    ".post('/auth/request-password-reset')\n      .send({ identifier: `missing-${unique}@example.test` })",
+  ],
+  [
+    ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', reactivateKey)\n      .send({ email, password })",
+    ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', reactivateKey)\n      .send({ identifier: email, password })",
+  ],
+  [
+    ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `reactivate-closed-${unique}`)\n      .send({ email, password })",
+    ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `reactivate-closed-${unique}`)\n      .send({ identifier: email, password })",
+  ],
+  [
     ".post('/doctor/account/permanent-delete')\n      .set('Idempotency-Key', idempotencyKey)\n      .send({\n        email,",
     ".post('/doctor/account/permanent-delete')\n      .set('Idempotency-Key', idempotencyKey)\n      .send({\n        identifier: email,",
   ],
@@ -77,15 +89,18 @@ if (repairedTestCount !== 11) {
   );
 }
 
-const staleLoginRequestPatterns = [
+const staleRequestPatterns = [
   ".post('/auth/login')\n      .send({ email, password })",
   ".post('/auth/login')\n      .send({ email, password: oldPassword })",
   ".post('/auth/login')\n      .send({ email, password: newPassword })",
   ".post('/auth/login').send({ email, password })",
+  ".post('/auth/request-password-reset')\n      .send({ email: `missing-${unique}@example.test` })",
+  ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', reactivateKey)\n      .send({ email, password })",
+  ".post('/doctor/account/reactivate')\n      .set('Idempotency-Key', `reactivate-closed-${unique}`)\n      .send({ email, password })",
 ];
-for (const stale of staleLoginRequestPatterns) {
+for (const stale of staleRequestPatterns) {
   if (repaired.includes(stale)) {
-    throw new Error(`Stale auth login request remains. No file was written.`);
+    throw new Error(`Stale account request remains. No file was written.`);
   }
 }
 
