@@ -77,14 +77,15 @@ if (repairedTestCount !== 11) {
   );
 }
 
-const remainingLoginEmailBodies = [
-  ".send({ email, password })",
-  ".send({ email, password: oldPassword })",
-  ".send({ email, password: newPassword })",
+const staleLoginRequestPatterns = [
+  ".post('/auth/login')\n      .send({ email, password })",
+  ".post('/auth/login')\n      .send({ email, password: oldPassword })",
+  ".post('/auth/login')\n      .send({ email, password: newPassword })",
+  ".post('/auth/login').send({ email, password })",
 ];
-for (const stale of remainingLoginEmailBodies) {
+for (const stale of staleLoginRequestPatterns) {
   if (repaired.includes(stale)) {
-    throw new Error(`Stale auth login request remains: ${stale}. No file was written.`);
+    throw new Error(`Stale auth login request remains. No file was written.`);
   }
 }
 
