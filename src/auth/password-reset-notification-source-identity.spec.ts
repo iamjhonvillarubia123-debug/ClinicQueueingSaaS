@@ -1,10 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import {
+  AccountLoginIdentifierType,
   NotificationChannel,
   NotificationType,
   UserAccountStatus,
 } from '../../generated/prisma/client';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordSecurityService } from './security/password-security.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
@@ -18,6 +21,8 @@ describe('PasswordReset notification source identity', () => {
           Promise.resolve({
             id: 'user-1',
             email: 'doctor@example.com',
+            mobileNumber: null,
+            loginIdentifierType: AccountLoginIdentifierType.EMAIL,
             accountStatus: UserAccountStatus.ACTIVE,
           }),
         ),
@@ -47,6 +52,14 @@ describe('PasswordReset notification source identity', () => {
         (value: string, purpose: string) => `enc:${purpose}:${value}`,
       ),
     };
+    const notificationPayload = {
+      encryptMessage: jest.fn((value: string) => `enc:message:${value}`),
+    };
+    const mobileNumbers = {
+      normalize: jest.fn((value: string) => ({ canonical: value })),
+      hashCanonical: jest.fn((value: string) => `hash:${value}`),
+      encryptCanonical: jest.fn((value: string) => `enc:mobile:${value}`),
+    };
     const passwordSecurity = {
       assertValid: jest.fn(),
       hash: jest.fn(),
@@ -55,6 +68,8 @@ describe('PasswordReset notification source identity', () => {
       prisma as never,
       config as unknown as ConfigService,
       payload as unknown as ProtectedAccountPayloadService,
+      notificationPayload as unknown as NotificationPayloadService,
+      mobileNumbers as unknown as MobileNumberService,
       passwordSecurity as unknown as PasswordSecurityService,
     );
 
