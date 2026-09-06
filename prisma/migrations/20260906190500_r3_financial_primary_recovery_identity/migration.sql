@@ -30,5 +30,9 @@ SET
   "recipientIdentifierEncrypted" = "recipientEmailEncrypted"
 WHERE "recoveryIdentifierHash" IS NULL;
 
+ALTER TABLE "FinancialAccessChallenge"
+  ALTER COLUMN "recoveryEmailHash" DROP NOT NULL,
+  ALTER COLUMN "recipientEmailEncrypted" DROP NOT NULL;
+
 CREATE INDEX "FinancialAccessChallenge_identifier_created_idx"
   ON "FinancialAccessChallenge"("recoveryIdentifierType", "recoveryIdentifierHash", "createdAt");
