@@ -479,10 +479,7 @@ export function AuthoritativeClinicStaffTab({
           method: 'POST',
           body: {
             practiceLocationId: clinicId,
-            firstName: command.firstName,
-            lastName: command.lastName,
-            email: command.email,
-            mobileNumber: command.mobileNumber,
+            identifier: command.identifier,
             assignmentType: command.assignmentType,
             ...roleConfiguration,
           },
@@ -621,16 +618,23 @@ export function AuthoritativeClinicStaffTab({
     setPending(true);
     setMessage('');
     try {
-      await apiRequest(
-        `/practice-staff/invitations/${encodeURIComponent(selectedInvitationAction.invitation.invitationId)}`,
-        command.type === 'REMOVE'
-          ? { method: 'DELETE' }
-          : { method: 'PATCH', body: command },
-      );
+      if (command.type === 'REMOVE') {
+        await apiRequest(
+          `/practice-staff/invitations/${encodeURIComponent(selectedInvitationAction.invitation.invitationId)}`,
+          { method: 'DELETE' },
+        );
+      } else {
+        const { type: _type, ...payload } = command;
+        void _type;
+        await apiRequest(
+          `/practice-staff/invitations/${encodeURIComponent(selectedInvitationAction.invitation.invitationId)}`,
+          { method: 'PATCH', body: payload },
+        );
+      }
       setMessage(
         command.type === 'REMOVE'
           ? 'Pending invitation cancelled and removed.'
-          : 'Planned authority updated.',
+          : 'Pending invitation updated.',
       );
       setRevision((value) => value + 1);
       setSelectedInvitationAction(null);
