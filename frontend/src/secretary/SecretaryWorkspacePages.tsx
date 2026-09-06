@@ -24,6 +24,12 @@ export type SecretaryClinic = {
 };
 
 export type SecretaryWorkspaceData = {
+  account: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    mobileNumber: string;
+  };
   clinics: SecretaryClinic[];
   invitations: Array<{
     invitationId: string;
