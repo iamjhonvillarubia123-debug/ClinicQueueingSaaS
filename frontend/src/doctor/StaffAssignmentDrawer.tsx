@@ -8,6 +8,13 @@ export const AUTHORITY_BUNDLES = [
   ['REPORTS_VIEW_ONLY', 'Reports · View Only'],
 ] as const;
 
+const AUTHORITY_BUNDLE_DETAILS: Record<string, string[]> = {
+  QUEUE_AND_CLINIC_DAY_OPERATIONS: ['Run permitted live queue and Clinic Day actions.'],
+  APPOINTMENTS_AND_PATIENT_INTAKE: ['Enter walk-ins and permitted appointments/intake.'],
+  CLINIC_CONFIGURATION_DRAFTING: ['Prepare permitted clinic drafts for Doctor approval.'],
+  REPORTS_VIEW_ONLY: ['View permitted clinic reports only.'],
+};
+
 export type StaffAssignmentCommand =
   | { role: 'CLINIC_SECRETARY'; userId: string; firstName: string; lastName: string; email: string; mobileNumber: string; authorityBundles: string[]; requestedCancelClinicDay: boolean; password?: string }
   | { role: 'SUBSTITUTE_SECRETARY'; userId: string; firstName: string; lastName: string; email: string; mobileNumber: string; coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE'; fromServiceDate: string; toServiceDate: string }
@@ -29,6 +36,7 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
   const [candidateSearch, setCandidateSearch] = useState('');
   const [role, setRole] = useState<'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY'>('CLINIC_SECRETARY');
   const [bundles, setBundles] = useState<string[]>([AUTHORITY_BUNDLES[0][0]]);
+  const [expandedBundle, setExpandedBundle] = useState<string | null>(null);
   const [cancelClinicDay, setCancelClinicDay] = useState(false);
   const [coverageMode, setCoverageMode] = useState<'ONE_SERVICE_DATE' | 'DATE_RANGE'>('ONE_SERVICE_DATE');
   const [fromDate, setFromDate] = useState('');
@@ -104,7 +112,18 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
       </> : null}
       {step === 4 && role === 'CLINIC_SECRETARY' ? <>
         <h2>Set Authority Bundles</h2><p>Select one or more authority bundles.</p>
-        <div className="staff-bundle-list">{AUTHORITY_BUNDLES.map(([value, label]) => <label key={value}><input type="checkbox" checked={bundles.includes(value)} onChange={() => toggleBundle(value)} /><span><strong>{label}</strong></span></label>)}</div>
+        <div className="staff-bundle-list">
+          {AUTHORITY_BUNDLES.map(([value, label]) => {
+            const expanded = expandedBundle === value;
+            return <div className="staff-bundle-item" key={value}>
+              <div className="staff-bundle-row">
+                <label><input type="checkbox" checked={bundles.includes(value)} onChange={() => toggleBundle(value)} /><strong>{label}</strong></label>
+                <button type="button" className="staff-bundle-expand" aria-expanded={expanded} aria-label={`${expanded ? 'Hide' : 'Show'} ${label} authority`} onClick={() => setExpandedBundle(expanded ? null : value)}>{expanded ? '⌃' : '⌄'}</button>
+              </div>
+              {expanded ? <div className="staff-bundle-details">{AUTHORITY_BUNDLE_DETAILS[value].map((detail) => <span key={detail}>{detail}</span>)}</div> : null}
+            </div>;
+          })}
+        </div>
         <label className="staff-radio"><input type="checkbox" checked={cancelClinicDay} onChange={(e) => setCancelClinicDay(e.target.checked)} /> Allow Cancel Clinic Day <small>Sensitive authority requiring Doctor re-authentication when used.</small></label>
         {current ? <div className="staff-replacement-warning"><strong>Replace current Clinic Secretary?</strong><p>{mode === 'INVITE' ? `If this invitation is accepted, ${selectedName} will replace ${current.name} at ${data.clinic.name}.` : `${selectedName} will replace ${current.name} at ${data.clinic.name} when you confirm this assignment.`} {current.name}'s account and unrelated clinic assignments remain unaffected.</p><label>Enter your current password to authorize this replacement<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label></div> : cancelClinicDay ? <div className="staff-replacement-warning"><strong>Sensitive authority</strong><p>Cancel Clinic Day can interrupt clinic operations and requires fresh Doctor authentication before it is granted.</p><label>Enter your current password to grant Cancel Clinic Day<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label></div> : null}
       </> : null}
@@ -129,17 +148,8 @@ export function StaffAssignmentDrawer({ data, pending, message, onClose, onSubmi
       {message ? <div className={`staff-drawer-message${messageIsError ? ' is-error' : ''}`} role={messageIsError ? 'alert' : 'status'}>{message}</div> : null}
       {accountEmailCorrectionVisible ? (
         <div className="staff-invite-fields">
-          <label>
-            Secretary Email Address
-            <input
-              type="email"
-              value={invite.email}
-              onChange={(event) => setInvite({ ...invite, email: event.target.value })}
-            />
-          </label>
-          <button type="button" className="clinic-staff-primary-button is-full" disabled={pending || !invite.email.trim()} onClick={submit}>
-            {pending ? 'Retrying…' : 'Retry Invitation'}
-          </button>
+          <label>Secretary Email Address<input type="email" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} /></label>
+          <button type="button" className="clinic-staff-primary-button is-full" disabled={pending || !invite.email.trim()} onClick={submit}>{pending ? 'Retrying…' : 'Retry Invitation'}</button>
         </div>
       ) : null}
       <footer>
