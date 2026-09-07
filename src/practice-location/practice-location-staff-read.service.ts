@@ -89,6 +89,7 @@ export class PracticeLocationStaffReadService {
       where: {
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
         OR: [
           {
             loginIdentifierType: 'EMAIL',
@@ -99,10 +100,12 @@ export class PracticeLocationStaffReadService {
             mobileVerifiedAt: { not: null },
           },
         ],
-        practiceStaffAssignments: {
-          some: {
-            disconnectedAt: null,
-            practiceLocation: { doctorProfile: { userId } },
+        NOT: {
+          practiceStaffAssignments: {
+            some: {
+              practiceLocationId,
+              disconnectedAt: null,
+            },
           },
         },
       },
