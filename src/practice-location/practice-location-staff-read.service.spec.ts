@@ -33,9 +33,11 @@ describe('PracticeLocationStaffReadService', () => {
             lastName: 'Reyes',
             email: 'jane@example.test',
             mobileNumber: '09183334444',
+            loginIdentifierType: 'EMAIL',
             role: 'SECRETARY',
             accountStatus: 'ACTIVE',
             emailVerifiedAt: activatedAt,
+            mobileVerifiedAt: null,
           },
           authorityBundles: [
             {
@@ -81,7 +83,7 @@ describe('PracticeLocationStaffReadService', () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
-  it('returns active Secretaries with a verified primary login identity as eligible existing candidates', async () => {
+  it('returns active verified zero-assignment email and mobile Secretaries as existing candidates', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -91,10 +93,17 @@ describe('PracticeLocationStaffReadService', () => {
     });
     prisma.user.findMany.mockResolvedValue([
       {
-        id: 'secretary-1',
+        id: 'secretary-email',
         firstName: 'Maria',
         lastName: 'Santos',
         email: 'maria@example.test',
+        mobileNumber: null,
+      },
+      {
+        id: 'secretary-mobile',
+        firstName: 'Ana',
+        lastName: 'Reyes',
+        email: null,
         mobileNumber: '09172223333',
       },
     ]);
@@ -106,6 +115,7 @@ describe('PracticeLocationStaffReadService', () => {
         where: expect.objectContaining({
           role: 'SECRETARY',
           accountStatus: 'ACTIVE',
+          administrativeRestrictionStatus: 'NONE',
           OR: [
             {
               loginIdentifierType: 'EMAIL',
@@ -116,17 +126,28 @@ describe('PracticeLocationStaffReadService', () => {
               mobileVerifiedAt: { not: null },
             },
           ],
-          practiceStaffAssignments: {
-            some: {
-              disconnectedAt: null,
-              practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
+          NOT: {
+            practiceStaffAssignments: {
+              some: {
+                practiceLocationId: 'clinic-1',
+                disconnectedAt: null,
+              },
             },
           },
         }) as unknown,
       }),
     );
     expect(result.candidates).toEqual([
-      expect.objectContaining({ userId: 'secretary-1', name: 'Maria Santos' }),
+      expect.objectContaining({
+        userId: 'secretary-email',
+        name: 'Maria Santos',
+        email: 'maria@example.test',
+      }),
+      expect.objectContaining({
+        userId: 'secretary-mobile',
+        name: 'Ana Reyes',
+        mobileNumber: '09172223333',
+      }),
     ]);
   });
 
@@ -156,8 +177,11 @@ describe('PracticeLocationStaffReadService', () => {
         firstName: 'Maria',
         lastName: 'Santos',
         email: 'maria@example.test',
+        loginIdentifierType: 'EMAIL',
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
+        emailVerifiedAt: new Date('2026-07-01T00:00:00.000Z'),
+        mobileVerifiedAt: null,
       },
     };
     const substitute = {
@@ -171,8 +195,11 @@ describe('PracticeLocationStaffReadService', () => {
         firstName: 'Jane',
         lastName: 'Reyes',
         email: 'jane@example.test',
+        loginIdentifierType: 'EMAIL',
         role: 'SECRETARY',
         accountStatus: 'ACTIVE',
+        emailVerifiedAt: new Date('2026-07-01T00:00:00.000Z'),
+        mobileVerifiedAt: null,
       },
     };
     prisma.practiceLocation.findFirst.mockResolvedValue({
