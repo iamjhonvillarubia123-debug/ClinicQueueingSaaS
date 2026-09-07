@@ -106,14 +106,6 @@ export class PracticeLocationStaffReadService {
             practiceLocation: { doctorProfile: { userId } },
           },
         },
-        NOT: {
-          practiceStaffAssignments: {
-            some: {
-              practiceLocationId,
-              disconnectedAt: null,
-            },
-          },
-        },
       },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: {
