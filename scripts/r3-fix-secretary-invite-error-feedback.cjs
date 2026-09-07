@@ -16,18 +16,22 @@ function replaceRequired(content, pattern, replacement, label) {
 {
   const path = 'frontend/src/doctor/AuthoritativeClinicStaffTab.tsx';
   let s = read(path);
-  s = replaceRequired(
-    s,
-    "import { apiRequest } from '../api/client';",
-    "import { ApiError, apiRequest } from '../api/client';",
-    'ApiError import',
-  );
-  s = replaceRequired(
-    s,
-    /    } catch \(cause\) \{\n      setMessage\(\n        cause instanceof Error\n          \? cause\.message\n          : 'Unable to assign this Secretary\.',\n      \);\n    } finally \{/,
-    `    } catch (cause) {\n      const passwordProtectedClinicSecretary =\n        command.role === 'CLINIC_SECRETARY' ||\n        (command.role === 'INVITE_NEW' &&\n          command.assignmentType === 'CLINIC_SECRETARY')\n          ? Boolean(command.password)\n          : false;\n      const genericApiMessage =\n        cause instanceof ApiError &&\n        cause.message === 'Something went wrong. Please try again.';\n      setMessage(\n        cause instanceof ApiError &&\n          cause.status === 401 &&\n          passwordProtectedClinicSecretary &&\n          genericApiMessage\n          ? 'Current password is incorrect.'\n          : cause instanceof Error\n            ? cause.message\n            : 'Unable to assign this Secretary.',\n      );\n    } finally {`,
-    'staff assignment 401 feedback',
-  );
+  if (!s.includes("import { ApiError, apiRequest } from '../api/client';")) {
+    s = replaceRequired(
+      s,
+      "import { apiRequest } from '../api/client';",
+      "import { ApiError, apiRequest } from '../api/client';",
+      'ApiError import',
+    );
+  }
+  if (!s.includes('passwordProtectedClinicSecretary')) {
+    s = replaceRequired(
+      s,
+      /    } catch \(cause\) \{\r?\n      setMessage\(\r?\n        cause instanceof Error\r?\n          \? cause\.message\r?\n          : 'Unable to assign this Secretary\.',\r?\n      \);\r?\n    } finally \{/,
+      `    } catch (cause) {\n      const passwordProtectedClinicSecretary =\n        command.role === 'CLINIC_SECRETARY' ||\n        (command.role === 'INVITE_NEW' &&\n          command.assignmentType === 'CLINIC_SECRETARY')\n          ? Boolean(command.password)\n          : false;\n      const genericApiMessage =\n        cause instanceof ApiError &&\n        cause.message === 'Something went wrong. Please try again.';\n      setMessage(\n        cause instanceof ApiError &&\n          cause.status === 401 &&\n          passwordProtectedClinicSecretary &&\n          genericApiMessage\n          ? 'Current password is incorrect.'\n          : cause instanceof Error\n            ? cause.message\n            : 'Unable to assign this Secretary.',\n      );\n    } finally {`,
+      'staff assignment 401 feedback',
+    );
+  }
   write(path, s);
 }
 
@@ -35,23 +39,17 @@ function replaceRequired(content, pattern, replacement, label) {
 {
   const path = 'frontend/src/doctor/StaffAssignmentDrawer.tsx';
   let s = read(path);
-  s = replaceRequired(
-    s,
+  s = s.replace(
     "      const identifier = inviteIdentifier.trim().toLowerCase();",
     "      const identifier = inviteIdentifier.trim();",
-    'identifier normalization delegated to backend',
   );
-  s = replaceRequired(
-    s,
-    /Enter the Secretary&apos;s registered email address\. The Secretary must\n            already have an active, verified Secretary account\./,
+  s = s.replace(
+    `Enter the Secretary&apos;s registered email address. The Secretary must\n            already have an active, verified Secretary account.`,
     `Enter the Secretary&apos;s registered email address or Philippine mobile number. The Secretary must\n            already have an active, verified Secretary account.`,
-    'dual identifier invitation guidance',
   );
-  s = replaceRequired(
-    s,
-    /Secretary Email Address\n              <input\n                type="email"\n                autoComplete="email"\n                placeholder="Enter Secretary email address"/,
+  s = s.replace(
+    `Secretary Email Address\n              <input\n                type="email"\n                autoComplete="email"\n                placeholder="Enter Secretary email address"`,
     `Secretary Email or Mobile Number\n              <input\n                type="text"\n                autoComplete="username"\n                inputMode="text"\n                placeholder="Email or 09xx xxx xxxx"`,
-    'dual identifier invitation input',
   );
   write(path, s);
 }
@@ -79,18 +77,17 @@ function replaceRequired(content, pattern, replacement, label) {
 {
   const path = 'frontend/src/doctor/AuthoritativeClinicStaffTab.test.tsx';
   let s = read(path);
-  s = s.replaceAll("screen.getByLabelText('Secretary Email Address')", "screen.getByLabelText('Secretary Email or Mobile Number')");
-  s = replaceRequired(
-    s,
-    /await user\.type\(\n      screen\.getByLabelText\('Secretary Email or Mobile Number'\),\n      'anna@example\.test',\n    \);\n    expect\(screen\.queryByLabelText\(\/password\/i\)\)\.not\.toBeInTheDocument\(\);/,
-    `await user.type(\n      screen.getByLabelText('Secretary Email or Mobile Number'),\n      '09171234567',\n    );\n    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();`,
-    'mobile invitation test input',
+  s = s.replaceAll(
+    "screen.getByLabelText('Secretary Email Address')",
+    "screen.getByLabelText('Secretary Email or Mobile Number')",
   );
-  s = replaceRequired(
-    s,
-    /identifier: 'anna@example\.test',\n        authorityBundles:/,
+  s = s.replace(
+    `await user.type(\n      screen.getByLabelText('Secretary Email or Mobile Number'),\n      'anna@example.test',\n    );\n    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();`,
+    `await user.type(\n      screen.getByLabelText('Secretary Email or Mobile Number'),\n      '09171234567',\n    );\n    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();`,
+  );
+  s = s.replace(
+    `identifier: 'anna@example.test',\n        authorityBundles:`,
     `identifier: '09171234567',\n        authorityBundles:`,
-    'mobile invitation expected identifier',
   );
   write(path, s);
 }
