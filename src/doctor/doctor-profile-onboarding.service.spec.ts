@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   UserAccountStatus,
   UserRole,
@@ -54,7 +55,9 @@ describe('DoctorProfileOnboardingService', () => {
     role: UserRole.DOCTOR,
     accountStatus: UserAccountStatus.ACTIVE,
     administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+    loginIdentifierType: AccountLoginIdentifierType.EMAIL,
     emailVerifiedAt: new Date('2026-09-05T00:00:00.000Z'),
+    mobileVerifiedAt: null,
     firstName: 'Jane',
     middleName: null,
     lastName: 'Doe',
@@ -83,7 +86,9 @@ describe('DoctorProfileOnboardingService', () => {
         accountStatus: eligibleUser.accountStatus,
         administrativeRestrictionStatus:
           eligibleUser.administrativeRestrictionStatus,
+        loginIdentifierType: eligibleUser.loginIdentifierType,
         emailVerifiedAt: eligibleUser.emailVerifiedAt,
+        mobileVerifiedAt: eligibleUser.mobileVerifiedAt,
       },
     ]);
     transaction.doctorProfile.findUnique.mockResolvedValue(null);
@@ -104,6 +109,21 @@ describe('DoctorProfileOnboardingService', () => {
       lastName: 'Doe',
     });
     expect(result.profile).toBeNull();
+  });
+
+  it('accepts a Doctor whose primary mobile login identifier is verified', async () => {
+    prismaServiceMock.user.findUnique.mockResolvedValueOnce({
+      ...eligibleUser,
+      loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+      emailVerifiedAt: null,
+      mobileVerifiedAt: new Date('2026-09-07T00:00:00.000Z'),
+    });
+
+    const result = await service.getProfileState('doctor-user');
+
+    expect(result.onboardingComplete).toBe(false);
+    expect(result.user.firstName).toBe('Jane');
+    expect(result.user.lastName).toBe('Doe');
   });
 
   it('creates DoctorProfile and DoctorAccountSettings atomically for the verified Doctor', async () => {
@@ -159,6 +179,7 @@ describe('DoctorProfileOnboardingService', () => {
     prismaServiceMock.user.findUnique.mockResolvedValueOnce({
       ...eligibleUser,
       emailVerifiedAt: null,
+      mobileVerifiedAt: null,
     });
 
     await expect(
