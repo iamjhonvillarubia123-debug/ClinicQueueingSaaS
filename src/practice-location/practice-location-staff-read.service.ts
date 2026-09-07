@@ -100,6 +100,12 @@ export class PracticeLocationStaffReadService {
             mobileVerifiedAt: { not: null },
           },
         ],
+        practiceStaffAssignments: {
+          some: {
+            disconnectedAt: null,
+            practiceLocation: { doctorProfile: { userId } },
+          },
+        },
         NOT: {
           practiceStaffAssignments: {
             some: {
