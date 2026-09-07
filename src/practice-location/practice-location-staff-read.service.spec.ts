@@ -83,7 +83,7 @@ describe('PracticeLocationStaffReadService', () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
-  it('returns active verified zero-assignment email and mobile Secretaries as existing candidates', async () => {
+  it('returns only active-account Secretaries with an established non-removed Doctor relationship as existing candidates', async () => {
     prisma.practiceLocation.findFirst.mockResolvedValue({
       id: 'clinic-1',
       name: 'North Clinic',
@@ -126,6 +126,12 @@ describe('PracticeLocationStaffReadService', () => {
               mobileVerifiedAt: { not: null },
             },
           ],
+          practiceStaffAssignments: {
+            some: {
+              disconnectedAt: null,
+              practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
+            },
+          },
           NOT: {
             practiceStaffAssignments: {
               some: {
