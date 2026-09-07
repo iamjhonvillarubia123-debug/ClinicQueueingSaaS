@@ -4,11 +4,13 @@ import {
   Injectable,
 } from '@nestjs/common';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   Prisma,
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompleteDoctorOnboardingDto } from './dto/complete-doctor-onboarding.dto';
 
@@ -24,7 +26,9 @@ export class DoctorProfileOnboardingService {
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
         emailVerifiedAt: true,
+        mobileVerifiedAt: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -79,7 +83,9 @@ export class DoctorProfileOnboardingService {
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
         emailVerifiedAt: true,
+        mobileVerifiedAt: true,
         doctorProfile: { select: { id: true } },
       },
     });
@@ -98,10 +104,13 @@ export class DoctorProfileOnboardingService {
             role: UserRole;
             accountStatus: UserAccountStatus;
             administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+            loginIdentifierType: AccountLoginIdentifierType;
             emailVerifiedAt: Date | null;
+            mobileVerifiedAt: Date | null;
           }>
         >(Prisma.sql`
-          SELECT "id", "role", "accountStatus", "administrativeRestrictionStatus", "emailVerifiedAt"
+          SELECT "id", "role", "accountStatus", "administrativeRestrictionStatus",
+                 "loginIdentifierType", "emailVerifiedAt", "mobileVerifiedAt"
           FROM "User"
           WHERE "id" = ${authenticatedUserId}
           FOR UPDATE
@@ -187,7 +196,9 @@ export class DoctorProfileOnboardingService {
       role: UserRole;
       accountStatus: UserAccountStatus;
       administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+      loginIdentifierType: AccountLoginIdentifierType;
       emailVerifiedAt: Date | null;
+      mobileVerifiedAt: Date | null;
     } | null,
   ): void {
     if (
@@ -196,7 +207,7 @@ export class DoctorProfileOnboardingService {
       user.accountStatus !== UserAccountStatus.ACTIVE ||
       user.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      !user.emailVerifiedAt
+      !accountIdentifierIsVerified(user)
     ) {
       throw new ForbiddenException(
         'Only an active verified Doctor may complete Doctor onboarding.',
