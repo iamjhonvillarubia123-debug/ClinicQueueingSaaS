@@ -70,7 +70,9 @@ export class PublicRoutingService {
       },
     });
 
-    if (!profile || !profile.isProfilePublic) this.notFound();
+    if (!profile || !this.isPublicProfessionalProfileComplete(profile)) {
+      this.notFound();
+    }
     if (profile.user.accountStatus === 'PERMANENTLY_CLOSED') this.notFound();
 
     const subscriptionAllowsBooking = await this.subscriptionAllowsBooking(
@@ -152,6 +154,7 @@ export class PublicRoutingService {
           select: {
             publicIdentifier: true,
             publicSlug: true,
+            isProfilePublic: true,
             middleName: true,
             suffix: true,
             professionalTitle: true,
@@ -180,7 +183,10 @@ export class PublicRoutingService {
 
     if (!location) this.notFound();
     if (location.lifecycleStatus === 'PERMANENTLY_DELETED') this.notFound();
-    if (location.doctorProfile.user.accountStatus === 'PERMANENTLY_CLOSED') {
+    if (
+      !this.isPublicProfessionalProfileComplete(location.doctorProfile) ||
+      location.doctorProfile.user.accountStatus === 'PERMANENTLY_CLOSED'
+    ) {
       this.notFound();
     }
 
@@ -281,6 +287,21 @@ export class PublicRoutingService {
     const normalizedBaseUrl = baseUrl.toString().replace(/\/$/, '');
     const encodedIdentifier = encodeURIComponent(publicIdentifier);
     return `${normalizedBaseUrl}/public/${resource}/${encodedIdentifier}`;
+  }
+
+  private isPublicProfessionalProfileComplete(profile: {
+    isProfilePublic: boolean;
+    professionalTitle: string | null;
+    specialization: string | null;
+  }): profile is typeof profile & {
+    professionalTitle: string;
+    specialization: string;
+  } {
+    return Boolean(
+      profile.isProfilePublic &&
+        profile.professionalTitle?.trim() &&
+        profile.specialization?.trim(),
+    );
   }
 
   private mapDoctorIdentity(profile: {
