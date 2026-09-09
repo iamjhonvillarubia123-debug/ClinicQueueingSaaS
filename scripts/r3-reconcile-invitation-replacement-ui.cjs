@@ -72,15 +72,6 @@ if (!drawer.includes('{stepValidationError ? (')) {
     'validation error rendering',
   );
 }
-drawer = drawer.replace(
-  'Enter the Secretary&apos;s registered email address. The Secretary must\n            already have an active, verified Secretary account.',
-  'Enter the Secretary&apos;s registered email address or Philippine mobile number. Existing eligible Secretary accounts can be invited immediately; otherwise the recipient must create and verify their own Secretary account before accepting.',
-);
-drawer = drawer.replace('Secretary Email Address', 'Email or Mobile Number');
-drawer = drawer.replace(
-  'type="email"\n                autoComplete="email"\n                placeholder="Enter Secretary email address"',
-  'type="text"\n                autoComplete="username"\n                placeholder="Enter email or mobile number"',
-);
 write(drawerPath, drawer);
 
 let parent = read(parentPath);
@@ -106,12 +97,12 @@ let spec = read(specPath);
 if (!spec.includes('keeps the current Clinic Secretary visible in Assign Existing Secretary')) {
   const end = spec.lastIndexOf('\n});');
   if (end < 0) throw new Error('Test suite end not found');
-  const tests = `\n  it('keeps the current Clinic Secretary visible in Assign Existing Secretary', async () => {\n    const user = userEvent.setup();\n    const withCurrentCandidate = {\n      ...staff,\n      candidates: [\n        ...staff.candidates,\n        {\n          userId: 'user-regular',\n          name: 'Maria Santos',\n          email: 'maria@example.test',\n          mobileNumber: '09172223333',\n        },\n      ],\n    };\n    render(\n      <StaffAssignmentDrawer\n        data={withCurrentCandidate}\n        pending={false}\n        message=\"\"\n        onClose={() => undefined}\n        onSubmit={() => undefined}\n      />,\n    );\n    await user.click(screen.getByRole('button', { name: /Assign Existing Secretary/i }));\n    expect(screen.getByText('Maria Santos')).toBeInTheDocument();\n  });\n\n  it('warns and validates Doctor authentication before review when inviting a replacement Clinic Secretary', async () => {\n    const user = userEvent.setup();\n    const validateIdentifier = vi.fn().mockResolvedValue({\n      existingSecretary: true,\n      secretaryName: 'Anna Cruz',\n    });\n    const validateAuthorization = vi.fn().mockResolvedValue(undefined);\n    render(\n      <StaffAssignmentDrawer\n        data={staff}\n        pending={false}\n        message=\"\"\n        onClose={() => undefined}\n        onSubmit={() => undefined}\n        onValidateInviteIdentifier={validateIdentifier}\n        onValidateInviteAuthorization={validateAuthorization}\n      />,\n    );\n    await user.click(screen.getByRole('button', { name: /Invite New Secretary to Clinic/i }));\n    await user.type(screen.getByLabelText('Email or Mobile Number'), 'anna@example.test');\n    await user.click(screen.getByRole('button', { name: 'Next' }));\n    await user.click(screen.getByRole('button', { name: 'Next' }));\n    expect(screen.getByText('Replace current Clinic Secretary?')).toBeInTheDocument();\n    const password = screen.getByLabelText(/current password to authorize this replacement/i);\n    await user.type(password, 'doctor-password');\n    await user.click(screen.getByRole('button', { name: 'Next' }));\n    expect(validateAuthorization).toHaveBeenCalledWith('doctor-password');\n    expect(screen.getByRole('heading', { name: 'Review Invitation' })).toBeInTheDocument();\n  });\n`;
+  const tests = `\n  it('keeps the current Clinic Secretary visible in Assign Existing Secretary', async () => {\n    const user = userEvent.setup();\n    const withCurrentCandidate = {\n      ...staff,\n      candidates: [\n        ...staff.candidates,\n        {\n          userId: 'user-regular',\n          name: 'Maria Santos',\n          email: 'maria@example.test',\n          mobileNumber: '09172223333',\n        },\n      ],\n    };\n    render(\n      <StaffAssignmentDrawer\n        data={withCurrentCandidate}\n        pending={false}\n        message=\"\"\n        onClose={() => undefined}\n        onSubmit={() => undefined}\n      />,\n    );\n    await user.click(screen.getByRole('button', { name: /Assign Existing Secretary/i }));\n    expect(screen.getByText('Maria Santos')).toBeInTheDocument();\n  });\n\n  it('warns and validates Doctor authentication before review when inviting a replacement Clinic Secretary', async () => {\n    const user = userEvent.setup();\n    const validateIdentifier = vi.fn().mockResolvedValue({\n      existingSecretary: true,\n      secretaryName: 'Anna Cruz',\n    });\n    const validateAuthorization = vi.fn().mockResolvedValue(undefined);\n    render(\n      <StaffAssignmentDrawer\n        data={staff}\n        pending={false}\n        message=\"\"\n        onClose={() => undefined}\n        onSubmit={() => undefined}\n        onValidateInviteIdentifier={validateIdentifier}\n        onValidateInviteAuthorization={validateAuthorization}\n      />,\n    );\n    await user.click(screen.getByRole('button', { name: /Invite New Secretary to Clinic/i }));\n    await user.type(screen.getByLabelText(/Secretary Email or Mobile Number/i), 'anna@example.test');\n    await user.click(screen.getByRole('button', { name: 'Next' }));\n    await user.click(screen.getByRole('button', { name: 'Next' }));\n    expect(screen.getByText('Replace current Clinic Secretary?')).toBeInTheDocument();\n    const password = screen.getByLabelText(/current password to authorize this replacement/i);\n    await user.type(password, 'doctor-password');\n    await user.click(screen.getByRole('button', { name: 'Next' }));\n    expect(validateAuthorization).toHaveBeenCalledWith('doctor-password');\n    expect(screen.getByRole('heading', { name: 'Review Invitation' })).toBeInTheDocument();\n  });\n`;
   spec = spec.slice(0, end) + tests + spec.slice(end);
 } else {
   spec = spec.replace(
-    "screen.getByRole('button', { name: /Invite Secretary to Clinic/i })",
-    "screen.getByRole('button', { name: /Invite New Secretary to Clinic/i })",
+    "screen.getByLabelText('Email or Mobile Number')",
+    "screen.getByLabelText(/Secretary Email or Mobile Number/i)",
   );
 }
 write(specPath, spec);
