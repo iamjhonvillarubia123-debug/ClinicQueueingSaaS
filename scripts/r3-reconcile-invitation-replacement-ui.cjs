@@ -10,71 +10,74 @@ function read(path) {
 function write(path, content) {
   fs.writeFileSync(path, content);
 }
-function replaceOnce(source, from, to, label) {
-  if (source.includes(to)) return source;
-  if (!source.includes(from)) throw new Error(`Patch target not found: ${label}`);
-  return source.replace(from, to);
+function replaceIfPresent(source, from, to) {
+  return source.includes(from) ? source.replace(from, to) : source;
 }
 
 let drawer = read(drawerPath);
+
 drawer = drawer.replace(
   /  const candidates = useMemo\([\s\S]*?\n  \);\n  const \[step,/,
   '  const candidates = data.candidates;\n  const [step,',
 );
-drawer = replaceOnce(
+
+drawer = replaceIfPresent(
   drawer,
   '  onSubmit,\n}: {\n  data: AuthoritativeClinicStaff;\n  pending: boolean;\n  message: string;\n  onClose: () => void;\n  onSubmit: (command: StaffAssignmentCommand) => void | Promise<void>;\n}) {',
   '  onSubmit,\n  onValidateInviteIdentifier,\n  onValidateInviteAuthorization,\n}: {\n  data: AuthoritativeClinicStaff;\n  pending: boolean;\n  message: string;\n  onClose: () => void;\n  onSubmit: (command: StaffAssignmentCommand) => void | Promise<void>;\n  onValidateInviteIdentifier?: (identifier: string) => Promise<{ existingSecretary: boolean; secretaryName: string | null }>;\n  onValidateInviteAuthorization?: (password: string) => Promise<void>;\n}) {',
-  'validation props',
 );
-drawer = replaceOnce(
+
+drawer = replaceIfPresent(
   drawer,
   "  const [inviteIdentifier, setInviteIdentifier] = useState('');",
   "  const [inviteIdentifier, setInviteIdentifier] = useState('');\n  const [stepValidationPending, setStepValidationPending] = useState(false);\n  const [stepValidationError, setStepValidationError] = useState('');\n  const [validatedInvitee, setValidatedInvitee] = useState<{ existingSecretary: boolean; secretaryName: string | null } | null>(null);",
-  'validation state',
 );
+
 if (!drawer.includes('async function advance()')) {
-  drawer = replaceOnce(
-    drawer,
+  drawer = drawer.replace(
     '  function submit() {',
     `  async function advance() {\n    setStepValidationError('');\n    if (mode === 'INVITE' && step === 2 && onValidateInviteIdentifier) {\n      setStepValidationPending(true);\n      try {\n        const result = await onValidateInviteIdentifier(inviteIdentifier.trim().toLowerCase());\n        setValidatedInvitee(result);\n        setStep(3);\n      } catch (cause) {\n        setValidatedInvitee(null);\n        setStepValidationError(\n          cause instanceof Error ? cause.message : 'Unable to validate this Secretary identifier.',\n        );\n      } finally {\n        setStepValidationPending(false);\n      }\n      return;\n    }\n\n    if (\n      mode === 'INVITE' &&\n      step === 4 &&\n      role === 'CLINIC_SECRETARY' &&\n      (current || cancelClinicDay) &&\n      onValidateInviteAuthorization\n    ) {\n      setStepValidationPending(true);\n      try {\n        await onValidateInviteAuthorization(password);\n        setStep(5);\n      } catch (cause) {\n        setStepValidationError(\n          cause instanceof Error ? cause.message : 'Unable to validate the Doctor password.',\n        );\n      } finally {\n        setStepValidationPending(false);\n      }\n      return;\n    }\n\n    setStep((value) => value + 1);\n  }\n\n  function submit() {`,
-    'advance function',
   );
 }
+
 drawer = drawer.replace(
   /onClick=\{\(\) => setStep\(\(value\) => value \+ 1\)\}/g,
   'onClick={() => void advance()}',
 );
-drawer = drawer.replace('disabled={pending}', 'disabled={pending || stepValidationPending}');
-drawer = replaceOnce(
-  drawer,
-  '      {message ? (',
-  '      {stepValidationError ? (\n        <div className="staff-drawer-message is-error" role="alert">\n          {stepValidationError}\n        </div>\n      ) : null}\n\n      {message ? (',
-  'validation error rendering',
-);
+
+drawer = drawer.replace(/disabled=\{pending\}/g, 'disabled={pending || stepValidationPending}');
+
+if (!drawer.includes('stepValidationError ? (')) {
+  drawer = drawer.replace(
+    '      {message ? (',
+    '      {stepValidationError ? (\n        <div className="staff-drawer-message is-error" role="alert">\n          {stepValidationError}\n        </div>\n      ) : null}\n\n      {message ? (',
+  );
+}
+
 drawer = drawer.replace(
   'Enter the Secretary&apos;s registered email address. The Secretary must\n            already have an active, verified Secretary account.',
   'Enter the Secretary&apos;s registered email address or Philippine mobile number. Existing eligible Secretary accounts can be invited immediately; otherwise the recipient must create and verify their own Secretary account before accepting.',
 );
-drawer = drawer.replace('Secretary Email Address', 'Email or Mobile Number');
-drawer = drawer.replace('type="email"\n                autoComplete="email"\n                placeholder="Enter Secretary email address"', 'type="text"\n                autoComplete="username"\n                placeholder="Enter email or mobile number"');
+drawer = drawer.replace(/Secretary Email Address/g, 'Email or Mobile Number');
+drawer = drawer.replace(
+  'type="email"\n                autoComplete="email"\n                placeholder="Enter Secretary email address"',
+  'type="text"\n                autoComplete="username"\n                placeholder="Enter email or mobile number"',
+);
 write(drawerPath, drawer);
 
 let parent = read(parentPath);
 if (!parent.includes('async function validateInviteIdentifier(')) {
-  parent = replaceOnce(
-    parent,
+  parent = parent.replace(
     '  async function assign(command: StaffAssignmentCommand) {',
     `  async function validateInviteIdentifier(identifier: string) {\n    return apiRequest<{\n      valid: true;\n      existingSecretary: boolean;\n      secretaryName: string | null;\n    }>('/practice-staff/invitations/validate-identifier', {\n      method: 'POST',\n      body: { practiceLocationId: clinicId, identifier },\n    });\n  }\n\n  async function validateInviteAuthorization(password: string) {\n    await apiRequest('/practice-staff/invitations/validate-authorization', {\n      method: 'POST',\n      body: { practiceLocationId: clinicId, password },\n    });\n  }\n\n  async function assign(command: StaffAssignmentCommand) {`,
-    'parent validation helpers',
   );
 }
-parent = replaceOnce(
-  parent,
-  '          onClose={() => setDrawerOpen(false)}\n          onSubmit={assign}',
-  '          onClose={() => setDrawerOpen(false)}\n          onSubmit={assign}\n          onValidateInviteIdentifier={validateInviteIdentifier}\n          onValidateInviteAuthorization={validateInviteAuthorization}',
-  'drawer validation callbacks',
-);
+if (!parent.includes('onValidateInviteIdentifier={validateInviteIdentifier}')) {
+  parent = parent.replace(
+    '          onClose={() => setDrawerOpen(false)}\n          onSubmit={assign}',
+    '          onClose={() => setDrawerOpen(false)}\n          onSubmit={assign}\n          onValidateInviteIdentifier={validateInviteIdentifier}\n          onValidateInviteAuthorization={validateInviteAuthorization}',
+  );
+}
 write(parentPath, parent);
 
 let spec = read(specPath);
