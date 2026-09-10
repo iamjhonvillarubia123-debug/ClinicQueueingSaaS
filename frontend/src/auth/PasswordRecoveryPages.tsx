@@ -63,10 +63,10 @@ export function ForgotPasswordPage() {
 
   return <RecoveryFrame>{submittedIdentifier ? <section className="recovery-card recovery-email-card" aria-labelledby="check-message-heading">
     <div className="recovery-success-symbol"><Icon name="mail" /><span><Icon name="check" /></span></div>
-    <header><h2 id="check-message-heading">Check your messages</h2><p>If an eligible account matches</p><strong>{submittedIdentifier}</strong><p>a password reset link has been sent to its registered email address or mobile number. The link expires in 30 minutes.</p></header>
-    <aside><strong>Didn’t receive the message?</strong><p>Check your email spam folder or mobile messages. You can request a new link below.</p></aside>
+    <header><h2 id="check-message-heading">Check your messages</h2><p>If an eligible account matches</p><strong>{submittedIdentifier}</strong><p>password-reset instructions will be sent to the email address or mobile number used to sign in. Reset links expire in 30 minutes.</p></header>
+    <aside><strong>Didn’t receive a message?</strong><p>Check the sign-in email or mobile number you entered. If you do not have an account yet, create one from the sign-in page.</p></aside>
     {error ? <div className="form-error" role="alert">{error}</div> : null}
-    <button className="recovery-secondary" type="button" disabled={busy} onClick={() => void requestReset()}>{busy ? 'Sending…' : 'Resend reset link'}</button>
+    <button className="recovery-secondary" type="button" disabled={busy} onClick={() => void requestReset()}>{busy ? 'Sending…' : 'Resend reset request'}</button>
     <Link className="recovery-back-link" to="/login">Back to sign in</Link>
   </section> : <section className="recovery-card" aria-labelledby="forgot-password-heading">
     <header><h2 id="forgot-password-heading">Forgot password?</h2><p>Enter the mobile number or email address you use to sign in and we’ll send a password reset link to that registered account.</p></header>
