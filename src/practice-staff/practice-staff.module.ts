@@ -11,6 +11,7 @@ import { PracticeStaffController } from './practice-staff.controller';
 import { SubstituteSecretaryCoverageController } from './substitute-secretary-coverage.controller';
 import { SubstituteSecretaryCoverageService } from './substitute-secretary-coverage.service';
 import { SecretaryInvitationController } from './secretary-invitation.controller';
+import { SecretaryInvitationPrevalidationService } from './secretary-invitation-prevalidation.service';
 import { SecretaryInvitationService } from './secretary-invitation.service';
 import { SecretaryDirectoryController } from './secretary-directory.controller';
 import { SecretaryDirectoryService } from './secretary-directory.service';
@@ -24,6 +25,7 @@ import { SecretaryWorkspaceService } from './secretary-workspace.service';
     ClinicSecretaryAuthorityService,
     SubstituteSecretaryCoverageService,
     SecretaryInvitationService,
+    SecretaryInvitationPrevalidationService,
     SecretaryDirectoryService,
     SecretaryWorkspaceService,
   ],
