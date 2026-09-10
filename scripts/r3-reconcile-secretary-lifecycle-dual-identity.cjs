@@ -17,14 +17,49 @@ function replaceOnce(source, from, to, label) {
   return source.replace(from, to);
 }
 
-let permanentDto = read(files.permanentDto);
-permanentDto = permanentDto.replace("import { IsBoolean, IsEmail, IsString } from 'class-validator';", "import { IsBoolean, IsString } from 'class-validator';");
-permanentDto = permanentDto.replace("  @IsEmail()\n  email!: string;", "  @IsString()\n  identifier!: string;");
+function reconcileIdentifierDto(source, { permanent }) {
+  source = source.replace(
+    /import\s*\{([^}]*)\}\s*from\s*['"]class-validator['"];?/,
+    (_match, names) => {
+      const validators = names
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .filter((name) => name !== 'IsEmail');
+      if (!validators.includes('IsString')) validators.push('IsString');
+      return `import { ${validators.join(', ')} } from 'class-validator';`;
+    },
+  );
+
+  source = source.replace(
+    /\s*@IsEmail\(\)\s*(?:\r?\n\s*)?email!:\s*string;/,
+    '\n  @IsString()\n  identifier!: string;',
+  );
+
+  // Recover partially reconciled files where the import changed but the old
+  // decorator/property pair survived because of newline or formatting drift.
+  source = source.replace(
+    /\s*@IsEmail\(\)\s*(?:\r?\n\s*)?identifier!:\s*string;/,
+    '\n  @IsString()\n  identifier!: string;',
+  );
+  source = source.replace(
+    /\s*@IsString\(\)\s*(?:\r?\n\s*)?email!:\s*string;/,
+    '\n  @IsString()\n  identifier!: string;',
+  );
+
+  if (source.includes('@IsEmail()')) {
+    throw new Error(`Stale @IsEmail() remains in ${permanent ? 'permanent-delete' : 'reactivate'} Secretary DTO.`);
+  }
+  if (!source.includes('identifier!: string;')) {
+    throw new Error(`Secretary ${permanent ? 'permanent-delete' : 'reactivate'} DTO was not reconciled to identifier.`);
+  }
+  return source;
+}
+
+let permanentDto = reconcileIdentifierDto(read(files.permanentDto), { permanent: true });
 write(files.permanentDto, permanentDto);
 
-let reactivateDto = read(files.reactivateDto);
-reactivateDto = reactivateDto.replace("import { IsEmail, IsString } from 'class-validator';", "import { IsString } from 'class-validator';");
-reactivateDto = reactivateDto.replace("  @IsEmail()\n  email!: string;", "  @IsString()\n  identifier!: string;");
+let reactivateDto = reconcileIdentifierDto(read(files.reactivateDto), { permanent: false });
 write(files.reactivateDto, reactivateDto);
 
 let controller = read(files.controller);
@@ -32,10 +67,11 @@ controller = controller.replace("subject: { kind: 'BODY', field: 'email' }", "su
 controller = controller.replace("subject: { kind: 'BODY', field: 'email' }", "subject: { kind: 'BODY', field: 'identifier' }");
 controller = controller.replace('      dto.email,\n      dto.password,', '      dto.identifier,\n      dto.password,');
 controller = controller.replace('      dto.email,\n      dto.password,', '      dto.identifier,\n      dto.password,');
+controller = controller.replace(/dto\.email,/g, 'dto.identifier,');
 write(files.controller, controller);
 
 let moduleFile = read(files.module);
-if (!moduleFile.includes("MobileNumberModule")) {
+if (!moduleFile.includes('MobileNumberModule')) {
   moduleFile = replaceOnce(
     moduleFile,
     "import { PrismaModule } from '../prisma/prisma.module';",
