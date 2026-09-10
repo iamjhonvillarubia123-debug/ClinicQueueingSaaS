@@ -4,16 +4,28 @@ import { apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 import { meetsPasswordPolicy, passwordChecks } from './passwordPolicy';
 
-type IconName = 'brand' | 'check' | 'eye' | 'eyeOff' | 'lock' | 'mail';
+type IconName =
+  | 'brand'
+  | 'calendar'
+  | 'chart'
+  | 'check'
+  | 'eye'
+  | 'eyeOff'
+  | 'lock'
+  | 'mail'
+  | 'shield';
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
     brand: <path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" />,
+    calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4M17 3v4M3 10h18M8 14h2M14 14h2M8 18h2" /></>,
+    chart: <><path d="M4 20V10M10 20V4M16 20v-7M22 20V7M2 20h22" /></>,
     check: <path d="m5 12 4 4L19 6" />,
     eye: <><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" /><circle cx="12" cy="12" r="2.5" /></>,
     eyeOff: <><path d="m3 3 18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6.5 0 10 6 10 6a18 18 0 0 1-2.1 2.8M6.6 6.6C3.6 8.3 2 12 2 12s3.5 6 10 6c1.1 0 2.1-.2 3-.5M9.9 9.9a3 3 0 0 0 4.2 4.2" /></>,
     lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
     mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m4 7 8 6 8-6" /></>,
+    shield: <><path d="M12 2 4 5v6c0 5.4 3.4 9.3 8 11 4.6-1.7 8-5.6 8-11V5zM12 7v10M8 11l4 4 4-4" /></>,
   };
   return <svg className="sign-in-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -23,7 +35,15 @@ function RecoveryFrame({ children }: { children: React.ReactNode }) {
     <section className="sign-in-brand-panel" aria-label="Clinic Queueing introduction">
       <div className="sign-in-brand-content">
         <Link className="sign-in-brand" to="/" aria-label="Clinic Queueing home"><span><Icon name="brand" /></span><strong>CLINIC QUEUEING<small>SaaS</small></strong></Link>
-        <div className="recovery-pitch"><h1>Smart<br />queueing.<br />Better<br />patient care.</h1><p>A queue management<br />system built for clinics<br />to run efficiently and<br />serve patients better.</p></div>
+        <div className="sign-in-pitch">
+          <h1>Smart queueing.<br />Better patient care.</h1>
+          <p>A queue management system built for clinics<br className="desktop-only" /> to run efficiently and serve patients better.</p>
+          <ul>
+            <li><span><Icon name="calendar" /></span><div><strong>Organize Appointments</strong><p>Manage schedules and appointments with ease.</p></div></li>
+            <li><span><Icon name="chart" /></span><div><strong>Real-time Queue</strong><p>See live queue status and keep patients informed.</p></div></li>
+            <li><span><Icon name="shield" /></span><div><strong>Secure &amp; Reliable</strong><p>Your data is secure and accessible anytime.</p></div></li>
+          </ul>
+        </div>
         <img className="clinic-illustration" src={clinicWaitingRoom} alt="" aria-hidden="true" decoding="async" />
       </div>
     </section>
