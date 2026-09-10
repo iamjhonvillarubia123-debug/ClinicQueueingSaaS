@@ -1,5 +1,7 @@
+require('dotenv').config();
 const { createHmac } = require('crypto');
-const { PrismaClient } = require('../generated/prisma');
+const { Client } = require('pg');
+const { assertDevelopmentDatabase } = require('./show-dev-latest-email-verification-link.cjs');
 
 function normalizePhilippineMobile(input) {
   const compact = String(input || '').trim().replace(/[\s()-]/g, '');
@@ -11,10 +13,21 @@ function normalizePhilippineMobile(input) {
 }
 
 async function main() {
+  console.log('R3 account-by-mobile diagnostic');
+  console.log('Read-only: no rows are changed.');
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to inspect account state in production.');
+  }
+
   const raw = process.argv[2];
   if (!raw) {
     throw new Error('Usage: node scripts/r3-diagnose-account-by-mobile.cjs <mobile-number>');
   }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL is not defined.');
+  assertDevelopmentDatabase(databaseUrl);
 
   const canonical = normalizePhilippineMobile(raw);
   const keyBase64 = process.env.MOBILE_LOOKUP_HMAC_KEY_V1;
@@ -27,31 +40,36 @@ async function main() {
   }
 
   const hash = createHmac('sha256', key).update(canonical, 'utf8').digest('hex');
-  const prisma = new PrismaClient();
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+
   try {
-    const users = await prisma.user.findMany({
-      where: { mobileNumberHash: hash },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        role: true,
-        accountStatus: true,
-        administrativeRestrictionStatus: true,
-        loginIdentifierType: true,
-        mobileVerifiedAt: true,
-        emailVerifiedAt: true,
-        createdAt: true,
-      },
-    });
+    const result = await client.query(
+      `
+        SELECT
+          "id",
+          "role",
+          "accountStatus",
+          "administrativeRestrictionStatus",
+          "loginIdentifierType",
+          "mobileVerifiedAt",
+          "emailVerifiedAt",
+          "createdAt"
+        FROM "User"
+        WHERE "mobileNumberHash" = $1
+        ORDER BY "createdAt" DESC
+      `,
+      [hash],
+    );
 
     console.log(`Mobile: ${canonical}`);
-    console.log(`Matching account rows: ${users.length}`);
-    if (users.length === 0) {
+    console.log(`Matching account rows: ${result.rowCount}`);
+    if (result.rowCount === 0) {
       console.log('No account row matches this mobile number.');
       return;
     }
 
-    for (const [index, user] of users.entries()) {
+    for (const [index, user] of result.rows.entries()) {
       const primaryVerified = user.loginIdentifierType === 'MOBILE'
         ? Boolean(user.mobileVerifiedAt)
         : Boolean(user.emailVerifiedAt);
@@ -68,10 +86,10 @@ async function main() {
       console.log(`  loginIdentifierType: ${user.loginIdentifierType}`);
       console.log(`  primaryIdentifierVerified: ${primaryVerified ? 'YES' : 'NO'}`);
       console.log(`  ordinaryAuthenticationEligible: ${ordinaryAuthEligible ? 'YES' : 'NO'}`);
-      console.log(`  createdAt: ${user.createdAt.toISOString()}`);
+      console.log(`  createdAt: ${new Date(user.createdAt).toISOString()}`);
     }
   } finally {
-    await prisma.$disconnect();
+    await client.end();
   }
 }
 
