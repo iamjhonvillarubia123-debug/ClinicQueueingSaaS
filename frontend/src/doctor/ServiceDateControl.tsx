@@ -18,16 +18,21 @@ const longFormatter = new Intl.DateTimeFormat('en-US', {
 
 const ServiceDateTodayContext = createContext<string | null>(null);
 
+type DateRange = { fromServiceDate: string; toServiceDate: string };
+const AllowedDatesContext = createContext<DateRange[] | null>(null);
+
 export function ServiceDateTodayProvider({
   today,
+  allowedRanges = null,
   children,
 }: {
   today: string;
+  allowedRanges?: DateRange[] | null;
   children: React.ReactNode;
 }) {
   return (
     <ServiceDateTodayContext.Provider value={today}>
-      {children}
+      <AllowedDatesContext.Provider value={allowedRanges}>{children}</AllowedDatesContext.Provider>
     </ServiceDateTodayContext.Provider>
   );
 }
@@ -78,6 +83,15 @@ export function ServiceDateControl({
   compact?: boolean;
 }) {
   const authoritativeToday = useContext(ServiceDateTodayContext);
+  const allowedRanges = useContext(AllowedDatesContext);
+  const isAllowed = (date: string) => allowedRanges === null || allowedRanges.some((range) => range.fromServiceDate <= date && range.toServiceDate >= date);
+  function adjacent(direction: number) {
+    const next = shiftDate(value, direction);
+    if (isAllowed(next)) return next;
+    const candidates = (allowedRanges ?? []).map((range) => direction > 0 ? range.fromServiceDate : range.toServiceDate).filter((date) => direction > 0 ? date > value : date < value).sort();
+    return direction > 0 ? candidates[0] : candidates.at(-1);
+  }
+  const previous = adjacent(-1); const next = adjacent(1);
   const today = authoritativeToday !== null && value === authoritativeToday;
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(monthKey(value));
@@ -106,6 +120,7 @@ export function ServiceDateControl({
   }, []);
 
   function chooseDate(nextDate: string) {
+    if (!isAllowed(nextDate)) return;
     onChange(nextDate);
     setOpen(false);
   }
@@ -115,13 +130,13 @@ export function ServiceDateControl({
       <small>Service Date</small>
       <input className="service-date-value" readOnly value={value} aria-label="Select service date" />
       <div className="service-date-row">
-        <button type="button" aria-label="Previous service date" onClick={() => onChange(shiftDate(value, -1))}>‹</button>
+        <button type="button" aria-label="Previous service date" disabled={!previous} onClick={() => previous && chooseDate(previous)}>‹</button>
         <button className="service-date-trigger" type="button" aria-label="Open service date calendar" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
           <span aria-hidden="true"><OperationsIcon name="calendar" size={17} /></span>
           <strong>{formatServiceDate(value)}</strong>
         </button>
-        <button type="button" aria-label="Next service date" onClick={() => onChange(shiftDate(value, 1))}>›</button>
-        {today ? <em>TODAY</em> : authoritativeToday ? <button className="service-date-today" type="button" onClick={() => chooseDate(authoritativeToday)}>Go to today</button> : null}
+        <button type="button" aria-label="Next service date" disabled={!next} onClick={() => next && chooseDate(next)}>›</button>
+        {today ? <em>TODAY</em> : authoritativeToday && isAllowed(authoritativeToday) ? <button className="service-date-today" type="button" onClick={() => chooseDate(authoritativeToday)}>Go to today</button> : null}
       </div>
       {open ? (
         <div className="service-calendar" role="dialog" aria-label="Choose service date">
@@ -137,6 +152,7 @@ export function ServiceDateControl({
                 className={`${monthKey(day) === visibleMonth ? '' : 'is-outside'}${day === value ? ' is-selected' : ''}${day === authoritativeToday ? ' is-today' : ''}`.trim()}
                 type="button"
                 key={day}
+                disabled={!isAllowed(day)}
                 onClick={() => chooseDate(day)}
                 aria-label={formatServiceDate(day)}
                 aria-pressed={day === value}
@@ -145,8 +161,9 @@ export function ServiceDateControl({
               </button>
             ))}
           </div>
+          {allowedRanges !== null ? <small>Only dates authorized by your doctor can be selected.</small> : null}
           <footer>
-            {authoritativeToday ? <button type="button" onClick={() => chooseDate(authoritativeToday)}>Go to today</button> : null}
+            {authoritativeToday && isAllowed(authoritativeToday) ? <button type="button" onClick={() => chooseDate(authoritativeToday)}>Go to today</button> : null}
             <button type="button" onClick={() => setOpen(false)}>Close</button>
           </footer>
         </div>

@@ -21,7 +21,7 @@ function Icon({ name }: { name: 'brand' | 'calendar' | 'chart' | 'shield' | 'mai
 
 export function LoginPage() {
   const { status, login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -31,9 +31,11 @@ export function LoginPage() {
   const location = useLocation();
 
   useEffect(() => {
-    const rememberedEmail = localStorage.getItem('clinic-queueing.remembered-email');
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
+    const remembered =
+      localStorage.getItem('clinic-queueing.remembered-identifier') ??
+      localStorage.getItem('clinic-queueing.remembered-email');
+    if (remembered) {
+      setIdentifier(remembered);
       setRememberMe(true);
     }
   }, []);
@@ -45,9 +47,16 @@ export function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      await login(email, password);
-      if (rememberMe) localStorage.setItem('clinic-queueing.remembered-email', email.trim());
-      else localStorage.removeItem('clinic-queueing.remembered-email');
+      await login(identifier, password);
+      if (rememberMe) {
+        localStorage.setItem(
+          'clinic-queueing.remembered-identifier',
+          identifier.trim(),
+        );
+      } else {
+        localStorage.removeItem('clinic-queueing.remembered-identifier');
+      }
+      localStorage.removeItem('clinic-queueing.remembered-email');
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from || '/app', { replace: true });
     } catch (caught) {
@@ -81,14 +90,14 @@ export function LoginPage() {
         <section className="sign-in-card" aria-labelledby="signin-heading">
           <header><h2 id="signin-heading">Sign in</h2><p>Welcome back! Please sign in to your account.</p></header>
           <form onSubmit={submit} noValidate>
-            <label htmlFor="signin-email">Email address</label>
-            <div className="sign-in-input"><Icon name="mail" /><input id="signin-email" type="email" autoComplete="email" required placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+            <label htmlFor="signin-identifier">Mobile # or email address</label>
+            <div className="sign-in-input"><Icon name="mail" /><input id="signin-identifier" type="text" autoComplete="username" required placeholder="Enter mobile # or email address" value={identifier} onChange={(event) => setIdentifier(event.target.value)} /></div>
             <label htmlFor="signin-password">Password</label>
             <div className="sign-in-input"><Icon name="lock" /><input id="signin-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>
             <div className="sign-in-help"><label className="remember-me"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /><span>Remember me</span></label><Link to="/forgot-password">Forgot password?</Link></div>
-            <span className="remember-email-note" id="remember-email-note">Only your email address is remembered on this device.</span>
+            <span className="remember-email-note" id="remember-identifier-note">Only your mobile number or email address is remembered on this device.</span>
             {error ? <div className="form-error" role="alert">{error}</div> : null}
-            <button className="sign-in-submit" type="submit" disabled={submitting || !email || !password}>{submitting ? 'Signing in…' : 'Sign in'}</button>
+            <button className="sign-in-submit" type="submit" disabled={submitting || !identifier || !password}>{submitting ? 'Signing in…' : 'Sign in'}</button>
             <div className="sign-in-divider" aria-hidden="true"><span>or</span></div>
             <button className="google-sign-in" type="button" disabled aria-describedby="google-coming-soon"><span className="google-mark" aria-hidden="true">G</span>Sign in with Google</button>
             <span className="google-coming-soon" id="google-coming-soon">Google sign-in is coming soon.</span>

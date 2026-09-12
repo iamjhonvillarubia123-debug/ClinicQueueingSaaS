@@ -7,9 +7,12 @@ import {
   SubscriptionPurchaseStatus,
 } from '../../generated/prisma/client';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { SubscriptionPeriodService } from './subscription-period.service';
 
 const RECOVERY_EMAIL_PURPOSE = 'doctor-financial-account:recovery-email';
+const RECOVERY_IDENTIFIER_PURPOSE =
+  'doctor-financial-account:recovery-identifier';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -28,10 +31,16 @@ export type DoctorClosureFinancialSettlement = {
   creditedFuturePeriods: number;
 };
 
+export type FinancialRecoveryIdentity = {
+  type: 'EMAIL' | 'MOBILE';
+  value: string;
+};
+
 @Injectable()
 export class DoctorClosureFinancialSettlementService {
   constructor(
     private readonly protectedPayload: ProtectedAccountPayloadService,
+    private readonly mobileNumberService: MobileNumberService,
     private readonly periods: SubscriptionPeriodService,
   ) {}
 
@@ -87,7 +96,7 @@ export class DoctorClosureFinancialSettlementService {
     transaction: TransactionClient,
     input: {
       doctorFinancialAccountId: string | null;
-      recoveryEmail: string;
+      recoveryIdentity: FinancialRecoveryIdentity;
       closureCommandId: string;
       closedAt: Date;
     },
@@ -100,17 +109,41 @@ export class DoctorClosureFinancialSettlementService {
       };
     }
 
-    const recoveryEmail = input.recoveryEmail.trim().toLowerCase();
-    await transaction.doctorFinancialAccount.update({
-      where: { id: input.doctorFinancialAccountId },
-      data: {
-        recoveryEmailEncrypted: this.protectedPayload.encrypt(
-          recoveryEmail,
-          RECOVERY_EMAIL_PURPOSE,
-        ),
-        recoveryEmailHash: this.sha256(recoveryEmail),
-      },
-    });
+    const recoveryIdentity = this.normalizeRecoveryIdentity(
+      input.recoveryIdentity,
+    );
+    const recoveryIdentifierEncrypted = this.protectedPayload.encrypt(
+      recoveryIdentity.value,
+      `${RECOVERY_IDENTIFIER_PURPOSE}:${recoveryIdentity.type.toLowerCase()}`,
+    );
+    const recoveryIdentifierHash =
+      recoveryIdentity.type === 'EMAIL'
+        ? this.sha256(recoveryIdentity.value)
+        : this.mobileNumberService.hashCanonical(recoveryIdentity.value);
+
+    await transaction.$executeRaw(
+      Prisma.sql`
+        UPDATE "DoctorFinancialAccount"
+        SET
+          "recoveryIdentifierType" = CAST(${recoveryIdentity.type} AS "AccountLoginIdentifierType"),
+          "recoveryIdentifierEncrypted" = ${recoveryIdentifierEncrypted},
+          "recoveryIdentifierHash" = ${recoveryIdentifierHash},
+          "recoveryEmailEncrypted" = ${
+            recoveryIdentity.type === 'EMAIL'
+              ? this.protectedPayload.encrypt(
+                  recoveryIdentity.value,
+                  RECOVERY_EMAIL_PURPOSE,
+                )
+              : null
+          },
+          "recoveryEmailHash" = ${
+            recoveryIdentity.type === 'EMAIL'
+              ? this.sha256(recoveryIdentity.value)
+              : null
+          }
+        WHERE "id" = ${input.doctorFinancialAccountId}
+      `,
+    );
 
     const purchases = await transaction.subscriptionPurchase.findMany({
       where: {
@@ -159,6 +192,18 @@ export class DoctorClosureFinancialSettlementService {
       doctorFinancialAccountId: input.doctorFinancialAccountId,
       creditCreated: creditCreated.toFixed(2),
       creditedFuturePeriods,
+    };
+  }
+
+  private normalizeRecoveryIdentity(
+    identity: FinancialRecoveryIdentity,
+  ): FinancialRecoveryIdentity {
+    if (identity.type === 'EMAIL') {
+      return { type: 'EMAIL', value: identity.value.trim().toLowerCase() };
+    }
+    return {
+      type: 'MOBILE',
+      value: this.mobileNumberService.normalize(identity.value).canonical,
     };
   }
 

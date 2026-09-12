@@ -92,18 +92,20 @@ describe('Secretary workspace pages', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows only modules represented by granted authority', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+  it.each([false, true])('opens authorized clinic modules (substitute: %s)', async (substitute) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input);
       if (url.includes('/secretary/workspace'))
-        return Promise.resolve(response(workspace));
+        return Promise.resolve(response(substitute ? { ...workspace, clinics: [{ ...workspace.clinics[0], assignmentType: 'SUBSTITUTE_SECRETARY', authorityBundles: [], substituteCoverages: [{ status: 'ACTIVE', fromServiceDate: '2026-09-02', toServiceDate: '2026-09-02' }] }] } : workspace));
       if (url.includes('/operations/context'))
         return Promise.resolve(
           response({
             practiceLocationId: 'clinic-1',
             clinicName: 'North Clinic',
             timeZone: 'Asia/Manila',
-            currentServiceDate: '2026-09-02',
+            currentServiceDate: '2026-09-01',
+            defaultServiceDate: '2026-09-02',
+            allowedServiceDateRanges: substitute ? [{ fromServiceDate: '2026-09-02', toServiceDate: '2026-09-02' }] : null,
           }),
         );
       const clinic = {
@@ -159,9 +161,10 @@ describe('Secretary workspace pages', () => {
       await screen.findByRole('button', { name: 'Overview' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Queue' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Appointments' }),
-    ).toBeInTheDocument();
+    if (substitute) expect(screen.queryByRole('button', { name: 'Appointments' })).not.toBeInTheDocument();
+    else expect(screen.getByRole('button', { name: 'Appointments' })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/operations/overview?serviceDate=2026-09-02'))).toBe(true));
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('serviceDate=2026-09-01'))).toBe(false);
     expect(
       screen.queryByRole('button', { name: 'Staff' }),
     ).not.toBeInTheDocument();

@@ -97,11 +97,11 @@ describe('R1 authentication role boundaries (e2e)', () => {
 
     await doctorBrowser
       .post('/auth/login')
-      .send({ email: doctorEmail, password: doctorPassword })
+      .send({ identifier: doctorEmail, password: doctorPassword })
       .expect(201);
     await secretaryBrowser
       .post('/auth/login')
-      .send({ email: secretaryEmail, password: secretaryPassword })
+      .send({ identifier: secretaryEmail, password: secretaryPassword })
       .expect(201);
 
     await expect(doctorBrowser.get('/auth/profile')).resolves.toMatchObject({

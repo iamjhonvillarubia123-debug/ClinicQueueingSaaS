@@ -55,8 +55,7 @@ export class DoctorController {
     return this.accountRegistrationService.register({
       firstName: registerDoctorDto.firstName,
       lastName: registerDoctorDto.lastName,
-      email: registerDoctorDto.email,
-      mobileNumber: registerDoctorDto.mobileNumber,
+      identifier: registerDoctorDto.email,
       password: registerDoctorDto.password,
       role: UserRole.DOCTOR,
     });
@@ -231,7 +230,7 @@ export class DoctorController {
     id: 'doctor-reactivate',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
   @Post('account/reactivate')
   reactivateAccount(
@@ -249,7 +248,7 @@ export class DoctorController {
     id: 'doctor-permanent-delete',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
   @Post('account/permanent-delete')
   permanentlyDeleteAccount(

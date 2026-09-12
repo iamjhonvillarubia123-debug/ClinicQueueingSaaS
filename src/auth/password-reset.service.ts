@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'crypto';
 import {
+  AccountLoginIdentifierType,
   NotificationChannel,
   NotificationOutboxStatus,
   NotificationType,
@@ -9,14 +10,18 @@ import {
   Prisma,
   UserAccountStatus,
 } from '../../generated/prisma/client';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { normalizeEmail } from './security/session-security';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import {
+  AccountIdentifier,
+  parseAccountIdentifier,
+} from './security/account-identifier';
 import { PasswordSecurityService } from './security/password-security.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
 
 const PASSWORD_RESET_LIFETIME_MS = 30 * 60 * 1000;
 const PASSWORD_RESET_PAYLOAD_PURPOSE = 'password-reset';
-
 type TransactionClient = Prisma.TransactionClient;
 
 @Injectable()
@@ -25,14 +30,30 @@ export class PasswordResetService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly protectedPayloadService: ProtectedAccountPayloadService,
+    private readonly notificationPayload: NotificationPayloadService,
+    private readonly mobileNumbers: MobileNumberService,
     private readonly passwordSecurityService: PasswordSecurityService,
   ) {}
 
-  async request(email: string): Promise<{ accepted: true }> {
-    const normalizedEmail = normalizeEmail(email);
+  async request(identifierInput: string): Promise<{ accepted: true }> {
+    let identifier: AccountIdentifier;
+    try {
+      identifier = parseAccountIdentifier(identifierInput, this.mobileNumbers);
+    } catch {
+      return { accepted: true };
+    }
+
     const currentUser = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        ...(identifier.type === 'EMAIL'
+          ? {
+              loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+              email: identifier.normalized,
+            }
+          : {
+              loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+              mobileNumberHash: identifier.mobileHash,
+            }),
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
       select: { id: true },
@@ -50,6 +71,8 @@ export class PasswordResetService {
         select: {
           id: true,
           email: true,
+          mobileNumber: true,
+          loginIdentifierType: true,
           accountStatus: true,
         },
       });
@@ -97,7 +120,7 @@ export class PasswordResetService {
         }
       }
 
-      await this.createReset(transaction, user.id, user.email, now);
+      await this.createReset(transaction, user, now);
     });
 
     return { accepted: true };
@@ -155,12 +178,7 @@ export class PasswordResetService {
 
       const user = await transaction.user.findUnique({
         where: { id: reset.userId },
-        select: {
-          id: true,
-          accountStatus: true,
-          emailVerifiedAt: true,
-          administrativeRestrictionStatus: true,
-        },
+        select: { id: true, accountStatus: true },
       });
 
       if (
@@ -216,14 +234,18 @@ export class PasswordResetService {
 
   private async createReset(
     transaction: TransactionClient,
-    userId: string,
-    normalizedEmail: string,
+    user: {
+      id: string;
+      email: string | null;
+      mobileNumber: string | null;
+      loginIdentifierType: AccountLoginIdentifierType;
+    },
     createdAt: Date,
   ): Promise<void> {
     const token = randomBytes(32).toString('base64url');
     const tokenHash = this.sha256(token);
     const activeResetKey = this.sha256(
-      `${NotificationType.PASSWORD_RESET}:${userId}`,
+      `${NotificationType.PASSWORD_RESET}:${user.id}`,
     );
     const expiresAt = new Date(
       createdAt.getTime() + PASSWORD_RESET_LIFETIME_MS,
@@ -231,7 +253,7 @@ export class PasswordResetService {
 
     const reset = await transaction.passwordReset.create({
       data: {
-        userId,
+        userId: user.id,
         tokenHash,
         activeResetKey,
         status: PasswordResetStatus.PENDING,
@@ -242,6 +264,14 @@ export class PasswordResetService {
 
     const resetUrl = this.buildResetUrl(token);
     const messageBody = `Reset your Clinic Queueing SaaS password: ${resetUrl}`;
+    const isEmail =
+      user.loginIdentifierType === AccountLoginIdentifierType.EMAIL;
+
+    if ((isEmail && !user.email) || (!isEmail && !user.mobileNumber)) {
+      throw new BadRequestException(
+        'Password recovery identity is unavailable.',
+      );
+    }
 
     await transaction.notificationOutbox.create({
       data: {
@@ -249,19 +279,27 @@ export class PasswordResetService {
           `${NotificationType.PASSWORD_RESET}:${reset.id}`,
         ),
         notificationType: NotificationType.PASSWORD_RESET,
-        channel: NotificationChannel.EMAIL,
+        channel: isEmail ? NotificationChannel.EMAIL : NotificationChannel.SMS,
         status: NotificationOutboxStatus.PENDING,
         practiceLocationId: null,
         passwordResetId: reset.id,
-        recipientMobileEncrypted: null,
-        recipientEmailEncrypted: this.protectedPayloadService.encrypt(
-          normalizedEmail,
-          `${PASSWORD_RESET_PAYLOAD_PURPOSE}:recipient`,
-        ),
-        messageBodyEncrypted: this.protectedPayloadService.encrypt(
-          messageBody,
-          `${PASSWORD_RESET_PAYLOAD_PURPOSE}:message`,
-        ),
+        recipientMobileEncrypted:
+          !isEmail && user.mobileNumber
+            ? this.mobileNumbers.encryptCanonical(user.mobileNumber)
+            : null,
+        recipientEmailEncrypted:
+          isEmail && user.email
+            ? this.protectedPayloadService.encrypt(
+                user.email,
+                `${PASSWORD_RESET_PAYLOAD_PURPOSE}:recipient`,
+              )
+            : null,
+        messageBodyEncrypted: isEmail
+          ? this.protectedPayloadService.encrypt(
+              messageBody,
+              `${PASSWORD_RESET_PAYLOAD_PURPOSE}:message`,
+            )
+          : this.notificationPayload.encryptMessage(messageBody),
         providerIdempotencyKey: `password-reset:${reset.id}`,
         nextAttemptAt: createdAt,
         expiresAt,
@@ -287,17 +325,19 @@ export class PasswordResetService {
     if (outboxId) {
       await transaction.notificationOutbox.updateMany({
         where: { id: outboxId, status: NotificationOutboxStatus.PENDING },
-        data: { status: NotificationOutboxStatus.CANCELLED, cancelledAt: now },
+        data: {
+          status: NotificationOutboxStatus.CANCELLED,
+          cancelledAt: now,
+        },
       });
     }
   }
 
   private buildResetUrl(token: string): string {
-    const baseUrl = (
+    const baseUrl =
       this.configService.get<string>('PUBLIC_APP_BASE_URL') ??
-      'http://localhost:3000'
-    ).replace(/\/$/, '');
-    return `${baseUrl}/reset-password?token=${encodeURIComponent(token)}`;
+      'http://localhost:3000';
+    return `${baseUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
   }
 
   private sha256(value: string): string {

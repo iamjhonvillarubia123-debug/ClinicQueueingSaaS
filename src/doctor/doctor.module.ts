@@ -5,6 +5,7 @@ import { DoctorAuditService } from './doctor-audit.service';
 import { DoctorAuditController } from './doctor-audit.controller';
 import { AuthModule } from '../auth/auth.module';
 import { FinancialModule } from '../financial/financial.module';
+import { NotificationModule } from '../notification/notification.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 import { DoctorController } from './doctor.controller';
@@ -17,7 +18,13 @@ import { DoctorProfileOnboardingService } from './doctor-profile-onboarding.serv
 import { DoctorService } from './doctor.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, FinancialModule, MobileNumberModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    FinancialModule,
+    NotificationModule,
+    MobileNumberModule,
+  ],
   providers: [
     DoctorAccountDataService,
     DoctorAuditService,

@@ -3,11 +3,14 @@ import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  AccountLoginIdentifierType,
   NotificationOutboxStatus,
   PasswordResetStatus,
   UserAccountStatus,
 } from '../../generated/prisma/client';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { PasswordResetService } from './password-reset.service';
 import { PasswordSecurityService } from './security/password-security.service';
 import { ProtectedAccountPayloadService } from './security/protected-account-payload.service';
@@ -40,6 +43,14 @@ describe('PasswordResetService', () => {
   };
   const config = { get: jest.fn().mockReturnValue('https://app.example.test') };
   const payload = { encrypt: jest.fn((value: string) => `enc:${value}`) };
+  const notificationPayload = {
+    encryptMessage: jest.fn((value: string) => `notification:${value}`),
+  };
+  const mobileNumbers = {
+    normalize: jest.fn((value: string) => ({ canonical: value })),
+    hashCanonical: jest.fn((value: string) => `hash:${value}`),
+    encryptCanonical: jest.fn((value: string) => `mobile:${value}`),
+  };
   const passwordSecurity = {
     assertValid: jest.fn(),
     hash: jest.fn().mockResolvedValue('new-password-hash'),
@@ -52,6 +63,8 @@ describe('PasswordResetService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: ConfigService, useValue: config },
         { provide: ProtectedAccountPayloadService, useValue: payload },
+        { provide: NotificationPayloadService, useValue: notificationPayload },
+        { provide: MobileNumberService, useValue: mobileNumbers },
         { provide: PasswordSecurityService, useValue: passwordSecurity },
       ],
     }).compile();
@@ -59,6 +72,9 @@ describe('PasswordResetService', () => {
     jest.clearAllMocks();
     config.get.mockReturnValue('https://app.example.test');
     payload.encrypt.mockImplementation((value: string) => `enc:${value}`);
+    notificationPayload.encryptMessage.mockImplementation(
+      (value: string) => `notification:${value}`,
+    );
     passwordSecurity.hash.mockResolvedValue('new-password-hash');
     transaction.$executeRaw.mockResolvedValue(1);
   });
@@ -70,6 +86,7 @@ describe('PasswordResetService', () => {
     });
     expect(prisma.user.findFirst).toHaveBeenCalledWith({
       where: {
+        loginIdentifierType: AccountLoginIdentifierType.EMAIL,
         email: 'missing@example.com',
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
@@ -83,6 +100,8 @@ describe('PasswordResetService', () => {
     transaction.user.findUnique.mockResolvedValue({
       id: 'user-1',
       email: 'doctor@example.com',
+      mobileNumber: null,
+      loginIdentifierType: AccountLoginIdentifierType.EMAIL,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
     });
     transaction.passwordReset.findFirst.mockResolvedValue({
@@ -138,7 +157,6 @@ describe('PasswordResetService', () => {
     transaction.$queryRaw
       .mockResolvedValueOnce([{ id: 'reset-1' }])
       .mockResolvedValueOnce([{ id: 'user-1' }]);
-    // Match the actual derived token hash after the service computes it.
     transaction.passwordReset.findUnique.mockImplementation(() => ({
       id: 'reset-1',
       userId: 'user-1',
@@ -151,12 +169,9 @@ describe('PasswordResetService', () => {
         status: NotificationOutboxStatus.PENDING,
       },
     }));
-    const emailVerifiedAt = new Date('2026-08-15T00:00:00Z');
     transaction.user.findUnique.mockResolvedValue({
       id: 'user-1',
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
-      emailVerifiedAt,
-      administrativeRestrictionStatus: 'SUSPENDED',
     });
 
     await expect(service.consume('raw-token', 'new password')).resolves.toEqual(

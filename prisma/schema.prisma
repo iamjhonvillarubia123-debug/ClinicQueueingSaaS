@@ -142,6 +142,7 @@ enum OtpPurpose {
   BOOKING
   APPOINTMENT_RECOVERY
   BOOKING_GROUP_RECOVERY
+  ACCOUNT_MOBILE_VERIFICATION
 }
 
 enum BookingAccessTokenPurpose {
@@ -376,6 +377,11 @@ enum PrivacyErasureResourceType {
   APPOINTMENT
 }
 
+enum AccountLoginIdentifierType {
+  EMAIL
+  MOBILE
+}
+
 enum UserRole {
   DOCTOR
   SECRETARY
@@ -501,22 +507,28 @@ enum BookingQuestionType {
 
 model User {
   id         String  @id @default(uuid())
-  email      String  @db.VarChar(255)
+  email      String? @db.VarChar(255)
   firstName  String  @db.VarChar(100)
   middleName String? @db.VarChar(100)
   lastName   String  @db.VarChar(100)
 
-  mobileNumber String @db.VarChar(30)
-  passwordHash String @db.VarChar(255)
+  mobileNumber     String? @db.VarChar(30)
+  // Current-account uniqueness is enforced by the partial SQL index
+  // User_mobileNumberHash_current_nonterminal_key, like the email index.
+  // Historical permanently closed accounts retain their identifiers.
+  mobileNumberHash String? @db.VarChar(64)
+  passwordHash     String  @db.VarChar(255)
 
-  role                            UserRole
-  accountStatus                   UserAccountStatus               @default(ACTIVE)
-  administrativeRestrictionStatus AdministrativeRestrictionStatus @default(NONE)
+  loginIdentifierType            AccountLoginIdentifierType        @default(EMAIL)
+  role                           UserRole
+  accountStatus                  UserAccountStatus                  @default(ACTIVE)
+  administrativeRestrictionStatus AdministrativeRestrictionStatus  @default(NONE)
 
-  emailVerifiedAt DateTime? @db.Timestamptz(3)
-  lastLoginAt     DateTime? @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+  emailVerifiedAt  DateTime? @db.Timestamptz(3)
+  mobileVerifiedAt DateTime? @db.Timestamptz(3)
+  lastLoginAt      DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
 
   doctorProfile                    DoctorProfile?
   practiceStaffAssignments         PracticeStaff[]
@@ -527,6 +539,7 @@ model User {
   substituteCoveragesCreated SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageCreatedBy")
   substituteCoveragesEnded SubstituteSecretaryCoverage[] @relation("SubstituteSecretaryCoverageEndedBy")
   secretaryInvitationsSent SecretaryInvitation[] @relation("SecretaryInvitationInvitedBy")
+  targetedSecretaryInvitations SecretaryInvitation[] @relation("SecretaryInvitationTargetUser")
   acceptedSecretaryInvitations SecretaryInvitation[] @relation("SecretaryInvitationAcceptedUser")
   reviewedSecretarySettingsDrafts  SecretarySettingsDraft[]             @relation("SecretarySettingsDraftReviewedBy")
   createdAppointments              Appointment[]
@@ -539,6 +552,7 @@ model User {
   clinicDayOperationalNoticesEnded   ClinicDayOperationalNotice[]       @relation("ClinicDayOperationalNoticeEndedBy")
   userSessions                     UserSession[]
   emailVerifications               EmailVerification[]
+  accountOtpVerifications          OtpVerification[]
   passwordResets                   PasswordReset[]
   dataRetentionAcknowledgements    DoctorDataRetentionAcknowledgement[]
 
@@ -564,9 +578,9 @@ model DoctorProfile {
   userId             String  @unique
   middleName         String? @db.VarChar(100)
   suffix             String? @db.VarChar(30)
-  professionalTitle  String  @db.VarChar(50)
-  specialization     String  @db.VarChar(150)
-  licenseNumber      String  @unique @db.VarChar(100)
+  professionalTitle  String? @db.VarChar(50)
+  specialization     String? @db.VarChar(150)
+  licenseNumber      String? @unique @db.VarChar(100)
   profileDescription String?
   profilePhotoUrl    String? @db.VarChar(500)
   // Phase 5 stable Doctor public-route identity. It is opaque,
@@ -886,10 +900,13 @@ model SecretaryInvitation {
   id String @id @default(uuid())
   practiceLocationId String
   invitedByUserId String
-  normalizedEmail String @db.VarChar(255)
+  targetUserId String?
+  identifierType AccountLoginIdentifierType @default(EMAIL)
+  normalizedIdentifier String @db.VarChar(255)
+  normalizedEmail String? @db.VarChar(255)
   firstName String @db.VarChar(100)
   lastName String @db.VarChar(100)
-  mobileNumber String @db.VarChar(30)
+  mobileNumber String? @db.VarChar(30)
   tokenHash String? @db.VarChar(64)
   activeInvitationKey String? @unique @db.VarChar(64)
   status SecretaryInvitationStatus @default(PENDING)
@@ -909,17 +926,22 @@ model SecretaryInvitation {
   requestedCoverageMode SubstituteSecretaryCoverageMode?
   requestedFromServiceDate DateTime? @db.Date
   requestedToServiceDate DateTime? @db.Date
+  // Append-only date exclusions retain the original invitation plan and replacement history.
+  requestedCoverageRanges Json @default("[]")
+  coverageRevisions Json @default("[]")
   expectedCurrentPracticeStaffId String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
   invitedByUser User @relation("SecretaryInvitationInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  targetUser User? @relation("SecretaryInvitationTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
   acceptedUser User? @relation("SecretaryInvitationAcceptedUser", fields: [acceptedUserId], references: [id], onDelete: Restrict)
   notificationOutbox NotificationOutbox?
   @@index([tokenHash])
   @@index([status, expiresAt])
   @@index([practiceLocationId, createdAt])
   @@index([invitedByUserId, createdAt])
+  @@index([targetUserId, createdAt])
   @@index([acceptedUserId])
 }
 
@@ -1390,6 +1412,7 @@ model Appointment {
 model OtpVerification {
   id      String     @id @default(uuid())
   purpose OtpPurpose
+  userId                        String?
   bookingDraftId                String?
   bookingRecoveryAttemptId      String?
   bookingGroupRecoveryAttemptId String?
@@ -1405,10 +1428,12 @@ model OtpVerification {
   invalidatedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
   bookingDraft BookingDraft? @relation(fields: [bookingDraftId], references: [id], onDelete: Restrict)
   bookingRecoveryAttempt      BookingRecoveryAttempt?      @relation(fields: [bookingRecoveryAttemptId], references: [id], onDelete: Restrict)
   bookingGroupRecoveryAttempt BookingGroupRecoveryAttempt? @relation(fields: [bookingGroupRecoveryAttemptId], references: [id], onDelete: Restrict)
   notificationOutbox          NotificationOutbox?          @relation("OtpVerificationNotificationOutbox")
+  @@index([userId, createdAt], map: "OtpVerification_user_created_idx")
   @@index([bookingDraftId, createdAt], map: "OtpVerification_bookingDraft_created_idx")
   @@index([bookingRecoveryAttemptId, createdAt], map: "OtpVerification_recovery_created_idx")
   @@index([bookingGroupRecoveryAttemptId, createdAt], map: "OtpVerification_group_recovery_created_idx")
@@ -1649,8 +1674,11 @@ model NotificationLog {
 model DoctorFinancialAccount {
   id String @id @default(uuid())
   doctorUserId String @unique
-  recoveryEmailEncrypted String?
-  recoveryEmailHash      String? @db.VarChar(64)
+  recoveryEmailEncrypted      String?
+  recoveryEmailHash           String?                     @db.VarChar(64)
+  recoveryIdentifierType      AccountLoginIdentifierType?
+  recoveryIdentifierEncrypted String?
+  recoveryIdentifierHash      String?                     @db.VarChar(128)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   doctorUser User @relation(fields: [doctorUserId], references: [id], onDelete: Restrict)
@@ -1663,6 +1691,7 @@ model DoctorFinancialAccount {
   financialAccessSessions       FinancialAccessSession[]
   subscriptionEntitlementEvents SubscriptionEntitlementEvent[]
   @@index([recoveryEmailHash], map: "DoctorFinancialAccount_recoveryEmailHash_idx")
+  @@index([recoveryIdentifierType, recoveryIdentifierHash], map: "DoctorFinancialAccount_recoveryIdentifier_idx")
 }
 
 model DoctorSubscriptionEntitlement {
@@ -1795,9 +1824,12 @@ model RefundProcessingAttempt {
 
 model FinancialAccessChallenge {
   id String @id @default(uuid())
-  recoveryEmailHash       String @db.VarChar(64)
-  recipientEmailEncrypted String
-  codeHash                String @db.VarChar(64)
+  recoveryEmailHash            String?                     @db.VarChar(64)
+  recipientEmailEncrypted      String?
+  recoveryIdentifierType       AccountLoginIdentifierType?
+  recoveryIdentifierHash       String?                     @db.VarChar(128)
+  recipientIdentifierEncrypted String?
+  codeHash                     String                      @db.VarChar(64)
   expiresAt     DateTime  @db.Timestamptz(3)
   attemptCount  Int       @default(0)
   verifiedAt    DateTime? @db.Timestamptz(3)
@@ -1807,6 +1839,7 @@ model FinancialAccessChallenge {
   sessions             FinancialAccessSession[]
   notificationOutboxes NotificationOutbox[]
   @@index([recoveryEmailHash, createdAt], map: "FinancialAccessChallenge_email_created_idx")
+  @@index([recoveryIdentifierType, recoveryIdentifierHash, createdAt], map: "FinancialAccessChallenge_identifier_created_idx")
   @@index([expiresAt], map: "FinancialAccessChallenge_expires_idx")
 }
 

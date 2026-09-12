@@ -8,6 +8,24 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+async function completeRegistrationForm(accountType: 'DOCTOR' | 'SECRETARY' = 'DOCTOR') {
+  const user = userEvent.setup();
+  if (accountType === 'SECRETARY') {
+    await user.click(screen.getByRole('radio', { name: /Secretary/i }));
+  }
+  await user.type(screen.getByPlaceholderText('Enter your first name'), 'Maria');
+  await user.type(screen.getByPlaceholderText('Enter your last name'), 'Santos');
+  await user.type(
+    screen.getByPlaceholderText('Enter mobile # or email address'),
+    accountType === 'SECRETARY' ? 'secretary@example.com' : '09171234567',
+  );
+  await user.type(screen.getByPlaceholderText('Create a password'), 'ExamplePass1!');
+  await user.type(screen.getByPlaceholderText('Re-enter your password'), 'ExamplePass1!');
+  await user.click(screen.getByRole('checkbox'));
+  await user.click(screen.getByRole('button', { name: 'Create account' }));
+  return user;
+}
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -22,8 +40,7 @@ describe('approved create account UI', () => {
     expect(screen.getByRole('radio', { name: /Secretary/i })).not.toBeChecked();
     expect(screen.getByPlaceholderText('Enter your first name')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Enter your last name')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter your email address')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter your mobile number')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter mobile # or email address')).toBeInTheDocument();
     expect(screen.getByText('At least 8 characters')).toBeInTheDocument();
     expect(screen.getByText('Uppercase letter')).toBeInTheDocument();
     expect(screen.getByText('Lowercase letter')).toBeInTheDocument();
@@ -59,6 +76,7 @@ describe('approved create account UI', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><CreateAccountPage /></MemoryRouter>);
 
+    await user.type(screen.getByPlaceholderText('Enter mobile # or email address'), 'doctor@example.com');
     const password = screen.getByPlaceholderText('Create a password');
     const confirmation = screen.getByPlaceholderText('Re-enter your password');
     const submit = screen.getByRole('button', { name: 'Create account' });
@@ -76,12 +94,13 @@ describe('approved create account UI', () => {
 
   it('registers the selected role and moves to the approved check-email UI', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      registrationStatus: 'CREATED',
       userId: 'user-1',
       role: 'SECRETARY',
-      emailVerificationRequired: true,
-      emailVerificationExpiresAt: '2026-09-01T00:00:00.000Z',
+      verificationChannel: 'EMAIL',
+      verificationRequired: true,
+      verificationExpiresAt: '2026-09-01T00:00:00.000Z',
     }));
-    const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/register']}>
         <Routes>
@@ -91,21 +110,40 @@ describe('approved create account UI', () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole('radio', { name: /Secretary/i }));
-    await user.type(screen.getByPlaceholderText('Enter your first name'), 'Maria');
-    await user.type(screen.getByPlaceholderText('Enter your last name'), 'Santos');
-    await user.type(screen.getByPlaceholderText('Enter your email address'), 'secretary@example.com');
-    await user.type(screen.getByPlaceholderText('Enter your mobile number'), '09171234567');
-    await user.type(screen.getByPlaceholderText('Create a password'), 'ExamplePass1!');
-    await user.type(screen.getByPlaceholderText('Re-enter your password'), 'ExamplePass1!');
-    await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    await completeRegistrationForm('SECRETARY');
 
     expect(await screen.findByText('Check email destination')).toBeInTheDocument();
     expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/register');
     expect(fetchMock.mock.calls[0][1]?.method).toBe('POST');
     expect(String(fetchMock.mock.calls[0][1]?.body)).toContain('"role":"SECRETARY"');
     expect(String(fetchMock.mock.calls[0][1]?.body)).not.toContain('PracticeStaff');
+  }, 10000);
+
+  it('offers a controlled continuation when the existing account is still awaiting mobile verification', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      registrationStatus: 'VERIFICATION_PENDING',
+      userId: 'existing-user',
+      role: 'DOCTOR',
+      verificationChannel: 'MOBILE',
+      verificationRequired: true,
+    }));
+    render(
+      <MemoryRouter initialEntries={['/register']}>
+        <Routes>
+          <Route path="/register" element={<CreateAccountPage />} />
+          <Route path="/registration/verify-mobile" element={<div>Mobile verification destination</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const user = await completeRegistrationForm('DOCTOR');
+
+    expect(await screen.findByRole('heading', { name: 'Finish verifying your account' })).toBeInTheDocument();
+    expect(screen.getByText(/already exists and is still waiting for verification/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Enter your first name')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Continue verification' }));
+    expect(await screen.findByText('Mobile verification destination')).toBeInTheDocument();
   }, 10000);
 
   it('preserves the approved authentication branding panel content', () => {

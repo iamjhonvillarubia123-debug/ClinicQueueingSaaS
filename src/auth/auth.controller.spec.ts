@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AccountMobileVerificationService } from './account-mobile-verification.service';
 import { AccountRegistrationService } from './account-registration.service';
 import { AuthenticationService } from './authentication.service';
 import { AuthController } from './auth.controller';
@@ -15,6 +16,10 @@ describe('AuthController', () => {
   const authServiceMock = { login: jest.fn(), logout: jest.fn() };
   const authenticationServiceMock = {};
   const emailVerificationServiceMock = { verify: jest.fn() };
+  const mobileVerificationServiceMock = {
+    verify: jest.fn(),
+    resend: jest.fn(),
+  };
   const passwordResetServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue('http://localhost:3000'),
@@ -39,6 +44,10 @@ describe('AuthController', () => {
         {
           provide: EmailVerificationService,
           useValue: emailVerificationServiceMock,
+        },
+        {
+          provide: AccountMobileVerificationService,
+          useValue: mobileVerificationServiceMock,
         },
         {
           provide: PasswordResetService,
@@ -69,7 +78,7 @@ describe('AuthController', () => {
 
     try {
       const body = await controller.login(
-        { email: 'doctor@example.com', password: 'password' },
+        { identifier: 'doctor@example.com', password: 'password' },
         response,
       );
       expect(cookieMock).toHaveBeenCalledWith(

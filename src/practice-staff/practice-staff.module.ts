@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module';
+import { NotificationModule } from '../notification/notification.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { MobileNumberModule } from '../security/mobile-number/mobile-number.module';
 
 import { ClinicSecretaryAuthorityService } from './clinic-secretary-authority.service';
 import { PracticeStaffService } from './practice-staff.service';
@@ -9,6 +11,7 @@ import { PracticeStaffController } from './practice-staff.controller';
 import { SubstituteSecretaryCoverageController } from './substitute-secretary-coverage.controller';
 import { SubstituteSecretaryCoverageService } from './substitute-secretary-coverage.service';
 import { SecretaryInvitationController } from './secretary-invitation.controller';
+import { SecretaryInvitationPrevalidationService } from './secretary-invitation-prevalidation.service';
 import { SecretaryInvitationService } from './secretary-invitation.service';
 import { SecretaryDirectoryController } from './secretary-directory.controller';
 import { SecretaryDirectoryService } from './secretary-directory.service';
@@ -16,12 +19,13 @@ import { SecretaryWorkspaceController } from './secretary-workspace.controller';
 import { SecretaryWorkspaceService } from './secretary-workspace.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, NotificationModule, MobileNumberModule],
   providers: [
     PracticeStaffService,
     ClinicSecretaryAuthorityService,
     SubstituteSecretaryCoverageService,
     SecretaryInvitationService,
+    SecretaryInvitationPrevalidationService,
     SecretaryDirectoryService,
     SecretaryWorkspaceService,
   ],

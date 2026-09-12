@@ -1,3 +1,4 @@
+import { invitationRanges, formatCoverage, type CoverageRange } from '../doctor/coverage-ranges';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
@@ -33,6 +34,7 @@ export type SecretaryWorkspaceData = {
   clinics: SecretaryClinic[];
   invitations: Array<{
     invitationId: string;
+    coverageRanges?: CoverageRange[];
     clinicId: string;
     clinicName: string;
     doctorName: string;
@@ -271,6 +273,7 @@ export function SecretaryInvitationsPage() {
       {message ? (
         <div className="secretary-notice" role="status">
           {message}
+          <button type="button" onClick={() => setMessage('')}>Dismiss</button>
         </div>
       ) : null}
       {!data?.invitations.length ? (
@@ -306,7 +309,7 @@ export function SecretaryInvitationsPage() {
                       ? invitation.authorityBundles
                           .map((bundle) => bundleLabels[bundle] ?? bundle)
                           .join(', ')
-                      : `Live clinic and queue operations · ${invitation.fromServiceDate?.slice(0, 10)} – ${invitation.toServiceDate?.slice(0, 10)}`}
+                      : `Live clinic and queue operations · ${formatCoverage(invitationRanges(invitation))}`}
                   </dd>
                 </div>
                 <div>

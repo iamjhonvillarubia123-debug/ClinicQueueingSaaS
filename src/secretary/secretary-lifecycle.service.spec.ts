@@ -15,6 +15,7 @@ import {
 } from '../../generated/prisma/client';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { SecretaryLifecycleService } from './secretary-lifecycle.service';
 
 describe('SecretaryLifecycleService', () => {
@@ -55,6 +56,15 @@ describe('SecretaryLifecycleService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SecretaryLifecycleService,
+        {
+          provide: MobileNumberService,
+          useValue: {
+            normalize: jest
+              .fn()
+              .mockReturnValue({ canonical: '+639171234567' }),
+            hashCanonical: jest.fn().mockReturnValue('mobile-hash'),
+          },
+        },
         { provide: PrismaService, useValue: prisma },
         { provide: PasswordSecurityService, useValue: passwordSecurity },
       ],
@@ -66,6 +76,106 @@ describe('SecretaryLifecycleService', () => {
     passwordSecurity.verify.mockResolvedValue(true);
   });
 
+  it('uses the protected primary mobile hash and authenticated owner for closure', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValue([]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.ACTIVE,
+      passwordHash: 'hash',
+      loginIdentifierType: 'MOBILE',
+      email: null,
+      mobileNumberHash: 'mobile-hash',
+      mobileVerifiedAt: new Date(),
+      emailVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
+    });
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+    tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
+    await expect(
+      service.permanentlyDelete(
+        'secretary-1',
+        '+639171234567',
+        'password',
+        true,
+        'mobile-close',
+      ),
+    ).resolves.toEqual({ permanentlyClosed: true, replayed: false });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'secretary-1',
+        role: UserRole.SECRETARY,
+        loginIdentifierType: 'MOBILE',
+        mobileNumberHash: 'mobile-hash',
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    expect(tx.accountPermanentClosureAudit.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('reactivates a mobile-only account using its primary mobile hash', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValue([]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
+      passwordHash: 'hash',
+    });
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+    await expect(
+      service.reactivate('+639171234567', 'password', 'mobile-reactivate'),
+    ).resolves.toEqual({ reactivated: true, replayed: false });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        role: UserRole.SECRETARY,
+        loginIdentifierType: 'MOBILE',
+        mobileNumberHash: 'mobile-hash',
+        accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+      },
+      select: { id: true },
+    });
+  });
+
+  it('rejects a different account even when its password is known', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-2' });
+    await expect(
+      service.permanentlyDelete(
+        'secretary-1',
+        'other@example.com',
+        'password',
+        true,
+        'nonowner',
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(tx.user.update).not.toHaveBeenCalled();
+    expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a changed primary identifier after acquiring the account lock', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
+    tx.$queryRaw.mockResolvedValue([]);
+    tx.user.findUnique.mockResolvedValue({
+      id: 'secretary-1',
+      role: UserRole.SECRETARY,
+      loginIdentifierType: 'MOBILE',
+      mobileNumberHash: 'different-hash',
+    });
+    await expect(
+      service.permanentlyDelete(
+        'secretary-1',
+        '+639171234567',
+        'password',
+        true,
+        'changed-identifier',
+      ),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(passwordSecurity.verify).not.toHaveBeenCalled();
+    expect(tx.user.update).not.toHaveBeenCalled();
+  });
+
   it('disables a Secretary and removes current clinic authority atomically', async () => {
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     tx.user.findUnique.mockResolvedValue({
@@ -73,6 +183,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
     tx.$queryRaw
@@ -170,6 +285,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
     tx.$queryRaw
@@ -197,6 +317,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     passwordSecurity.verify.mockResolvedValue(false);
 
@@ -237,6 +362,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
 
     await expect(
@@ -253,6 +383,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
 
@@ -266,6 +401,7 @@ describe('SecretaryLifecycleService', () => {
 
     expect(prisma.user.findFirst).toHaveBeenCalledWith({
       where: {
+        loginIdentifierType: 'EMAIL',
         email: 'secretary@example.com',
         role: UserRole.SECRETARY,
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
@@ -301,6 +437,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     passwordSecurity.verify.mockResolvedValue(false);
 
@@ -320,6 +461,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     const fingerprint = createHash('sha256')
       .update(`${CommandType.SECRETARY_REACTIVATE_ACCOUNT}|secretary-1`, 'utf8')
@@ -346,6 +492,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
 
@@ -381,12 +532,18 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-delete-1' });
 
     await expect(
       service.permanentlyDelete(
+        'secretary-1',
         ' Secretary@Example.com ',
         'password',
         true,
@@ -432,7 +589,7 @@ describe('SecretaryLifecycleService', () => {
     });
   });
 
-  it('permanently closes a VOLUNTARILY_DISABLED Secretary without duplicating prior assignment-loss notifications', async () => {
+  it('requires reactivation before closing a VOLUNTARILY_DISABLED Secretary', async () => {
     prisma.user.findFirst.mockResolvedValue({ id: 'secretary-1' });
     tx.$queryRaw
       .mockResolvedValueOnce([{ id: 'secretary-1' }])
@@ -442,24 +599,26 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     tx.commandIdempotency.findUnique.mockResolvedValue(null);
     tx.commandIdempotency.create.mockResolvedValue({ id: 'command-delete-1' });
 
     await expect(
       service.permanentlyDelete(
+        'secretary-1',
         'secretary@example.com',
         'password',
         true,
         'delete-key',
       ),
-    ).resolves.toEqual({ permanentlyClosed: true, replayed: false });
+    ).rejects.toThrow(ConflictException);
 
-    expect(tx.accountPermanentClosureAudit.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        previousAccountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
-      }) as unknown,
-    });
+    expect(tx.accountPermanentClosureAudit.create).not.toHaveBeenCalled();
     expect(tx.applicationNotification.create).not.toHaveBeenCalled();
     expect(tx.practiceStaff.updateMany).not.toHaveBeenCalled();
     expect(tx.clinicDay.updateMany).not.toHaveBeenCalled();
@@ -468,6 +627,7 @@ describe('SecretaryLifecycleService', () => {
   it('requires explicit irreversible confirmation before Secretary Permanent Delete', async () => {
     await expect(
       service.permanentlyDelete(
+        'secretary-1',
         'secretary@example.com',
         'password',
         false,
@@ -487,11 +647,17 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.ACTIVE,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     passwordSecurity.verify.mockResolvedValue(false);
 
     await expect(
       service.permanentlyDelete(
+        'secretary-1',
         'secretary@example.com',
         'bad-password',
         true,
@@ -512,6 +678,11 @@ describe('SecretaryLifecycleService', () => {
       role: UserRole.SECRETARY,
       accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
       passwordHash: 'hash',
+      loginIdentifierType: 'EMAIL',
+      email: 'secretary@example.com',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      administrativeRestrictionStatus: 'NONE',
     });
     const fingerprint = createHash('sha256')
       .update(
@@ -525,6 +696,7 @@ describe('SecretaryLifecycleService', () => {
 
     await expect(
       service.permanentlyDelete(
+        'secretary-1',
         'secretary@example.com',
         'password',
         true,

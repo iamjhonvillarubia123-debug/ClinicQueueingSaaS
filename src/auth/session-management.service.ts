@@ -1,3 +1,4 @@
+import { accountIdentifierIsVerified } from './security/account-identifier';
 import {
   BadRequestException,
   ForbiddenException,
@@ -105,7 +106,7 @@ export class SessionManagementService {
       // Match recovery's account advisory lock and reset-before-user lock order.
       await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${actor.userId}, 0))`;
       await transaction.$queryRaw`SELECT "id" FROM "PasswordReset" WHERE "userId" = ${actor.userId} AND "status" = 'PENDING' ORDER BY "id" FOR UPDATE`;
-      const user = await this.validateActor(transaction, actor);
+      const user = await this.validateActor(transaction, actor, true);
       if (
         !currentPassword ||
         !(await this.passwords.verify(currentPassword, user.passwordHash))
@@ -150,8 +151,12 @@ export class SessionManagementService {
   async validateActor(
     transaction: Prisma.TransactionClient,
     actor: AuthenticatedUserContext,
+    forPasswordChange = false,
   ) {
-    if (actor.role !== UserRole.DOCTOR)
+    if (
+      actor.role !== UserRole.DOCTOR &&
+      !(forPasswordChange && actor.role === UserRole.SECRETARY)
+    )
       throw new ForbiddenException('Doctor authority is required.');
     // Same lock order as account lifecycle commands: account before session.
     await transaction.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${actor.userId} FOR UPDATE`;
@@ -163,16 +168,20 @@ export class SessionManagementService {
         accountStatus: true,
         administrativeRestrictionStatus: true,
         emailVerifiedAt: true,
+        loginIdentifierType: true,
+        mobileVerifiedAt: true,
         passwordHash: true,
       },
     });
     if (
       !user ||
-      user.role !== UserRole.DOCTOR ||
+      user.role !== actor.role ||
       user.accountStatus !== UserAccountStatus.ACTIVE ||
       user.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      !user.emailVerifiedAt
+      (forPasswordChange
+        ? !accountIdentifierIsVerified(user)
+        : !user.emailVerifiedAt)
     )
       throw new UnauthorizedException('Authentication required.');
     await transaction.$queryRaw`SELECT "id" FROM "UserSession" WHERE "id" = ${actor.sessionId} AND "userId" = ${actor.userId} FOR UPDATE`;

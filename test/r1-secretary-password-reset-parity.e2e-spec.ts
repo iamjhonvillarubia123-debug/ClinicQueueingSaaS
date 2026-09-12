@@ -101,11 +101,11 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
     const browserB = request.agent(app.getHttpServer());
     await browserA
       .post('/auth/login')
-      .send({ email, password: oldPassword })
+      .send({ identifier: email, password: oldPassword })
       .expect(201);
     await browserB
       .post('/auth/login')
-      .send({ email, password: oldPassword })
+      .send({ identifier: email, password: oldPassword })
       .expect(201);
     expect(
       await prisma.userSession.count({
@@ -118,7 +118,7 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/request-password-reset')
-      .send({ email })
+      .send({ identifier: email })
       .expect(201, { accepted: true });
     const token = await currentResetToken(user.id);
 
@@ -136,20 +136,29 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
     await browserB.get('/auth/profile').expect(401);
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password: oldPassword })
+      .send({ identifier: email, password: oldPassword })
       .expect(401);
 
     const freshBrowser = request.agent(app.getHttpServer());
     await freshBrowser
       .post('/auth/login')
-      .send({ email, password: newPassword })
+      .send({ identifier: email, password: newPassword })
       .expect(201);
     const profile = await freshBrowser.get('/auth/profile').expect(200);
     expect(profile.body).toEqual({ userId: user.id, role: 'SECRETARY' });
     const workspace = await freshBrowser
       .get('/secretary/workspace')
       .expect(200);
-    expect(workspace.body).toEqual({ clinics: [], invitations: [] });
+    expect(workspace.body).toEqual({
+      account: {
+        firstName: 'Reset',
+        lastName: 'Secretary',
+        email,
+        mobileNumber: '+639171234567',
+      },
+      clinics: [],
+      invitations: [],
+    });
     expect(
       await prisma.practiceStaff.count({ where: { userId: user.id } }),
     ).toBe(0);
@@ -178,7 +187,7 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/request-password-reset')
-      .send({ email })
+      .send({ identifier: email })
       .expect(201, { accepted: true });
     const token = await currentResetToken(user.id);
 
@@ -196,7 +205,7 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
     ).toBe(0);
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password: newPassword })
+      .send({ identifier: email, password: newPassword })
       .expect(401);
 
     await request(app.getHttpServer())

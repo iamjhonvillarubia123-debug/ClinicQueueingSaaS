@@ -1,9 +1,11 @@
+import { invitationRanges, formatCoverage, type CoverageRange } from '../doctor/coverage-ranges';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
 type InvitationPreview = {
+  coverageRanges?: CoverageRange[];
   status: 'PENDING';
   name: string;
   email: string;
@@ -179,8 +181,7 @@ export function SecretaryInvitationAcceptancePage() {
                 <div>
                   <dt>Coverage</dt>
                   <dd>
-                    {preview.fromServiceDate?.slice(0, 10)} –{' '}
-                    {preview.toServiceDate?.slice(0, 10)}
+                    {formatCoverage(invitationRanges(preview))}
                   </dd>
                 </div>
               )}
@@ -190,7 +191,7 @@ export function SecretaryInvitationAcceptancePage() {
                 <p>
                   This invitation assigns a clinic relationship; it does not
                   create your account. Create and verify a Secretary account
-                  using the invited email, or sign in to your existing account,
+                  using the invited email or mobile number, or sign in to your existing account,
                   then return here.
                 </p>
                 <Link
@@ -230,6 +231,7 @@ export function SecretaryInvitationAcceptancePage() {
             {error ? (
               <div className="form-error" role="alert">
                 {error}
+                {profile?.role === 'SECRETARY' ? <p><Link to="/app/secretary">Return to Secretary Workspace</Link></p> : null}
               </div>
             ) : null}
           </div>

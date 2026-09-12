@@ -1,14 +1,21 @@
+import { Transform } from 'class-transformer';
 import {
   Equals,
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsString,
+  MaxLength,
 } from 'class-validator';
 
+const trimString = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' ? value.trim() : value;
+
 export class PermanentlyDeleteDoctorDto {
-  @IsEmail()
-  email!: string;
+  @Transform(trimString)
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  identifier!: string;
 
   @IsString()
   @IsNotEmpty()
@@ -17,4 +24,8 @@ export class PermanentlyDeleteDoctorDto {
   @IsBoolean()
   @Equals(true)
   confirmPermanentDelete!: boolean;
+
+  get email(): string {
+    return this.identifier;
+  }
 }

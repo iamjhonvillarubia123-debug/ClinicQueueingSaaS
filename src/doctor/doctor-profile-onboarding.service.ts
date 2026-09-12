@@ -4,11 +4,13 @@ import {
   Injectable,
 } from '@nestjs/common';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   Prisma,
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompleteDoctorOnboardingDto } from './dto/complete-doctor-onboarding.dto';
 
@@ -24,7 +26,9 @@ export class DoctorProfileOnboardingService {
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
         emailVerifiedAt: true,
+        mobileVerifiedAt: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -49,7 +53,7 @@ export class DoctorProfileOnboardingService {
     this.assertEligibleDoctor(user);
 
     return {
-      onboardingComplete: Boolean(user!.doctorProfile),
+      onboardingComplete: this.profileIsComplete(user!.doctorProfile),
       user: {
         firstName: user!.firstName,
         middleName: user!.middleName,
@@ -79,14 +83,23 @@ export class DoctorProfileOnboardingService {
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
         emailVerifiedAt: true,
-        doctorProfile: { select: { id: true } },
+        mobileVerifiedAt: true,
+        doctorProfile: {
+          select: {
+            id: true,
+            professionalTitle: true,
+            specialization: true,
+            licenseNumber: true,
+          },
+        },
       },
     });
 
     this.assertEligibleDoctor(user);
 
-    if (user!.doctorProfile) {
+    if (this.profileIsComplete(user!.doctorProfile)) {
       throw new ConflictException('Doctor onboarding is already complete.');
     }
 
@@ -98,10 +111,13 @@ export class DoctorProfileOnboardingService {
             role: UserRole;
             accountStatus: UserAccountStatus;
             administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+            loginIdentifierType: AccountLoginIdentifierType;
             emailVerifiedAt: Date | null;
+            mobileVerifiedAt: Date | null;
           }>
         >(Prisma.sql`
-          SELECT "id", "role", "accountStatus", "administrativeRestrictionStatus", "emailVerifiedAt"
+          SELECT "id", "role", "accountStatus", "administrativeRestrictionStatus",
+                 "loginIdentifierType", "emailVerifiedAt", "mobileVerifiedAt"
           FROM "User"
           WHERE "id" = ${authenticatedUserId}
           FOR UPDATE
@@ -111,9 +127,14 @@ export class DoctorProfileOnboardingService {
 
         const existingProfile = await transaction.doctorProfile.findUnique({
           where: { userId: authenticatedUserId },
-          select: { id: true },
+          select: {
+            id: true,
+            professionalTitle: true,
+            specialization: true,
+            licenseNumber: true,
+          },
         });
-        if (existingProfile) {
+        if (this.profileIsComplete(existingProfile)) {
           throw new ConflictException('Doctor onboarding is already complete.');
         }
 
@@ -122,34 +143,43 @@ export class DoctorProfileOnboardingService {
           data: { firstName, middleName, lastName },
         });
 
-        const doctorProfile = await transaction.doctorProfile.create({
-          data: {
-            userId: authenticatedUserId,
-            middleName,
-            suffix,
-            professionalTitle,
-            specialization,
-            licenseNumber,
-            profileDescription,
-            isProfilePublic: false,
-          },
-          select: {
-            id: true,
-            middleName: true,
-            suffix: true,
-            professionalTitle: true,
-            specialization: true,
-            licenseNumber: true,
-            profileDescription: true,
-            profilePhotoUrl: true,
-            publicIdentifier: true,
-            publicSlug: true,
-            isProfilePublic: true,
-          },
-        });
+        const profileData = {
+          middleName,
+          suffix,
+          professionalTitle,
+          specialization,
+          licenseNumber,
+          profileDescription,
+          isProfilePublic: false,
+        };
+        const profileSelect = {
+          id: true,
+          middleName: true,
+          suffix: true,
+          professionalTitle: true,
+          specialization: true,
+          licenseNumber: true,
+          profileDescription: true,
+          profilePhotoUrl: true,
+          publicIdentifier: true,
+          publicSlug: true,
+          isProfilePublic: true,
+        } as const;
+        const doctorProfile = existingProfile
+          ? await transaction.doctorProfile.update({
+              where: { id: existingProfile.id },
+              data: profileData,
+              select: profileSelect,
+            })
+          : await transaction.doctorProfile.create({
+              data: { userId: authenticatedUserId, ...profileData },
+              select: profileSelect,
+            });
 
-        await transaction.doctorAccountSettings.create({
-          data: { doctorProfileId: doctorProfile.id },
+        await transaction.doctorAccountSettings.upsert({
+          where: { doctorProfileId: doctorProfile.id },
+          create: { doctorProfileId: doctorProfile.id },
+          update: {},
         });
 
         return {
@@ -187,7 +217,9 @@ export class DoctorProfileOnboardingService {
       role: UserRole;
       accountStatus: UserAccountStatus;
       administrativeRestrictionStatus: AdministrativeRestrictionStatus;
+      loginIdentifierType: AccountLoginIdentifierType;
       emailVerifiedAt: Date | null;
+      mobileVerifiedAt: Date | null;
     } | null,
   ): void {
     if (
@@ -196,12 +228,26 @@ export class DoctorProfileOnboardingService {
       user.accountStatus !== UserAccountStatus.ACTIVE ||
       user.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      !user.emailVerifiedAt
+      !accountIdentifierIsVerified(user)
     ) {
       throw new ForbiddenException(
         'Only an active verified Doctor may complete Doctor onboarding.',
       );
     }
+  }
+
+  private profileIsComplete(
+    profile: {
+      professionalTitle: string | null;
+      specialization: string | null;
+      licenseNumber: string | null;
+    } | null,
+  ): boolean {
+    return Boolean(
+      profile?.professionalTitle?.trim() &&
+      profile.specialization?.trim() &&
+      profile.licenseNumber?.trim(),
+    );
   }
 
   private optionalTrim(value: string | undefined): string | null {
