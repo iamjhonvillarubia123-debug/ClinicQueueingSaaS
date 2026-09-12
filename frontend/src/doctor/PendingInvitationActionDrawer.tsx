@@ -1,3 +1,6 @@
+import { CoverageScheduleEditor } from './CoverageScheduleEditor';
+import type { CoverageRange } from './coverage-ranges';
+import { invitationRanges, formatCoverage } from './coverage-ranges';
 import { useState } from 'react';
 import type { PendingStaffInvitation } from './AuthoritativeClinicStaffTab';
 import { AUTHORITY_BUNDLES } from './StaffAssignmentDrawer';
@@ -15,6 +18,7 @@ export type PendingInvitationActionCommand =
       type: 'UPDATE';
       identifier: string;
       assignmentType: 'SUBSTITUTE_SECRETARY';
+      coverageRanges?: CoverageRange[];
       coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE';
       fromServiceDate: string;
       toServiceDate: string;
@@ -39,22 +43,17 @@ export function PendingInvitationActionDrawer({
   onSubmit: (command: PendingInvitationActionCommand) => void | Promise<void>;
 }) {
   const [identifier, setIdentifier] = useState(
-    invitation.email.trim().toLowerCase(),
+    (invitation.email ?? invitation.mobileNumber ?? '').trim().toLowerCase(),
   );
   const [bundles, setBundles] = useState<string[]>(invitation.authorityBundles);
   const [cancelClinicDay, setCancelClinicDay] = useState(
     invitation.requestedCancelClinicDay === true,
   );
   const [password, setPassword] = useState('');
-  const [coverageMode, setCoverageMode] = useState<
-    'ONE_SERVICE_DATE' | 'DATE_RANGE'
-  >(invitation.coverageMode ?? 'ONE_SERVICE_DATE');
-  const [fromDate, setFromDate] = useState(
-    invitation.fromServiceDate?.slice(0, 10) ?? '',
-  );
-  const [toDate, setToDate] = useState(
-    invitation.toServiceDate?.slice(0, 10) ?? '',
-  );
+  const [coverageRanges, setCoverageRanges] = useState(() => invitationRanges(invitation));
+  const fromDate = coverageRanges[0]?.fromServiceDate ?? '';
+  const toDate = coverageRanges.at(-1)?.toServiceDate ?? '';
+  const coverageMode = fromDate === toDate ? 'ONE_SERVICE_DATE' : 'DATE_RANGE';
   const isClinic = invitation.assignmentType === 'CLINIC_SECRETARY';
   const isGrantingCancelClinicDay =
     isClinic &&
@@ -96,6 +95,7 @@ export function PendingInvitationActionDrawer({
       identifier: normalizedIdentifier,
       assignmentType: 'SUBSTITUTE_SECRETARY',
       coverageMode,
+      coverageRanges,
       fromServiceDate: fromDate,
       toServiceDate: coverageMode === 'ONE_SERVICE_DATE' ? fromDate : toDate,
     });
@@ -131,16 +131,16 @@ export function PendingInvitationActionDrawer({
       {mode === 'EDIT' ? (
         <div className="staff-invite-fields">
           <label>
-            Secretary Email Address
+            Secretary Email or Mobile Number
             <input
-              type="email"
-              autoComplete="email"
+              type="text"
+              autoComplete="username"
               value={identifier}
               onChange={(event) => setIdentifier(event.target.value)}
             />
           </label>
           <small>
-            Changing this email makes the system revalidate the target Secretary
+            Changing this sign-in identifier makes the system revalidate the target Secretary
             account before the invitation can be updated.
           </small>
         </div>
@@ -165,6 +165,7 @@ export function PendingInvitationActionDrawer({
         </dl>
       )}
 
+      {mode === 'EDIT' && !isClinic ? <div className="staff-replacement-warning"><p>Remaining coverage: {formatCoverage(invitationRanges(invitation))}. Dates removed by earlier replacements remain excluded.</p>On acceptance, this invitation replaces any Substitute Secretary coverage on the selected dates. Dates outside that period remain assigned.</div> : null}
       {mode === 'VIEW' ? (
         <dl className="staff-review">
           <div>
@@ -178,7 +179,7 @@ export function PendingInvitationActionDrawer({
                         value,
                     )
                     .join(', ')
-                : `${fromDate} to ${toDate}`}
+                : formatCoverage(invitationRanges(invitation))}
             </dd>
           </div>
           <div>
@@ -240,48 +241,7 @@ export function PendingInvitationActionDrawer({
             Edit the planned substitute coverage. It remains pending until
             accepted.
           </p>
-          <label className="staff-radio">
-            <input
-              type="radio"
-              checked={coverageMode === 'ONE_SERVICE_DATE'}
-              onChange={() => {
-                setCoverageMode('ONE_SERVICE_DATE');
-                setToDate(fromDate);
-              }}
-            />{' '}
-            One Clinic Day
-          </label>
-          <label className="staff-radio">
-            <input
-              type="radio"
-              checked={coverageMode === 'DATE_RANGE'}
-              onChange={() => setCoverageMode('DATE_RANGE')}
-            />{' '}
-            Date Range
-          </label>
-          <div className="staff-date-fields">
-            <label>
-              From
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(event) => {
-                  setFromDate(event.target.value);
-                  if (coverageMode === 'ONE_SERVICE_DATE')
-                    setToDate(event.target.value);
-                }}
-              />
-            </label>
-            <label>
-              To
-              <input
-                type="date"
-                disabled={coverageMode === 'ONE_SERVICE_DATE'}
-                value={toDate}
-                onChange={(event) => setToDate(event.target.value)}
-              />
-            </label>
-          </div>
+          <CoverageScheduleEditor initialRanges={coverageRanges} onChange={setCoverageRanges} />
         </>
       ) : mode === 'REMOVE' ? (
         <div className="staff-replacement-warning">

@@ -1,3 +1,4 @@
+import { invitationCoverageRanges } from '../practice-staff/invitation-coverage';
 import {
   BadRequestException,
   Injectable,
@@ -72,6 +73,8 @@ export class PracticeLocationStaffReadService {
             requestedAuthorityBundles: true,
             requestedCancelClinicDay: true,
             requestedCoverageMode: true,
+            coverageRevisions: true,
+            requestedCoverageRanges: true,
             requestedFromServiceDate: true,
             requestedToServiceDate: true,
             expiresAt: true,
@@ -114,6 +117,7 @@ export class PracticeLocationStaffReadService {
         lastName: true,
         email: true,
         mobileNumber: true,
+        loginIdentifierType: true,
       },
     });
 
@@ -136,7 +140,10 @@ export class PracticeLocationStaffReadService {
           assignment.id === location.currentRegularPracticeStaffId,
         assignmentType:
           assignment.id === location.currentRegularPracticeStaffId ||
-          assignment.authorityBundles.length > 0
+          (!assignment.substituteSecretaryCoverages.some(
+            (coverage) => coverage.status === 'ACTIVE',
+          ) &&
+            assignment.authorityBundles.length > 0)
             ? 'CLINIC_SECRETARY'
             : 'SUBSTITUTE_SECRETARY',
         assignedAt: assignment.activatedAt,
@@ -155,6 +162,10 @@ export class PracticeLocationStaffReadService {
       candidates: candidates.map((candidate) => ({
         userId: candidate.id,
         name: `${candidate.firstName} ${candidate.lastName}`.trim(),
+        identifier:
+          candidate.loginIdentifierType === 'MOBILE'
+            ? candidate.mobileNumber
+            : candidate.email,
         email: candidate.email,
         mobileNumber: candidate.mobileNumber,
       })),
@@ -168,6 +179,7 @@ export class PracticeLocationStaffReadService {
         authorityBundles: invitation.requestedAuthorityBundles,
         requestedCancelClinicDay: invitation.requestedCancelClinicDay,
         coverageMode: invitation.requestedCoverageMode,
+        coverageRanges: invitationCoverageRanges(invitation),
         fromServiceDate: invitation.requestedFromServiceDate,
         toServiceDate: invitation.requestedToServiceDate,
         invitedAt: invitation.createdAt,

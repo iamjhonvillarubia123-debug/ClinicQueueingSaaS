@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiRequest } from '../../api/client';
+import { ApiError, apiRequest } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { SessionSettings } from './SessionSettings';
 import {
@@ -34,7 +34,7 @@ export function AccountSettings() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -44,7 +44,7 @@ export function AccountSettings() {
     setPassword('');
     setNewPassword('');
     setConfirmation('');
-    setEmail('');
+    setIdentifier('');
     setAcknowledged(false);
     setError('');
   }
@@ -88,22 +88,31 @@ export function AccountSettings() {
     }
   }
   async function permanentlyDelete() {
+    if (busy || !identifier.trim() || !password || !acknowledged) return;
     setBusy(true);
     setError('');
     try {
       await apiRequest('/doctor/account/permanent-delete', {
         method: 'POST',
         headers: { 'Idempotency-Key': key },
-        body: { email, password, confirmPermanentDelete: acknowledged },
+        body: { identifier, password, confirmPermanentDelete: acknowledged },
       });
       setPassword('');
       await refresh();
       navigate('/login', { replace: true });
     } catch (caught) {
+      const waitMinutes =
+        caught instanceof ApiError &&
+        caught.status === 429 &&
+        caught.retryAfterSeconds
+          ? Math.ceil(caught.retryAfterSeconds / 60)
+          : null;
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Unable to delete your account.',
+        waitMinutes
+          ? `Too many requests. Please wait about ${waitMinutes} minute${waitMinutes === 1 ? '' : 's'} before trying again.`
+          : caught instanceof Error
+            ? caught.message
+            : 'Unable to delete your account.',
       );
     } finally {
       setBusy(false);
@@ -337,18 +346,18 @@ export function AccountSettings() {
                 }}
               >
                 <Note warning>
-                  Final confirmation required. Enter the email and password of
-                  the Doctor account you intend to permanently close.
+                  Final confirmation required. Enter your primary sign-in email
+                  or Philippine mobile number and current password.
                 </Note>
                 <label>
-                  Doctor account email
+                  Doctor sign-in identifier
                   <input
-                    type="email"
+                    type="text"
                     autoComplete="username"
                     required
-                    value={email}
+                    value={identifier}
                     disabled={busy}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) => setIdentifier(event.target.value)}
                   />
                 </label>
                 <PasswordField
@@ -370,7 +379,7 @@ export function AccountSettings() {
                 </label>
                 <button
                   className="ds-danger"
-                  disabled={busy || !acknowledged || !password || !email}
+                  disabled={busy || !acknowledged || !password || !identifier}
                 >
                   {busy ? 'Deleting…' : 'Permanently Delete My Account'}
                 </button>

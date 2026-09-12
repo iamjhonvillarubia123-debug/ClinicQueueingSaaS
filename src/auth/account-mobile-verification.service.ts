@@ -222,7 +222,10 @@ export class AccountMobileVerificationService {
       ) {
         await tx.notificationOutbox.update({
           where: { id: challenge.notificationOutbox.id },
-          data: { status: NotificationOutboxStatus.CANCELLED, cancelledAt: now },
+          data: {
+            status: NotificationOutboxStatus.CANCELLED,
+            cancelledAt: now,
+          },
         });
       }
       await tx.userSession.create({
@@ -266,10 +269,15 @@ export class AccountMobileVerificationService {
           otpHash: null,
         },
       });
-      if (existing.notificationOutbox?.status === NotificationOutboxStatus.PENDING) {
+      if (
+        existing.notificationOutbox?.status === NotificationOutboxStatus.PENDING
+      ) {
         await tx.notificationOutbox.update({
           where: { id: existing.notificationOutbox.id },
-          data: { status: NotificationOutboxStatus.CANCELLED, cancelledAt: now },
+          data: {
+            status: NotificationOutboxStatus.CANCELLED,
+            cancelledAt: now,
+          },
         });
       }
     }
@@ -319,14 +327,18 @@ export class AccountMobileVerificationService {
     loginIdentifierType: AccountLoginIdentifierType;
     mobileVerifiedAt: Date | null;
   }): user is typeof user & { role: VerifiableRole } {
-    if (user.role !== UserRole.DOCTOR && user.role !== UserRole.SECRETARY) return false;
+    if (user.role !== UserRole.DOCTOR && user.role !== UserRole.SECRETARY)
+      return false;
     if (user.accountStatus !== UserAccountStatus.ACTIVE) return false;
-    if (user.loginIdentifierType !== AccountLoginIdentifierType.MOBILE) return false;
+    if (user.loginIdentifierType !== AccountLoginIdentifierType.MOBILE)
+      return false;
     if (user.mobileVerifiedAt !== null) return false;
     if (
       user.role === UserRole.DOCTOR &&
-      user.administrativeRestrictionStatus !== AdministrativeRestrictionStatus.NONE
-    ) return false;
+      user.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
+    )
+      return false;
     return true;
   }
 
@@ -350,10 +362,14 @@ export class AccountMobileVerificationService {
   private matches(userId: string, otp: string, storedHash: string): boolean {
     const calculated = Buffer.from(this.hashOtp(userId, otp), 'hex');
     const stored = Buffer.from(storedHash, 'hex');
-    return calculated.length === stored.length && timingSafeEqual(calculated, stored);
+    return (
+      calculated.length === stored.length && timingSafeEqual(calculated, stored)
+    );
   }
 
   private sha256(value: string): string {
-    return createHmac('sha256', this.otpHmacKey).update(value, 'utf8').digest('hex');
+    return createHmac('sha256', this.otpHmacKey)
+      .update(value, 'utf8')
+      .digest('hex');
   }
 }

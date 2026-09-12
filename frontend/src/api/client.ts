@@ -6,6 +6,7 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly requestId?: string,
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -14,7 +15,10 @@ export class ApiError extends Error {
 
 type ApiOptions = Omit<RequestInit, 'body'> & { body?: unknown };
 
-export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
+export async function apiRequest<T>(
+  path: string,
+  options: ApiOptions = {},
+): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
 
@@ -32,14 +36,25 @@ export async function apiRequest<T>(path: string, options: ApiOptions = {}): Pro
   });
 
   const contentType = response.headers.get('content-type') ?? '';
-  const payload = contentType.includes('application/json') ? await response.json() : undefined;
+  const payload = contentType.includes('application/json')
+    ? await response.json()
+    : undefined;
 
   if (!response.ok) {
-    const message = typeof payload?.message === 'string'
-      ? payload.message
-      : 'Something went wrong. Please try again.';
-    const requestId = typeof payload?.requestId === 'string' ? payload.requestId : undefined;
-    throw new ApiError(message, response.status, requestId);
+    const message =
+      typeof payload?.message === 'string'
+        ? payload.message
+        : 'Something went wrong. Please try again.';
+    const requestId =
+      typeof payload?.requestId === 'string' ? payload.requestId : undefined;
+    const retryAfter = Number(
+      payload?.retryAfterSeconds ?? response.headers.get('Retry-After'),
+    );
+    const retryAfterSeconds =
+      Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.ceil(retryAfter)
+        : undefined;
+    throw new ApiError(message, response.status, requestId, retryAfterSeconds);
   }
 
   return payload as T;

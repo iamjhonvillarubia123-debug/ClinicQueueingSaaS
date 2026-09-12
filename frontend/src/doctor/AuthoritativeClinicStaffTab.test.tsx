@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -56,6 +56,7 @@ const staff: AuthoritativeClinicStaff = {
     },
   ],
 };
+Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value() { this.setAttribute('open', ''); } });
 afterEach(cleanup);
 
 describe('ClinicStaffView', () => {
@@ -202,7 +203,7 @@ describe('ClinicStaffView', () => {
     expect(screen.getByText('Maria Santos')).toBeInTheDocument();
     expect(screen.queryByText('Jane Reyes')).not.toBeInTheDocument();
   });
-  it('reviews an existing Secretary as an immediate clinic-scoped assignment', async () => {
+  it('invites an existing Secretary without changing access immediately', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     const withoutCurrent = {
@@ -227,17 +228,19 @@ describe('ClinicStaffView', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(
-      screen.getByRole('heading', { name: 'Review Assignment' }),
+      screen.getByRole('heading', { name: 'Review Invitation' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/creates or reactivates the clinic-scoped relationship immediately/i),
+      screen.getByText(
+        /must accept this invitation before their clinic assignment or coverage changes/i,
+      ),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Assign Secretary' }));
+    await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        role: 'CLINIC_SECRETARY',
-        userId: 'candidate-1',
-        email: 'jane@example.test',
+        role: 'INVITE_NEW',
+        assignmentType: 'CLINIC_SECRETARY',
+        identifier: 'jane@example.test',
         authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }),
     );
@@ -264,8 +267,8 @@ describe('ClinicStaffView', () => {
       screen.getByRole('button', { name: /Invite New Secretary/i }),
     );
     await user.type(
-      screen.getByLabelText('Secretary Email Address'),
-      'anna@example.test',
+      screen.getByLabelText('Secretary Email or Mobile Number'),
+      '09171234567',
     );
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -285,7 +288,7 @@ describe('ClinicStaffView', () => {
       expect.objectContaining({
         role: 'INVITE_NEW',
         assignmentType: 'CLINIC_SECRETARY',
-        identifier: 'anna@example.test',
+        identifier: '09171234567',
         authorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
       }),
     );
@@ -311,7 +314,7 @@ describe('ClinicStaffView', () => {
       screen.getByRole('button', { name: /Invite New Secretary/i }),
     );
     await user.type(
-      screen.getByLabelText('Secretary Email Address'),
+      screen.getByLabelText('Secretary Email or Mobile Number'),
       'anna@example.test',
     );
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -534,4 +537,172 @@ describe('ClinicStaffView', () => {
       screen.getByRole('button', { name: 'Permanently Remove' }),
     ).toBeDisabled();
   });
+  it('validates the invite identifier before leaving Invitation Details', async () => {
+    const user = userEvent.setup();
+    const validateIdentifier = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('Enter a valid email address or Philippine mobile number.'),
+      );
+    render(
+      <StaffAssignmentDrawer
+        data={staff}
+        pending={false}
+        message=""
+        onClose={() => undefined}
+        onSubmit={() => undefined}
+        onValidateInviteIdentifier={validateIdentifier}
+      />,
+    );
+    await user.click(
+      screen.getByRole('button', { name: /Invite New Secretary/i }),
+    );
+    await user.type(
+      screen.getByLabelText(
+        /Secretary.*Address|Secretary.*Number|Email or Mobile/i,
+      ),
+      'not-valid',
+    );
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(validateIdentifier).toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Enter a valid email address or Philippine mobile number.',
+    );
+    expect(
+      screen.getByRole('heading', { name: 'Invitation Details' }),
+    ).toBeInTheDocument();
+  });
+  it('keeps the current Clinic Secretary visible in Assign Existing Secretary', async () => {
+    const user = userEvent.setup();
+    const withCurrentCandidate = {
+      ...staff,
+      candidates: [
+        ...staff.candidates,
+        {
+          userId: 'user-regular',
+          name: 'Maria Santos',
+          email: 'maria@example.test',
+          mobileNumber: '09172223333',
+        },
+      ],
+    };
+    render(
+      <StaffAssignmentDrawer
+        data={withCurrentCandidate}
+        pending={false}
+        message=""
+        onClose={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Assign Existing Secretary/i }));
+    expect(screen.getByText('Maria Santos')).toBeInTheDocument();
+  });
+
+  it('warns and validates Doctor authentication before review when inviting a replacement Clinic Secretary', async () => {
+    const user = userEvent.setup();
+    const validateIdentifier = vi.fn().mockResolvedValue({
+      existingSecretary: true,
+      secretaryName: 'Anna Cruz',
+    });
+    const validateAuthorization = vi.fn().mockResolvedValue(undefined);
+    render(
+      <StaffAssignmentDrawer
+        data={staff}
+        pending={false}
+        message=""
+        onClose={() => undefined}
+        onSubmit={() => undefined}
+        onValidateInviteIdentifier={validateIdentifier}
+        onValidateInviteAuthorization={validateAuthorization}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Invite New Secretary to Clinic/i }));
+    await user.type(screen.getByLabelText(/Secretary Email or Mobile Number/i), 'anna@example.test');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Replace current Clinic Secretary?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue with Replacement' }));
+    const password = screen.getByLabelText(/current password to authorize this replacement/i);
+    await user.type(password, 'doctor-password');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(validateAuthorization).toHaveBeenCalledWith('doctor-password');
+    expect(screen.getByRole('heading', { name: 'Review Invitation' })).toBeInTheDocument();
+  });
+
+});
+
+
+it('reviews replacing a pending Clinic Secretary invitation before continuing', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  const data: AuthoritativeClinicStaff = { ...staff, pendingInvitations: [{ invitationId: 'pending', name: 'Pending Secretary', email: 'pending@example.test', mobileNumber: null, status: 'PENDING', assignmentType: 'CLINIC_SECRETARY', authorityBundles: [], coverageMode: null, fromServiceDate: null, toServiceDate: null, invitedAt: '2026-01-01', expiresAt: '2099-01-01' }] };
+  render(<StaffAssignmentDrawer data={data} pending={false} message="" onClose={vi.fn()} onSubmit={onSubmit} />);
+  await user.click(screen.getByRole('button', { name: /Invite New Secretary/i }));
+  await user.type(screen.getByLabelText('Secretary Email or Mobile Number'), 'second@example.test');
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('dialog', { name: 'Review Clinic Secretary Replacement' })).toBeInTheDocument();
+  expect(screen.getByText('Replace pending invitation?')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Go Back' }));
+  expect(onSubmit).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: 'Continue with Replacement' }));
+  expect(screen.getByRole('heading', { name: 'Set Authority Bundles' })).toBeInTheDocument();
+  expect(onSubmit).not.toHaveBeenCalled();
+  await user.type(screen.getByLabelText(/current password to authorize this replacement/i), 'doctor-password');
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ replacePendingInvitationIds: ['pending'] }));
+});
+
+
+it.each([{ pendingInvite: true, full: false }, { pendingInvite: true, full: true }, { pendingInvite: false, full: false }, { pendingInvite: false, full: true }])('reviews substitute overlap before proceeding: %j', async ({ pendingInvite, full }) => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  const data: AuthoritativeClinicStaff = { ...staff, staffAssignments: pendingInvite ? [] : [{ ...staff.staffAssignments[0], isClinicSecretary: false, assignmentType: 'SUBSTITUTE_SECRETARY', substituteCoverages: [{ id: 'coverage', coverageMode: 'DATE_RANGE', fromServiceDate: '2027-06-01', toServiceDate: '2027-06-10', status: 'ACTIVE', createdAt: '2026-01-01', endedAt: null }] }], pendingInvitations: pendingInvite ? [{ invitationId: 'pending-substitute', name: 'Pending Secretary', email: null, mobileNumber: '+639171234567', status: 'PENDING', assignmentType: 'SUBSTITUTE_SECRETARY', authorityBundles: [], coverageMode: 'DATE_RANGE', fromServiceDate: '2027-06-01', toServiceDate: '2027-06-10', invitedAt: '2026-01-01', expiresAt: '2099-01-01' }] : [] };
+  render(<StaffAssignmentDrawer data={data} pending={false} message="" onClose={vi.fn()} onSubmit={onSubmit} />);
+  await user.click(screen.getByRole('button', { name: /Invite New Secretary/i }));
+  await user.type(screen.getByLabelText('Secretary Email or Mobile Number'), 'new@example.test');
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: /Substitute Secretary/i }));
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: 'Add period' }));
+  await user.click(screen.getByLabelText('Date Range'));
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: full ? '2027-06-01' : '2027-06-04' } });
+  fireEvent.change(screen.getByLabelText('To'), { target: { value: full ? '2027-06-10' : '2027-06-06' } });
+  await user.click(screen.getByRole('button', { name: 'Add' }));
+  expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('dialog', { name: 'Review Substitute Coverage Replacement' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: pendingInvite ? (full ? 'Cancel pending invitation' : 'Revise pending coverage') : (full ? 'Disable clinic access on acceptance' : 'Revise active coverage on acceptance') })).toBeInTheDocument();
+  if (!full) expect(screen.getByText(/2027-06-01 – 2027-06-03, 2027-06-07 – 2027-06-10/)).toBeInTheDocument();
+  expect(onSubmit).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: 'Continue with Replacement' }));
+  await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ assignmentType: 'SUBSTITUTE_SECRETARY', replacePendingInvitationIds: pendingInvite ? ['pending-substitute'] : [] }));
+});
+
+
+it('invites a disabled existing mobile-primary Secretary through the substitute replacement review', async () => {
+  const user = userEvent.setup();
+  const onSubmit = vi.fn();
+  const validate = vi.fn().mockResolvedValue({ existingSecretary: true, secretaryName: 'Returning Secretary' });
+  const data: AuthoritativeClinicStaff = { ...staff, candidates: [{ userId: 'returning', name: 'Returning Secretary', email: 'secondary@example.test', mobileNumber: '+639171234567', identifier: '+639171234567' }], staffAssignments: [{ ...staff.staffAssignments[1], userId: 'returning' }], pendingInvitations: [{ invitationId: 'old-pending', name: 'Other Secretary', email: 'other@example.test', mobileNumber: null, status: 'PENDING', assignmentType: 'SUBSTITUTE_SECRETARY', authorityBundles: [], coverageMode: 'DATE_RANGE', fromServiceDate: '2027-07-01', toServiceDate: '2027-07-10', invitedAt: '2026-01-01', expiresAt: '2099-01-01' }] };
+  render(<StaffAssignmentDrawer data={data} pending={false} message="" onClose={vi.fn()} onSubmit={onSubmit} onValidateInviteIdentifier={validate} />);
+  await user.click(screen.getByRole('button', { name: /Assign Existing Secretary/i }));
+  expect(screen.getByText('Returning Secretary')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(validate).toHaveBeenCalledWith('+639171234567');
+  await user.click(screen.getByRole('button', { name: /Substitute Secretary/i }));
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await user.click(screen.getByRole('button', { name: 'Add period' }));
+  fireEvent.change(screen.getByLabelText('From'), { target: { value: '2027-07-05' } });
+  await user.click(screen.getByRole('button', { name: 'Add' }));
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  expect(screen.getByRole('dialog', { name: 'Review Substitute Coverage Replacement' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Continue with Replacement' }));
+  await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ role: 'INVITE_NEW', assignmentType: 'SUBSTITUTE_SECRETARY', identifier: '+639171234567', replacePendingInvitationIds: ['old-pending'] }));
 });

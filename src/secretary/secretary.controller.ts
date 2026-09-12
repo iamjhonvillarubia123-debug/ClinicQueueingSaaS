@@ -45,7 +45,7 @@ export class SecretaryController {
     id: 'secretary-reactivate',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
   @Post('account/reactivate')
   reactivateAccount(
@@ -53,7 +53,7 @@ export class SecretaryController {
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
     return this.secretaryLifecycleService.reactivate(
-      dto.email,
+      dto.identifier,
       dto.password,
       idempotencyKey,
     );
@@ -63,15 +63,18 @@ export class SecretaryController {
     id: 'secretary-permanent-delete',
     limit: 10,
     windowMs: 15 * 60 * 1000,
-    subject: { kind: 'BODY', field: 'email' },
+    subject: { kind: 'BODY', field: 'identifier' },
   })
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
   @Post('account/permanent-delete')
   permanentlyDeleteAccount(
+    @Request() request: AuthenticatedRequest,
     @Body() dto: PermanentlyDeleteSecretaryDto,
     @Headers('idempotency-key') idempotencyKey: string,
   ) {
     return this.secretaryLifecycleService.permanentlyDelete(
-      dto.email,
+      request.user.userId,
+      dto.identifier,
       dto.password,
       dto.confirmPermanentDelete,
       idempotencyKey,

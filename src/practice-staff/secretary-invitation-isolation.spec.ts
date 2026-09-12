@@ -25,7 +25,10 @@ describe('SecretaryInvitationService relationship isolation', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
     },
-    substituteSecretaryCoverage: { create: jest.fn() },
+    substituteSecretaryCoverage: {
+      create: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
   };

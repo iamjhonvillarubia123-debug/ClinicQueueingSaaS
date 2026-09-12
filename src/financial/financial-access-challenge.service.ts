@@ -81,9 +81,7 @@ export class FinancialAccessChallengeService {
             )
           : null;
       const legacyRecoveryEmailHash =
-        identifier.type === 'EMAIL'
-          ? this.sha256(identifier.normalized)
-          : null;
+        identifier.type === 'EMAIL' ? this.sha256(identifier.normalized) : null;
       const expiresAt = new Date(now.getTime() + CHALLENGE_TTL_MS);
 
       await transaction.$executeRaw(

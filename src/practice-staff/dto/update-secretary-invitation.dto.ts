@@ -1,10 +1,12 @@
-import { Transform } from 'class-transformer';
+import { InvitationCoverageRangeDto } from './invitation-coverage-range.dto';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
+  ArrayMaxSize,
+  ValidateNested,
   ArrayUnique,
   IsArray,
   IsBoolean,
-  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -19,10 +21,17 @@ import { SecretaryInvitationAssignmentType } from './create-secretary-invitation
 
 export class UpdateSecretaryInvitationDto {
   @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => InvitationCoverageRangeDto)
+  coverageRanges?: InvitationCoverageRangeDto[];
+
+  @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
-  @IsEmail()
   @MaxLength(255)
   identifier?: string;
 

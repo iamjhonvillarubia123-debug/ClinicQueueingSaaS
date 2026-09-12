@@ -95,7 +95,8 @@ describe('SecretaryWorkspaceService', () => {
             { targetUserId: 'secretary-1' },
             {
               targetUserId: null,
-              normalizedEmail: 'secretary@example.test',
+              identifierType: 'EMAIL',
+              normalizedIdentifier: 'secretary@example.test',
             },
           ],
           status: 'PENDING',

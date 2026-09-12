@@ -1,10 +1,12 @@
-import { Transform } from 'class-transformer';
+import { InvitationCoverageRangeDto } from './invitation-coverage-range.dto';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
+  ArrayMaxSize,
+  ValidateNested,
   ArrayUnique,
   IsBoolean,
   IsArray,
-  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -23,12 +25,25 @@ export enum SecretaryInvitationAssignmentType {
 }
 
 export class CreateSecretaryInvitationDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => InvitationCoverageRangeDto)
+  coverageRanges?: InvitationCoverageRangeDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  replacePendingInvitationIds?: string[];
+
   @IsUUID() @IsNotEmpty() practiceLocationId!: string;
 
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
-  @IsEmail()
   @IsNotEmpty()
   @MaxLength(255)
   identifier!: string;

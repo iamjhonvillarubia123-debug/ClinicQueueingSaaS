@@ -139,7 +139,10 @@ describe('AuthService', () => {
     passwordSecurityServiceMock.verify.mockResolvedValue(true);
 
     await expect(
-      service.login({ identifier: user.email, password: 'CorrectPassword123!' }),
+      service.login({
+        identifier: user.email,
+        password: 'CorrectPassword123!',
+      }),
     ).rejects.toThrow('Invalid login details or password.');
     expect(transactionMock.userSession.create).not.toHaveBeenCalled();
     expect(transactionMock.user.update).not.toHaveBeenCalled();

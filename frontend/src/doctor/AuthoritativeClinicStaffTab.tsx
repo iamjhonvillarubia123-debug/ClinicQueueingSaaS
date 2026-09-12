@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { apiRequest } from '../api/client';
+import { ApiError, apiRequest } from '../api/client';
 import {
   StaffAssignmentDrawer,
   type StaffAssignmentCommand,
@@ -28,8 +28,8 @@ export type ClinicStaffAssignment = {
   practiceStaffId: string;
   userId: string;
   name: string;
-  email: string;
-  mobileNumber: string;
+  email: string | null;
+  mobileNumber: string | null;
   assignmentActive: boolean;
   operationallyReady: boolean;
   isClinicSecretary: boolean;
@@ -42,16 +42,18 @@ export type ClinicStaffAssignment = {
   substituteCoverages: SubstituteCoverage[];
 };
 export type StaffCandidate = {
+  identifier?: string | null;
   userId: string;
   name: string;
-  email: string;
-  mobileNumber: string;
+  email: string | null;
+  mobileNumber: string | null;
 };
 export type PendingStaffInvitation = {
+  coverageRanges?: import('./coverage-ranges').CoverageRange[];
   invitationId: string;
   name: string;
-  email: string;
-  mobileNumber: string;
+  email: string | null;
+  mobileNumber: string | null;
   status: 'PENDING';
   assignmentType: 'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY';
   authorityBundles: string[];
@@ -458,6 +460,24 @@ export function AuthoritativeClinicStaffTab({
     };
   }, [selectedAction]);
 
+  async function validateInviteIdentifier(identifier: string) {
+    return apiRequest<{
+      valid: true;
+      existingSecretary: boolean;
+      secretaryName: string | null;
+    }>('/practice-staff/invitations/validate-identifier', {
+      method: 'POST',
+      body: { practiceLocationId: clinicId, identifier },
+    });
+  }
+
+  async function validateInviteAuthorization(password: string) {
+    await apiRequest('/practice-staff/invitations/validate-authorization', {
+      method: 'POST',
+      body: { practiceLocationId: clinicId, password },
+    });
+  }
+
   async function assign(command: StaffAssignmentCommand) {
     setPending(true);
     setMessage('');
@@ -469,8 +489,11 @@ export function AuthoritativeClinicStaffTab({
                 authorityBundles: command.authorityBundles,
                 requestedCancelClinicDay: command.requestedCancelClinicDay,
                 password: command.password,
+                replacePendingInvitationIds: command.replacePendingInvitationIds,
               }
             : {
+                replacePendingInvitationIds: command.replacePendingInvitationIds,
+                coverageRanges: command.coverageRanges,
                 coverageMode: command.coverageMode,
                 fromServiceDate: command.fromServiceDate,
                 toServiceDate: command.toServiceDate,
@@ -524,10 +547,24 @@ export function AuthoritativeClinicStaffTab({
       }
       setRevision((value) => value + 1);
     } catch (cause) {
+      const passwordProtectedClinicSecretary =
+        command.role === 'CLINIC_SECRETARY' ||
+        (command.role === 'INVITE_NEW' &&
+          command.assignmentType === 'CLINIC_SECRETARY')
+          ? Boolean(command.password)
+          : false;
+      const genericApiMessage =
+        cause instanceof ApiError &&
+        cause.message === 'Something went wrong. Please try again.';
       setMessage(
-        cause instanceof Error
-          ? cause.message
-          : 'Unable to assign this Secretary.',
+        cause instanceof ApiError &&
+          cause.status === 401 &&
+          passwordProtectedClinicSecretary &&
+          genericApiMessage
+          ? 'Current password is incorrect.'
+          : cause instanceof Error
+            ? cause.message
+            : 'Unable to assign this Secretary.',
       );
     } finally {
       setPending(false);
@@ -717,6 +754,8 @@ export function AuthoritativeClinicStaffTab({
           message={message}
           onClose={() => setDrawerOpen(false)}
           onSubmit={assign}
+          onValidateInviteIdentifier={validateInviteIdentifier}
+          onValidateInviteAuthorization={validateInviteAuthorization}
         />
       ) : null}
       {selectedAction ? (

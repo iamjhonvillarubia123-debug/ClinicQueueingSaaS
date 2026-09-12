@@ -1,6 +1,8 @@
+import { invitationCoverageRanges } from './invitation-coverage';
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import {
   AdministrativeRestrictionStatus,
+  Prisma,
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
@@ -41,14 +43,23 @@ export class SecretaryWorkspaceService {
       );
     }
 
-    const invitationIdentityWhere = user.email
-      ? {
-          OR: [
-            { targetUserId: user.id },
-            { targetUserId: null, normalizedEmail: user.email.trim().toLowerCase() },
-          ],
-        }
-      : { targetUserId: user.id };
+    const normalizedIdentifier: string | null =
+      user.loginIdentifierType === 'EMAIL'
+        ? (user.email?.trim().toLowerCase() ?? null)
+        : (user.mobileNumber ?? null);
+    const invitationIdentityWhere: Prisma.SecretaryInvitationWhereInput =
+      normalizedIdentifier === null
+        ? { targetUserId: user.id }
+        : {
+            OR: [
+              { targetUserId: user.id },
+              {
+                targetUserId: null,
+                identifierType: user.loginIdentifierType,
+                normalizedIdentifier,
+              },
+            ],
+          };
 
     const [assignments, invitations] = await Promise.all([
       this.prisma.practiceStaff.findMany({
@@ -106,6 +117,8 @@ export class SecretaryWorkspaceService {
           requestedAuthorityBundles: true,
           requestedCancelClinicDay: true,
           requestedCoverageMode: true,
+          coverageRevisions: true,
+          requestedCoverageRanges: true,
           requestedFromServiceDate: true,
           requestedToServiceDate: true,
           createdAt: true,
@@ -176,6 +189,7 @@ export class SecretaryWorkspaceService {
         authorityBundles: invitation.requestedAuthorityBundles,
         requestedCancelClinicDay: invitation.requestedCancelClinicDay,
         coverageMode: invitation.requestedCoverageMode,
+        coverageRanges: invitationCoverageRanges(invitation),
         fromServiceDate: invitation.requestedFromServiceDate,
         toServiceDate: invitation.requestedToServiceDate,
         invitedAt: invitation.createdAt,

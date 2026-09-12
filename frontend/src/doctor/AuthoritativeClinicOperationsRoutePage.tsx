@@ -52,6 +52,8 @@ type OperationsContext = {
   clinicName: string | null;
   timeZone: string;
   currentServiceDate: string;
+  defaultServiceDate?: string | null;
+  allowedServiceDateRanges?: { fromServiceDate: string; toServiceDate: string }[] | null;
 };
 
 function mapAppointmentDetails(details: AppointmentDetailsResponse): AppointmentDetailsModel {
@@ -125,7 +127,8 @@ export function AuthoritativeClinicOperationsRoutePage({
       .then((result) => {
         if (!cancelled) {
           setOperationsContext(result);
-          setServiceDate(result.currentServiceDate);
+          setServiceDate(result.defaultServiceDate === undefined ? result.currentServiceDate : result.defaultServiceDate);
+          if (result.defaultServiceDate === null) setContextError('No authorized coverage dates are available for this clinic.');
         }
       })
       .catch((error) => {
@@ -263,7 +266,7 @@ export function AuthoritativeClinicOperationsRoutePage({
   }
 
   return (
-    <ServiceDateTodayProvider today={operationsContext.currentServiceDate}>
+    <ServiceDateTodayProvider today={operationsContext.currentServiceDate} allowedRanges={operationsContext.allowedServiceDateRanges}>
       <AuthoritativeClinicOperationsWorkspace
         overview={overview}
         overviewLoading={overviewLoading}

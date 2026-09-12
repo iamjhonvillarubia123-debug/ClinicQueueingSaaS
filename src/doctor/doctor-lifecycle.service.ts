@@ -132,7 +132,11 @@ export class DoctorLifecycleService {
     });
   }
 
-  async reactivate(identifierInput: string, password: string, idempotencyKey: string) {
+  async reactivate(
+    identifierInput: string,
+    password: string,
+    idempotencyKey: string,
+  ) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
     const identifier = parseAccountIdentifier(
       identifierInput,
@@ -144,7 +148,7 @@ export class DoctorLifecycleService {
         ...(identifier.type === 'EMAIL'
           ? { email: identifier.normalized, loginIdentifierType: 'EMAIL' }
           : {
-              mobileLoginHash: identifier.mobileHash,
+              mobileNumberHash: identifier.mobileHash,
               loginIdentifierType: 'MOBILE',
             }),
         role: UserRole.DOCTOR,
@@ -258,7 +262,7 @@ export class DoctorLifecycleService {
         ...(identifier.type === 'EMAIL'
           ? { email: identifier.normalized, loginIdentifierType: 'EMAIL' }
           : {
-              mobileLoginHash: identifier.mobileHash,
+              mobileNumberHash: identifier.mobileHash,
               loginIdentifierType: 'MOBILE',
             }),
         role: UserRole.DOCTOR,
@@ -432,7 +436,8 @@ export class DoctorLifecycleService {
             recoveryIdentity.type === 'MOBILE'
               ? this.mobileNumberService.encrypt(recoveryIdentity.value)
               : null,
-          messageBodyEncrypted: this.notificationPayload.encryptMessage(message),
+          messageBodyEncrypted:
+            this.notificationPayload.encryptMessage(message),
           providerIdempotencyKey: `account-closure:${command.id}`,
           attemptCount: 0,
           nextAttemptAt: now,

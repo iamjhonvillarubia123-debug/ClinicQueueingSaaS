@@ -41,8 +41,9 @@ describe('DoctorProfileOnboardingService', () => {
     doctorProfile: {
       findUnique: jest.fn(),
       create: createProfileMock,
+      update: jest.fn(),
     },
-    doctorAccountSettings: { create: jest.fn() },
+    doctorAccountSettings: { upsert: jest.fn() },
   };
 
   const prismaServiceMock = {
@@ -94,7 +95,7 @@ describe('DoctorProfileOnboardingService', () => {
     transaction.doctorProfile.findUnique.mockResolvedValue(null);
     transaction.user.update.mockResolvedValue({ id: eligibleUser.id });
     createProfileMock.mockResolvedValue(profile);
-    transaction.doctorAccountSettings.create.mockResolvedValue({
+    transaction.doctorAccountSettings.upsert.mockResolvedValue({
       id: 'settings-1',
     });
   });
@@ -156,8 +157,10 @@ describe('DoctorProfileOnboardingService', () => {
     });
     expect(createProfileCall?.select.id).toBe(true);
 
-    expect(transaction.doctorAccountSettings.create).toHaveBeenCalledWith({
-      data: { doctorProfileId: 'profile-1' },
+    expect(transaction.doctorAccountSettings.upsert).toHaveBeenCalledWith({
+      where: { doctorProfileId: 'profile-1' },
+      create: { doctorProfileId: 'profile-1' },
+      update: {},
     });
     expect(result).toEqual({
       onboardingComplete: true,
@@ -195,10 +198,15 @@ describe('DoctorProfileOnboardingService', () => {
     );
   });
 
-  it('does not allow the onboarding command to overwrite an existing DoctorProfile', async () => {
+  it('rejects onboarding only when the existing DoctorProfile is already complete', async () => {
     prismaServiceMock.user.findUnique.mockResolvedValueOnce({
       ...eligibleUser,
-      doctorProfile: { id: 'existing-profile' },
+      doctorProfile: {
+        id: 'existing-profile',
+        professionalTitle: 'Doctor',
+        specialization: 'Family Medicine',
+        licenseNumber: 'LIC-123',
+      },
     });
 
     await expect(
@@ -212,5 +220,33 @@ describe('DoctorProfileOnboardingService', () => {
     ).rejects.toThrow('Doctor onboarding is already complete.');
 
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('completes a skeletal clinic-ownership profile instead of rejecting it as already complete', async () => {
+    const skeletalProfile = {
+      id: 'profile-1',
+      professionalTitle: null,
+      specialization: null,
+      licenseNumber: null,
+    };
+    prismaServiceMock.user.findUnique.mockResolvedValueOnce({
+      ...eligibleUser,
+      doctorProfile: skeletalProfile,
+    });
+    transaction.doctorProfile.findUnique.mockResolvedValueOnce(skeletalProfile);
+    transaction.doctorProfile.update.mockResolvedValueOnce(profile);
+
+    const result = await service.completeOnboarding('doctor-user', {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      professionalTitle: 'Doctor',
+      specialization: 'Family Medicine',
+      licenseNumber: 'LIC-123',
+    });
+
+    expect(transaction.doctorProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'profile-1' } }),
+    );
+    expect(result.onboardingComplete).toBe(true);
   });
 });

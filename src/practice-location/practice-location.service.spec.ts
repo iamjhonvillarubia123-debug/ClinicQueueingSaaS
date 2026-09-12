@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   BookingQuestionType,
   PracticeLocationLifecycleStatus,
@@ -25,6 +26,12 @@ describe('PracticeLocationService', () => {
     doctorBookingQuestionTemplate: {
       findMany: jest.fn(),
     },
+    doctorProfile: {
+      create: jest.fn(),
+    },
+    doctorAccountSettings: {
+      upsert: jest.fn(),
+    },
     $executeRaw: jest.fn(),
   };
 
@@ -48,7 +55,9 @@ describe('PracticeLocationService', () => {
     role: UserRole.DOCTOR,
     accountStatus: UserAccountStatus.ACTIVE,
     administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+    loginIdentifierType: AccountLoginIdentifierType.EMAIL,
     emailVerifiedAt: new Date('2026-09-01T00:00:00.000Z'),
+    mobileVerifiedAt: null,
     doctorProfile: { id: 'doctor-profile-1' },
   };
 
@@ -266,10 +275,40 @@ describe('PracticeLocationService', () => {
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it('rejects first clinic creation until Doctor email verification and professional onboarding are complete', async () => {
+  it('allows a verified Doctor without a professional profile to create a clinic ownership record', async () => {
+    prismaServiceMock.user.findUnique.mockResolvedValue({
+      ...eligibleDoctor,
+      doctorProfile: null,
+    });
+    transactionMock.doctorProfile.create.mockResolvedValue({
+      id: 'doctor-profile-1',
+    });
+    transactionMock.doctorAccountSettings.upsert.mockResolvedValue({
+      id: 'settings-1',
+    });
+    transactionMock.practiceLocation.create.mockResolvedValue({
+      id: 'location-1',
+      lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
+    });
+
+    await expect(service.create('doctor-user-1', {})).resolves.toBeDefined();
+    expect(transactionMock.doctorProfile.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'doctor-user-1',
+        professionalTitle: null,
+        specialization: null,
+        licenseNumber: null,
+        isProfilePublic: false,
+      },
+      select: { id: true },
+    });
+  });
+
+  it('rejects clinic creation until the Doctor primary identifier is verified', async () => {
     prismaServiceMock.user.findUnique.mockResolvedValue({
       ...eligibleDoctor,
       emailVerifiedAt: null,
+      mobileVerifiedAt: null,
       doctorProfile: null,
     });
 
@@ -277,5 +316,20 @@ describe('PracticeLocationService', () => {
       ForbiddenException,
     );
     expect(prismaServiceMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('accepts a mobile-primary verified Doctor for clinic creation', async () => {
+    prismaServiceMock.user.findUnique.mockResolvedValue({
+      ...eligibleDoctor,
+      loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+      emailVerifiedAt: null,
+      mobileVerifiedAt: new Date('2026-09-07T00:00:00.000Z'),
+    });
+    transactionMock.practiceLocation.create.mockResolvedValue({
+      id: 'location-1',
+      lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
+    });
+
+    await expect(service.create('doctor-user-1', {})).resolves.toBeDefined();
   });
 });

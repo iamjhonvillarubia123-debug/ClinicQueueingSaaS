@@ -1,3 +1,4 @@
+import { invitationCoverageRanges } from './invitation-coverage';
 import { Injectable } from '@nestjs/common';
 import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,6 +65,8 @@ export class SecretaryDirectoryService {
             requestedAuthorityBundles: true,
             requestedCancelClinicDay: true,
             requestedCoverageMode: true,
+            coverageRevisions: true,
+            requestedCoverageRanges: true,
             requestedFromServiceDate: true,
             requestedToServiceDate: true,
             createdAt: true,
@@ -108,6 +111,7 @@ export class SecretaryDirectoryService {
           authorityBundles: invitation.requestedAuthorityBundles,
           requestedCancelClinicDay: invitation.requestedCancelClinicDay,
           coverageMode: invitation.requestedCoverageMode,
+          coverageRanges: invitationCoverageRanges(invitation),
           fromServiceDate: invitation.requestedFromServiceDate,
           toServiceDate: invitation.requestedToServiceDate,
           invitedAt: invitation.createdAt,

@@ -16,7 +16,10 @@ describe('AuthController', () => {
   const authServiceMock = { login: jest.fn(), logout: jest.fn() };
   const authenticationServiceMock = {};
   const emailVerificationServiceMock = { verify: jest.fn() };
-  const mobileVerificationServiceMock = { verify: jest.fn(), resend: jest.fn() };
+  const mobileVerificationServiceMock = {
+    verify: jest.fn(),
+    resend: jest.fn(),
+  };
   const passwordResetServiceMock = {};
   const configServiceMock = {
     get: jest.fn().mockReturnValue('http://localhost:3000'),

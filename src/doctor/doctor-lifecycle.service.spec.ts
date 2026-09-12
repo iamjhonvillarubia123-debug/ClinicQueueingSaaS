@@ -187,7 +187,8 @@ describe('DoctorLifecycleService', () => {
       id: 'doctor-1',
       role: UserRole.DOCTOR,
       accountStatus: UserAccountStatus.VOLUNTARILY_DISABLED,
-      administrativeRestrictionStatus: AdministrativeRestrictionStatus.SUSPENDED,
+      administrativeRestrictionStatus:
+        AdministrativeRestrictionStatus.SUSPENDED,
       passwordHash: 'hash',
     });
     tx.$queryRaw.mockResolvedValue([{ id: 'doctor-1' }]);
@@ -268,6 +269,70 @@ describe('DoctorLifecycleService', () => {
         status: NotificationOutboxStatus.PENDING,
         commandIdempotencyId: 'command-1',
       }) as unknown,
+    });
+  });
+
+  it('closes a mobile-only Doctor using the persisted primary mobile hash', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
+    tx.$queryRaw.mockResolvedValue([]);
+    tx.user.findUnique.mockResolvedValue({
+      ...currentEmailDoctor(),
+      email: null,
+      emailVerifiedAt: null,
+      loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+      mobileNumber: '639171234567',
+      mobileVerifiedAt: new Date(),
+    });
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+    tx.commandIdempotency.create.mockResolvedValue({ id: 'command-1' });
+    await expect(
+      service.permanentlyDelete(
+        '639171234567',
+        'password',
+        true,
+        'mobile-close',
+      ),
+    ).resolves.toEqual({
+      permanentlyClosed: true,
+      replayed: false,
+      publicRouteRetired: true,
+    });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        loginIdentifierType: 'MOBILE',
+        mobileNumberHash: 'hash:639171234567',
+        role: UserRole.DOCTOR,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    expect(tx.notificationOutbox.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        channel: NotificationChannel.SMS,
+        recipientEmailEncrypted: null,
+      }) as unknown,
+    });
+  });
+
+  it('reactivates a mobile Doctor using the persisted primary mobile hash', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'doctor-1' });
+    tx.$queryRaw.mockResolvedValue([]);
+    tx.user.findUnique.mockResolvedValue({
+      ...currentEmailDoctor(UserAccountStatus.VOLUNTARILY_DISABLED),
+      administrativeRestrictionStatus: AdministrativeRestrictionStatus.NONE,
+    });
+    tx.commandIdempotency.findUnique.mockResolvedValue(null);
+    await expect(
+      service.reactivate('639171234567', 'password', 'mobile-reactivate'),
+    ).resolves.toEqual({ reactivated: true, replayed: false });
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        loginIdentifierType: 'MOBILE',
+        mobileNumberHash: 'hash:639171234567',
+        role: UserRole.DOCTOR,
+        accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+      },
+      select: { id: true },
     });
   });
 

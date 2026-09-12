@@ -1,10 +1,5 @@
 import { Transform } from 'class-transformer';
-import {
-  IsIn,
-  IsNotEmpty,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { UserRole } from '../../../generated/prisma/client';
 
 const trimString = ({ value }: { value: unknown }): unknown =>

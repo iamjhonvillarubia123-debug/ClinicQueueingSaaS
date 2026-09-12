@@ -1,4 +1,9 @@
 import {
+  invitationCoverageRanges,
+  coverageOverlaps,
+  subtractCoverage,
+} from './invitation-coverage';
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -54,12 +59,10 @@ export class SecretaryInvitationService {
   ) {}
 
   async create(actorUserId: string, dto: CreateSecretaryInvitationDto) {
-    const identifier = parseAccountIdentifier(
-      dto.identifier,
-      this.mobileNumbers,
-    );
     const plan = this.validatePlan(dto);
-
+    const replacedIds = [
+      ...new Set(dto.replacePendingInvitationIds ?? []),
+    ].sort();
     const actor = await this.prisma.user.findUnique({
       where: { id: actorUserId },
       select: {
@@ -88,10 +91,33 @@ export class SecretaryInvitationService {
       },
       select: { id: true, name: true, currentRegularPracticeStaffId: true },
     });
-    if (!location) {
+    if (!location)
       throw new NotFoundException('Practice location was not found.');
+
+    const expectedCurrentPracticeStaffId =
+      plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY
+        ? location.currentRegularPracticeStaffId
+        : null;
+
+    // Sensitive Doctor authorization is evaluated independently of the invitee identity.
+    // This prevents a malformed/unregistered Secretary identifier from hiding a bad Doctor password.
+    if (expectedCurrentPracticeStaffId || plan.requestedCancelClinicDay) {
+      if (!dto.password) {
+        throw new UnauthorizedException(
+          expectedCurrentPracticeStaffId
+            ? 'Current password is required to authorize replacement.'
+            : 'Current password is required to grant Cancel Clinic Day authority.',
+        );
+      }
+      if (!(await this.passwords.verify(dto.password, actor.passwordHash))) {
+        throw new UnauthorizedException('Current password is incorrect.');
+      }
     }
 
+    const identifier = parseAccountIdentifier(
+      dto.identifier,
+      this.mobileNumbers,
+    );
     const target = await this.prisma.user.findFirst({
       where: {
         ...(identifier.type === 'EMAIL'
@@ -121,82 +147,197 @@ export class SecretaryInvitationService {
       },
     });
 
-    if (!target) {
-      throw new NotFoundException(
-        'No Secretary account was found for this email. Please review the email address for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
-      );
-    }
-    if (target.role !== UserRole.SECRETARY) {
+    if (target?.role !== undefined && target.role !== UserRole.SECRETARY) {
       throw new ConflictException(
-        'This email address belongs to an account with an incompatible role.',
+        'This identifier belongs to an account with an incompatible role.',
       );
     }
     if (
-      target.accountStatus !== UserAccountStatus.ACTIVE ||
-      target.administrativeRestrictionStatus !==
-        AdministrativeRestrictionStatus.NONE ||
-      !accountIdentifierIsVerified(target)
+      target &&
+      (target.accountStatus !== UserAccountStatus.ACTIVE ||
+        target.administrativeRestrictionStatus !==
+          AdministrativeRestrictionStatus.NONE ||
+        !accountIdentifierIsVerified(target))
     ) {
       throw new ConflictException(
-        'The Secretary account must be active and its registered email address must be verified before it can be invited.',
+        'The Secretary account must be active and its registered login identifier must be verified before it can accept a clinic invitation.',
       );
     }
 
-    const expectedCurrentPracticeStaffId =
-      plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY
-        ? location.currentRegularPracticeStaffId
-        : null;
-
-    if (expectedCurrentPracticeStaffId || plan.requestedCancelClinicDay) {
-      if (!dto.password) {
-        throw new UnauthorizedException(
-          expectedCurrentPracticeStaffId
-            ? 'Current password is required to authorize replacement.'
-            : 'Current password is required to grant Cancel Clinic Day authority.',
-        );
-      }
-      if (!(await this.passwords.verify(dto.password, actor.passwordHash))) {
-        throw new UnauthorizedException('Current password is incorrect.');
-      }
-    }
-
-    const activeInvitationKey = this.sha256(`${location.id}:${target.id}`);
-    if (
-      await this.prisma.secretaryInvitation.findUnique({
-        where: { activeInvitationKey },
-        select: { id: true },
-      })
-    ) {
-      throw new ConflictException(
-        'A pending invitation already exists for this Secretary at this clinic.',
-      );
-    }
-
-    const token = randomBytes(32).toString('base64url');
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + INVITATION_LIFETIME_MS);
-    const normalizedIdentifier =
-      target.loginIdentifierType === AccountLoginIdentifierType.EMAIL
+    const identifierType =
+      identifier.type === 'EMAIL'
+        ? AccountLoginIdentifierType.EMAIL
+        : AccountLoginIdentifierType.MOBILE;
+    const normalizedIdentifier = target
+      ? target.loginIdentifierType === AccountLoginIdentifierType.EMAIL
         ? target.email
-        : target.mobileNumber;
+        : target.mobileNumber
+      : identifier.normalized;
     if (!normalizedIdentifier) {
       throw new ConflictException(
         'The Secretary account does not have a usable verified login identifier.',
       );
     }
 
+    const activeInvitationKey = this.sha256(
+      target
+        ? `${location.id}:user:${target.id}`
+        : `${location.id}:identifier:${identifierType}:${normalizedIdentifier}`,
+    );
+    const duplicateInvitation =
+      await this.prisma.secretaryInvitation.findUnique({
+        where: { activeInvitationKey },
+        select: { id: true },
+      });
+    if (duplicateInvitation && !replacedIds.includes(duplicateInvitation.id)) {
+      throw new ConflictException(
+        'A pending invitation already exists for this Secretary at this clinic.',
+      );
+    }
+
+    const replacementInvitationId = randomUUID();
+    const token = randomBytes(32).toString('base64url');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + INVITATION_LIFETIME_MS);
     const invitation = await this.prisma.$transaction(async (transaction) => {
+      // Lock reviewed invitations before the location, matching acceptance lock order.
+      for (const id of replacedIds)
+        await transaction.$executeRaw(
+          Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "id" = ${id} AND "practiceLocationId" = ${location.id} FOR UPDATE`,
+        );
+      await this.lockInvitationLocation(transaction, location.id);
+      if (
+        replacedIds.length &&
+        plan.assignmentType ===
+          SecretaryInvitationAssignmentType.SUBSTITUTE_SECRETARY
+      ) {
+        const reviewed = await transaction.secretaryInvitation.findMany({
+          where: {
+            id: { in: replacedIds },
+            practiceLocationId: location.id,
+            status: SecretaryInvitationStatus.PENDING,
+            requestedAssignmentType:
+              SecretaryInvitationAssignmentType.SUBSTITUTE_SECRETARY,
+            expiresAt: { gt: now },
+          },
+        });
+        if (reviewed.length !== replacedIds.length)
+          throw new ConflictException(
+            'The pending coverage changed. Refresh the staff list and review the replacement again.',
+          );
+        const removed = plan.coverageRanges;
+        for (const previous of reviewed) {
+          const ranges = invitationCoverageRanges(previous);
+          if (!removed.some((range) => coverageOverlaps(ranges, range)))
+            throw new ConflictException(
+              'The pending coverage changed. Refresh the staff list and review the replacement again.',
+            );
+          const remaining = removed.reduce(
+            (result, range) => subtractCoverage(result, range),
+            ranges,
+          );
+          const revisions: Prisma.InputJsonValue[] = Array.isArray(
+            previous.coverageRevisions,
+          )
+            ? (previous.coverageRevisions as Prisma.InputJsonValue[])
+            : [];
+          await transaction.secretaryInvitation.update({
+            where: { id: previous.id },
+            data: {
+              coverageRevisions: [
+                ...revisions,
+                ...removed.map((range) => ({
+                  ...range,
+                  actorUserId,
+                  replacementInvitationId,
+                  changedAt: now.toISOString(),
+                })),
+              ],
+              ...(remaining.length
+                ? {}
+                : {
+                    status: SecretaryInvitationStatus.REVOKED,
+                    revokedAt: now,
+                    activeInvitationKey: null,
+                  }),
+            },
+          });
+          if (!remaining.length)
+            await transaction.notificationOutbox.updateMany({
+              where: {
+                secretaryInvitationId: previous.id,
+                status: NotificationOutboxStatus.PENDING,
+              },
+              data: {
+                status: NotificationOutboxStatus.CANCELLED,
+                cancelledAt: now,
+              },
+            });
+        }
+      } else if (replacedIds.length) {
+        const revoked = await transaction.secretaryInvitation.updateMany({
+          where: {
+            id: { in: replacedIds },
+            practiceLocationId: location.id,
+            status: SecretaryInvitationStatus.PENDING,
+            requestedAssignmentType:
+              SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
+          },
+          data: {
+            status: SecretaryInvitationStatus.REVOKED,
+            revokedAt: now,
+            activeInvitationKey: null,
+          },
+        });
+        if (revoked.count !== replacedIds.length)
+          throw new ConflictException(
+            'The pending invitation changed. Refresh the staff list and review the replacement again.',
+          );
+        await transaction.notificationOutbox.updateMany({
+          where: {
+            secretaryInvitationId: { in: replacedIds },
+            status: NotificationOutboxStatus.PENDING,
+          },
+          data: {
+            status: NotificationOutboxStatus.CANCELLED,
+            cancelledAt: now,
+          },
+        });
+      }
+      await this.assertPendingPlanAvailable(transaction, location.id, plan);
+      const currentLocation =
+        await transaction.practiceLocation.findUniqueOrThrow({
+          where: { id: location.id },
+          select: { currentRegularPracticeStaffId: true },
+        });
+      if (
+        plan.assignmentType ===
+          SecretaryInvitationAssignmentType.CLINIC_SECRETARY &&
+        currentLocation.currentRegularPracticeStaffId !==
+          expectedCurrentPracticeStaffId
+      ) {
+        throw new ConflictException(
+          'The Clinic Secretary assignment changed. Refresh the staff list and review the replacement before sending this invitation.',
+        );
+      }
       const created = await transaction.secretaryInvitation.create({
         data: {
+          id: replacementInvitationId,
           practiceLocationId: location.id,
           invitedByUserId: actorUserId,
-          targetUserId: target.id,
-          identifierType: target.loginIdentifierType,
+          targetUserId: target?.id ?? null,
+          identifierType,
           normalizedIdentifier,
-          normalizedEmail: target.email,
-          firstName: target.firstName,
-          lastName: target.lastName,
-          mobileNumber: target.mobileNumber,
+          normalizedEmail:
+            identifierType === AccountLoginIdentifierType.EMAIL
+              ? normalizedIdentifier
+              : null,
+          firstName: target?.firstName ?? '',
+          lastName: target?.lastName ?? '',
+          mobileNumber:
+            identifierType === AccountLoginIdentifierType.MOBILE
+              ? normalizedIdentifier
+              : null,
           tokenHash: this.sha256(token),
           activeInvitationKey,
           status: SecretaryInvitationStatus.PENDING,
@@ -205,6 +346,7 @@ export class SecretaryInvitationService {
           requestedAuthorityBundles: plan.authorityBundles,
           requestedCancelClinicDay: plan.requestedCancelClinicDay,
           requestedCoverageMode: plan.coverageMode,
+          requestedCoverageRanges: plan.coverageRanges,
           requestedFromServiceDate: plan.fromServiceDate,
           requestedToServiceDate: plan.toServiceDate,
           expectedCurrentPracticeStaffId,
@@ -213,7 +355,14 @@ export class SecretaryInvitationService {
       });
 
       const url = `${this.publicAppBaseUrl()}/secretary-invitations/accept?token=${encodeURIComponent(token)}`;
-      const message = `You have been invited to join ${location.name ?? 'a clinic'} as a ${plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY ? 'Clinic Secretary' : 'Substitute Secretary'}. Sign in to your active, verified Secretary account, then accept the clinic relationship: ${url}`;
+      const roleLabel =
+        plan.assignmentType ===
+        SecretaryInvitationAssignmentType.CLINIC_SECRETARY
+          ? 'Clinic Secretary'
+          : 'Substitute Secretary';
+      const message = target
+        ? `You have been invited to join ${location.name ?? 'a clinic'} as a ${roleLabel}. Sign in to your active, verified Secretary account, then accept the clinic relationship: ${url}`
+        : `You have been invited to join ${location.name ?? 'a clinic'} as a ${roleLabel}. Create and verify your own Secretary account using this same ${identifierType === AccountLoginIdentifierType.EMAIL ? 'email address' : 'mobile number'}, then sign in and accept the clinic relationship: ${url}`;
 
       await transaction.notificationOutbox.create({
         data: {
@@ -222,24 +371,22 @@ export class SecretaryInvitationService {
           ),
           notificationType: NotificationType.SECRETARY_INVITATION,
           channel:
-            target.loginIdentifierType === AccountLoginIdentifierType.EMAIL
+            identifierType === AccountLoginIdentifierType.EMAIL
               ? NotificationChannel.EMAIL
               : NotificationChannel.SMS,
           status: NotificationOutboxStatus.PENDING,
           practiceLocationId: location.id,
           secretaryInvitationId: created.id,
           recipientEmailEncrypted:
-            target.loginIdentifierType === AccountLoginIdentifierType.EMAIL &&
-            target.email
+            identifierType === AccountLoginIdentifierType.EMAIL
               ? this.protectedAccountPayload.encrypt(
-                  target.email,
+                  normalizedIdentifier,
                   `${PAYLOAD_PURPOSE}:recipient`,
                 )
               : null,
           recipientMobileEncrypted:
-            target.loginIdentifierType === AccountLoginIdentifierType.MOBILE &&
-            target.mobileNumber
-              ? this.mobileNumbers.encryptCanonical(target.mobileNumber)
+            identifierType === AccountLoginIdentifierType.MOBILE
+              ? this.mobileNumbers.encryptCanonical(normalizedIdentifier)
               : null,
           messageBodyEncrypted:
             this.notificationPayload.encryptMessage(message),
@@ -248,7 +395,6 @@ export class SecretaryInvitationService {
           expiresAt,
         },
       });
-
       return created;
     });
 
@@ -257,6 +403,138 @@ export class SecretaryInvitationService {
       status: invitation.status,
       expiresAt: invitation.expiresAt,
     };
+  }
+
+  async validateIdentifier(
+    actorUserId: string,
+    dto: { practiceLocationId: string; identifier: string },
+  ) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: {
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+      },
+    });
+    if (
+      !actor ||
+      actor.role !== UserRole.DOCTOR ||
+      actor.accountStatus !== UserAccountStatus.ACTIVE ||
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
+    ) {
+      throw new ForbiddenException(
+        'Only an eligible current Doctor may validate a Secretary invitation.',
+      );
+    }
+
+    const location = await this.prisma.practiceLocation.findFirst({
+      where: {
+        id: dto.practiceLocationId,
+        doctorProfile: { userId: actorUserId },
+      },
+      select: { id: true },
+    });
+    if (!location)
+      throw new NotFoundException('Practice location was not found.');
+
+    const identifier = parseAccountIdentifier(
+      dto.identifier,
+      this.mobileNumbers,
+    );
+    const target = await this.prisma.user.findFirst({
+      where: {
+        ...(identifier.type === 'EMAIL'
+          ? {
+              loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+              email: identifier.normalized,
+            }
+          : {
+              loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+              mobileNumberHash: identifier.mobileHash,
+            }),
+        accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+      },
+      select: {
+        id: true,
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
+        emailVerifiedAt: true,
+        mobileVerifiedAt: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    if (target && target.role !== UserRole.SECRETARY) {
+      throw new ConflictException(
+        'This identifier cannot currently be used for a Secretary invitation.',
+      );
+    }
+    if (
+      target &&
+      (target.accountStatus !== UserAccountStatus.ACTIVE ||
+        target.administrativeRestrictionStatus !==
+          AdministrativeRestrictionStatus.NONE ||
+        !accountIdentifierIsVerified(target))
+    ) {
+      throw new ConflictException(
+        'This identifier cannot currently be used for a Secretary invitation.',
+      );
+    }
+
+    return {
+      valid: true as const,
+      identifierType: identifier.type,
+      normalizedIdentifier: identifier.normalized,
+      existingSecretary: Boolean(target),
+      secretaryName: target
+        ? `${target.firstName} ${target.lastName}`.trim()
+        : null,
+    };
+  }
+
+  async validateSensitiveAuthorization(
+    actorUserId: string,
+    dto: { practiceLocationId: string; password: string },
+  ) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: {
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        passwordHash: true,
+      },
+    });
+    if (
+      !actor ||
+      actor.role !== UserRole.DOCTOR ||
+      actor.accountStatus !== UserAccountStatus.ACTIVE ||
+      actor.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE
+    ) {
+      throw new ForbiddenException(
+        'Only an eligible current Doctor may authorize this invitation.',
+      );
+    }
+
+    const location = await this.prisma.practiceLocation.findFirst({
+      where: {
+        id: dto.practiceLocationId,
+        doctorProfile: { userId: actorUserId },
+      },
+      select: { id: true },
+    });
+    if (!location)
+      throw new NotFoundException('Practice location was not found.');
+    if (!(await this.passwords.verify(dto.password, actor.passwordHash))) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+    return { valid: true as const };
   }
 
   async preview(token: string) {
@@ -277,6 +555,8 @@ export class SecretaryInvitationService {
         requestedAuthorityBundles: true,
         requestedCancelClinicDay: true,
         requestedCoverageMode: true,
+        coverageRevisions: true,
+        requestedCoverageRanges: true,
         requestedFromServiceDate: true,
         requestedToServiceDate: true,
         practiceLocation: { select: { name: true } },
@@ -312,6 +592,7 @@ export class SecretaryInvitationService {
       authorityBundles: invitation.requestedAuthorityBundles,
       requestedCancelClinicDay: invitation.requestedCancelClinicDay,
       coverageMode: invitation.requestedCoverageMode,
+      coverageRanges: invitationCoverageRanges(invitation),
       fromServiceDate: invitation.requestedFromServiceDate,
       toServiceDate: invitation.requestedToServiceDate,
     };
@@ -334,17 +615,16 @@ export class SecretaryInvitationService {
         expiresAt: true,
         practiceLocationId: true,
         normalizedIdentifier: true,
+        identifierType: true,
         requestedAssignmentType: true,
         requestedCancelClinicDay: true,
         practiceLocation: { select: { name: true } },
       },
     });
-    if (!invitation) {
+    if (!invitation)
       throw new NotFoundException('Pending invitation was not found.');
-    }
-    if (invitation.expiresAt.getTime() <= Date.now()) {
+    if (invitation.expiresAt.getTime() <= Date.now())
       throw new ConflictException('This invitation has expired.');
-    }
     if (invitation.requestedAssignmentType !== plan.assignmentType) {
       throw new ConflictException(
         'A pending invitation cannot change between Clinic Secretary and Substitute Secretary. Cancel it and create a new invitation instead.',
@@ -384,143 +664,200 @@ export class SecretaryInvitationService {
       }
     }
 
-    const correctedIdentifier = dto.identifier?.trim().toLowerCase();
-    if (
-      correctedIdentifier &&
-      correctedIdentifier !== invitation.normalizedIdentifier
-    ) {
-      const target = await this.prisma.user.findFirst({
-        where: {
-          loginIdentifierType: AccountLoginIdentifierType.EMAIL,
-          email: correctedIdentifier,
-          accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
-        },
-        select: {
-          id: true,
-          role: true,
-          accountStatus: true,
-          administrativeRestrictionStatus: true,
-          loginIdentifierType: true,
-          email: true,
-          emailVerifiedAt: true,
-          mobileNumber: true,
-          mobileNumberHash: true,
-          mobileVerifiedAt: true,
-          firstName: true,
-          lastName: true,
-        },
-      });
-
-      if (!target) {
-        throw new NotFoundException(
-          'No Secretary account was found for this email. Please review the email address for possible errors. If the details are correct, ask the Secretary to create and verify an account first.',
-        );
-      }
-      if (target.role !== UserRole.SECRETARY) {
-        throw new ConflictException(
-          'This email address belongs to an account with an incompatible role.',
-        );
-      }
-      if (
-        target.accountStatus !== UserAccountStatus.ACTIVE ||
-        target.administrativeRestrictionStatus !==
-          AdministrativeRestrictionStatus.NONE ||
-        !accountIdentifierIsVerified(target) ||
-        !target.email
-      ) {
-        throw new ConflictException(
-          'The Secretary account must be active and its registered email address must be verified before it can be invited.',
-        );
-      }
-      const targetEmail = target.email;
-
-      const activeInvitationKey = this.sha256(
-        `${invitation.practiceLocationId}:${target.id}`,
+    if (dto.identifier) {
+      const corrected = parseAccountIdentifier(
+        dto.identifier,
+        this.mobileNumbers,
       );
-      const duplicate = await this.prisma.secretaryInvitation.findUnique({
-        where: { activeInvitationKey },
-        select: { id: true },
-      });
-      if (duplicate && duplicate.id !== invitation.id) {
-        throw new ConflictException(
-          'A pending invitation already exists for this Secretary at this clinic.',
+      const correctedType =
+        corrected.type === 'EMAIL'
+          ? AccountLoginIdentifierType.EMAIL
+          : AccountLoginIdentifierType.MOBILE;
+      if (
+        corrected.normalized !== invitation.normalizedIdentifier ||
+        correctedType !== invitation.identifierType
+      ) {
+        const target = await this.prisma.user.findFirst({
+          where: {
+            ...(corrected.type === 'EMAIL'
+              ? {
+                  loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+                  email: corrected.normalized,
+                }
+              : {
+                  loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+                  mobileNumberHash: corrected.mobileHash,
+                }),
+            accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
+          },
+          select: {
+            id: true,
+            role: true,
+            accountStatus: true,
+            administrativeRestrictionStatus: true,
+            loginIdentifierType: true,
+            email: true,
+            emailVerifiedAt: true,
+            mobileNumber: true,
+            mobileNumberHash: true,
+            mobileVerifiedAt: true,
+            firstName: true,
+            lastName: true,
+          },
+        });
+        if (target?.role !== undefined && target.role !== UserRole.SECRETARY) {
+          throw new ConflictException(
+            'This identifier belongs to an account with an incompatible role.',
+          );
+        }
+        if (
+          target &&
+          (target.accountStatus !== UserAccountStatus.ACTIVE ||
+            target.administrativeRestrictionStatus !==
+              AdministrativeRestrictionStatus.NONE ||
+            !accountIdentifierIsVerified(target))
+        ) {
+          throw new ConflictException(
+            'The Secretary account must be active and its registered login identifier must be verified before it can accept a clinic invitation.',
+          );
+        }
+
+        const normalizedIdentifier = target
+          ? target.loginIdentifierType === AccountLoginIdentifierType.EMAIL
+            ? target.email
+            : target.mobileNumber
+          : corrected.normalized;
+        if (!normalizedIdentifier) {
+          throw new ConflictException(
+            'The Secretary account does not have a usable verified login identifier.',
+          );
+        }
+        const identifierType = correctedType;
+        const activeInvitationKey = this.sha256(
+          target
+            ? `${invitation.practiceLocationId}:user:${target.id}`
+            : `${invitation.practiceLocationId}:identifier:${identifierType}:${normalizedIdentifier}`,
         );
+        const duplicate = await this.prisma.secretaryInvitation.findUnique({
+          where: { activeInvitationKey },
+          select: { id: true },
+        });
+        if (duplicate && duplicate.id !== invitation.id) {
+          throw new ConflictException(
+            'A pending invitation already exists for this Secretary at this clinic.',
+          );
+        }
+
+        const token = randomBytes(32).toString('base64url');
+        const now = new Date();
+        const url = `${this.publicAppBaseUrl()}/secretary-invitations/accept?token=${encodeURIComponent(token)}`;
+        const roleLabel =
+          plan.assignmentType ===
+          SecretaryInvitationAssignmentType.CLINIC_SECRETARY
+            ? 'Clinic Secretary'
+            : 'Substitute Secretary';
+        const message = target
+          ? `You have been invited to join ${invitation.practiceLocation.name ?? 'a clinic'} as a ${roleLabel}. Sign in to your active, verified Secretary account, then accept the clinic relationship: ${url}`
+          : `You have been invited to join ${invitation.practiceLocation.name ?? 'a clinic'} as a ${roleLabel}. Create and verify your own Secretary account using this same ${identifierType === AccountLoginIdentifierType.EMAIL ? 'email address' : 'mobile number'}, then sign in and accept the clinic relationship: ${url}`;
+
+        const updated = await this.prisma.$transaction(async (transaction) => {
+          await this.lockPendingPlan(
+            transaction,
+            invitation.id,
+            invitation.practiceLocationId,
+            plan,
+          );
+          const retargeted = await transaction.secretaryInvitation.update({
+            where: { id: invitation.id },
+            data: {
+              targetUserId: target?.id ?? null,
+              identifierType,
+              normalizedIdentifier,
+              normalizedEmail:
+                identifierType === AccountLoginIdentifierType.EMAIL
+                  ? normalizedIdentifier
+                  : null,
+              firstName: target?.firstName ?? '',
+              lastName: target?.lastName ?? '',
+              mobileNumber:
+                identifierType === AccountLoginIdentifierType.MOBILE
+                  ? normalizedIdentifier
+                  : null,
+              tokenHash: this.sha256(token),
+              activeInvitationKey,
+              requestedAssignmentType: plan.assignmentType,
+              requestedAuthorityBundles: plan.authorityBundles,
+              requestedCancelClinicDay: plan.requestedCancelClinicDay,
+              requestedCoverageMode: plan.coverageMode,
+              requestedCoverageRanges: plan.coverageRanges,
+              requestedFromServiceDate: plan.fromServiceDate,
+              requestedToServiceDate: plan.toServiceDate,
+            },
+            select: { id: true, status: true, updatedAt: true },
+          });
+          await transaction.notificationOutbox.updateMany({
+            where: { secretaryInvitationId: invitation.id },
+            data: {
+              channel:
+                identifierType === AccountLoginIdentifierType.EMAIL
+                  ? NotificationChannel.EMAIL
+                  : NotificationChannel.SMS,
+              status: NotificationOutboxStatus.PENDING,
+              recipientEmailEncrypted:
+                identifierType === AccountLoginIdentifierType.EMAIL
+                  ? this.protectedAccountPayload.encrypt(
+                      normalizedIdentifier,
+                      `${PAYLOAD_PURPOSE}:recipient`,
+                    )
+                  : null,
+              recipientMobileEncrypted:
+                identifierType === AccountLoginIdentifierType.MOBILE
+                  ? this.mobileNumbers.encryptCanonical(normalizedIdentifier)
+                  : null,
+              messageBodyEncrypted:
+                this.notificationPayload.encryptMessage(message),
+              providerIdempotencyKey: `secretary-invitation:${invitation.id}:retarget:${this.sha256(`${target?.id ?? normalizedIdentifier}:${token}`).slice(0, 16)}`,
+              attemptCount: 0,
+              processingStartedAt: null,
+              leaseExpiresAt: null,
+              processingWorkerId: null,
+              nextAttemptAt: now,
+              sentAt: null,
+              failedAt: null,
+              cancelledAt: null,
+              protectedPayloadPurgedAt: null,
+            },
+          });
+          return retargeted;
+        });
+        return {
+          invitationId: updated.id,
+          status: updated.status,
+          updatedAt: updated.updatedAt,
+        };
       }
-
-      const token = randomBytes(32).toString('base64url');
-      const now = new Date();
-      const url = `${this.publicAppBaseUrl()}/secretary-invitations/accept?token=${encodeURIComponent(token)}`;
-      const message = `You have been invited to join ${invitation.practiceLocation.name ?? 'a clinic'} as a ${plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY ? 'Clinic Secretary' : 'Substitute Secretary'}. Sign in to your active, verified Secretary account, then accept the clinic relationship: ${url}`;
-
-      const updated = await this.prisma.$transaction(async (transaction) => {
-        const retargeted = await transaction.secretaryInvitation.update({
-          where: { id: invitation.id },
-          data: {
-            targetUserId: target.id,
-            identifierType: AccountLoginIdentifierType.EMAIL,
-            normalizedIdentifier: targetEmail,
-            normalizedEmail: targetEmail,
-            firstName: target.firstName,
-            lastName: target.lastName,
-            mobileNumber: target.mobileNumber,
-            tokenHash: this.sha256(token),
-            activeInvitationKey,
-            requestedAssignmentType: plan.assignmentType,
-            requestedAuthorityBundles: plan.authorityBundles,
-            requestedCancelClinicDay: plan.requestedCancelClinicDay,
-            requestedCoverageMode: plan.coverageMode,
-            requestedFromServiceDate: plan.fromServiceDate,
-            requestedToServiceDate: plan.toServiceDate,
-          },
-          select: { id: true, status: true, updatedAt: true },
-        });
-
-        await transaction.notificationOutbox.updateMany({
-          where: { secretaryInvitationId: invitation.id },
-          data: {
-            channel: NotificationChannel.EMAIL,
-            status: NotificationOutboxStatus.PENDING,
-            recipientEmailEncrypted: this.protectedAccountPayload.encrypt(
-              targetEmail,
-              `${PAYLOAD_PURPOSE}:recipient`,
-            ),
-            recipientMobileEncrypted: null,
-            messageBodyEncrypted:
-              this.notificationPayload.encryptMessage(message),
-            providerIdempotencyKey: `secretary-invitation:${invitation.id}:retarget:${this.sha256(`${target.id}:${token}`).slice(0, 16)}`,
-            attemptCount: 0,
-            processingStartedAt: null,
-            leaseExpiresAt: null,
-            processingWorkerId: null,
-            nextAttemptAt: now,
-            sentAt: null,
-            failedAt: null,
-            cancelledAt: null,
-            protectedPayloadPurgedAt: null,
-          },
-        });
-
-        return retargeted;
-      });
-
-      return {
-        invitationId: updated.id,
-        status: updated.status,
-        updatedAt: updated.updatedAt,
-      };
     }
 
-    const updated = await this.prisma.secretaryInvitation.update({
-      where: { id: invitation.id },
-      data: {
-        requestedAssignmentType: plan.assignmentType,
-        requestedAuthorityBundles: plan.authorityBundles,
-        requestedCancelClinicDay: plan.requestedCancelClinicDay,
-        requestedCoverageMode: plan.coverageMode,
-        requestedFromServiceDate: plan.fromServiceDate,
-        requestedToServiceDate: plan.toServiceDate,
-      },
-      select: { id: true, status: true, updatedAt: true },
+    const updated = await this.prisma.$transaction(async (transaction) => {
+      await this.lockPendingPlan(
+        transaction,
+        invitation.id,
+        invitation.practiceLocationId,
+        plan,
+      );
+      return transaction.secretaryInvitation.update({
+        where: { id: invitation.id },
+        data: {
+          requestedAssignmentType: plan.assignmentType,
+          requestedAuthorityBundles: plan.authorityBundles,
+          requestedCancelClinicDay: plan.requestedCancelClinicDay,
+          requestedCoverageMode: plan.coverageMode,
+          requestedCoverageRanges: plan.coverageRanges,
+          requestedFromServiceDate: plan.fromServiceDate,
+          requestedToServiceDate: plan.toServiceDate,
+        },
+        select: { id: true, status: true, updatedAt: true },
+      });
     });
     return {
       invitationId: updated.id,
@@ -684,6 +1021,9 @@ export class SecretaryInvitationService {
         return { kind: 'identity' as const };
       }
 
+      await transaction.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`SUBSTITUTE_COVERAGE|${invitation.practiceLocationId}`}, 0))`,
+      );
       const locations = await transaction.$queryRaw<
         Array<{
           id: string;
@@ -770,16 +1110,25 @@ export class SecretaryInvitationService {
         if (!coverageMode || !fromServiceDate || !toServiceDate) {
           throw new ConflictException('Invitation coverage plan is invalid.');
         }
-        coverageId = await this.createCoverage(
-          transaction,
-          assignment.id,
-          location.id,
-          invitation.invitedByUserId,
-          coverageMode,
-          fromServiceDate,
-          toServiceDate,
-          now,
-        );
+        const ranges = invitationCoverageRanges(invitation);
+        if (!ranges.length)
+          throw new ConflictException(
+            'This invitation has no remaining coverage dates. Ask the Doctor to send a new invitation.',
+          );
+        for (const range of ranges) {
+          coverageId = await this.createCoverage(
+            transaction,
+            assignment.id,
+            location.id,
+            invitation.invitedByUserId,
+            range.fromServiceDate === range.toServiceDate
+              ? SubstituteSecretaryCoverageMode.ONE_SERVICE_DATE
+              : SubstituteSecretaryCoverageMode.DATE_RANGE,
+            new Date(range.fromServiceDate),
+            new Date(range.toServiceDate),
+            now,
+          );
+        }
       }
 
       await transaction.secretaryInvitation.update({
@@ -838,7 +1187,7 @@ export class SecretaryInvitationService {
     }
     if (outcome.kind === 'replacement_changed') {
       throw new ConflictException(
-        'The current Clinic Secretary changed after this invitation was sent. Ask the Doctor to review and send a new invitation.',
+        'This invitation can no longer be accepted because the clinic has assigned a different Clinic Secretary. Ask the Doctor to cancel this invitation and send a new replacement invitation. Your account is still active.',
       );
     }
     if (outcome.kind === 'ownership') {
@@ -866,6 +1215,7 @@ export class SecretaryInvitationService {
       | 'authorityBundles'
       | 'requestedCancelClinicDay'
       | 'coverageMode'
+      | 'coverageRanges'
       | 'fromServiceDate'
       | 'toServiceDate'
     >,
@@ -881,6 +1231,10 @@ export class SecretaryInvitationService {
         assignmentType: SecretaryInvitationAssignmentType.CLINIC_SECRETARY,
         authorityBundles,
         requestedCancelClinicDay: dto.requestedCancelClinicDay === true,
+        coverageRanges: [] as {
+          fromServiceDate: string;
+          toServiceDate: string;
+        }[],
         coverageMode: null,
         fromServiceDate: null,
         toServiceDate: null,
@@ -914,13 +1268,66 @@ export class SecretaryInvitationService {
       );
     }
 
+    const requested = dto.coverageRanges ?? [
+      {
+        fromServiceDate: dto.fromServiceDate,
+        toServiceDate: dto.toServiceDate,
+      },
+    ];
+    if (!requested.length || requested.length > 100)
+      throw new BadRequestException(
+        'Choose between 1 and 100 coverage periods.',
+      );
+    const coverageRanges: { fromServiceDate: string; toServiceDate: string }[] =
+      [];
+    for (const range of [...requested].sort((a, b) =>
+      a.fromServiceDate.localeCompare(b.fromServiceDate),
+    )) {
+      const start = this.parseDate(range.fromServiceDate);
+      const end = this.parseDate(range.toServiceDate);
+      if (start > end)
+        throw new BadRequestException(
+          'Coverage start date must not be after its end date.',
+        );
+      const previous = coverageRanges.at(-1);
+      if (
+        previous &&
+        start.getTime() <=
+          this.parseDate(previous.toServiceDate).getTime() + 86400000
+      )
+        previous.toServiceDate =
+          previous.toServiceDate > range.toServiceDate
+            ? previous.toServiceDate
+            : range.toServiceDate;
+      else coverageRanges.push({ ...range });
+    }
+    if (
+      dto.coverageRanges &&
+      coverageRanges.reduce(
+        (total, range) =>
+          total +
+          (this.parseDate(range.toServiceDate).getTime() -
+            this.parseDate(range.fromServiceDate).getTime()) /
+            86400000 +
+          1,
+        0,
+      ) > 366
+    )
+      throw new BadRequestException('An invitation can cover up to 366 days.');
     return {
       assignmentType: SecretaryInvitationAssignmentType.SUBSTITUTE_SECRETARY,
       authorityBundles: [],
       requestedCancelClinicDay: false,
-      coverageMode: dto.coverageMode,
-      fromServiceDate: from,
-      toServiceDate: to,
+      coverageRanges,
+      coverageMode:
+        coverageRanges.length === 1 &&
+        coverageRanges[0].fromServiceDate === coverageRanges[0].toServiceDate
+          ? DtoCoverageMode.ONE_SERVICE_DATE
+          : DtoCoverageMode.DATE_RANGE,
+      fromServiceDate: this.parseDate(coverageRanges[0].fromServiceDate),
+      toServiceDate: this.parseDate(
+        coverageRanges[coverageRanges.length - 1].toServiceDate,
+      ),
     };
   }
 
@@ -1075,6 +1482,110 @@ export class SecretaryInvitationService {
     });
   }
 
+  private async lockInvitationLocation(
+    transaction: Tx,
+    practiceLocationId: string,
+  ) {
+    await transaction.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`SUBSTITUTE_COVERAGE|${practiceLocationId}`}, 0))`,
+    );
+    await transaction.$executeRaw(
+      Prisma.sql`SELECT "id" FROM "PracticeLocation" WHERE "id" = ${practiceLocationId} FOR UPDATE`,
+    );
+  }
+
+  private async assertPendingPlanAvailable(
+    transaction: Tx,
+    practiceLocationId: string,
+    plan: ReturnType<SecretaryInvitationService['validatePlan']>,
+    excludedId?: string,
+    coverageRevisions?: unknown,
+  ) {
+    const conflicts = await transaction.secretaryInvitation.findMany({
+      where: {
+        practiceLocationId,
+        status: SecretaryInvitationStatus.PENDING,
+        expiresAt: { gt: new Date() },
+        ...(excludedId ? { id: { not: excludedId } } : {}),
+        requestedAssignmentType: plan.assignmentType,
+        ...(plan.assignmentType ===
+        SecretaryInvitationAssignmentType.SUBSTITUTE_SECRETARY
+          ? {
+              requestedFromServiceDate: { lte: plan.toServiceDate },
+              requestedToServiceDate: { gte: plan.fromServiceDate },
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        requestedFromServiceDate: true,
+        requestedToServiceDate: true,
+        coverageRevisions: true,
+        requestedCoverageRanges: true,
+      },
+    });
+    const desired = invitationCoverageRanges({
+      requestedCoverageRanges: plan.coverageRanges,
+      requestedFromServiceDate: plan.fromServiceDate,
+      requestedToServiceDate: plan.toServiceDate,
+      coverageRevisions,
+    });
+    if (
+      plan.assignmentType ===
+        SecretaryInvitationAssignmentType.SUBSTITUTE_SECRETARY &&
+      !desired.length
+    )
+      throw new ConflictException(
+        'No coverage dates remain in this period. Choose different dates.',
+      );
+    const conflict =
+      plan.assignmentType === SecretaryInvitationAssignmentType.CLINIC_SECRETARY
+        ? conflicts.length > 0
+        : conflicts.some((invitation) =>
+            desired.some((range) =>
+              coverageOverlaps(invitationCoverageRanges(invitation), range),
+            ),
+          );
+    if (conflict)
+      throw new ConflictException(
+        plan.assignmentType ===
+          SecretaryInvitationAssignmentType.CLINIC_SECRETARY
+          ? 'A Clinic Secretary invitation is already pending for this clinic. Wait for it to be accepted, or cancel it before inviting another Secretary.'
+          : 'A Substitute Secretary invitation is already pending for one or more selected dates. Choose different dates, or cancel the pending invitation first.',
+      );
+  }
+
+  private async lockPendingPlan(
+    transaction: Tx,
+    invitationId: string,
+    practiceLocationId: string,
+    plan: ReturnType<SecretaryInvitationService['validatePlan']>,
+  ) {
+    await transaction.$executeRaw(
+      Prisma.sql`SELECT "id" FROM "SecretaryInvitation" WHERE "id" = ${invitationId} FOR UPDATE`,
+    );
+    const current = await transaction.secretaryInvitation.findUnique({
+      where: { id: invitationId },
+      select: { status: true, expiresAt: true, coverageRevisions: true },
+    });
+    if (
+      !current ||
+      current.status !== SecretaryInvitationStatus.PENDING ||
+      current.expiresAt <= new Date()
+    )
+      throw new ConflictException(
+        'This invitation is no longer pending. Refresh the staff list.',
+      );
+    await this.lockInvitationLocation(transaction, practiceLocationId);
+    await this.assertPendingPlanAvailable(
+      transaction,
+      practiceLocationId,
+      plan,
+      invitationId,
+      current.coverageRevisions,
+    );
+  }
+
   private async createCoverage(
     transaction: Tx,
     practiceStaffId: string,
@@ -1084,29 +1595,104 @@ export class SecretaryInvitationService {
     from: Date,
     to: Date,
     now: Date,
+    supersedesCoverageId?: string,
   ) {
     await transaction.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`SUBSTITUTE_COVERAGE|${practiceLocationId}`}, 0))`,
     );
-    if (
-      await transaction.substituteSecretaryCoverageDate.findFirst({
-        where: {
-          practiceLocationId,
-          status: 'ACTIVE',
-          serviceDate: { gte: from, lte: to },
+    const outgoing = await transaction.substituteSecretaryCoverage.findMany({
+      where: {
+        practiceLocationId,
+        status: 'ACTIVE',
+        serviceDates: {
+          some: { status: 'ACTIVE', serviceDate: { gte: from, lte: to } },
         },
-        select: { id: true },
-      })
-    ) {
-      throw new ConflictException(
-        'Another active Substitute Secretary coverage already applies to one or more selected Service Dates.',
-      );
+      },
+      include: {
+        serviceDates: {
+          where: { status: 'ACTIVE' },
+          orderBy: { serviceDate: 'asc' },
+        },
+      },
+    });
+    for (const previous of outgoing) {
+      // Retain the original plan as history and carry forward only its untouched dates.
+      await transaction.substituteSecretaryCoverageDate.updateMany({
+        where: { coverageId: previous.id, status: 'ACTIVE' },
+        data: { status: 'SUPERSEDED', endedAt: now },
+      });
+      await transaction.substituteSecretaryCoverage.update({
+        where: { id: previous.id },
+        data: {
+          status: 'SUPERSEDED',
+          endedAt: now,
+          endedByUserId: actorUserId,
+        },
+      });
+      const remaining = previous.serviceDates
+        .map((day) => day.serviceDate)
+        .filter((date) => date < from || date > to);
+      for (let index = 0; index < remaining.length;) {
+        const first = remaining[index];
+        let last = first;
+        while (
+          ++index < remaining.length &&
+          remaining[index].getTime() === last.getTime() + 86_400_000
+        )
+          last = remaining[index];
+        await this.createCoverage(
+          transaction,
+          previous.practiceStaffId,
+          practiceLocationId,
+          actorUserId,
+          first.getTime() === last.getTime()
+            ? SubstituteSecretaryCoverageMode.ONE_SERVICE_DATE
+            : SubstituteSecretaryCoverageMode.DATE_RANGE,
+          first,
+          last,
+          now,
+          previous.id,
+        );
+      }
+      if (previous.practiceStaffId !== practiceStaffId) {
+        const days = await transaction.clinicDay.findMany({
+          where: {
+            practiceLocationId,
+            operatingPracticeStaffId: previous.practiceStaffId,
+            serviceDate: { gte: from, lte: to },
+            status: { in: ['NOT_STARTED', 'DELAYED', 'STARTED'] },
+          },
+          select: { id: true, serviceDate: true },
+        });
+        for (const day of days) {
+          const cleared = await transaction.clinicDay.updateMany({
+            where: {
+              id: day.id,
+              operatingPracticeStaffId: previous.practiceStaffId,
+            },
+            data: { operatingPracticeStaffId: null },
+          });
+          if (cleared.count)
+            await transaction.clinicDayOperatingStaffAudit.create({
+              data: {
+                clinicDayId: day.id,
+                practiceLocationId,
+                serviceDate: day.serviceDate,
+                changeType: 'CLEARED',
+                previousOperatingPracticeStaffId: previous.practiceStaffId,
+                actorUserId,
+                createdAt: now,
+              },
+            });
+        }
+      }
     }
 
     const coverage = await transaction.substituteSecretaryCoverage.create({
       data: {
         practiceLocationId,
         practiceStaffId,
+        supersedesCoverageId,
         coverageMode: mode,
         fromServiceDate: from,
         toServiceDate: to,
@@ -1131,6 +1717,29 @@ export class SecretaryInvitationService {
           createdAt: now,
         },
       });
+    }
+    for (const outgoingStaffId of new Set(
+      outgoing.map((item) => item.practiceStaffId),
+    )) {
+      if (outgoingStaffId === practiceStaffId) continue;
+      const remaining = await transaction.substituteSecretaryCoverage.count({
+        where: { practiceStaffId: outgoingStaffId, status: 'ACTIVE' },
+      });
+      const location = await transaction.practiceLocation.findUniqueOrThrow({
+        where: { id: practiceLocationId },
+        select: { currentRegularPracticeStaffId: true },
+      });
+      if (
+        !remaining &&
+        location.currentRegularPracticeStaffId !== outgoingStaffId
+      )
+        await this.disableOutgoing(
+          transaction,
+          outgoingStaffId,
+          actorUserId,
+          practiceLocationId,
+          now,
+        );
     }
     return coverage.id;
   }
