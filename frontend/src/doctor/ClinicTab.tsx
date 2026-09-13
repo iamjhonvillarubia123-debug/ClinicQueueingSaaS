@@ -160,6 +160,279 @@ type PracticeLocationResponse = {
   doctorScheduleDraft?: DoctorConfigurationDraftResponse | null;
 };
 
+type DoctorAccountSettingsResponse = {
+  defaultTimeZone: string;
+};
+
+const FALLBACK_TIME_ZONE = 'Asia/Manila';
+
+type TimeZoneChoice = {
+  value: string;
+  city: string;
+  region: string;
+};
+
+const CURATED_TIME_ZONES: TimeZoneChoice[] = [
+  { value: 'Asia/Manila', city: 'Manila', region: 'Philippines' },
+  { value: 'Asia/Bangkok', city: 'Bangkok', region: 'Asia' },
+  { value: 'Asia/Singapore', city: 'Singapore', region: 'Asia' },
+  { value: 'Asia/Hong_Kong', city: 'Hong Kong', region: 'Asia' },
+  { value: 'Asia/Kuala_Lumpur', city: 'Kuala Lumpur', region: 'Asia' },
+  { value: 'Asia/Taipei', city: 'Taipei', region: 'Asia' },
+  { value: 'Asia/Tokyo', city: 'Tokyo', region: 'Asia' },
+  { value: 'Asia/Seoul', city: 'Seoul', region: 'Asia' },
+  { value: 'Asia/Kolkata', city: 'New Delhi', region: 'Asia' },
+  { value: 'Asia/Dubai', city: 'Dubai', region: 'Asia' },
+  { value: 'Australia/Brisbane', city: 'Brisbane', region: 'Australia & Pacific' },
+  { value: 'Australia/Sydney', city: 'Sydney', region: 'Australia & Pacific' },
+  { value: 'Pacific/Auckland', city: 'Auckland', region: 'Australia & Pacific' },
+  { value: 'Europe/London', city: 'London', region: 'Europe' },
+  { value: 'Europe/Paris', city: 'Paris', region: 'Europe' },
+  { value: 'Europe/Berlin', city: 'Berlin', region: 'Europe' },
+  { value: 'America/New_York', city: 'New York', region: 'North America' },
+  { value: 'America/Chicago', city: 'Chicago', region: 'North America' },
+  { value: 'America/Denver', city: 'Denver', region: 'North America' },
+  { value: 'America/Los_Angeles', city: 'Los Angeles', region: 'North America' },
+  { value: 'America/Toronto', city: 'Toronto', region: 'North America' },
+  { value: 'America/Vancouver', city: 'Vancouver', region: 'North America' },
+];
+
+function timeZoneOffset(timeZone: string) {
+  try {
+    const timeZoneName = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'longOffset',
+    })
+      .formatToParts(new Date())
+      .find((part) => part.type === 'timeZoneName')?.value;
+    if (!timeZoneName || timeZoneName === 'GMT') return '+00:00';
+    return timeZoneName.replace('GMT', '');
+  } catch {
+    return '';
+  }
+}
+
+function timeZoneCity(timeZone: string) {
+  return (
+    CURATED_TIME_ZONES.find((choice) => choice.value === timeZone)?.city ??
+    timeZone.split('/').at(-1)?.replaceAll('_', ' ') ??
+    timeZone
+  );
+}
+
+function timeZoneLabel(timeZone: string, city = timeZoneCity(timeZone)) {
+  const offset = timeZoneOffset(timeZone);
+  return offset ? `(GMT${offset}) ${city}` : city;
+}
+
+function TimeZonePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (timeZone: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const choices = useMemo(() => {
+    const currentIsCurated = CURATED_TIME_ZONES.some(
+      (choice) => choice.value === value,
+    );
+    return currentIsCurated || !value
+      ? CURATED_TIME_ZONES
+      : [
+          {
+            value,
+            city: timeZoneCity(value),
+            region: 'Current clinic timezone',
+          },
+          ...CURATED_TIME_ZONES,
+        ];
+  }, [value]);
+
+  const filteredChoices = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return choices;
+    return choices.filter((choice) =>
+      [choice.city, choice.region, choice.value].some((candidate) =>
+        candidate.toLowerCase().includes(needle),
+      ),
+    );
+  }, [choices, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) searchRef.current?.focus();
+  }, [open]);
+
+  function selectTimeZone(timeZone: string) {
+    onChange(timeZone);
+    setOpen(false);
+    setQuery('');
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ position: 'relative', width: '100%' }}
+    >
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        style={{
+          width: '100%',
+          minHeight: 46,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '0 14px',
+          border: '1px solid #d7dce2',
+          borderRadius: 8,
+          background: '#fff',
+          color: '#17191c',
+          font: 'inherit',
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+      >
+        <span>{timeZoneLabel(value)}</span>
+        <span aria-hidden="true" style={{ fontSize: 14 }}>
+          {open ? '⌃' : '⌄'}
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          style={{
+            position: 'absolute',
+            zIndex: 50,
+            top: 'calc(100% + 6px)',
+            left: 0,
+            right: 0,
+            border: '1px solid #d7dce2',
+            borderRadius: 10,
+            background: '#fff',
+            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.12)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: 10, borderBottom: '1px solid #eceff2' }}>
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search city or timezone"
+              aria-label="Search timezone"
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                minHeight: 40,
+                padding: '0 11px',
+                border: '1px solid #d7dce2',
+                borderRadius: 7,
+                font: 'inherit',
+              }}
+            />
+          </div>
+          <div
+            role="listbox"
+            aria-label="Timezone options"
+            style={{ maxHeight: 300, overflowY: 'auto', padding: 6 }}
+          >
+            {filteredChoices.length ? (
+              filteredChoices.map((choice, index) => {
+                const previous = filteredChoices[index - 1];
+                const showRegion = !previous || previous.region !== choice.region;
+                const selected = choice.value === value;
+                return (
+                  <div key={choice.value}>
+                    {showRegion ? (
+                      <div
+                        style={{
+                          padding: '9px 10px 5px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: '#6b7280',
+                        }}
+                      >
+                        {choice.region}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      onClick={() => selectTimeZone(choice.value)}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        padding: '9px 10px',
+                        border: 0,
+                        borderRadius: 7,
+                        background: selected ? '#f2f4f6' : '#fff',
+                        color: '#17191c',
+                        font: 'inherit',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span>{timeZoneLabel(choice.value, choice.city)}</span>
+                      {selected ? <span aria-hidden="true">✓</span> : null}
+                    </button>
+                  </div>
+                );
+              })
+            ) : (
+              <div
+                style={{
+                  padding: '16px 12px',
+                  color: '#6b7280',
+                  fontSize: 14,
+                }}
+              >
+                No matching timezone.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const initialDraft: ClinicDraft = {
   name: '',
   shortCode: '',
@@ -612,12 +885,10 @@ function BasicInformation({
       </label>
       <label>
         Timezone <b>*</b>
-        <select
+        <TimeZonePicker
           value={value.timeZone}
-          onChange={(e) => onChange({ ...value, timeZone: e.target.value })}
-        >
-          <option value="Asia/Manila">(GMT+08:00) Asia/Manila</option>
-        </select>
+          onChange={(timeZone) => onChange({ ...value, timeZone })}
+        />
       </label>
       <label>
         Contact Number <small>(Optional)</small>
@@ -2110,6 +2381,10 @@ export function ClinicTabPage() {
     null,
   );
   const [loadError, setLoadError] = useState('');
+  const [doctorDefaultTimeZone, setDoctorDefaultTimeZone] = useState(
+    FALLBACK_TIME_ZONE,
+  );
+  const [doctorDefaultsLoaded, setDoctorDefaultsLoaded] = useState(false);
 
   async function loadClinics() {
     const locations =
@@ -2141,6 +2416,26 @@ export function ClinicTabPage() {
           error instanceof Error ? error.message : 'Unable to load clinics.',
         );
         setClinicsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiRequest<DoctorAccountSettingsResponse>('/doctor/account/settings')
+      .then((settings) => {
+        if (cancelled) return;
+        setDoctorDefaultTimeZone(
+          settings.defaultTimeZone?.trim() || FALLBACK_TIME_ZONE,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setDoctorDefaultTimeZone(FALLBACK_TIME_ZONE);
+      })
+      .finally(() => {
+        if (!cancelled) setDoctorDefaultsLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -2295,10 +2590,20 @@ export function ClinicTabPage() {
     };
   }
 
+  if (mode === 'create' && !doctorDefaultsLoaded)
+    return (
+      <section className="clinic-page" aria-live="polite">
+        <p>Loading clinic defaults…</p>
+      </section>
+    );
   if (mode === 'create')
     return (
       <ClinicWizard
         initialStatus="DRAFT"
+        initialValue={{
+          ...initialDraft,
+          timeZone: doctorDefaultTimeZone || FALLBACK_TIME_ZONE,
+        }}
         onExit={() => {
           setEditingClinic(null);
           setMode('list');

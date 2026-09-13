@@ -279,8 +279,32 @@ export class PracticeLocationConfigurationDraftService {
       clinicDescription: this.normalizeOptionalText(info.clinicDescription),
       countryCode:
         this.normalizeOptionalText(info.countryCode)?.toUpperCase() ?? null,
-      timeZone: this.normalizeOptionalText(info.timeZone),
+      timeZone:
+        info.timeZone === undefined
+          ? null
+          : this.normalizeTimeZone(info.timeZone),
     };
+  }
+
+  private normalizeTimeZone(value: string): string {
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new BadRequestException('A valid IANA time zone is required.');
+    }
+    if (/^(?:UTC|GMT)?[+-]\d{1,2}(?::?\d{2})?$/i.test(normalized)) {
+      throw new BadRequestException(
+        'timeZone must be an IANA time zone, not a fixed UTC/GMT offset.',
+      );
+    }
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: normalized,
+      }).resolvedOptions().timeZone;
+    } catch {
+      throw new BadRequestException(
+        'timeZone must be a valid supported IANA time zone.',
+      );
+    }
   }
 
   private scheduleRows(dto: SaveDoctorClinicConfigurationDraftDto) {

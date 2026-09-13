@@ -1,4 +1,8 @@
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   AccountLoginIdentifierType,
@@ -77,6 +81,9 @@ describe('PracticeLocationService', () => {
     transactionMock.doctorBookingQuestionTemplate.findMany.mockResolvedValue(
       [],
     );
+    transactionMock.doctorAccountSettings.upsert.mockResolvedValue({
+      defaultTimeZone: 'Asia/Manila',
+    });
     transactionMock.$executeRaw.mockResolvedValue(1);
   });
 
@@ -100,7 +107,7 @@ describe('PracticeLocationService', () => {
           clinicEmail: null,
           clinicDescription: null,
           countryCode: null,
-          timeZone: null,
+          timeZone: 'Asia/Manila',
           services: { create: [] },
           bookingQuestions: { create: [] },
         }) as unknown,
@@ -233,6 +240,34 @@ describe('PracticeLocationService', () => {
         }) as unknown,
       }),
     );
+  });
+
+  it('uses the Doctor default timezone when a new clinic does not override it', async () => {
+    transactionMock.doctorAccountSettings.upsert.mockResolvedValue({
+      defaultTimeZone: 'Asia/Tokyo',
+    });
+    transactionMock.practiceLocation.create.mockResolvedValue({
+      id: 'location-1',
+    });
+
+    await service.create('doctor-user-1', {});
+
+    expect(transactionMock.practiceLocation.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          timeZone: 'Asia/Tokyo',
+        }) as unknown,
+      }),
+    );
+  });
+
+  it('rejects fixed-offset or invalid clinic timezones', async () => {
+    await expect(
+      service.create('doctor-user-1', { timeZone: 'GMT+8' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.create('doctor-user-1', { timeZone: 'Not/A_Real_Zone' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects a duplicate non-terminal clinic before creating another clinic', async () => {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -73,11 +74,17 @@ export class PracticeLocationService {
           select: { id: true },
         }));
 
-      await transaction.doctorAccountSettings.upsert({
+      const doctorSettings = await transaction.doctorAccountSettings.upsert({
         where: { doctorProfileId: doctorProfile.id },
         create: { doctorProfileId: doctorProfile.id },
         update: {},
+        select: { defaultTimeZone: true },
       });
+      const timeZone = this.normalizeTimeZone(
+        createPracticeLocationDto.timeZone ??
+          doctorSettings.defaultTimeZone ??
+          'Asia/Manila',
+      );
 
       if (name && addressLine1) {
         const existingLocation = await transaction.practiceLocation.findFirst({
@@ -161,9 +168,7 @@ export class PracticeLocationService {
             this.normalizeOptionalText(
               createPracticeLocationDto.countryCode,
             )?.toUpperCase() ?? null,
-          timeZone: this.normalizeOptionalText(
-            createPracticeLocationDto.timeZone,
-          ),
+          timeZone,
           services: {
             create: serviceTemplates.map((template) => ({
               sourceDoctorServiceTemplateId: template.id,
@@ -334,7 +339,7 @@ export class PracticeLocationService {
         timeZone:
           dto.timeZone === undefined
             ? undefined
-            : this.normalizeOptionalText(dto.timeZone),
+            : this.normalizeTimeZone(dto.timeZone),
       },
       select: {
         id: true,
@@ -555,6 +560,27 @@ export class PracticeLocationService {
           }
         : null,
     }));
+  }
+
+  private normalizeTimeZone(value: string): string {
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new BadRequestException('A valid IANA time zone is required.');
+    }
+    if (/^(?:UTC|GMT)?[+-]\d{1,2}(?::?\d{2})?$/i.test(normalized)) {
+      throw new BadRequestException(
+        'timeZone must be an IANA time zone, not a fixed UTC/GMT offset.',
+      );
+    }
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: normalized,
+      }).resolvedOptions().timeZone;
+    } catch {
+      throw new BadRequestException(
+        'timeZone must be a valid supported IANA time zone.',
+      );
+    }
   }
 
   private normalizeOptionalText(value: string | undefined): string | null {
