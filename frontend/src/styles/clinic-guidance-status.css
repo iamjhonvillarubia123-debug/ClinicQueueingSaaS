@@ -54,6 +54,66 @@
   line-height: 1.4;
 }
 
+.clinic-hours-guide-card > p {
+  margin-bottom: 16px;
+}
+
+.clinic-hours-guide-section {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.clinic-hours-guide-section:first-of-type {
+  margin-top: 0;
+}
+
+.clinic-hours-guide-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: #344054;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.clinic-hours-guide-section h4 {
+  margin: 0 0 6px;
+  color: #171717;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.clinic-hours-guide-section ul {
+  display: block;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.clinic-hours-guide-section li {
+  display: list-item !important;
+  margin: 0 0 4px;
+  color: #53657f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.clinic-hours-guide-section li:last-child {
+  margin-bottom: 0;
+}
+
+.clinic-hours-guide-section li::before {
+  content: none !important;
+}
+
+.clinic-hours-guide-section strong {
+  color: #344054;
+  font-weight: 700;
+}
+
 @media (max-width: 1100px) {
   .clinic-guide-card ul {
     gap: 10px;
