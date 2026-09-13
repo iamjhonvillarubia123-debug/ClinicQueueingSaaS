@@ -168,33 +168,30 @@ const FALLBACK_TIME_ZONE = 'Asia/Manila';
 
 type TimeZoneChoice = {
   value: string;
-  city: string;
-  region: string;
 };
 
 const CURATED_TIME_ZONES: TimeZoneChoice[] = [
-  { value: 'Asia/Manila', city: 'Manila', region: 'Philippines' },
-  { value: 'Asia/Bangkok', city: 'Bangkok', region: 'Asia' },
-  { value: 'Asia/Singapore', city: 'Singapore', region: 'Asia' },
-  { value: 'Asia/Hong_Kong', city: 'Hong Kong', region: 'Asia' },
-  { value: 'Asia/Kuala_Lumpur', city: 'Kuala Lumpur', region: 'Asia' },
-  { value: 'Asia/Taipei', city: 'Taipei', region: 'Asia' },
-  { value: 'Asia/Tokyo', city: 'Tokyo', region: 'Asia' },
-  { value: 'Asia/Seoul', city: 'Seoul', region: 'Asia' },
-  { value: 'Asia/Kolkata', city: 'New Delhi', region: 'Asia' },
-  { value: 'Asia/Dubai', city: 'Dubai', region: 'Asia' },
-  { value: 'Australia/Brisbane', city: 'Brisbane', region: 'Australia & Pacific' },
-  { value: 'Australia/Sydney', city: 'Sydney', region: 'Australia & Pacific' },
-  { value: 'Pacific/Auckland', city: 'Auckland', region: 'Australia & Pacific' },
-  { value: 'Europe/London', city: 'London', region: 'Europe' },
-  { value: 'Europe/Paris', city: 'Paris', region: 'Europe' },
-  { value: 'Europe/Berlin', city: 'Berlin', region: 'Europe' },
-  { value: 'America/New_York', city: 'New York', region: 'North America' },
-  { value: 'America/Chicago', city: 'Chicago', region: 'North America' },
-  { value: 'America/Denver', city: 'Denver', region: 'North America' },
-  { value: 'America/Los_Angeles', city: 'Los Angeles', region: 'North America' },
-  { value: 'America/Toronto', city: 'Toronto', region: 'North America' },
-  { value: 'America/Vancouver', city: 'Vancouver', region: 'North America' },
+  { value: 'America/Los_Angeles' },
+  { value: 'America/Denver' },
+  { value: 'America/Chicago' },
+  { value: 'America/New_York' },
+  { value: 'America/Toronto' },
+  { value: 'Europe/London' },
+  { value: 'Europe/Paris' },
+  { value: 'Europe/Berlin' },
+  { value: 'Asia/Dubai' },
+  { value: 'Asia/Kolkata' },
+  { value: 'Asia/Bangkok' },
+  { value: 'Asia/Hong_Kong' },
+  { value: 'Asia/Kuala_Lumpur' },
+  { value: 'Asia/Manila' },
+  { value: 'Asia/Singapore' },
+  { value: 'Asia/Taipei' },
+  { value: 'Asia/Seoul' },
+  { value: 'Asia/Tokyo' },
+  { value: 'Australia/Brisbane' },
+  { value: 'Australia/Sydney' },
+  { value: 'Pacific/Auckland' },
 ];
 
 function timeZoneOffset(timeZone: string) {
@@ -212,17 +209,26 @@ function timeZoneOffset(timeZone: string) {
   }
 }
 
-function timeZoneCity(timeZone: string) {
-  return (
-    CURATED_TIME_ZONES.find((choice) => choice.value === timeZone)?.city ??
-    timeZone.split('/').at(-1)?.replaceAll('_', ' ') ??
-    timeZone
-  );
+function timeZoneOffsetMinutes(timeZone: string) {
+  const offset = timeZoneOffset(timeZone);
+  const match = offset.match(/^([+-])(\d{2}):(\d{2})$/);
+  if (!match) return 0;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return match[1] === '-' ? -minutes : minutes;
 }
 
-function timeZoneLabel(timeZone: string, city = timeZoneCity(timeZone)) {
+function timeZoneLabel(timeZone: string) {
   const offset = timeZoneOffset(timeZone);
-  return offset ? `(GMT${offset}) ${city}` : city;
+  return offset ? `(GMT${offset}) ${timeZone}` : timeZone;
+}
+
+function sortedTimeZoneChoices(choices: TimeZoneChoice[]) {
+  return [...choices].sort((left, right) => {
+    const offsetDifference =
+      timeZoneOffsetMinutes(left.value) - timeZoneOffsetMinutes(right.value);
+    if (offsetDifference !== 0) return offsetDifference;
+    return left.value.localeCompare(right.value);
+  });
 }
 
 function TimeZonePicker({
@@ -241,25 +247,21 @@ function TimeZonePicker({
     const currentIsCurated = CURATED_TIME_ZONES.some(
       (choice) => choice.value === value,
     );
-    return currentIsCurated || !value
-      ? CURATED_TIME_ZONES
-      : [
-          {
-            value,
-            city: timeZoneCity(value),
-            region: 'Current clinic timezone',
-          },
-          ...CURATED_TIME_ZONES,
-        ];
+    const allChoices =
+      currentIsCurated || !value
+        ? CURATED_TIME_ZONES
+        : [{ value }, ...CURATED_TIME_ZONES];
+    return sortedTimeZoneChoices(allChoices);
   }, [value]);
 
   const filteredChoices = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return choices;
     return choices.filter((choice) =>
-      [choice.city, choice.region, choice.value].some((candidate) =>
-        candidate.toLowerCase().includes(needle),
-      ),
+      [choice.value, timeZoneLabel(choice.value)]
+        .join(' ')
+        .toLowerCase()
+        .includes(needle),
     );
   }, [choices, query]);
 
@@ -321,6 +323,7 @@ function TimeZonePicker({
           background: '#fff',
           color: '#17191c',
           font: 'inherit',
+          lineHeight: 1.2,
           textAlign: 'left',
           cursor: 'pointer',
         }}
@@ -370,49 +373,34 @@ function TimeZonePicker({
             style={{ maxHeight: 300, overflowY: 'auto', padding: 6 }}
           >
             {filteredChoices.length ? (
-              filteredChoices.map((choice, index) => {
-                const previous = filteredChoices[index - 1];
-                const showRegion = !previous || previous.region !== choice.region;
+              filteredChoices.map((choice) => {
                 const selected = choice.value === value;
                 return (
-                  <div key={choice.value}>
-                    {showRegion ? (
-                      <div
-                        style={{
-                          padding: '9px 10px 5px',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: '#6b7280',
-                        }}
-                      >
-                        {choice.region}
-                      </div>
-                    ) : null}
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      onClick={() => selectTimeZone(choice.value)}
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        padding: '9px 10px',
-                        border: 0,
-                        borderRadius: 7,
-                        background: selected ? '#f2f4f6' : '#fff',
-                        color: '#17191c',
-                        font: 'inherit',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span>{timeZoneLabel(choice.value, choice.city)}</span>
-                      {selected ? <span aria-hidden="true">✓</span> : null}
-                    </button>
-                  </div>
+                  <button
+                    key={choice.value}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => selectTimeZone(choice.value)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      padding: '9px 10px',
+                      border: 0,
+                      borderRadius: 7,
+                      background: selected ? '#f2f4f6' : '#fff',
+                      color: '#17191c',
+                      font: 'inherit',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span>{timeZoneLabel(choice.value)}</span>
+                    {selected ? <span aria-hidden="true">✓</span> : null}
+                  </button>
                 );
               })
             ) : (
