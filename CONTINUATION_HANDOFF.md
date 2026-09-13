@@ -65,3 +65,27 @@ The E2E runner requires a dedicated test database and validates isolation. Never
 - Owner previously noted that partial replacement of active substitute coverage still needed manual testing. Automated replacement regression coverage exists; verify the actual browser workflow when continuing.
 - The compact editor preserves weekday settings while editing in the current mounted editor. Stored invitation data is normalized date ranges; reopening an invitation or remounting the editor reconstructs ranges, not the original weekday-pattern grouping.
 - No deployment or merge to the default branch is included in this checkpoint.
+
+## Update — Secretary choice and cross-clinic conflicts
+
+Implemented after the Git checkpoint above:
+- Secretary invitations now offer Accept and Decline. Decline keeps a DECLINED history row, clears the acceptance token/key, cancels pending delivery, and creates an in-app doctor notification.
+- Acceptance checks the Secretary's active connected clinics across doctors, using recurring clinic hours, time zones, schedule exceptions, and exact substitute coverage ranges. Conflicts leave the invitation pending with instructions to disconnect or decline. A Secretary-specific transaction lock serializes concurrent acceptance and self-disconnection.
+- Secretary Clinics rows offer password-confirmed Disconnect, with no doctor approval. It clears current regular/operating references, revokes capabilities/bundles, cancels active substitute coverage, preserves history, and notifies the doctor transactionally. It does not close/cancel clinic days or close the Secretary account.
+- Added migrations 20260912050000_secretary_invitation_decline and 20260912050100_secretary_declined_status_shape; applied locally to development and isolated test databases.
+- New tests cover cross-doctor concurrent acceptance, decline ownership, wrong-password protection, disconnection and subsequent acceptance, exact substitute dates, time zones, exceptions, adjacent times, notification rollback, and frontend controls.
+- This acceptance check does not retroactively remove pre-existing conflicting assignments. Later doctor schedule edits are not changed by this feature.
+
+## Latest accepted checkpoint — 2026-09-13
+
+The owner tested the latest staff-list behavior, confirmed "all good", and requested commit/push for browser continuation.
+
+- Fixed double JSON encoding in the secretary disconnection request; its regression test inspects the actual outgoing request body.
+- Doctor Staff filters are All, Active, Pending Invitations, Disabled, Declined, Disconnected.
+- Declined invitations and disconnected assignments remain in the read model. The directory presents one latest-status row per secretary identity, with matching filter/count totals. Older history remains stored, and assignment/replacement drawers still receive the full records.
+- Assign Existing Secretary lists connections across all the doctor's clinics, including disabled and self-disconnected connections. Account-ineligible entries show an explanation and cannot be selected. Doctor-removed connections are excluded.
+- PracticeStaff.removedByDoctorAt distinguishes doctor removal from self-disconnection. Migration 20260912060000_doctor_removed_staff_connection was applied to local development and isolated test databases. It backfills prior removals using the existing self-disconnection notification record; accepted reinvitations clear the removal marker.
+- Latest directory verification: 26 frontend tests and 7 backend read-model tests passed, plus backend typecheck, targeted lint, and frontend build.
+- Earlier in this checkpoint: 16 invitation replacement E2E tests passed together. A subsequently added cross-clinic candidate/reinvitation test passed separately (17 tests now exist); two updated history-projection E2E cases also passed in a targeted run. Other secretary choice, schedule-conflict, removal and request-body tests passed during their respective changes. Do not claim a fresh full-project test run.
+
+Start continuation with the latest repository files and this note. No known unfinished task was left by the owner's latest request. Local environment secrets and local database contents are not in Git. On another environment, apply all pending migrations and generate Prisma Client before running the app. The remaining manual-check notes above still describe the earlier partial active substitute-coverage acceptance check.

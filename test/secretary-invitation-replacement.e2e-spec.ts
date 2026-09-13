@@ -715,4 +715,332 @@ describe('Secretary invitation conflicts and replacement (isolated database)', (
       { fromServiceDate: '2027-06-09', toServiceDate: '2027-06-10' },
     ]);
   });
+  async function openMonday(clinicId: string) {
+    await prisma.practiceSchedule.create({
+      data: {
+        practiceLocationId: clinicId,
+        weekday: 'MONDAY',
+        isOpen: true,
+        opensAtLocal: new Date('1970-01-01T09:00:00Z'),
+        closesAtLocal: new Date('1970-01-01T12:00:00Z'),
+      },
+    });
+  }
+  it('serializes cross-doctor acceptance and allows leaving with password before accepting the conflict', async () => {
+    const a = await fixture();
+    const b = await fixture();
+    const secretary = a.secretaries[0];
+    await prisma.user.update({
+      where: { id: secretary.id },
+      data: { passwordHash: await passwords.hashStrong(password) },
+    });
+    await openMonday(a.clinic.id);
+    await openMonday(b.clinic.id);
+    const invitations = await Promise.all(
+      [a, b].map((f) =>
+        service.create(f.doctor.id, {
+          ...clinicPlan,
+          practiceLocationId: f.clinic.id,
+          identifier: secretary.email!,
+        }),
+      ),
+    );
+    const results = await Promise.allSettled(
+      invitations.map((i) =>
+        service.acceptPendingById(secretary.id, i.invitationId),
+      ),
+    );
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find(
+      (r) => r.status === 'rejected',
+    ) as PromiseRejectedResult;
+    expect(String(rejected.reason)).toContain('Disconnect from that clinic');
+    const connection = await prisma.practiceStaff.findFirstOrThrow({
+      where: { userId: secretary.id, isActive: true },
+    });
+    const pending = await prisma.secretaryInvitation.findFirstOrThrow({
+      where: { targetUserId: secretary.id, status: 'PENDING' },
+    });
+    await expect(
+      service.disconnectSelf(secretary.id, connection.id, 'wrong'),
+    ).rejects.toThrow('password');
+    expect(
+      (
+        await prisma.practiceStaff.findUniqueOrThrow({
+          where: { id: connection.id },
+        })
+      ).isActive,
+    ).toBe(true);
+    await expect(
+      service.disconnectSelf(a.secretaries[1].id, connection.id, password),
+    ).rejects.toThrow();
+    await service.disconnectSelf(secretary.id, connection.id, password);
+    await service.disconnectSelf(secretary.id, connection.id, password);
+    expect(
+      (
+        await prisma.practiceStaff.findUniqueOrThrow({
+          where: { id: connection.id },
+        })
+      ).disconnectedAt,
+    ).not.toBeNull();
+    expect(
+      (
+        await prisma.practiceLocation.findUniqueOrThrow({
+          where: { id: connection.practiceLocationId },
+        })
+      ).currentRegularPracticeStaffId,
+    ).toBeNull();
+    expect(
+      await prisma.practiceStaffAuthorityBundle.count({
+        where: { practiceStaffId: connection.id, status: 'ACTIVE' },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.applicationNotification.count({
+        where: {
+          affectedSecretaryUserId: secretary.id,
+          title: 'Secretary disconnected from clinic',
+        },
+      }),
+    ).toBe(1);
+    const owner =
+      connection.practiceLocationId === a.clinic.id ? a.doctor.id : b.doctor.id;
+    const history = await new PracticeLocationStaffReadService(
+      prisma,
+    ).getClinicStaff(owner, connection.practiceLocationId);
+    expect(
+      history.staffAssignments.find(
+        (item) => item.practiceStaffId === connection.id,
+      ),
+    ).toMatchObject({
+      disconnectedAt: expect.any(Date) as unknown,
+      assignmentActive: false,
+      operationallyReady: false,
+    });
+    await service.acceptPendingById(secretary.id, pending.id);
+    expect(
+      (await prisma.user.findUniqueOrThrow({ where: { id: secretary.id } }))
+        .accountStatus,
+    ).toBe('ACTIVE');
+  });
+  it('declines only the addressed invitation and notifies its doctor without deleting history', async () => {
+    const f = await fixture();
+    const invite = await service.create(f.doctor.id, {
+      ...clinicPlan,
+      practiceLocationId: f.clinic.id,
+      identifier: f.secretaries[0].email!,
+    });
+    await expect(
+      service.declinePendingById(f.secretaries[1].id, invite.invitationId),
+    ).rejects.toThrow('different Secretary');
+    await service.declinePendingById(f.secretaries[0].id, invite.invitationId);
+    const row = await prisma.secretaryInvitation.findUniqueOrThrow({
+      where: { id: invite.invitationId },
+    });
+    expect(row.status).toBe('DECLINED');
+    const history = await new PracticeLocationStaffReadService(
+      prisma,
+    ).getClinicStaff(f.doctor.id, f.clinic.id);
+    expect(history.pendingInvitations).toHaveLength(0);
+    expect(
+      history.declinedInvitations.map((item) => item.invitationId),
+    ).toContain(invite.invitationId);
+    expect(row.tokenHash).toBeNull();
+    expect(row.activeInvitationKey).toBeNull();
+    await expect(
+      service.acceptPendingById(f.secretaries[0].id, invite.invitationId),
+    ).rejects.toThrow();
+    expect(
+      await prisma.applicationNotification.count({
+        where: {
+          recipientUserId: f.doctor.id,
+          affectedSecretaryUserId: f.secretaries[0].id,
+          title: 'Secretary invitation declined',
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.practiceStaff.count({
+        where: { userId: f.secretaries[0].id },
+      }),
+    ).toBe(0);
+  });
+  it('checks exact substitute dates, allowing gaps but rejecting an overlapping covered Monday', async () => {
+    const a = await fixture();
+    const b = await fixture();
+    const secretary = a.secretaries[0];
+    await openMonday(a.clinic.id);
+    await openMonday(b.clinic.id);
+    const first = await service.create(a.doctor.id, {
+      ...coveragePlan('2027-01-04', '2027-01-04'),
+      practiceLocationId: a.clinic.id,
+      identifier: secretary.email!,
+    });
+    await service.acceptPendingById(secretary.id, first.invitationId);
+    const second = await service.create(b.doctor.id, {
+      ...coveragePlan('2027-01-04', '2027-01-04'),
+      practiceLocationId: b.clinic.id,
+      identifier: secretary.email!,
+    });
+    await expect(
+      service.acceptPendingById(secretary.id, second.invitationId),
+    ).rejects.toThrow('conflicts');
+    await service.declinePendingById(secretary.id, second.invitationId);
+    const separate = await service.create(b.doctor.id, {
+      ...coveragePlan('2027-01-11', '2027-01-11'),
+      practiceLocationId: b.clinic.id,
+      identifier: secretary.email!,
+    });
+    await service.acceptPendingById(secretary.id, separate.invitationId);
+    expect(
+      await prisma.practiceStaff.count({
+        where: { userId: secretary.id, isActive: true },
+      }),
+    ).toBe(2);
+  });
+  it('rolls back disconnection if its durable doctor notification fails', async () => {
+    const f = await fixture();
+    const secretary = f.secretaries[0];
+    await prisma.user.update({
+      where: { id: secretary.id },
+      data: { passwordHash: await passwords.hashStrong(password) },
+    });
+    const invite = await service.create(f.doctor.id, {
+      ...coveragePlan('2027-01-04', '2027-01-05'),
+      practiceLocationId: f.clinic.id,
+      identifier: secretary.email!,
+    });
+    await service.acceptPendingById(secretary.id, invite.invitationId);
+    const connection = await prisma.practiceStaff.findFirstOrThrow({
+      where: { userId: secretary.id },
+    });
+    const failingPrisma = {
+      $transaction: (
+        callback: (
+          tx: import('../generated/prisma/client').Prisma.TransactionClient,
+        ) => Promise<unknown>,
+      ) =>
+        prisma.$transaction(async (tx) =>
+          callback(
+            new Proxy(tx, {
+              get(target, property) {
+                if (property === 'applicationNotification')
+                  return {
+                    create: () => {
+                      throw new Error('notification failure');
+                    },
+                  };
+                return Reflect.get(target, property) as unknown;
+              },
+            }),
+          ),
+        ),
+    };
+    const failing = new SecretaryInvitationService(
+      failingPrisma as unknown as PrismaService,
+      config,
+      new ProtectedAccountPayloadService(config),
+      new NotificationPayloadService(config),
+      passwords,
+      mobile,
+    );
+    await expect(
+      failing.disconnectSelf(secretary.id, connection.id, password),
+    ).rejects.toThrow('notification failure');
+    expect(
+      (
+        await prisma.practiceStaff.findUniqueOrThrow({
+          where: { id: connection.id },
+        })
+      ).isActive,
+    ).toBe(true);
+    expect(
+      await prisma.substituteSecretaryCoverage.count({
+        where: { practiceStaffId: connection.id, status: 'ACTIVE' },
+      }),
+    ).toBe(1);
+    await service.disconnectSelf(secretary.id, connection.id, password);
+    expect(
+      await prisma.substituteSecretaryCoverage.count({
+        where: { practiceStaffId: connection.id, status: 'ACTIVE' },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.substituteSecretaryCoverage.count({
+        where: { practiceStaffId: connection.id, status: 'CANCELLED' },
+      }),
+    ).toBe(1);
+  });
+  it('lists connected secretaries across doctor clinics and statuses but excludes doctor-removed relationships', async () => {
+    const f = await fixture();
+    const outsider = await fixture();
+    const clinic2 = await prisma.practiceLocation.create({
+      data: {
+        doctorProfileId: f.clinic.doctorProfileId,
+        name: 'Other doctor clinic',
+        timeZone: 'Asia/Manila',
+        countryCode: 'PH',
+      },
+    });
+    for (const secretary of f.secretaries) {
+      const invite = await service.create(f.doctor.id, {
+        ...coveragePlan('2027-01-04', '2027-01-04'),
+        practiceLocationId: f.clinic.id,
+        identifier: secretary.email!,
+      });
+      await service.acceptPendingById(secretary.id, invite.invitationId);
+    }
+    // One clinic-disabled connection, one secretary who left, and one doctor removal.
+    const [disabled, left, removed] = f.secretaries;
+    await prisma.practiceStaff.updateMany({
+      where: { userId: disabled.id },
+      data: { isActive: false },
+    });
+    await prisma.user.update({
+      where: { id: left.id },
+      data: { passwordHash: await passwords.hashStrong(password) },
+    });
+    const leftAssignment = await prisma.practiceStaff.findFirstOrThrow({
+      where: { userId: left.id },
+    });
+    await service.disconnectSelf(left.id, leftAssignment.id, password);
+    await prisma.practiceStaff.updateMany({
+      where: { userId: removed.id },
+      data: {
+        isActive: false,
+        disconnectedAt: new Date(),
+        removedByDoctorAt: new Date(),
+      },
+    });
+    const reader = new PracticeLocationStaffReadService(prisma);
+    const candidates = (await reader.getClinicStaff(f.doctor.id, clinic2.id))
+      .candidates;
+    expect(candidates.map((c) => c.userId).sort()).toEqual(
+      [disabled.id, left.id].sort(),
+    );
+    expect(
+      (await reader.getClinicStaff(outsider.doctor.id, outsider.clinic.id))
+        .candidates,
+    ).toHaveLength(0);
+    const invite = await service.create(f.doctor.id, {
+      ...coveragePlan('2027-01-11', '2027-01-11'),
+      practiceLocationId: f.clinic.id,
+      identifier: left.email!,
+    });
+    expect(
+      (
+        await prisma.practiceStaff.findUniqueOrThrow({
+          where: { id: leftAssignment.id },
+        })
+      ).isActive,
+    ).toBe(false);
+    await service.acceptPendingById(left.id, invite.invitationId);
+    expect(
+      (
+        await prisma.practiceStaff.findUniqueOrThrow({
+          where: { id: leftAssignment.id },
+        })
+      ).disconnectedAt,
+    ).toBeNull();
+  });
 });

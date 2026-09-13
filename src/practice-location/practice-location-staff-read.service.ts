@@ -18,7 +18,6 @@ export class PracticeLocationStaffReadService {
         name: true,
         currentRegularPracticeStaffId: true,
         staffAssignments: {
-          where: { disconnectedAt: null },
           orderBy: [{ isActive: 'desc' }, { activatedAt: 'asc' }],
           select: {
             id: true,
@@ -26,6 +25,7 @@ export class PracticeLocationStaffReadService {
             isActive: true,
             activatedAt: true,
             deactivatedAt: true,
+            disconnectedAt: true,
             updatedAt: true,
             user: {
               select: {
@@ -60,13 +60,17 @@ export class PracticeLocationStaffReadService {
           },
         },
         secretaryInvitations: {
-          where: { status: 'PENDING' },
+          where: { status: { in: ['PENDING', 'DECLINED'] } },
           orderBy: { createdAt: 'desc' },
           select: {
             id: true,
             firstName: true,
             lastName: true,
             normalizedEmail: true,
+            targetUserId: true,
+            identifierType: true,
+            normalizedIdentifier: true,
+            updatedAt: true,
             mobileNumber: true,
             status: true,
             requestedAssignmentType: true,
@@ -91,21 +95,9 @@ export class PracticeLocationStaffReadService {
     const candidates = await this.prisma.user.findMany({
       where: {
         role: 'SECRETARY',
-        accountStatus: 'ACTIVE',
-        administrativeRestrictionStatus: 'NONE',
-        OR: [
-          {
-            loginIdentifierType: 'EMAIL',
-            emailVerifiedAt: { not: null },
-          },
-          {
-            loginIdentifierType: 'MOBILE',
-            mobileVerifiedAt: { not: null },
-          },
-        ],
         practiceStaffAssignments: {
           some: {
-            disconnectedAt: null,
+            removedByDoctorAt: null,
             practiceLocation: { doctorProfile: { userId } },
           },
         },
@@ -118,9 +110,34 @@ export class PracticeLocationStaffReadService {
         email: true,
         mobileNumber: true,
         loginIdentifierType: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        emailVerifiedAt: true,
+        mobileVerifiedAt: true,
       },
     });
 
+    const invitations = location.secretaryInvitations.map((invitation) => ({
+      invitationId: invitation.id,
+      targetUserId: invitation.targetUserId,
+      identityKey: invitation.targetUserId
+        ? `user:${invitation.targetUserId}`
+        : `identifier:${invitation.identifierType}:${invitation.normalizedIdentifier}`,
+      updatedAt: invitation.updatedAt,
+      name: `${invitation.firstName} ${invitation.lastName}`.trim(),
+      email: invitation.normalizedEmail,
+      mobileNumber: invitation.mobileNumber,
+      status: invitation.status,
+      assignmentType: invitation.requestedAssignmentType,
+      authorityBundles: invitation.requestedAuthorityBundles,
+      requestedCancelClinicDay: invitation.requestedCancelClinicDay,
+      coverageMode: invitation.requestedCoverageMode,
+      coverageRanges: invitationCoverageRanges(invitation),
+      fromServiceDate: invitation.requestedFromServiceDate,
+      toServiceDate: invitation.requestedToServiceDate,
+      invitedAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+    }));
     return {
       clinic: { id: location.id, name: location.name },
       staffAssignments: location.staffAssignments.map((assignment) => ({
@@ -129,8 +146,10 @@ export class PracticeLocationStaffReadService {
         name: `${assignment.user.firstName} ${assignment.user.lastName}`.trim(),
         email: assignment.user.email,
         mobileNumber: assignment.user.mobileNumber,
-        assignmentActive: assignment.isActive,
+        disconnectedAt: assignment.disconnectedAt,
+        assignmentActive: assignment.isActive && !assignment.disconnectedAt,
         operationallyReady:
+          !assignment.disconnectedAt &&
           assignment.isActive &&
           assignment.staffRole === 'SECRETARY' &&
           assignment.user.role === 'SECRETARY' &&
@@ -160,6 +179,13 @@ export class PracticeLocationStaffReadService {
         substituteCoverages: assignment.substituteSecretaryCoverages,
       })),
       candidates: candidates.map((candidate) => ({
+        unavailableReason:
+          candidate.accountStatus &&
+          (candidate.accountStatus !== 'ACTIVE' ||
+            candidate.administrativeRestrictionStatus !== 'NONE' ||
+            !this.hasVerifiedPrimaryIdentity(candidate))
+            ? 'This account must be active and verified to receive an invitation.'
+            : null,
         userId: candidate.id,
         name: `${candidate.firstName} ${candidate.lastName}`.trim(),
         identifier:
@@ -169,22 +195,12 @@ export class PracticeLocationStaffReadService {
         email: candidate.email,
         mobileNumber: candidate.mobileNumber,
       })),
-      pendingInvitations: location.secretaryInvitations.map((invitation) => ({
-        invitationId: invitation.id,
-        name: `${invitation.firstName} ${invitation.lastName}`.trim(),
-        email: invitation.normalizedEmail,
-        mobileNumber: invitation.mobileNumber,
-        status: invitation.status,
-        assignmentType: invitation.requestedAssignmentType,
-        authorityBundles: invitation.requestedAuthorityBundles,
-        requestedCancelClinicDay: invitation.requestedCancelClinicDay,
-        coverageMode: invitation.requestedCoverageMode,
-        coverageRanges: invitationCoverageRanges(invitation),
-        fromServiceDate: invitation.requestedFromServiceDate,
-        toServiceDate: invitation.requestedToServiceDate,
-        invitedAt: invitation.createdAt,
-        expiresAt: invitation.expiresAt,
-      })),
+      pendingInvitations: invitations.filter(
+        (item) => item.status === 'PENDING',
+      ),
+      declinedInvitations: invitations.filter(
+        (item) => item.status === 'DECLINED',
+      ),
     };
   }
 

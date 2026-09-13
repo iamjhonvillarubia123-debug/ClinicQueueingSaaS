@@ -153,3 +153,8 @@
 .staff-assignment-drawer footer button.is-primary { border-color: #111; background: #111; color: #fff; }
 .staff-assignment-drawer footer button:only-child { grid-column: 1 / -1; }
 .staff-assignment-drawer footer button:disabled { opacity: 0.45; }
+.clinic-staff-filters { flex-wrap: wrap; gap: 12px 24px; }
+.clinic-staff-filters button { min-height: 48px; }
+.clinic-staff-status.is-disconnected { color: #596475; }
+.clinic-staff-status.is-declined { color: #a23838; }
+.clinic-staff-assigned-at small { display: block; margin-top: 6px; }

@@ -15,7 +15,11 @@ describe('SecretaryInvitationService relationship isolation', () => {
     },
     notificationOutbox: { update: jest.fn() },
     user: { findUnique: jest.fn() },
-    practiceStaff: { create: jest.fn(), update: jest.fn() },
+    practiceStaff: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
     practiceLocation: { update: jest.fn() },
     practiceStaffAuthorityBundle: { updateMany: jest.fn() },
     practiceStaffCapability: { updateMany: jest.fn(), create: jest.fn() },

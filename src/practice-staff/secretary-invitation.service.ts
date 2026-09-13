@@ -1,3 +1,4 @@
+import { assertSecretaryScheduleAvailable } from './secretary-schedule-conflict';
 import {
   invitationCoverageRanges,
   coverageOverlaps,
@@ -930,9 +931,89 @@ export class SecretaryInvitationService {
     return this.acceptSelected(authenticatedUserId, { invitationId });
   }
 
+  async declinePendingById(userId: string, invitationId: string) {
+    return this.acceptSelected(userId, { invitationId }, true);
+  }
+
+  async disconnectSelf(
+    userId: string,
+    practiceStaffId: string,
+    password: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${'SECRETARY_SCHEDULE|' + userId}, 0))`,
+      );
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      if (
+        !user ||
+        user.role !== 'SECRETARY' ||
+        user.accountStatus !== 'ACTIVE' ||
+        user.administrativeRestrictionStatus !== 'NONE' ||
+        !accountIdentifierIsVerified(user)
+      )
+        throw new ForbiddenException(
+          'An active verified Secretary account is required.',
+        );
+      if (!(await this.passwords.verify(password, user.passwordHash)))
+        throw new UnauthorizedException('The current password is incorrect.');
+      const assignment = await tx.practiceStaff.findFirst({
+        where: { id: practiceStaffId, userId },
+        include: { practiceLocation: { include: { doctorProfile: true } } },
+      });
+      if (!assignment)
+        throw new NotFoundException('Clinic connection was not found.');
+      if (assignment.disconnectedAt) return { disconnected: true };
+      await this.lockInvitationLocation(tx, assignment.practiceLocationId);
+      const now = new Date();
+      await tx.practiceLocation.updateMany({
+        where: {
+          id: assignment.practiceLocationId,
+          currentRegularPracticeStaffId: assignment.id,
+        },
+        data: { currentRegularPracticeStaffId: null },
+      });
+      await this.disableOutgoing(
+        tx,
+        assignment.id,
+        userId,
+        assignment.practiceLocationId,
+        now,
+      );
+      await tx.substituteSecretaryCoverage.updateMany({
+        where: { practiceStaffId: assignment.id, status: 'ACTIVE' },
+        data: { status: 'CANCELLED', endedAt: now, endedByUserId: userId },
+      });
+      await tx.practiceStaff.update({
+        where: { id: assignment.id },
+        data: { disconnectedAt: now },
+      });
+      await tx.applicationNotification.create({
+        data: {
+          recipientUserId: assignment.practiceLocation.doctorProfile.userId,
+          notificationType: 'ACCOUNT_ACTIVITY',
+          affectedSecretaryUserId: userId,
+          sourceActorUserId: userId,
+          practiceLocationId: assignment.practiceLocationId,
+          notificationIdentityKey: this.sha256(
+            'secretary-disconnect|' + assignment.id + '|' + now.toISOString(),
+          ),
+          title: 'Secretary disconnected from clinic',
+          message:
+            (user.firstName + ' ' + user.lastName).trim() +
+            ' disconnected from ' +
+            (assignment.practiceLocation.name ?? 'your clinic') +
+            '. Clinic access has ended. Clinic and patient history are preserved.',
+        },
+      });
+      return { disconnected: true };
+    });
+  }
+
   private async acceptSelected(
     authenticatedUserId: string,
     selector: { tokenHash: string } | { invitationId: string },
+    decline = false,
   ) {
     const tokenHash = 'tokenHash' in selector ? selector.tokenHash : null;
 
@@ -978,6 +1059,8 @@ export class SecretaryInvitationService {
         where: { id: authenticatedUserId },
         select: {
           id: true,
+          firstName: true,
+          lastName: true,
           email: true,
           mobileNumber: true,
           mobileNumberHash: true,
@@ -1021,6 +1104,40 @@ export class SecretaryInvitationService {
         return { kind: 'identity' as const };
       }
 
+      if (decline) {
+        await transaction.secretaryInvitation.update({
+          where: { id: invitation.id },
+          data: {
+            status: 'DECLINED',
+            tokenHash: null,
+            activeInvitationKey: null,
+          },
+        });
+        await transaction.notificationOutbox.updateMany({
+          where: { secretaryInvitationId: invitation.id, status: 'PENDING' },
+          data: { status: 'CANCELLED', cancelledAt: now },
+        });
+        await transaction.applicationNotification.create({
+          data: {
+            recipientUserId: invitation.invitedByUserId,
+            notificationType: 'ACCOUNT_ACTIVITY',
+            affectedSecretaryUserId: user.id,
+            sourceActorUserId: user.id,
+            practiceLocationId: invitation.practiceLocationId,
+            notificationIdentityKey: this.sha256(
+              'secretary-decline|' + invitation.id,
+            ),
+            title: 'Secretary invitation declined',
+            message:
+              (user.firstName + ' ' + user.lastName).trim() +
+              ' declined your clinic invitation. You can invite another Secretary.',
+          },
+        });
+        return { kind: 'declined' as const };
+      }
+      await transaction.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${'SECRETARY_SCHEDULE|' + user.id}, 0))`,
+      );
       await transaction.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`SUBSTITUTE_COVERAGE|${invitation.practiceLocationId}`}, 0))`,
       );
@@ -1062,6 +1179,15 @@ export class SecretaryInvitationService {
         return { kind: 'invalid_plan' as const };
       }
 
+      await assertSecretaryScheduleAvailable(
+        transaction,
+        user.id,
+        location.id,
+        invitation.requestedAssignmentType === 'SUBSTITUTE_SECRETARY'
+          ? invitationCoverageRanges(invitation)
+          : null,
+        now,
+      );
       const assignment = await this.prepareAssignment(
         transaction,
         user.id,
@@ -1162,6 +1288,7 @@ export class SecretaryInvitationService {
       };
     });
 
+    if (outcome.kind === 'declined') return { declined: true };
     if (outcome.kind === 'accepted') {
       return {
         accepted: true,
@@ -1357,6 +1484,7 @@ export class SecretaryInvitationService {
             activatedAt: now,
             deactivatedAt: null,
             disconnectedAt: null,
+            removedByDoctorAt: null,
           },
         });
       }

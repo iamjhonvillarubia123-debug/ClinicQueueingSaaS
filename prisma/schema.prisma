@@ -232,6 +232,7 @@ enum NotificationAttemptOutcome {
 }
 
 enum SecretaryInvitationStatus {
+  DECLINED
   PENDING
   ACCEPTED
   REVOKED
@@ -872,6 +873,7 @@ model PracticeStaff {
   activatedAt DateTime @default(now()) @db.Timestamptz(3)
   deactivatedAt DateTime? @db.Timestamptz(3)
   disconnectedAt DateTime? @db.Timestamptz(3)
+  removedByDoctorAt DateTime? @db.Timestamptz(3)
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)

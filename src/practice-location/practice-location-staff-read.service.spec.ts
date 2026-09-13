@@ -58,7 +58,9 @@ describe('PracticeLocationStaffReadService', () => {
       expect.objectContaining({
         select: expect.objectContaining({
           staffAssignments: expect.objectContaining({
-            where: { disconnectedAt: null },
+            select: expect.objectContaining({
+              disconnectedAt: true,
+            }) as unknown,
           }) as unknown,
         }) as unknown,
       }),
@@ -114,21 +116,9 @@ describe('PracticeLocationStaffReadService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           role: 'SECRETARY',
-          accountStatus: 'ACTIVE',
-          administrativeRestrictionStatus: 'NONE',
-          OR: [
-            {
-              loginIdentifierType: 'EMAIL',
-              emailVerifiedAt: { not: null },
-            },
-            {
-              loginIdentifierType: 'MOBILE',
-              mobileVerifiedAt: { not: null },
-            },
-          ],
           practiceStaffAssignments: {
             some: {
-              disconnectedAt: null,
+              removedByDoctorAt: null,
               practiceLocation: { doctorProfile: { userId: 'doctor-1' } },
             },
           },

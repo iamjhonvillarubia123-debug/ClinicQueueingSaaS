@@ -108,7 +108,7 @@ export function StaffAssignmentDrawer({
   const candidates = data.candidates;
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<'EXISTING' | 'INVITE'>('EXISTING');
-  const [userId, setUserId] = useState(candidates[0]?.userId ?? '');
+  const [userId, setUserId] = useState(candidates.find(candidate => !candidate.unavailableReason)?.userId ?? '');
   const [candidateSearch, setCandidateSearch] = useState('');
   const [role, setRole] = useState<'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY'>(
     'CLINIC_SECRETARY',
@@ -336,7 +336,7 @@ export function StaffAssignmentDrawer({
       {step === 2 && mode === 'EXISTING' ? (
         <>
           <h2>Assign Existing Secretary</h2>
-          <p>Select a Secretary to assign to {data.clinic.name}.</p>
+          <p>Select a Secretary from any of your clinics, including previous connections, to invite to {data.clinic.name}.</p>
           <label className="staff-candidate-search">
             Search your existing Secretaries
             <input
@@ -352,6 +352,7 @@ export function StaffAssignmentDrawer({
                 <button
                   type="button"
                   key={candidate.userId}
+                  disabled={Boolean(candidate.unavailableReason)}
                   className={userId === candidate.userId ? 'is-selected' : ''}
                   onClick={() => setUserId(candidate.userId)}
                 >
@@ -360,6 +361,7 @@ export function StaffAssignmentDrawer({
                     <strong>{candidate.name}</strong>
                     <small>{candidate.email}</small>
                     <small>{candidate.mobileNumber}</small>
+                    {candidate.unavailableReason ? <small>{candidate.unavailableReason}</small> : null}
                   </span>
                 </button>
               ))
@@ -367,7 +369,7 @@ export function StaffAssignmentDrawer({
               <p>
                 {candidateSearch.trim()
                   ? 'No existing Secretary relationships match your search.'
-                  : 'No eligible existing Secretaries are available.'}
+                  : 'No existing Secretaries are available.'}
               </p>
             )}
           </div>

@@ -1,3 +1,4 @@
+import { Drawer, PasswordField } from '../doctor/settings/SettingsShared';
 import { invitationRanges, formatCoverage, type CoverageRange } from '../doctor/coverage-ranges';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -107,7 +108,22 @@ function hasSubstituteCoverage(clinic: SecretaryClinic) {
 }
 
 export function SecretaryClinicsPage() {
-  const { data, error, loading } = useSecretaryWorkspace();
+  const [revision, setRevision] = useState(0);
+  const { data, error, loading } = useSecretaryWorkspace(revision);
+  const [disconnecting, setDisconnecting] = useState<SecretaryClinic | null>(null);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [disconnectError, setDisconnectError] = useState('');
+  const [notice, setNotice] = useState('');
+  async function disconnect() {
+    if (!disconnecting || !password || busy) return;
+    setBusy(true); setDisconnectError('');
+    try {
+      await apiRequest('/secretary/workspace/clinics/' + encodeURIComponent(disconnecting.practiceStaffId) + '/disconnect', { method: 'POST', body: { password } });
+      setDisconnecting(null); setPassword(''); setNotice('You have disconnected from the clinic. The doctor has been notified.'); setRevision(value => value + 1);
+    } catch (error) { setDisconnectError(error instanceof Error ? error.message : 'Unable to disconnect.'); }
+    finally { setBusy(false); }
+  }
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'DISABLED'>('ALL');
   const [search, setSearch] = useState('');
   if (loading || error) return <PageState loading={loading} error={error} />;
@@ -129,6 +145,8 @@ export function SecretaryClinicsPage() {
           granted by each Doctor.
         </p>
       </header>
+      {notice ? <p role="status">{notice}</p> : null}
+      {disconnecting ? <Drawer title="Disconnect from clinic" busy={busy} onClose={() => { setDisconnecting(null); setPassword(''); }}><form onSubmit={event => { event.preventDefault(); void disconnect(); }}><p>Disconnect from {disconnecting.clinicName}? Your access ends immediately and the doctor will be notified. Clinic and patient history will be preserved. You will need a new invitation to return.</p><PasswordField label="Current password" value={password} onChange={setPassword} /><p>No doctor approval is required.</p>{disconnectError ? <p role="alert">{disconnectError}</p> : null}<button type="submit" disabled={busy || !password}>{busy ? 'Disconnecting…' : 'Confirm disconnection'}</button></form></Drawer> : null}
       {!data?.clinics.length ? (
         <div className="secretary-empty">
           <span aria-hidden="true">＋</span>
@@ -206,6 +224,7 @@ export function SecretaryClinicsPage() {
                         : 'Substitute Secretary'}
                     </span>
                   </div>
+                  <div className="secretary-clinic-actions">
                   {canOpen ? (
                     <Link
                       className="secretary-open-clinic"
@@ -220,6 +239,8 @@ export function SecretaryClinicsPage() {
                         : 'No Live Access'}
                     </button>
                   )}
+                  <button type="button" onClick={() => { setDisconnecting(clinic); setPassword(''); setDisconnectError(''); }}>Disconnect</button>
+                  </div>
                 </article>
               );
             })}
@@ -238,16 +259,16 @@ export function SecretaryInvitationsPage() {
   const { data, error, loading } = useSecretaryWorkspace(revision);
   const [accepting, setAccepting] = useState('');
   const [message, setMessage] = useState('');
-  async function accept(invitationId: string) {
+  async function accept(invitationId: string, action: 'accept' | 'decline' = 'accept') {
     setAccepting(invitationId);
     setMessage('');
     try {
       await apiRequest(
-        `/practice-staff/invitations/${encodeURIComponent(invitationId)}/accept`,
+        `/practice-staff/invitations/${encodeURIComponent(invitationId)}/${action}`,
         { method: 'POST' },
       );
       setMessage(
-        'Invitation accepted. The clinic is now available in Clinics.',
+        action === 'decline' ? 'Invitation declined. The doctor has been notified.' : 'Invitation accepted. The clinic is now available in Clinics.',
       );
       setRevision((value) => value + 1);
     } catch (cause) {
@@ -324,9 +345,10 @@ export function SecretaryInvitationsPage() {
                   onClick={() => void accept(invitation.invitationId)}
                 >
                   {accepting === invitation.invitationId
-                    ? 'Accepting…'
+                    ? 'Processing…'
                     : 'Accept Invitation'}
                 </button>
+                <button disabled={Boolean(accepting)} onClick={() => void accept(invitation.invitationId, 'decline')}>Decline Invitation</button>
               </footer>
             </article>
           ))}

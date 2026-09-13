@@ -706,3 +706,41 @@ it('invites a disabled existing mobile-primary Secretary through the substitute 
   await user.click(screen.getByRole('button', { name: 'Send Invitation' }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ role: 'INVITE_NEW', assignmentType: 'SUBSTITUTE_SECRETARY', identifier: '+639171234567', replacePendingInvitationIds: ['old-pending'] }));
 });
+
+it('keeps declined and disconnected history separate from disabled and pending staff', async () => {
+  const user = userEvent.setup();
+  render(<ClinicStaffView data={{ ...staff, staffAssignments: [...staff.staffAssignments, { ...staff.staffAssignments[1], practiceStaffId: 'left', userId: 'departed-user', name: 'Departed Secretary', disconnectedAt: '2026-09-12T08:00:00Z' }], declinedInvitations: [{ invitationId: 'declined', name: 'Declined Secretary', email: 'declined@example.test', mobileNumber: null, status: 'DECLINED', assignmentType: 'CLINIC_SECRETARY', authorityBundles: [], coverageMode: null, fromServiceDate: null, toServiceDate: null, invitedAt: '2026-09-11', expiresAt: '2026-09-18' }] }} />);
+  expect(screen.getByRole('button', { name: 'All (4)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Disabled (1)' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Edit Departed Secretary' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Remove Departed Secretary' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Disconnected (1)' }));
+  expect(screen.getByText('Departed Secretary')).toBeInTheDocument();
+  expect(screen.queryByText('Declined Secretary')).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Declined (1)' }));
+  expect(screen.getByText('Declined Secretary')).toBeInTheDocument();
+  expect(screen.queryByText('Departed Secretary')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Edit Declined Secretary' })).not.toBeInTheDocument();
+});
+
+it('shows one latest status per account through disconnection, reinvitation, decline and acceptance', async () => {
+  const user = userEvent.setup();
+  const disconnected = { ...staff.staffAssignments[0], assignmentActive: false, operationallyReady: false, disconnectedAt: '2026-09-12T10:00:00Z', updatedAt: '2026-09-12T10:00:00Z' };
+  const invitation = { invitationId: 'reinvite', targetUserId: disconnected.userId, name: disconnected.name, email: disconnected.email, mobileNumber: null, status: 'PENDING' as const, assignmentType: 'CLINIC_SECRETARY' as const, authorityBundles: [], coverageMode: null, fromServiceDate: null, toServiceDate: null, invitedAt: '2026-09-13T08:00:00Z', updatedAt: '2026-09-13T08:00:00Z', expiresAt: '2026-09-20' };
+  const data = { ...staff, staffAssignments: [disconnected], pendingInvitations: [invitation] };
+  const { rerender } = render(<ClinicStaffView data={data} />);
+  expect(screen.getAllByText(disconnected.name)).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'All (1)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Disconnected (0)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Pending Invitations (1)' })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Disconnected (0)' }));
+  expect(screen.queryByText(disconnected.name)).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'All (1)' }));
+  rerender(<ClinicStaffView data={{ ...data, pendingInvitations: [], declinedInvitations: [{ ...invitation, status: 'DECLINED', updatedAt: '2026-09-13T09:00:00Z' }] }} />);
+  expect(screen.getAllByText(disconnected.name)).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Declined (1)' })).toBeInTheDocument();
+  rerender(<ClinicStaffView data={{ ...data, staffAssignments: [{ ...disconnected, disconnectedAt: null, deactivatedAt: null, assignmentActive: true, operationallyReady: true, updatedAt: '2026-09-13T11:00:00Z' }], pendingInvitations: [], declinedInvitations: [{ ...invitation, status: 'DECLINED' }] }} />);
+  expect(screen.getAllByText(disconnected.name)).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Active (1)' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Declined (0)' })).toBeInTheDocument();
+});

@@ -113,4 +113,15 @@ export class SecretaryInvitationController {
       invitationId,
     );
   }
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Post(':invitationId/decline')
+  decline(
+    @Param('invitationId') invitationId: string,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.invitations.declinePendingById(
+      request.user.userId,
+      invitationId,
+    );
+  }
 }
