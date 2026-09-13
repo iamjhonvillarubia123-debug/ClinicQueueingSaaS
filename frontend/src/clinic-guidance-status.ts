@@ -80,13 +80,8 @@ const STEP_GUIDANCE: Record<
 > = {
   2: {
     heading: 'About Clinic Hours',
-    body: 'Set the hours patients can expect this clinic to operate.',
-    tips: [
-      'Open at least one clinic day',
-      'Set opening and closing times',
-      'Maximum operating time cannot be earlier than closing time',
-      'Review the online booking cutoff for each open day',
-    ],
+    body: 'Set when this clinic operates and when patients can book.',
+    tips: [],
   },
   3: {
     heading: 'About Services',
@@ -174,6 +169,44 @@ function guidanceStatusListMarkup() {
   return SETUP_ITEMS.map((item) => `<li>${item}</li>`).join('');
 }
 
+function clinicHoursGuidanceMarkup() {
+  return `
+    <div class="clinic-hours-guide-section">
+      <span class="clinic-hours-guide-icon" aria-hidden="true">◷</span>
+      <div>
+        <h4>Clinic schedule</h4>
+        <ul>
+          <li>Turn on <strong>Open</strong> for the days this clinic operates.</li>
+          <li>Set the opening and closing times.</li>
+          <li>Set a Maximum Operating Time if the clinic or queue may continue after closing. It cannot be earlier than closing time.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="clinic-hours-guide-section">
+      <span class="clinic-hours-guide-icon" aria-hidden="true">▣</span>
+      <div>
+        <h4>Online booking</h4>
+        <ul>
+          <li>Online booking cutoff is calculated automatically from the closing time and the cutoff setting below.</li>
+          <li>You cannot edit the cutoff time in the table.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="clinic-hours-guide-section">
+      <span class="clinic-hours-guide-icon" aria-hidden="true">▤</span>
+      <div>
+        <h4>Tips</h4>
+        <ul>
+          <li>You can copy a day's schedule to other days.</li>
+          <li>You can select from the list or enter an exact time, for example 08:07 AM.</li>
+          <li>At least one clinic day must be open before activation.</li>
+          <li>The system checks for schedule conflicts before saving.</li>
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
 function ensureGuidancePanel() {
   const context = currentClinicContext();
   if (!context) return;
@@ -190,12 +223,17 @@ function ensureGuidancePanel() {
   aside.className = 'clinic-setup-guidance';
   aside.setAttribute('aria-label', 'Clinic setup guidance');
   aside.dataset.journeyGuidance = 'true';
+  const contextDetails =
+    context.step === 2
+      ? clinicHoursGuidanceMarkup()
+      : `<h4>Tips</h4><ul>${guidance.tips
+          .map((tip) => `<li>${tip}</li>`)
+          .join('')}</ul>`;
   aside.innerHTML = `
-    <section class="clinic-guide-card clinic-journey-context-card">
+    <section class="clinic-guide-card clinic-journey-context-card${context.step === 2 ? ' clinic-hours-guide-card' : ''}">
       <h3>${guidance.heading}</h3>
       <p>${guidance.body}</p>
-      <h4>Tips</h4>
-      <ul>${guidance.tips.map((tip) => `<li>${tip}</li>`).join('')}</ul>
+      ${contextDetails}
     </section>
     <section class="clinic-guide-card">
       <h3>About Clinics</h3>
