@@ -6,6 +6,20 @@
     <meta name="theme-color" content="#ffffff" />
     <meta name="color-scheme" content="light" />
     <title>Clinic Queueing</title>
+    <style>
+      /* Keep the Address and Timezone captions and control top edges aligned. */
+      .clinic-basic-layout > label:nth-child(3),
+      .clinic-basic-layout > label:nth-child(5) {
+        display: block;
+        align-self: start;
+      }
+
+      .clinic-basic-layout > label:nth-child(3) > textarea,
+      .clinic-basic-layout > label:nth-child(5) > div {
+        display: block;
+        margin-top: 8px;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
