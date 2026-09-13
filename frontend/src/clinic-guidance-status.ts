@@ -36,6 +36,13 @@ type GuidanceState = {
   review: boolean;
 };
 
+type ClinicSetupStep = 1 | 2 | 3 | 4 | 5;
+
+type ClinicSetupContext = {
+  clinicId: string;
+  step: ClinicSetupStep;
+};
+
 const SETUP_ITEMS = [
   'Clinic details and location',
   'Clinic hours and schedules',
@@ -65,6 +72,52 @@ const DETAILS: Record<(typeof SETUP_ITEMS)[number], [string, string]> = {
     'Ready to review before activation.',
     'Complete required clinic details and hours.',
   ],
+};
+
+const STEP_GUIDANCE: Record<
+  Exclude<ClinicSetupStep, 1>,
+  { heading: string; body: string; tips: string[] }
+> = {
+  2: {
+    heading: 'About Clinic Hours',
+    body: 'Set the hours patients can expect this clinic to operate.',
+    tips: [
+      'Open at least one clinic day',
+      'Set opening and closing times',
+      'Maximum operating time cannot be earlier than closing time',
+      'Review the online booking cutoff for each open day',
+    ],
+  },
+  3: {
+    heading: 'About Services',
+    body: 'Add the services patients can choose when booking at this clinic.',
+    tips: [
+      'Services are optional for activation',
+      'Use clear patient-facing service names',
+      'Set an expected duration for each service',
+      'You can add or change services later',
+    ],
+  },
+  4: {
+    heading: 'About Booking Questions',
+    body: 'Collect information that is useful before the patient arrives.',
+    tips: [
+      'Booking questions are optional for activation',
+      'Only ask for information needed for the visit',
+      'Mark a question required only when necessary',
+      'You can add or change questions later',
+    ],
+  },
+  5: {
+    heading: 'Before Activation',
+    body: 'Review the clinic configuration before making it available for use.',
+    tips: [
+      'Confirm the clinic identity and location',
+      'Confirm at least one valid clinic-hours schedule',
+      'Services and booking questions may remain optional',
+      'Return to any section if something needs correction',
+    ],
+  },
 };
 
 let lastClinicId = '';
@@ -98,17 +151,67 @@ function schedulesReady(schedules: Schedule[]) {
   });
 }
 
-function currentClinicId() {
+function currentClinicContext(): ClinicSetupContext | null {
   const url = new URL(window.location.href);
-  if (url.pathname !== '/app/clinics') return '';
-  if (url.searchParams.get('step') !== '1') return '';
-  return url.searchParams.get('clinic') ?? '';
+  if (url.pathname !== '/app/clinics') return null;
+  const clinicId = url.searchParams.get('clinic') ?? '';
+  const candidateStep = Number(url.searchParams.get('step'));
+  if (!clinicId || candidateStep < 1 || candidateStep > 5) return null;
+  return { clinicId, step: candidateStep as ClinicSetupStep };
+}
+
+function currentClinicId() {
+  return currentClinicContext()?.clinicId ?? '';
 }
 
 function findGuidanceCard(heading: string) {
   return [...document.querySelectorAll<HTMLElement>('.clinic-guide-card')].find(
     (card) => card.querySelector('h3')?.textContent?.trim() === heading,
   );
+}
+
+function guidanceStatusListMarkup() {
+  return SETUP_ITEMS.map((item) => `<li>${item}</li>`).join('');
+}
+
+function ensureGuidancePanel() {
+  const context = currentClinicContext();
+  if (!context) return;
+
+  const layout = document.querySelector<HTMLElement>('.clinic-setup-layout');
+  if (!layout) return;
+  layout.classList.add('has-guidance');
+
+  if (layout.querySelector('.clinic-setup-guidance')) return;
+  if (context.step === 1) return;
+
+  const guidance = STEP_GUIDANCE[context.step];
+  const aside = document.createElement('aside');
+  aside.className = 'clinic-setup-guidance';
+  aside.setAttribute('aria-label', 'Clinic setup guidance');
+  aside.dataset.journeyGuidance = 'true';
+  aside.innerHTML = `
+    <section class="clinic-guide-card clinic-journey-context-card">
+      <h3>${guidance.heading}</h3>
+      <p>${guidance.body}</p>
+      <h4>Tips</h4>
+      <ul>${guidance.tips.map((tip) => `<li>${tip}</li>`).join('')}</ul>
+    </section>
+    <section class="clinic-guide-card">
+      <h3>About Clinics</h3>
+      <p>Complete the following to prepare your clinic for activation.</p>
+      <h4>Set up your clinic</h4>
+      <ul>${guidanceStatusListMarkup()}</ul>
+    </section>
+    <section class="clinic-guide-card clinic-guide-note">
+      <span aria-hidden="true">i</span>
+      <div>
+        <h3>Save and continue later</h3>
+        <p>Choose Save as Draft from the save menu to keep your progress and finish setting up later.</p>
+      </div>
+    </section>
+  `;
+  layout.appendChild(aside);
 }
 
 function statusMarkup(complete: boolean) {
@@ -238,6 +341,7 @@ function startObserver() {
 function applyLatestState() {
   observer.disconnect();
   try {
+    ensureGuidancePanel();
     decoratePhotoTips();
     if (!latestState) return;
     const basic = visibleBasicInformationComplete(latestState.basic);
