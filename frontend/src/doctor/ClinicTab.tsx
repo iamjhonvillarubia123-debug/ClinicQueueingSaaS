@@ -1,3 +1,4 @@
+import clinicIllustration from '../assets/clinic-illustration.png';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest } from '../api/client';
@@ -454,7 +455,7 @@ function toClinicRecord(
 
 function Stepper({ step }: { step: Step }) {
   const labels = [
-    'Basic Informations',
+    'Basic Information',
     'Clinic Hours',
     'Clinic Services',
     'Clinic Questions',
@@ -560,8 +561,21 @@ function BasicInformation({
   value: ClinicDraft;
   onChange: (next: ClinicDraft) => void;
 }) {
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState('');
+  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo); }, [photo]);
+  function choosePhoto(file?: File) {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setPhotoError('Choose a JPG or PNG image no larger than 5 MB.');
+      return;
+    }
+    setPhotoError('');
+    setPhoto(URL.createObjectURL(file));
+  }
   return (
-    <div className="clinic-form-grid">
+    <div className="clinic-form-grid clinic-basic-layout">
       <label>
         Clinic Name <b>*</b>
         <input
@@ -634,6 +648,25 @@ function BasicInformation({
         />
         <span className="clinic-count">{value.description.length} / 250</span>
       </label>
+      <div className="clinic-photo-picker">
+        <div>Clinic Photo <small>(Optional)</small></div>
+        <div className="clinic-photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); choosePhoto(event.dataTransfer.files[0]); }}>
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="3"/><circle cx="11" cy="11" r="2"/><path d="m4 25 8-9 6 6 4-5 7 9"/></svg>
+          <span>Drag and drop an image here<br />or</span>
+          <button type="button" className="clinic-secondary" onClick={() => photoInput.current?.click()}>Upload Photo</button>
+          <input ref={photoInput} type="file" accept="image/jpeg,image/png" aria-label="Clinic photo" hidden onChange={(event) => { choosePhoto(event.target.files?.[0]); event.target.value = ''; }} />
+        </div>
+        <small>JPG or PNG, max 5 MB. Preview only — photos are not saved yet.</small>
+        {photoError ? <p role="alert" className="form-error">{photoError}</p> : null}
+      </div>
+      <div className="clinic-photo-preview">
+        <div>Preview</div>
+        <div className="clinic-photo-frame">
+          {photo ? <img src={photo} alt="Selected clinic photo preview" onError={() => { setPhoto(null); setPhotoError('This image could not be opened. Choose another JPG or PNG.'); }} /> : <img src={clinicIllustration} alt="Clinic illustration" />}
+          <small>{photo ? 'Selected photo preview' : 'Image preview will appear here.'}</small>
+        </div>
+        {photo ? <button className="clinic-back-link" type="button" onClick={() => setPhoto(null)}>Remove photo</button> : null}
+      </div>
     </div>
   );
 }
@@ -1559,7 +1592,7 @@ function ClinicWizard({
         };
 
   return (
-    <section className="clinic-page">
+    <section className="clinic-page clinic-setup-page">
       <button className="clinic-back-link" type="button" onClick={onExit}>
         ← Back to Clinics
       </button>
@@ -1578,9 +1611,10 @@ function ClinicWizard({
         </p>
       </div>
       <Stepper step={step} />
+      <div className={`clinic-setup-layout${step === 1 ? ' has-guidance' : ''}`}>
       <div className="clinic-work-card">
         <div className="clinic-work-heading">
-          <h2>{step === 1 ? 'Basic Informations' : title}</h2>
+          <h2>{step === 1 ? 'Basic Information' : title}</h2>
           {step === 1 ? (
             <p>Start with the clinic identity and location details.</p>
           ) : null}
@@ -1656,6 +1690,29 @@ function ClinicWizard({
             }}
           />
         </div>
+      </div>
+      {step === 1 ? (
+        <aside className="clinic-setup-guidance" aria-label="Clinic setup guidance">
+          <section className="clinic-guide-card">
+            <img className="clinic-guide-illustration" src={clinicIllustration} alt="Clinic illustration" />
+            <h3>About Clinic Photos</h3>
+            <p>Choose a clear photo that helps patients recognize your clinic.</p>
+            <h4>Tips</h4>
+            <ul><li>Use a clear, high-quality image</li><li>Show the clinic exterior or interior</li><li>Keep the file size under 5 MB</li><li>Supported formats: JPG, PNG</li></ul>
+          </section>
+          <section className="clinic-guide-card">
+
+            <h3>About Clinics</h3>
+            <p>A clinic represents a physical practice location where you provide services to patients.</p>
+            <h4>Set up your clinic</h4>
+            <ul><li>Clinic details and location</li><li>Clinic hours and schedules</li><li>Services offered</li><li>Booking questions</li><li>Review before activation</li></ul>
+          </section>
+          <section className="clinic-guide-card clinic-guide-note">
+            <span aria-hidden="true">i</span>
+            <div><h3>Save and continue later</h3><p>Choose Save as Draft from the save menu to keep your progress and finish setting up later.</p></div>
+          </section>
+        </aside>
+      ) : null}
       </div>
       {showActivateDialog && practiceLocationId ? (
         <ActivateClinicDialog

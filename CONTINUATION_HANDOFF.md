@@ -89,3 +89,12 @@ The owner tested the latest staff-list behavior, confirmed "all good", and reque
 - Earlier in this checkpoint: 16 invitation replacement E2E tests passed together. A subsequently added cross-clinic candidate/reinvitation test passed separately (17 tests now exist); two updated history-projection E2E cases also passed in a targeted run. Other secretary choice, schedule-conflict, removal and request-body tests passed during their respective changes. Do not claim a fresh full-project test run.
 
 Start continuation with the latest repository files and this note. No known unfinished task was left by the owner's latest request. Local environment secrets and local database contents are not in Git. On another environment, apply all pending migrations and generate Prisma Client before running the app. The remaining manual-check notes above still describe the earlier partial active substitute-coverage acceptance check.
+
+## 2026-09-13 clinic setup UI checkpoint
+
+- Updated clinic setup layout, compact fields, guidance sidebar, and save footer to the owner's reference. Backend and API save behavior were not changed.
+- Added JPG/PNG picker (5 MB maximum), drag/drop, local preview and removal. Photos are explicitly preview-only: no upload/persistence endpoint is connected. Preview state is local to the basic-information step.
+- Field placement: photo picker / preview / name and short code at top; address/timezone, contact/email, description below. Existing Country field remains editable below description.
+- Owner-supplied clinic illustration is stored in frontend/src/assets/clinic-illustration.png and used in preview and at the top of About Clinic Photos.
+- Verification: frontend typecheck and lint passed; 8 existing clinic tests passed. Later illustration changes passed typecheck; final sidebar move passed diff whitespace check. Browser visual verification remains manual.
+- R0-R3 audit is not closed: controlling Project Source documents were not available locally. Audit run had 44 passing and 3 failing R1/R3-labelled tests (two closure timeouts, one test sends email where reactivation DTO expects identifier). Do not infer roadmap closure from test filenames or start R4 on that basis.
