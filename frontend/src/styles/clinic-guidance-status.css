@@ -1,0 +1,61 @@
+.clinic-guide-card ul {
+  gap: 12px;
+}
+
+.clinic-guide-card li.clinic-guidance-status-row::before {
+  content: none;
+}
+
+.clinic-guidance-status-row {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 10px !important;
+  color: #171717 !important;
+}
+
+.clinic-guidance-status-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.clinic-guidance-status-icon.is-complete {
+  background: #dff4e3;
+  color: #259344;
+}
+
+.clinic-guidance-status-icon.is-incomplete {
+  background: #fde3e1;
+  color: #d92d20;
+}
+
+.clinic-guidance-status-label {
+  color: #171717;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.clinic-guidance-status-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.clinic-guidance-status-copy small {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1100px) {
+  .clinic-guide-card ul {
+    gap: 10px;
+  }
+}
