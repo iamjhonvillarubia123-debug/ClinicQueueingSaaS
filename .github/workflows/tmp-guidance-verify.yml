@@ -23,6 +23,11 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Tests
+        id: tests
+        continue-on-error: true
         run: npm run test
       - name: Build
         run: npm run build
+      - name: Preserve test failure
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
