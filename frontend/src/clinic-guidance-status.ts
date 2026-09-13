@@ -67,6 +67,7 @@ const DETAILS: Record<(typeof SETUP_ITEMS)[number], [string, string]> = {
 let lastClinicId = '';
 let latestState: GuidanceState | null = null;
 let refreshTimer: number | null = null;
+let observerStarted = false;
 
 function normalizeClock(value?: string | null) {
   if (!value) return null;
@@ -120,20 +121,11 @@ function decoratePhotoTips() {
   );
   const items = [...card.querySelectorAll<HTMLLIElement>('li')];
   for (const item of items) {
-    const text = item.textContent?.trim() ?? '';
-    item.classList.add('clinic-guidance-status-row');
-    item.classList.toggle('is-complete', hasSelectedPhoto);
-    item.classList.toggle('is-incomplete', !hasSelectedPhoto);
-    const existing = item.querySelector('.clinic-guidance-status-icon');
-    if (existing) existing.remove();
-    item.insertAdjacentHTML('afterbegin', statusMarkup(hasSelectedPhoto));
-    const label = document.createElement('span');
-    label.className = 'clinic-guidance-status-label';
-    label.textContent = text;
-    for (const node of [...item.childNodes]) {
-      if (node !== item.firstChild) node.remove();
-    }
-    item.append(label);
+    const originalLabel =
+      item.dataset.guidanceLabel ?? item.textContent?.trim() ?? '';
+    item.dataset.guidanceLabel = originalLabel;
+    item.className = `clinic-guidance-status-row ${hasSelectedPhoto ? 'is-complete' : 'is-incomplete'}`;
+    item.innerHTML = `${statusMarkup(hasSelectedPhoto)}<span class="clinic-guidance-status-label">${originalLabel}</span>`;
   }
 }
 
@@ -152,8 +144,12 @@ function decorateSetup(state: GuidanceState) {
   };
 
   for (const item of [...list.querySelectorAll<HTMLLIElement>('li')]) {
-    const label = SETUP_ITEMS.find((name) => item.textContent?.includes(name));
-    if (!label) continue;
+    const storedLabel = item.dataset.guidanceLabel;
+    const label =
+      (storedLabel as (typeof SETUP_ITEMS)[number] | undefined) ??
+      SETUP_ITEMS.find((name) => item.textContent?.includes(name));
+    if (!label || !SETUP_ITEMS.includes(label)) continue;
+    item.dataset.guidanceLabel = label;
     const complete = stateByLabel[label];
     item.className = `clinic-guidance-status-row ${complete ? 'is-complete' : 'is-incomplete'}`;
     item.innerHTML = `${statusMarkup(complete)}<span class="clinic-guidance-status-copy"><span class="clinic-guidance-status-label">${label}</span><small>${complete ? DETAILS[label][0] : DETAILS[label][1]}</small></span>`;
@@ -161,22 +157,27 @@ function decorateSetup(state: GuidanceState) {
 }
 
 function visibleBasicInformationComplete(serverBasic: boolean) {
-  const labels = [...document.querySelectorAll<HTMLLabelElement>('.clinic-basic-layout > label')];
+  const labels = [
+    ...document.querySelectorAll<HTMLLabelElement>(
+      '.clinic-basic-layout > label',
+    ),
+  ];
   const valueFor = (caption: string) => {
     const label = labels.find((candidate) =>
       candidate.textContent?.trim().startsWith(caption),
     );
     if (!label) return '';
-    const control = label.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-      'input, textarea, select',
-    );
+    const control = label.querySelector<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >('input, textarea, select');
     if (control) return control.value.trim();
-    const picker = label.querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]');
+    const picker = label.querySelector<HTMLButtonElement>(
+      'button[aria-haspopup="listbox"]',
+    );
     return picker?.textContent?.trim() ?? '';
   };
 
-  const hasVisibleBasicForm = labels.length > 0;
-  if (!hasVisibleBasicForm) return serverBasic;
+  if (!labels.length) return serverBasic;
   return Boolean(
     valueFor('Clinic Name') &&
       valueFor('Address') &&
@@ -220,13 +221,31 @@ async function fetchState(clinicId: string): Promise<GuidanceState | null> {
   }
 }
 
-function applyLatestState() {
-  decoratePhotoTips();
-  if (!latestState) return;
-  decorateSetup({
-    ...latestState,
-    basic: visibleBasicInformationComplete(latestState.basic),
+function startObserver() {
+  if (observerStarted) observer.disconnect();
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['src'],
   });
+  observerStarted = true;
+}
+
+function applyLatestState() {
+  observer.disconnect();
+  try {
+    decoratePhotoTips();
+    if (!latestState) return;
+    const basic = visibleBasicInformationComplete(latestState.basic);
+    decorateSetup({
+      ...latestState,
+      basic,
+      review: basic && latestState.hours,
+    });
+  } finally {
+    startObserver();
+  }
 }
 
 function scheduleRefresh() {
@@ -256,13 +275,7 @@ const observer = new MutationObserver(() => {
   scheduleRefresh();
 });
 
-observer.observe(document.body, {
-  childList: true,
-  subtree: true,
-  attributes: true,
-  attributeFilter: ['src'],
-});
-
+startObserver();
 document.addEventListener('input', scheduleRefresh, true);
 document.addEventListener('change', scheduleRefresh, true);
 window.addEventListener('popstate', scheduleRefresh);
