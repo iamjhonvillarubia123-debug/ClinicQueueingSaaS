@@ -53,10 +53,13 @@ const DETAILS: Record<(typeof SETUP_ITEMS)[number], [string, string]> = {
     'Clinic hours are configured.',
     'Not yet configured.',
   ],
-  'Services offered': ['Services have been added.', 'Not yet configured.'],
+  'Services offered': [
+    'Services have been added.',
+    'Optional — none added.',
+  ],
   'Booking questions': [
     'Booking questions are configured.',
-    'Not yet configured.',
+    'Optional — none added.',
   ],
   'Review before activation': [
     'Ready to review before activation.',
@@ -272,6 +275,10 @@ async function refresh() {
 }
 
 const observer = new MutationObserver(() => {
+  if (!currentClinicId()) {
+    lastClinicId = '';
+    latestState = null;
+  }
   scheduleRefresh();
 });
 
@@ -279,11 +286,5 @@ startObserver();
 document.addEventListener('input', scheduleRefresh, true);
 document.addEventListener('change', scheduleRefresh, true);
 window.addEventListener('popstate', scheduleRefresh);
-
-window.setInterval(() => {
-  if (!currentClinicId()) return;
-  latestState = null;
-  scheduleRefresh();
-}, 5000);
 
 scheduleRefresh();
