@@ -19,6 +19,23 @@
         display: block;
         margin-top: 8px;
       }
+
+      /* Use one value typography across all Basic Information fields. */
+      .clinic-basic-layout input,
+      .clinic-basic-layout textarea,
+      .clinic-basic-layout select,
+      .clinic-basic-layout button[aria-haspopup='listbox'] {
+        font-family: inherit;
+        font-size: inherit;
+        font-weight: 500;
+        color: #17191c;
+      }
+
+      .clinic-basic-layout input::placeholder,
+      .clinic-basic-layout textarea::placeholder {
+        font-weight: 400;
+        color: #7b8490;
+      }
     </style>
   </head>
   <body>
