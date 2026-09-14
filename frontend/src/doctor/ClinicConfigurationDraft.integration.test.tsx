@@ -150,6 +150,15 @@ describe('ACTIVE clinic whole-configuration draft recovery', () => {
       screen.getByRole('button', { name: 'Save changes for Draft Consultation' }),
     );
 
+    await user.click(screen.getByRole('button', { name: 'Go to Review' }));
+    expect(screen.getByRole('button', { name: 'Go to Review' })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: 'Go to Clinic Questions' })).not.toHaveClass('is-complete');
+    await user.click(screen.getByRole('button', { name: 'Go to Basic Information' }));
+    expect(screen.getByRole('button', { name: 'Go to Clinic Hours' })).toHaveClass('is-complete');
+    await user.click(screen.getByRole('button', { name: 'Go to Clinic Services' }));
+    expect(screen.getByText('Draft Consultation')).toBeInTheDocument();
+    expect(screen.getByText('Unpublished draft wording')).toBeInTheDocument();
+
     await user.click(
       screen.getByRole('button', { name: 'Choose save action' }),
     );

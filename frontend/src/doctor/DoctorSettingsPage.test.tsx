@@ -39,6 +39,57 @@ afterEach(() => {
 });
 
 describe('Doctor Settings', () => {
+  it.each([201, 429])(
+    'handles closure success or the server cooldown (%s)',
+    async (status) => {
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (url) =>
+          String(url).endsWith('/auth/sessions')
+            ? response({ sessions: [] })
+            : response(
+                status === 201
+                  ? { permanentlyClosed: true }
+                  : { message: 'Too many requests.', retryAfterSeconds: 120 },
+                status,
+              ),
+        );
+      const user = mount();
+      await user.click(
+        screen.getByRole('button', { name: 'Delete Account Permanently' }),
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(
+        screen.getByLabelText('Doctor sign-in identifier'),
+      ).toHaveAttribute('type', 'text');
+      await user.type(
+        screen.getByLabelText('Doctor sign-in identifier'),
+        '+639171234567',
+      );
+      await user.type(
+        screen.getByLabelText('Password', { exact: true }),
+        'test-password',
+      );
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(
+        screen.getByRole('button', { name: 'Permanently Delete My Account' }),
+      );
+      if (status === 201) {
+        await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      } else {
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+          'Please wait about 2 minutes before trying again.',
+        );
+        expect(refresh).not.toHaveBeenCalled();
+      }
+      expect(
+        fetchMock.mock.calls.filter(
+          ([, options]) => options?.method === 'POST',
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
   it('sends password-confirmed disablement and preserves the dialog after a rejected password', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
@@ -169,53 +220,56 @@ describe('Doctor Settings', () => {
     );
   });
 
-  it('requires explicit final confirmation and preserves the form on deletion failure', async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, 'fetch')
-      .mockImplementation(async (url) =>
-        String(url).endsWith('/auth/sessions')
-          ? response({ sessions: [] })
-          : response(
-              { message: 'Email or current password is incorrect.' },
-              401,
-            ),
+  it.each(['test@example.test', '+639171234567'])(
+    'submits primary identifier %s and preserves the form on deletion failure',
+    async (identifier) => {
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (url) =>
+          String(url).endsWith('/auth/sessions')
+            ? response({ sessions: [] })
+            : response(
+                { message: 'Email or current password is incorrect.' },
+                401,
+              ),
+        );
+      const user = mount();
+      await user.click(
+        screen.getByRole('button', { name: 'Delete Account Permanently' }),
       );
-    const user = mount();
-    await user.click(
-      screen.getByRole('button', { name: 'Delete Account Permanently' }),
-    );
-    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(
-      true,
-    );
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(
-      screen.getByRole('button', { name: 'Permanently Delete My Account' }),
-    ).toBeDisabled();
-    await user.type(
-      screen.getByLabelText('Doctor account email'),
-      'test@example.test',
-    );
-    await user.type(
-      screen.getByLabelText('Password', { exact: true }),
-      'test-password',
-    );
-    await user.click(screen.getByRole('checkbox'));
-    await user.click(
-      screen.getByRole('button', { name: 'Permanently Delete My Account' }),
-    );
-    expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
-    const [url, options] = fetchMock.mock.calls.find(
-      ([, options]) => options?.method === 'POST',
-    )!;
-    expect(String(url)).toContain('/doctor/account/permanent-delete');
-    expect(JSON.parse(String(options?.body))).toEqual({
-      email: 'test@example.test',
-      password: 'test-password',
-      confirmPermanentDelete: true,
-    });
-    expect(new Headers(options?.headers).get('Idempotency-Key')).toBeTruthy();
-    expect(refresh).not.toHaveBeenCalled();
-  });
+      expect(
+        fetchMock.mock.calls.every(([, options]) => !options?.method),
+      ).toBe(true);
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(
+        screen.getByRole('button', { name: 'Permanently Delete My Account' }),
+      ).toBeDisabled();
+      await user.type(
+        screen.getByLabelText('Doctor sign-in identifier'),
+        identifier,
+      );
+      await user.type(
+        screen.getByLabelText('Password', { exact: true }),
+        'test-password',
+      );
+      await user.click(screen.getByRole('checkbox'));
+      await user.click(
+        screen.getByRole('button', { name: 'Permanently Delete My Account' }),
+      );
+      expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
+      const [url, options] = fetchMock.mock.calls.find(
+        ([, options]) => options?.method === 'POST',
+      )!;
+      expect(String(url)).toContain('/doctor/account/permanent-delete');
+      expect(JSON.parse(String(options?.body))).toEqual({
+        identifier,
+        password: 'test-password',
+        confirmPermanentDelete: true,
+      });
+      expect(new Headers(options?.headers).get('Idempotency-Key')).toBeTruthy();
+      expect(refresh).not.toHaveBeenCalled();
+    },
+  );
 
   it('loads defaults and sends valid service creates and updates', async () => {
     const defaults = {

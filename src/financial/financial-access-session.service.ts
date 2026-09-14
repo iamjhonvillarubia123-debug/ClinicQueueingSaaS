@@ -31,7 +31,8 @@ export class FinancialAccessSessionService {
       const challengeRows = await transaction.$queryRaw<
         Array<{
           id: string;
-          recoveryEmailHash: string;
+          recoveryIdentifierType: 'EMAIL' | 'MOBILE' | null;
+          recoveryIdentifierHash: string | null;
           expiresAt: Date;
           verifiedAt: Date | null;
           consumedAt: Date | null;
@@ -40,7 +41,8 @@ export class FinancialAccessSessionService {
       >(Prisma.sql`
         SELECT
           "id",
-          "recoveryEmailHash",
+          "recoveryIdentifierType",
+          "recoveryIdentifierHash",
           "expiresAt",
           "verifiedAt",
           "consumedAt",
@@ -55,7 +57,9 @@ export class FinancialAccessSessionService {
         !challenge.verifiedAt ||
         challenge.consumedAt ||
         challenge.invalidatedAt ||
-        challenge.expiresAt.getTime() <= now.getTime()
+        challenge.expiresAt.getTime() <= now.getTime() ||
+        !challenge.recoveryIdentifierType ||
+        !challenge.recoveryIdentifierHash
       ) {
         throw new UnauthorizedException(
           'Financial access challenge is unavailable.',
@@ -65,13 +69,15 @@ export class FinancialAccessSessionService {
       const accountRows = await transaction.$queryRaw<
         Array<{
           id: string;
-          recoveryEmailHash: string | null;
+          recoveryIdentifierType: 'EMAIL' | 'MOBILE' | null;
+          recoveryIdentifierHash: string | null;
           accountStatus: UserAccountStatus;
         }>
       >(Prisma.sql`
         SELECT
           dfa."id",
-          dfa."recoveryEmailHash",
+          dfa."recoveryIdentifierType",
+          dfa."recoveryIdentifierHash",
           u."accountStatus"
         FROM "DoctorFinancialAccount" dfa
         JOIN "User" u ON u."id" = dfa."doctorUserId"
@@ -82,8 +88,10 @@ export class FinancialAccessSessionService {
       if (
         !account ||
         account.accountStatus !== UserAccountStatus.PERMANENTLY_CLOSED ||
-        !account.recoveryEmailHash ||
-        account.recoveryEmailHash !== challenge.recoveryEmailHash
+        !account.recoveryIdentifierType ||
+        !account.recoveryIdentifierHash ||
+        account.recoveryIdentifierType !== challenge.recoveryIdentifierType ||
+        account.recoveryIdentifierHash !== challenge.recoveryIdentifierHash
       ) {
         throw new UnauthorizedException(
           'Financial account is unavailable for this verified challenge.',

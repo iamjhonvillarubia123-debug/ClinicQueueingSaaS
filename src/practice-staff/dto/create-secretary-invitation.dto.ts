@@ -1,9 +1,12 @@
+import { InvitationCoverageRangeDto } from './invitation-coverage-range.dto';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
+  ArrayMaxSize,
+  ValidateNested,
   ArrayUnique,
   IsBoolean,
   IsArray,
-  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -22,11 +25,28 @@ export enum SecretaryInvitationAssignmentType {
 }
 
 export class CreateSecretaryInvitationDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => InvitationCoverageRangeDto)
+  coverageRanges?: InvitationCoverageRangeDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  replacePendingInvitationIds?: string[];
+
   @IsUUID() @IsNotEmpty() practiceLocationId!: string;
-  @IsString() @IsNotEmpty() @MaxLength(100) firstName!: string;
-  @IsString() @IsNotEmpty() @MaxLength(100) lastName!: string;
-  @IsEmail() @MaxLength(255) email!: string;
-  @IsString() @IsNotEmpty() @MaxLength(30) mobileNumber!: string;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  @IsNotEmpty()
+  @MaxLength(255)
+  identifier!: string;
 
   @IsEnum(SecretaryInvitationAssignmentType)
   assignmentType!: SecretaryInvitationAssignmentType;
@@ -65,6 +85,7 @@ export class CreateSecretaryInvitationDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   toServiceDate?: string;
 
+  // Current Doctor re-authentication secret. It is never a Secretary credential.
   @IsOptional()
   @IsString()
   @IsNotEmpty()

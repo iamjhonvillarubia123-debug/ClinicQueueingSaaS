@@ -62,10 +62,10 @@ describe('F6 account access journeys', () => {
     const user = userEvent.setup();
 
     render(<MemoryRouter><ForgotPasswordPage /></MemoryRouter>);
-    await user.type(screen.getByLabelText('Email address'), 'unknown@example.com');
+    await user.type(screen.getByLabelText('Mobile # or email address'), 'unknown@example.com');
     await user.click(screen.getByRole('button', { name: 'Send reset link' }));
 
-    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Check your messages' })).toBeInTheDocument();
     expect(screen.getByText('unknown@example.com')).toBeInTheDocument();
     expect(screen.queryByText(/account exists/i)).not.toBeInTheDocument();
   });

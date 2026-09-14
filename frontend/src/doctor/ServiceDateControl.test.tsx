@@ -39,3 +39,16 @@ describe('ServiceDateControl', () => {
     expect(formatServiceDate('2026-08-31', true)).toBe('August 31, 2026');
   });
 });
+
+it('limits substitute dates and skips gaps with next and previous controls', async () => {
+  const user = userEvent.setup(); const onChange = vi.fn();
+  render(<ServiceDateTodayProvider today="2026-09-01" allowedRanges={[{ fromServiceDate: '2026-09-02', toServiceDate: '2026-09-02' }, { fromServiceDate: '2026-09-07', toServiceDate: '2026-09-09' }]}><ServiceDateControl value="2026-09-02" onChange={onChange} /></ServiceDateTodayProvider>);
+  expect(screen.getByRole('button', { name: 'Previous service date' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Go to today' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Next service date' }));
+  expect(onChange).toHaveBeenLastCalledWith('2026-09-07');
+  await user.click(screen.getByRole('button', { name: 'Open service date calendar' }));
+  expect(screen.getByRole('button', { name: formatServiceDate('2026-09-03') })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: formatServiceDate('2026-09-08') }));
+  expect(onChange).toHaveBeenLastCalledWith('2026-09-08');
+});

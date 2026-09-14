@@ -279,7 +279,21 @@ export function GlobalSecretariesPage() {
     setPending(true);
     setMessage('');
     try {
-      const { type: _type, ...payload } = command;
+      const payload =
+        command.type === 'UPDATE'
+          ? command.assignmentType === 'CLINIC_SECRETARY'
+            ? {
+                assignmentType: command.assignmentType,
+                authorityBundles: command.authorityBundles,
+                requestedCancelClinicDay: command.requestedCancelClinicDay,
+              }
+            : {
+                assignmentType: command.assignmentType,
+                coverageMode: command.coverageMode,
+                fromServiceDate: command.fromServiceDate,
+                toServiceDate: command.toServiceDate,
+              }
+          : undefined;
       await apiRequest(
         `/practice-staff/invitations/${encodeURIComponent(selectedInvitation.invitation.invitationId)}`,
         command.type === 'REMOVE'

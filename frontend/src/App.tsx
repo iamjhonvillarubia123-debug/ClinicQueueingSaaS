@@ -19,6 +19,7 @@ import {
   ReactivateAccountPage,
 } from './auth/AccountLifecyclePages';
 import { CreateAccountPage } from './auth/CreateAccountPage';
+import { MobileVerificationPage } from './auth/MobileVerificationPage';
 import {
   DoctorOnboardingPage,
   RegistrationAccountReadyPage,
@@ -191,6 +192,7 @@ export function App() {
       <Route path="/register" element={<CreateAccountPage />} />
       <Route path="/register/doctor" element={<Navigate to="/register" replace />} />
       <Route path="/registration/check-email" element={<RegistrationCheckEmailPage />} />
+      <Route path="/registration/verify-mobile" element={<MobileVerificationPage />} />
       <Route path="/registration/account-ready" element={<RegistrationAccountReadyPage />} />
       <Route path="/registration/doctor-onboarding" element={<DoctorOnboardingPage />} />
       <Route path="/registration/secretary-home" element={<SecretaryNoAssignmentsPage />} />

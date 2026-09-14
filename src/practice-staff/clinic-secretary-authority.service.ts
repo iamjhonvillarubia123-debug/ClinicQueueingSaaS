@@ -583,6 +583,7 @@ export class ClinicSecretaryAuthorityService {
           isActive: false,
           deactivatedAt: now,
           disconnectedAt: now,
+          removedByDoctorAt: now,
         },
       });
       return { practiceStaffId: assignment.id, removed: true };

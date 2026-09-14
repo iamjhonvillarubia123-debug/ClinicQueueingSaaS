@@ -159,7 +159,7 @@ describe('Account security closure (e2e)', () => {
     const browser = request.agent(app.getHttpServer());
     await browser
       .post('/auth/login')
-      .send({ email: doctor.email, password })
+      .send({ identifier: doctor.email, password })
       .expect(201);
 
     await browser

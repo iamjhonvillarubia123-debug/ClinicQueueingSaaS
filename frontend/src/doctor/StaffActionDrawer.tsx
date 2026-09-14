@@ -125,7 +125,7 @@ export function StaffActionDrawer({
           <div>
             <dt>Status</dt>
             <dd>
-              {staff.operationallyReady
+              {staff.disconnectedAt ? 'Disconnected' : staff.operationallyReady
                 ? 'Active'
                 : 'Disabled (at this clinic)'}
             </dd>

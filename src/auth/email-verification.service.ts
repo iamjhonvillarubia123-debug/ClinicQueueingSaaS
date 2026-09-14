@@ -132,7 +132,7 @@ export class EmailVerificationService {
         },
       });
 
-      if (!user || !this.isEligibleForVerification(user)) {
+      if (!user || !user.email || !this.isEligibleForVerification(user)) {
         return;
       }
 

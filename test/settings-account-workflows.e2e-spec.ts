@@ -4,7 +4,10 @@ import { PasswordSecurityService } from '../src/auth/security/password-security.
 import { SessionManagementService } from '../src/auth/session-management.service';
 import { DoctorAccountDataService } from '../src/doctor/doctor-account-data.service';
 import { DoctorAuditService } from '../src/doctor/doctor-audit.service';
-import { UserRole } from '../generated/prisma/client';
+import {
+  AccountLoginIdentifierType,
+  UserRole,
+} from '../generated/prisma/client';
 
 describe('Settings security, notifications, and account-only downloads (isolated database)', () => {
   const prisma = new PrismaService();
@@ -119,6 +122,8 @@ describe('Settings security, notifications, and account-only downloads (isolated
       data: {
         practiceLocationId: owner.clinic.id,
         invitedByUserId: owner.user.id,
+        identifierType: AccountLoginIdentifierType.EMAIL,
+        normalizedIdentifier: 'invitee@example.test',
         normalizedEmail: 'invitee@example.test',
         firstName: 'Invited',
         lastName: 'Secretary',
@@ -239,5 +244,66 @@ describe('Settings security, notifications, and account-only downloads (isolated
         false,
       ),
     ).rejects.toThrow('Authentication');
+  });
+
+  it('changes a Secretary password using the signed-in account and revokes its session', async () => {
+    const id = randomUUID();
+    ids.push(id);
+    await prisma.user.create({
+      data: {
+        id,
+        email: id + '@example.test',
+        firstName: 'Settings',
+        lastName: 'Secretary',
+        role: UserRole.SECRETARY,
+        emailVerifiedAt: new Date(),
+        passwordHash: await passwords.hashStrong(password),
+      },
+    });
+    const session = await prisma.userSession.create({
+      data: {
+        userId: id,
+        tokenHash: randomUUID().replaceAll('-', '').padEnd(64, '0'),
+        lastSeenAt: new Date(),
+        expiresAt: new Date(Date.now() + 3600000),
+        idleExpiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const actor = {
+      userId: id,
+      sessionId: session.id,
+      role: UserRole.SECRETARY,
+    };
+    const replacement = 'A new Secretary passphrase for settings 42!';
+    await expect(
+      sessions.changePassword(
+        actor,
+        'wrong password',
+        replacement,
+        replacement,
+      ),
+    ).rejects.toThrow('Current password is incorrect');
+    expect(
+      (
+        await prisma.userSession.findUniqueOrThrow({
+          where: { id: session.id },
+        })
+      ).revokedAt,
+    ).toBeNull();
+    await expect(
+      sessions.changePassword(actor, password, replacement, replacement),
+    ).resolves.toEqual({ changed: true, signInRequired: true });
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id } });
+    expect(await passwords.verify(replacement, updated.passwordHash)).toBe(
+      true,
+    );
+    expect(await passwords.verify(password, updated.passwordHash)).toBe(false);
+    expect(
+      (
+        await prisma.userSession.findUniqueOrThrow({
+          where: { id: session.id },
+        })
+      ).revokedAt,
+    ).not.toBeNull();
   });
 });

@@ -88,8 +88,7 @@ describe('AppController (e2e)', () => {
       .send({
         firstName: 'Jane',
         lastName: 'Doe',
-        email,
-        mobileNumber: '09171234567',
+        identifier: email,
         password,
         role: 'DOCTOR',
       })
@@ -98,16 +97,16 @@ describe('AppController (e2e)', () => {
     const registrationBody = registration.body as unknown as {
       userId: string;
       role: 'DOCTOR';
-      emailVerificationRequired: boolean;
-      emailVerificationExpiresAt: string;
+      verificationRequired: boolean;
+      verificationExpiresAt: string;
     };
     const userId = registrationBody.userId;
     expect(registrationBody).toEqual(
       expect.objectContaining({
         userId,
         role: 'DOCTOR',
-        emailVerificationRequired: true,
-        emailVerificationExpiresAt: expect.any(String) as unknown,
+        verificationRequired: true,
+        verificationExpiresAt: expect.any(String) as unknown,
       }),
     );
     expect(registrationBody).not.toHaveProperty('token');
@@ -135,7 +134,7 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(401);
 
     expect(await prisma.userSession.count({ where: { userId } })).toBe(0);
@@ -357,7 +356,7 @@ describe('AppController (e2e)', () => {
 
     const firstLogin = await firstBrowser
       .post('/auth/login')
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(201);
     expect(firstLogin.body).not.toHaveProperty('sessionToken');
     const firstCookie = firstLogin.headers['set-cookie']?.[0];
@@ -372,7 +371,7 @@ describe('AppController (e2e)', () => {
 
     await secondBrowser
       .post('/auth/login')
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(201);
 
     expect(await prisma.userSession.count({ where: { userId: user.id } })).toBe(
@@ -456,11 +455,11 @@ describe('AppController (e2e)', () => {
     const browserB = request.agent(app.getHttpServer());
     await browserA
       .post('/auth/login')
-      .send({ email, password: oldPassword })
+      .send({ identifier: email, password: oldPassword })
       .expect(201);
     await browserB
       .post('/auth/login')
-      .send({ email, password: oldPassword })
+      .send({ identifier: email, password: oldPassword })
       .expect(201);
     expect(
       await prisma.userSession.count({
@@ -470,15 +469,15 @@ describe('AppController (e2e)', () => {
 
     const missingResponse = await request(app.getHttpServer())
       .post('/auth/request-password-reset')
-      .send({ email: `missing-${unique}@example.test` })
+      .send({ identifier: `missing-${unique}@example.test` })
       .expect(201);
     const concurrentResponses = await Promise.all([
       request(app.getHttpServer())
         .post('/auth/request-password-reset')
-        .send({ email }),
+        .send({ identifier: email }),
       request(app.getHttpServer())
         .post('/auth/request-password-reset')
-        .send({ email }),
+        .send({ identifier: email }),
     ]);
     expect(missingResponse.body).toEqual({ accepted: true });
     expect(concurrentResponses.map((response) => response.status)).toEqual([
@@ -579,11 +578,11 @@ describe('AppController (e2e)', () => {
     await browserB.get('/auth/profile').expect(401);
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password: oldPassword })
+      .send({ identifier: email, password: oldPassword })
       .expect(401);
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password: newPassword })
+      .send({ identifier: email, password: newPassword })
       .expect(201);
   });
 
@@ -608,7 +607,7 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/request-password-reset')
-      .send({ email })
+      .send({ identifier: email })
       .expect(201, { accepted: true });
 
     const reset = await prisma.passwordReset.findFirstOrThrow({
@@ -804,7 +803,10 @@ describe('AppController (e2e)', () => {
     });
 
     const browser = request.agent(app.getHttpServer());
-    await browser.post('/auth/login').send({ email, password }).expect(201);
+    await browser
+      .post('/auth/login')
+      .send({ identifier: email, password })
+      .expect(201);
     await browser.get('/auth/profile').expect(200);
 
     const disableKey = `disable-${unique}`;
@@ -836,7 +838,7 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .post('/doctor/account/reactivate')
       .set('Idempotency-Key', reactivateKey)
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(201, { reactivated: true, replayed: false });
 
     const reactivated = await prisma.user.findUniqueOrThrow({
@@ -852,12 +854,12 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .post('/doctor/account/reactivate')
       .set('Idempotency-Key', reactivateKey)
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(201, { reactivated: true, replayed: true });
 
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(201);
 
     await prisma.user.update({
@@ -875,7 +877,7 @@ describe('AppController (e2e)', () => {
     await request(app.getHttpServer())
       .post('/doctor/account/reactivate')
       .set('Idempotency-Key', `restricted-${unique}`)
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(409);
 
     const stillRestricted = await prisma.user.findUniqueOrThrow({
@@ -915,7 +917,10 @@ describe('AppController (e2e)', () => {
     });
 
     const browser = request.agent(app.getHttpServer());
-    await browser.post('/auth/login').send({ email, password }).expect(201);
+    await browser
+      .post('/auth/login')
+      .send({ identifier: email, password })
+      .expect(201);
     await browser.get('/auth/profile').expect(200);
 
     const idempotencyKey = `delete-${unique}`;
@@ -923,7 +928,7 @@ describe('AppController (e2e)', () => {
       .post('/doctor/account/permanent-delete')
       .set('Idempotency-Key', idempotencyKey)
       .send({
-        email,
+        identifier: email,
         password,
         confirmPermanentDelete: true,
       })
@@ -978,7 +983,7 @@ describe('AppController (e2e)', () => {
       .post('/doctor/account/permanent-delete')
       .set('Idempotency-Key', idempotencyKey)
       .send({
-        email,
+        identifier: email,
         password,
         confirmPermanentDelete: true,
       })
@@ -1014,13 +1019,13 @@ describe('AppController (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(401);
 
     await request(app.getHttpServer())
       .post('/doctor/account/reactivate')
       .set('Idempotency-Key', `reactivate-closed-${unique}`)
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(401);
 
     const registration = await request(app.getHttpServer())
@@ -1108,7 +1113,7 @@ describe('AppController (e2e)', () => {
       .post('/doctor/account/permanent-delete')
       .set('Idempotency-Key', `delete-started-${unique}`)
       .send({
-        email,
+        identifier: email,
         password,
         confirmPermanentDelete: true,
       })

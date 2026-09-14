@@ -23,6 +23,8 @@ describe('PracticeLocationOperationsContextService', () => {
       id: 'clinic-1',
       name: 'North Clinic',
       timeZone: 'Asia/Manila',
+      doctorProfile: { userId: 'doctor-1' },
+      staffAssignments: [],
     });
 
     await expect(service.getContext('doctor-1', 'clinic-1')).resolves.toEqual({
@@ -30,6 +32,8 @@ describe('PracticeLocationOperationsContextService', () => {
       clinicName: 'North Clinic',
       timeZone: 'Asia/Manila',
       currentServiceDate: '2026-08-31',
+      defaultServiceDate: '2026-08-31',
+      allowedServiceDateRanges: null,
     });
   });
 
@@ -49,5 +53,48 @@ describe('PracticeLocationOperationsContextService', () => {
     await expect(
       service.getContext('doctor-1', 'clinic-1'),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+  it.each([
+    ['2026-08-31', '2026-08-31', '2026-09-02'],
+    ['2026-09-02', '2026-09-02', '2026-09-04'],
+    ['2026-08-20', '2026-08-18', '2026-08-20'],
+  ])('opens a covered date %s for a substitute', async (expected, from, to) => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'Clinic',
+      timeZone: 'Asia/Manila',
+      doctorProfile: { userId: 'doctor-1' },
+      staffAssignments: [
+        {
+          authorityBundles: [],
+          substituteSecretaryCoverages: [
+            { fromServiceDate: new Date(from), toServiceDate: new Date(to) },
+          ],
+        },
+      ],
+    });
+    const result = await service.getContext('substitute', 'clinic-1');
+    expect(result.defaultServiceDate).toBe(expected);
+    expect(result.allowedServiceDateRanges).toEqual([
+      { fromServiceDate: from, toServiceDate: to },
+    ]);
+  });
+  it('keeps regular secretary dates unrestricted', async () => {
+    prisma.practiceLocation.findFirst.mockResolvedValue({
+      id: 'clinic-1',
+      name: 'Clinic',
+      timeZone: 'Asia/Manila',
+      doctorProfile: { userId: 'doctor-1' },
+      staffAssignments: [
+        {
+          authorityBundles: [{ id: 'bundle' }],
+          substituteSecretaryCoverages: [],
+        },
+      ],
+    });
+    expect(
+      (await service.getContext('secretary', 'clinic-1'))
+        .allowedServiceDateRanges,
+    ).toBeNull();
   });
 });

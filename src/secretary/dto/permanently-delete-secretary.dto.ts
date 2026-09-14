@@ -1,8 +1,8 @@
-import { IsBoolean, IsEmail, IsString } from 'class-validator';
+import { IsBoolean, IsString } from 'class-validator';
 
 export class PermanentlyDeleteSecretaryDto {
-  @IsEmail()
-  email!: string;
+  @IsString()
+  identifier!: string;
 
   @IsString()
   password!: string;

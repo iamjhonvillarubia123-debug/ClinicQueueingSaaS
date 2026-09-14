@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { apiRequest } from '../api/client';
+import { ApiError, apiRequest } from '../api/client';
 import {
   StaffAssignmentDrawer,
   type StaffAssignmentCommand,
@@ -14,7 +14,7 @@ import {
   type PendingInvitationActionCommand,
 } from './PendingInvitationActionDrawer';
 
-type StaffFilter = 'ALL' | 'ACTIVE' | 'DISABLED' | 'PENDING';
+type StaffFilter = 'ALL' | 'ACTIVE' | 'DISABLED' | 'PENDING' | 'DECLINED' | 'DISCONNECTED';
 export type SubstituteCoverage = {
   id: string;
   coverageMode: 'ONE_SERVICE_DATE' | 'DATE_RANGE';
@@ -28,30 +28,37 @@ export type ClinicStaffAssignment = {
   practiceStaffId: string;
   userId: string;
   name: string;
-  email: string;
-  mobileNumber: string;
+  email: string | null;
+  mobileNumber: string | null;
   assignmentActive: boolean;
   operationallyReady: boolean;
   isClinicSecretary: boolean;
   assignmentType: 'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY';
   assignedAt: string;
   deactivatedAt: string | null;
+  disconnectedAt?: string | null;
   updatedAt: string;
   authorityBundles: string[];
   previousAuthorityBundles: string[];
   substituteCoverages: SubstituteCoverage[];
 };
 export type StaffCandidate = {
+  unavailableReason?: string | null;
+  identifier?: string | null;
   userId: string;
   name: string;
-  email: string;
-  mobileNumber: string;
+  email: string | null;
+  mobileNumber: string | null;
 };
 export type PendingStaffInvitation = {
+  targetUserId?: string | null;
+  identityKey?: string;
+  updatedAt?: string;
+  coverageRanges?: import('./coverage-ranges').CoverageRange[];
   invitationId: string;
   name: string;
-  email: string;
-  mobileNumber: string;
+  email: string | null;
+  mobileNumber: string | null;
   status: 'PENDING';
   assignmentType: 'CLINIC_SECRETARY' | 'SUBSTITUTE_SECRETARY';
   authorityBundles: string[];
@@ -67,7 +74,30 @@ export type AuthoritativeClinicStaff = {
   staffAssignments: ClinicStaffAssignment[];
   candidates: StaffCandidate[];
   pendingInvitations: PendingStaffInvitation[];
+  declinedInvitations?: Array<Omit<PendingStaffInvitation, 'status'> & { status: 'DECLINED' }>;
 };
+
+// Only the directory presentation is collapsed. Assignment/replacement drawers
+// still receive the complete authoritative records from the parent component.
+function latestStaffRows(data: AuthoritativeClinicStaff): AuthoritativeClinicStaff {
+  type Row = { time: number; kind: 'staff' | 'pending' | 'declined'; id: string };
+  const latest = new Map<string, Row>();
+  const timestamp = (...dates: (string | null | undefined)[]) => Math.max(0, ...dates.map(value => value ? Date.parse(value) || 0 : 0));
+  const remember = (key: string, row: Row) => { if (!latest.has(key) || latest.get(key)!.time <= row.time) latest.set(key, row); };
+  for (const staff of data.staffAssignments) remember('user:' + staff.userId, { time: timestamp(staff.updatedAt, staff.assignedAt, staff.deactivatedAt, staff.disconnectedAt), kind: 'staff', id: staff.practiceStaffId });
+  for (const [kind, invitations] of [['declined', data.declinedInvitations ?? []], ['pending', data.pendingInvitations]] as const) {
+    for (const invitation of invitations) {
+      const key = invitation.targetUserId ? 'user:' + invitation.targetUserId : invitation.identityKey ?? 'invitation-contact:' + (invitation.email?.trim().toLowerCase() || invitation.mobileNumber || invitation.invitationId);
+      remember(key, { time: timestamp(invitation.updatedAt, invitation.invitedAt), kind, id: invitation.invitationId });
+    }
+  }
+  const rows = [...latest.values()];
+  return { ...data,
+    staffAssignments: data.staffAssignments.filter(staff => rows.some(row => row.kind === 'staff' && row.id === staff.practiceStaffId)),
+    pendingInvitations: data.pendingInvitations.filter(invitation => rows.some(row => row.kind === 'pending' && row.id === invitation.invitationId)),
+    declinedInvitations: data.declinedInvitations?.filter(invitation => rows.some(row => row.kind === 'declined' && row.id === invitation.invitationId)),
+  };
+}
 
 function initials(name: string) {
   return (
@@ -132,7 +162,7 @@ function TrashIcon() {
 }
 
 export function ClinicStaffView({
-  data,
+  data: sourceData,
   onAssign,
   onView,
   onEdit,
@@ -150,33 +180,39 @@ export function ClinicStaffView({
   onInvitationEdit?: (invitation: PendingStaffInvitation) => void;
   onInvitationRemove?: (invitation: PendingStaffInvitation) => void;
 }) {
+  const data = useMemo(() => latestStaffRows(sourceData), [sourceData]);
   const [filter, setFilter] = useState<StaffFilter>('ALL');
   const active = data.staffAssignments.filter(
-    (staff) => staff.operationallyReady,
+    (staff) => !staff.disconnectedAt && staff.operationallyReady,
   );
   const disabled = data.staffAssignments.filter(
-    (staff) => !staff.operationallyReady,
+    (staff) => !staff.disconnectedAt && !staff.operationallyReady,
   );
-  const substitutes = data.staffAssignments.filter(hasActiveCoverage);
+  const disconnected = data.staffAssignments.filter(staff => Boolean(staff.disconnectedAt));
+  const declined = data.declinedInvitations ?? [];
+  const substitutes = active.filter(hasActiveCoverage);
   const filtered = useMemo(() => {
     if (filter === 'ACTIVE') return active;
     if (filter === 'DISABLED') return disabled;
-    if (filter === 'PENDING') return [];
+    if (filter === 'DISCONNECTED') return disconnected;
+    if (filter === 'PENDING' || filter === 'DECLINED') return [];
     return data.staffAssignments;
-  }, [active, data.staffAssignments, disabled, filter]);
+  }, [active, data.staffAssignments, disabled, disconnected, filter]);
   const filters: Array<{ id: StaffFilter; label: string; count: number }> = [
     {
       id: 'ALL',
       label: 'All',
-      count: data.staffAssignments.length + data.pendingInvitations.length,
+      count: data.staffAssignments.length + data.pendingInvitations.length + declined.length,
     },
     { id: 'ACTIVE', label: 'Active', count: active.length },
-    { id: 'DISABLED', label: 'Disabled', count: disabled.length },
     {
       id: 'PENDING',
       label: 'Pending Invitations',
       count: data.pendingInvitations.length,
     },
+    { id: 'DISABLED', label: 'Disabled', count: disabled.length },
+    { id: 'DECLINED', label: 'Declined', count: declined.length },
+    { id: 'DISCONNECTED', label: 'Disconnected', count: disconnected.length },
   ];
 
   return (
@@ -287,15 +323,16 @@ export function ClinicStaffView({
                 </div>
                 <span>{data.clinic.name ?? '—'}</span>
                 <span
-                  className={`clinic-staff-status ${staff.operationallyReady ? 'is-active' : 'is-disabled'}`}
+                  className={`clinic-staff-status ${staff.disconnectedAt ? 'is-disconnected' : staff.operationallyReady ? 'is-active' : 'is-disabled'}`}
                 >
                   <i aria-hidden="true" />
-                  {staff.operationallyReady
+                  {staff.disconnectedAt ? 'Disconnected' : staff.operationallyReady
                     ? 'Active'
                     : 'Disabled (at this clinic)'}
                 </span>
                 <span className="clinic-staff-assigned-at">
                   {formatAssignedAt(staff.assignedAt)}
+                  {staff.disconnectedAt ? <small>Disconnected {formatAssignedAt(staff.disconnectedAt)}</small> : null}
                 </span>
                 <span
                   className={`clinic-staff-role ${staff.assignmentType === 'CLINIC_SECRETARY' ? 'is-clinic' : 'is-substitute'}`}
@@ -308,7 +345,7 @@ export function ClinicStaffView({
                   ) : null}
                 </span>
                 <span className="clinic-staff-actions">
-                  <button
+                  {!staff.disconnectedAt ? <><button
                     type="button"
                     aria-label={`Edit ${staff.name}`}
                     title="Edit assignment"
@@ -323,7 +360,7 @@ export function ClinicStaffView({
                     onClick={() => onRemove?.(staff)}
                   >
                     <TrashIcon />
-                  </button>
+                  </button></> : null}
                   <button
                     type="button"
                     aria-label={`View ${staff.name}`}
@@ -336,16 +373,14 @@ export function ClinicStaffView({
               </div>
             ))
           : null}
-        {(filter === 'PENDING' && data.pendingInvitations.length === 0) ||
-        (filter !== 'PENDING' &&
-          filtered.length === 0 &&
-          (filter !== 'ALL' || data.pendingInvitations.length === 0)) ? (
-          <div className="clinic-staff-empty">
-            {filter === 'PENDING'
-              ? 'No pending invitations.'
-              : `No ${filter.toLowerCase()} Secretaries.`}
-          </div>
-        ) : null}
+        {filter === 'ALL' || filter === 'DECLINED' ? declined.map(invitation => <div className="clinic-staff-table-row" key={invitation.invitationId}>
+          <div className="clinic-staff-person"><b>{initials(invitation.name)}</b><span><strong>{invitation.name}</strong><small>{invitation.email}</small><small>{invitation.mobileNumber}</small></span></div>
+          <span>{data.clinic.name}</span><span className="clinic-staff-status is-declined">Declined</span>
+          <span className="clinic-staff-assigned-at">Invitation history<small>Invited {formatAssignedAt(invitation.invitedAt)}</small></span>
+          <span className="clinic-staff-role">{invitation.assignmentType === 'CLINIC_SECRETARY' ? 'Clinic Secretary' : 'Substitute Secretary'}</span>
+          <span>Invitation declined</span>
+        </div>) : null}
+        {!filtered.length && !((filter === 'ALL' || filter === 'PENDING') && data.pendingInvitations.length) && !((filter === 'ALL' || filter === 'DECLINED') && declined.length) ? <div className="clinic-staff-empty">No {filter === 'PENDING' ? 'pending invitations' : filter.toLowerCase() + ' Secretaries'}.</div> : null}
       </article>
       <div className="clinic-staff-access-summary">
         <div className="is-active">
@@ -458,6 +493,24 @@ export function AuthoritativeClinicStaffTab({
     };
   }, [selectedAction]);
 
+  async function validateInviteIdentifier(identifier: string) {
+    return apiRequest<{
+      valid: true;
+      existingSecretary: boolean;
+      secretaryName: string | null;
+    }>('/practice-staff/invitations/validate-identifier', {
+      method: 'POST',
+      body: { practiceLocationId: clinicId, identifier },
+    });
+  }
+
+  async function validateInviteAuthorization(password: string) {
+    await apiRequest('/practice-staff/invitations/validate-authorization', {
+      method: 'POST',
+      body: { practiceLocationId: clinicId, password },
+    });
+  }
+
   async function assign(command: StaffAssignmentCommand) {
     setPending(true);
     setMessage('');
@@ -469,8 +522,11 @@ export function AuthoritativeClinicStaffTab({
                 authorityBundles: command.authorityBundles,
                 requestedCancelClinicDay: command.requestedCancelClinicDay,
                 password: command.password,
+                replacePendingInvitationIds: command.replacePendingInvitationIds,
               }
             : {
+                replacePendingInvitationIds: command.replacePendingInvitationIds,
+                coverageRanges: command.coverageRanges,
                 coverageMode: command.coverageMode,
                 fromServiceDate: command.fromServiceDate,
                 toServiceDate: command.toServiceDate,
@@ -479,10 +535,7 @@ export function AuthoritativeClinicStaffTab({
           method: 'POST',
           body: {
             practiceLocationId: clinicId,
-            firstName: command.firstName,
-            lastName: command.lastName,
-            email: command.email,
-            mobileNumber: command.mobileNumber,
+            identifier: command.identifier,
             assignmentType: command.assignmentType,
             ...roleConfiguration,
           },
@@ -527,10 +580,24 @@ export function AuthoritativeClinicStaffTab({
       }
       setRevision((value) => value + 1);
     } catch (cause) {
+      const passwordProtectedClinicSecretary =
+        command.role === 'CLINIC_SECRETARY' ||
+        (command.role === 'INVITE_NEW' &&
+          command.assignmentType === 'CLINIC_SECRETARY')
+          ? Boolean(command.password)
+          : false;
+      const genericApiMessage =
+        cause instanceof ApiError &&
+        cause.message === 'Something went wrong. Please try again.';
       setMessage(
-        cause instanceof Error
-          ? cause.message
-          : 'Unable to assign this Secretary.',
+        cause instanceof ApiError &&
+          cause.status === 401 &&
+          passwordProtectedClinicSecretary &&
+          genericApiMessage
+          ? 'Current password is incorrect.'
+          : cause instanceof Error
+            ? cause.message
+            : 'Unable to assign this Secretary.',
       );
     } finally {
       setPending(false);
@@ -621,16 +688,23 @@ export function AuthoritativeClinicStaffTab({
     setPending(true);
     setMessage('');
     try {
-      await apiRequest(
-        `/practice-staff/invitations/${encodeURIComponent(selectedInvitationAction.invitation.invitationId)}`,
-        command.type === 'REMOVE'
-          ? { method: 'DELETE' }
-          : { method: 'PATCH', body: command },
-      );
+      if (command.type === 'REMOVE') {
+        await apiRequest(
+          `/practice-staff/invitations/${encodeURIComponent(selectedInvitationAction.invitation.invitationId)}`,
+          { method: 'DELETE' },
+        );
+      } else {
+        const { type: _type, ...payload } = command;
+        void _type;
+        await apiRequest(
+          `/practice-staff/invitations/${encodeURIComponent(selectedInvitationAction.invitation.invitationId)}`,
+          { method: 'PATCH', body: payload },
+        );
+      }
       setMessage(
         command.type === 'REMOVE'
           ? 'Pending invitation cancelled and removed.'
-          : 'Planned authority updated.',
+          : 'Pending invitation updated.',
       );
       setRevision((value) => value + 1);
       setSelectedInvitationAction(null);
@@ -713,6 +787,8 @@ export function AuthoritativeClinicStaffTab({
           message={message}
           onClose={() => setDrawerOpen(false)}
           onSubmit={assign}
+          onValidateInviteIdentifier={validateInviteIdentifier}
+          onValidateInviteAuthorization={validateInviteAuthorization}
         />
       ) : null}
       {selectedAction ? (

@@ -1,8 +1,8 @@
-import { IsEmail, IsString } from 'class-validator';
+import { IsString } from 'class-validator';
 
 export class ReactivateSecretaryDto {
-  @IsEmail()
-  email!: string;
+  @IsString()
+  identifier!: string;
 
   @IsString()
   password!: string;

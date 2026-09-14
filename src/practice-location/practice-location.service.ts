@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -12,6 +13,7 @@ import {
   UserAccountStatus,
   UserRole,
 } from '../../generated/prisma/client';
+import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePracticeLocationDto } from './dto/create-practice-location.dto';
 import { UpdatePracticeLocationDto } from './dto/update-practice-location.dto';
@@ -30,7 +32,9 @@ export class PracticeLocationService {
         role: true,
         accountStatus: true,
         administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
         emailVerifiedAt: true,
+        mobileVerifiedAt: true,
         doctorProfile: { select: { id: true } },
       },
     });
@@ -41,15 +45,12 @@ export class PracticeLocationService {
       user.accountStatus !== UserAccountStatus.ACTIVE ||
       user.administrativeRestrictionStatus !==
         AdministrativeRestrictionStatus.NONE ||
-      !user.emailVerifiedAt ||
-      !user.doctorProfile
+      !accountIdentifierIsVerified(user)
     ) {
       throw new ForbiddenException(
-        'A verified active Doctor with a completed professional profile is required to create a practice location.',
+        'A verified active Doctor is required to create a practice location.',
       );
     }
-
-    const doctorProfile = user.doctorProfile;
     const name = this.normalizeOptionalText(createPracticeLocationDto.name);
     const shortCode =
       this.normalizeOptionalText(
@@ -60,6 +61,31 @@ export class PracticeLocationService {
     );
 
     return this.prisma.$transaction(async (transaction) => {
+      const doctorProfile =
+        user.doctorProfile ??
+        (await transaction.doctorProfile.create({
+          data: {
+            userId,
+            professionalTitle: null,
+            specialization: null,
+            licenseNumber: null,
+            isProfilePublic: false,
+          },
+          select: { id: true },
+        }));
+
+      const doctorSettings = await transaction.doctorAccountSettings.upsert({
+        where: { doctorProfileId: doctorProfile.id },
+        create: { doctorProfileId: doctorProfile.id },
+        update: {},
+        select: { defaultTimeZone: true },
+      });
+      const timeZone = this.normalizeTimeZone(
+        createPracticeLocationDto.timeZone ??
+          doctorSettings.defaultTimeZone ??
+          'Asia/Manila',
+      );
+
       if (name && addressLine1) {
         const existingLocation = await transaction.practiceLocation.findFirst({
           where: {
@@ -142,9 +168,7 @@ export class PracticeLocationService {
             this.normalizeOptionalText(
               createPracticeLocationDto.countryCode,
             )?.toUpperCase() ?? null,
-          timeZone: this.normalizeOptionalText(
-            createPracticeLocationDto.timeZone,
-          ),
+          timeZone,
           services: {
             create: serviceTemplates.map((template) => ({
               sourceDoctorServiceTemplateId: template.id,
@@ -315,7 +339,7 @@ export class PracticeLocationService {
         timeZone:
           dto.timeZone === undefined
             ? undefined
-            : this.normalizeOptionalText(dto.timeZone),
+            : this.normalizeTimeZone(dto.timeZone),
       },
       select: {
         id: true,
@@ -341,16 +365,34 @@ export class PracticeLocationService {
   }
 
   async findAllForDoctor(userId: string) {
-    const doctorProfile = await this.prisma.doctorProfile.findUnique({
-      where: { userId },
-      select: { id: true },
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
+        emailVerifiedAt: true,
+        mobileVerifiedAt: true,
+        doctorProfile: { select: { id: true } },
+      },
     });
 
-    if (!doctorProfile) {
+    if (
+      !user ||
+      user.role !== UserRole.DOCTOR ||
+      user.accountStatus !== UserAccountStatus.ACTIVE ||
+      user.administrativeRestrictionStatus !==
+        AdministrativeRestrictionStatus.NONE ||
+      !accountIdentifierIsVerified(user)
+    ) {
       throw new ForbiddenException(
-        'Only a doctor may view practice locations.',
+        'Only an active verified Doctor may view practice locations.',
       );
     }
+
+    if (!user.doctorProfile) return [];
+    const doctorProfile = user.doctorProfile;
 
     const locations = await this.prisma.practiceLocation.findMany({
       where: { doctorProfileId: doctorProfile.id },
@@ -518,6 +560,27 @@ export class PracticeLocationService {
           }
         : null,
     }));
+  }
+
+  private normalizeTimeZone(value: string): string {
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new BadRequestException('A valid IANA time zone is required.');
+    }
+    if (/^(?:UTC|GMT)?[+-]\d{1,2}(?::?\d{2})?$/i.test(normalized)) {
+      throw new BadRequestException(
+        'timeZone must be an IANA time zone, not a fixed UTC/GMT offset.',
+      );
+    }
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: normalized,
+      }).resolvedOptions().timeZone;
+    } catch {
+      throw new BadRequestException(
+        'timeZone must be a valid supported IANA time zone.',
+      );
+    }
   }
 
   private normalizeOptionalText(value: string | undefined): string | null {

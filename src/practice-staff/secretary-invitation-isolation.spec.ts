@@ -1,7 +1,10 @@
 import { ConfigService } from '@nestjs/config';
+import { AccountLoginIdentifierType } from '../../generated/prisma/client';
 import { ProtectedAccountPayloadService } from '../auth/security/protected-account-payload.service';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
+import { NotificationPayloadService } from '../notification/notification-payload.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { SecretaryInvitationService } from './secretary-invitation.service';
 
 describe('SecretaryInvitationService relationship isolation', () => {
@@ -12,7 +15,11 @@ describe('SecretaryInvitationService relationship isolation', () => {
     },
     notificationOutbox: { update: jest.fn() },
     user: { findUnique: jest.fn() },
-    practiceStaff: { create: jest.fn(), update: jest.fn() },
+    practiceStaff: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
     practiceLocation: { update: jest.fn() },
     practiceStaffAuthorityBundle: { updateMany: jest.fn() },
     practiceStaffCapability: { updateMany: jest.fn(), create: jest.fn() },
@@ -22,7 +29,10 @@ describe('SecretaryInvitationService relationship isolation', () => {
       findFirst: jest.fn(),
       create: jest.fn(),
     },
-    substituteSecretaryCoverage: { create: jest.fn() },
+    substituteSecretaryCoverage: {
+      create: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $queryRaw: jest.fn(),
     $executeRaw: jest.fn(),
   };
@@ -39,7 +49,12 @@ describe('SecretaryInvitationService relationship isolation', () => {
       get: jest.fn(() => 'https://clinic.example'),
     } as unknown as ConfigService,
     { encrypt: jest.fn() } as unknown as ProtectedAccountPayloadService,
+    { encryptMessage: jest.fn() } as unknown as NotificationPayloadService,
     { verify: jest.fn() } as unknown as PasswordSecurityService,
+    {
+      normalize: jest.fn((value: string) => ({ canonical: value })),
+      hashCanonical: jest.fn((value: string) => `hash:${value}`),
+    } as unknown as MobileNumberService,
   );
 
   beforeEach(() => {
@@ -52,6 +67,9 @@ describe('SecretaryInvitationService relationship isolation', () => {
       expiresAt: new Date(Date.now() + 60_000),
       practiceLocationId: 'clinic-target',
       invitedByUserId: 'doctor-1',
+      targetUserId: 'secretary-1',
+      identifierType: AccountLoginIdentifierType.EMAIL,
+      normalizedIdentifier: 'jane@example.test',
       normalizedEmail: 'jane@example.test',
       requestedAssignmentType: 'CLINIC_SECRETARY',
       requestedAuthorityBundles: ['QUEUE_AND_CLINIC_DAY_OPERATIONS'],
@@ -65,10 +83,14 @@ describe('SecretaryInvitationService relationship isolation', () => {
     tx.user.findUnique.mockResolvedValue({
       id: 'secretary-1',
       email: 'jane@example.test',
+      mobileNumber: null,
+      mobileNumberHash: null,
+      loginIdentifierType: AccountLoginIdentifierType.EMAIL,
       role: 'SECRETARY',
       accountStatus: 'ACTIVE',
       administrativeRestrictionStatus: 'NONE',
       emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
     });
     tx.practiceStaff.update.mockResolvedValue({ id: 'staff-target' });
     tx.practiceStaff.create.mockResolvedValue({ id: 'staff-target' });

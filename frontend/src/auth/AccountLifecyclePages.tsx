@@ -3,6 +3,9 @@ import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import clinicWaitingRoom from '../assets/clinic-waiting-room.jpg';
 import { useAuth } from './AuthContext';
+import { ChangePasswordDrawer } from './ChangePasswordDrawer';
+import { Drawer } from '../doctor/settings/SettingsShared';
+import '../styles/doctor-settings.css';
 
 type LifecycleRole = 'DOCTOR' | 'SECRETARY';
 
@@ -57,14 +60,14 @@ function errorMessage(error: unknown, fallback: string) {
 
 function permanentClosureError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
-    return 'Email or current password is incorrect.';
+    return 'Sign-in identifier or current password is incorrect. Sign in again if your session has expired.';
   }
   return errorMessage(error, 'Unable to permanently close the account.');
 }
 
 function reactivationError(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
-    return 'The account type, email, or current password is incorrect.';
+    return 'The account type, sign-in identifier, or current password is incorrect.';
   }
   if (error instanceof ApiError && error.status === 409) {
     return 'This account cannot be reactivated from its current state.';
@@ -76,6 +79,8 @@ export function AccountSecurityPage() {
   const { profile, clearSession } = useAuth();
   const navigate = useNavigate();
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [showClosure, setShowClosure] = useState(false);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -116,15 +121,15 @@ export function AccountSecurityPage() {
       <section className="settings-section" aria-labelledby="security-heading">
         <h2 id="security-heading">Security</h2>
         <div className="settings-row">
-          <div><strong>Password</strong><span>Password replacement is completed through your verified email and signs out existing sessions.</span></div>
-          <Link className="secondary-action" to="/forgot-password">Reset password</Link>
+          <div><strong>Password</strong><span>Change your password securely using your current password. All sessions end after a successful change.</span></div>
+          <button className="secondary-action" type="button" onClick={() => setShowPasswordChange(true)}>Change Password</button>
         </div>
       </section>
 
       <section className="settings-section" aria-labelledby="disable-heading">
         <h2 id="disable-heading">Disable account</h2>
         <p className="settings-copy">
-          Disabling stops ordinary access immediately and signs this account out. You can reactivate later with your email and password, but reactivation does not restore a session automatically.
+          Disabling stops ordinary access immediately and signs this account out. You can reactivate later with your primary sign-in identifier and password, but reactivation does not restore a session automatically.
         </p>
         {role === 'SECRETARY' ? (
           <p className="settings-copy">Your current clinic assignments and exceptional capabilities are removed when the account is disabled. Reactivation does not restore them automatically.</p>
@@ -148,8 +153,10 @@ export function AccountSecurityPage() {
       <section className="settings-section permanent-zone" aria-labelledby="closure-heading">
         <h2 id="closure-heading">Permanent account closure</h2>
         <p className="settings-copy">Permanent closure cannot be undone. It is a separate workflow from temporary disablement.</p>
-        <Link className="quiet-link" to={`/account/permanent-close?role=${role}`}>Review permanent closure</Link>
+        {role === 'SECRETARY' ? <button className="quiet-link" type="button" onClick={() => setShowClosure(true)}>Review permanent closure</button> : <Link className="quiet-link" to={`/account/permanent-close?role=${role}`}>Review permanent closure</Link>}
       </section>
+      {showPasswordChange ? <ChangePasswordDrawer onClose={() => setShowPasswordChange(false)} /> : null}
+      {showClosure ? <PermanentCloseAccountPage asDrawer onClose={() => setShowClosure(false)} /> : null}
     </section>
   );
 }
@@ -179,7 +186,7 @@ export function ReactivateAccountPage() {
   const [params] = useSearchParams();
   const initialRole = roleFromQuery(params.get('role'));
   const [role, setRole] = useState<LifecycleRole | ''>(initialRole ?? '');
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -188,14 +195,14 @@ export function ReactivateAccountPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!role || !email.trim() || !password || submitting) return;
+    if (!role || !identifier.trim() || !password || submitting) return;
     setSubmitting(true);
     setError('');
     try {
       await apiRequest(`${lifecycleBase(role)}/reactivate`, {
         method: 'POST',
         headers: { 'Idempotency-Key': idempotencyKey('reactivate-account') },
-        body: { email, password },
+        body: { identifier, password },
       });
       setComplete(true);
     } catch (caught) {
@@ -225,23 +232,25 @@ export function ReactivateAccountPage() {
           <label className={role === 'DOCTOR' ? 'selected' : ''}><input type="radio" name="reactivation-role" value="DOCTOR" checked={role === 'DOCTOR'} onChange={() => setRole('DOCTOR')} /><span className="role-icon"><ReactivationIcon name="doctor" /></span><span><strong>Doctor</strong><small>Clinic owner or Doctor account</small></span><i aria-hidden="true"><ReactivationIcon name="check" /></i></label>
           <label className={role === 'SECRETARY' ? 'selected' : ''}><input type="radio" name="reactivation-role" value="SECRETARY" checked={role === 'SECRETARY'} onChange={() => setRole('SECRETARY')} /><span className="role-icon"><ReactivationIcon name="secretary" /></span><span><strong>Secretary</strong><small>Secretary account</small></span><i aria-hidden="true"><ReactivationIcon name="check" /></i></label>
         </div></fieldset>
-        <label htmlFor="reactivation-email">Email address</label><div className="sign-in-input"><ReactivationIcon name="mail" /><input id="reactivation-email" type="email" autoComplete="email" required placeholder="Enter your email address" value={email} onChange={(event) => setEmail(event.target.value)} /></div>
+        <label htmlFor="reactivation-identifier">Sign-in identifier</label><div className="sign-in-input"><ReactivationIcon name="mail" /><input id="reactivation-identifier" type="text" autoComplete="username" required placeholder="Enter your primary email or Philippine mobile number" value={identifier} onChange={(event) => setIdentifier(event.target.value)} /></div>
         <label htmlFor="reactivation-password">Current password</label><div className="sign-in-input"><ReactivationIcon name="lock" /><input id="reactivation-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required placeholder="Enter your current password" value={password} onChange={(event) => setPassword(event.target.value)} /><button type="button" className="password-visibility" aria-label={showPassword ? 'Hide current password' : 'Show current password'} onClick={() => setShowPassword((visible) => !visible)}><ReactivationIcon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>
         <div className="reactivation-guidance"><strong>Before you continue</strong><ul><li>Reactivation does not sign you in automatically.</li><li>{role === 'SECRETARY' ? 'Previous clinic assignments and authority will not be restored.' : 'Administratively restricted accounts cannot be restored here.'}</li><li>Permanently closed accounts cannot be reactivated.</li></ul></div>
         {error ? <div className="form-error" role="alert">{error}</div> : null}
-        <button className="sign-in-submit" type="submit" disabled={submitting || !role || !email.trim() || !password}>{submitting ? 'Reactivating…' : 'Reactivate account'}</button>
+        <button className="sign-in-submit" type="submit" disabled={submitting || !role || !identifier.trim() || !password}>{submitting ? 'Reactivating…' : 'Reactivate account'}</button>
         <Link className="reactivation-back-link" to="/login">Back to sign in</Link>
       </form>
     </section></ReactivationFrame>
   );
 }
 
-export function PermanentCloseAccountPage() {
-  const { clearSession } = useAuth();
+export function PermanentCloseAccountPage({ asDrawer = false, onClose = () => undefined }: { asDrawer?: boolean; onClose?: () => void } = {}) {
+  const navigate = useNavigate();
+  const { profile, clearSession } = useAuth();
   const [params] = useSearchParams();
   const initialRole = roleFromQuery(params.get('role'));
-  const [role, setRole] = useState<LifecycleRole>(initialRole ?? 'DOCTOR');
-  const [email, setEmail] = useState('');
+  const [selectedRole, setRole] = useState<LifecycleRole>(initialRole ?? 'DOCTOR');
+  const role = profile?.role === 'SECRETARY' ? 'SECRETARY' : selectedRole;
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -253,17 +262,18 @@ export function PermanentCloseAccountPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!confirmed) return;
+    if (!confirmed || submitting) return;
     setSubmitting(true);
     setError('');
     try {
       await apiRequest(`${lifecycleBase(role)}/permanent-delete`, {
         method: 'POST',
         headers: { 'Idempotency-Key': idempotencyKey('permanent-close-account') },
-        body: { email, password, confirmPermanentDelete: true },
+        body: { identifier, password, confirmPermanentDelete: true },
       });
       clearSession();
       setComplete(true);
+      if (asDrawer) navigate("/login", { replace: true, state: { message: "Account permanently closed. You can register a new account with your email or mobile number." } });
     } catch (caught) {
       setError(permanentClosureError(caught));
     } finally {
@@ -281,19 +291,23 @@ export function PermanentCloseAccountPage() {
     );
   }
 
-  return (
-    <main className="auth-page"><section className="auth-panel wide-auth-panel" aria-labelledby="close-heading">
+  if (role === 'SECRETARY' && profile?.role !== 'SECRETARY') {
+    return <main className="auth-page"><section className="auth-panel"><h1>Sign in to close your Secretary account</h1><p>Permanent closure requires your active Secretary session. If your account is disabled, reactivate it first, then sign in.</p><Link to="/login">Sign in</Link><Link to="/account/reactivate?role=SECRETARY">Reactivate account</Link></section></main>;
+  }
+
+  const content = (<>
       <Link className="brand" to="/">Clinic Queueing</Link>
       <div className="auth-heading"><p className="eyebrow">Permanent account closure</p><h1 id="close-heading">This cannot be undone.</h1><p>{warning}</p></div>
       <form className="stack" onSubmit={submit}>
-        <label>Account type<select value={role} onChange={(event) => setRole(event.target.value as LifecycleRole)}><option value="DOCTOR">Doctor</option><option value="SECRETARY">Secretary</option></select></label>
-        <label>Email<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+        {profile?.role !== 'SECRETARY' ? <label>Account type<select value={role} onChange={(event) => setRole(event.target.value as LifecycleRole)}><option value="DOCTOR">Doctor</option><option value="SECRETARY">Secretary</option></select></label> : null}
+        <label>Sign-in identifier<input type="text" autoComplete="username" placeholder="Primary email or Philippine mobile number" required value={identifier} onChange={(event) => setIdentifier(event.target.value)} /></label>
         <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <label className="confirmation-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>I understand this permanently closes this account and cannot be reversed.</span></label>
         {error ? <div className="form-error" role="alert">{error}</div> : null}
-        <button className="primary danger-primary" type="submit" disabled={submitting || !email || !password || !confirmed}>{submitting ? 'Closing account…' : 'Permanently close account'}</button>
-        <Link className="secondary-action" to="/login">Cancel</Link>
+        <button className="primary danger-primary" type="submit" disabled={submitting || !identifier || !password || !confirmed}>{submitting ? 'Closing account…' : 'Permanently close account'}</button>
+        {asDrawer ? <button type="button" disabled={submitting} onClick={onClose}>Cancel</button> : <Link className="secondary-action" to="/login">Cancel</Link>}
       </form>
-    </section></main>
+    </>
   );
+  return asDrawer ? <Drawer title="Permanent account closure" busy={submitting} onClose={onClose}>{content}</Drawer> : <main className="auth-page"><section className="auth-panel wide-auth-panel" aria-labelledby="close-heading">{content}</section></main>;
 }
