@@ -70,7 +70,7 @@ const DETAILS: Record<(typeof SETUP_ITEMS)[number], [string, string]> = {
   ],
   'Review before activation': [
     'Ready to review before activation.',
-    'Complete required clinic details and hours.',
+    'Complete all required steps.',
   ],
 };
 
@@ -172,33 +172,33 @@ function guidanceStatusListMarkup() {
 function clinicHoursGuidanceMarkup() {
   return `
     <div class="clinic-hours-guide-section">
-      <span class="clinic-hours-guide-icon" aria-hidden="true">◷</span>
+      <span class="clinic-hours-guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 5v7l5 3"/></svg></span>
       <div>
         <h4>Clinic schedule</h4>
         <ul>
           <li>Turn on <strong>Open</strong> for the days this clinic operates.</li>
           <li>Set the opening and closing times.</li>
-          <li>Set a Maximum Operating Time if the clinic or queue may continue after closing. It cannot be earlier than closing time.</li>
+          <li>Set a Maximum Operating Time if the clinic or queue may continue after closing (cannot be earlier than closing time).</li>
         </ul>
       </div>
     </div>
     <div class="clinic-hours-guide-section">
-      <span class="clinic-hours-guide-icon" aria-hidden="true">▣</span>
+      <span class="clinic-hours-guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M7 1v6M17 1v6M7 13h2m3 0h2M7 17h2m3 0h2"/></svg></span>
       <div>
         <h4>Online booking</h4>
         <ul>
-          <li>Online booking cutoff is calculated automatically from the closing time and the cutoff setting below.</li>
+          <li>Online booking cutoff is automatically calculated from the closing time and the cutoff setting below.</li>
           <li>You cannot edit the cutoff time in the table.</li>
         </ul>
       </div>
     </div>
     <div class="clinic-hours-guide-section">
-      <span class="clinic-hours-guide-icon" aria-hidden="true">▤</span>
+      <span class="clinic-hours-guide-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 2h9l5 5v15H5ZM14 2v6h5M8 12h8M8 16h8"/></svg></span>
       <div>
         <h4>Tips</h4>
         <ul>
           <li>You can copy a day's schedule to other days.</li>
-          <li>You can select from the list or enter an exact time, for example 08:07 AM.</li>
+          <li>You can select from the list or enter an exact time (e.g. 08:07 AM).</li>
           <li>At least one clinic day must be open before activation.</li>
           <li>The system checks for schedule conflicts before saving.</li>
         </ul>
@@ -207,7 +207,7 @@ function clinicHoursGuidanceMarkup() {
   `;
 }
 
-function ensureGuidancePanel() {
+export function ensureGuidancePanel() {
   const context = currentClinicContext();
   if (!context) return;
 
@@ -215,6 +215,14 @@ function ensureGuidancePanel() {
   if (!layout) return;
   layout.classList.add('has-guidance');
 
+  // Only replace panels owned by this helper; Basic Information owns its
+  // guidance in React and must retain that panel when navigating back.
+  const generatedPanel = layout.querySelector<HTMLElement>(
+    '.clinic-setup-guidance[data-journey-guidance="true"]',
+  );
+  if (generatedPanel?.dataset.guidanceStep !== String(context.step)) {
+    generatedPanel?.remove();
+  }
   if (layout.querySelector('.clinic-setup-guidance')) return;
   if (context.step === 1) return;
 
@@ -223,6 +231,7 @@ function ensureGuidancePanel() {
   aside.className = 'clinic-setup-guidance';
   aside.setAttribute('aria-label', 'Clinic setup guidance');
   aside.dataset.journeyGuidance = 'true';
+  aside.dataset.guidanceStep = String(context.step);
   const contextDetails =
     context.step === 2
       ? clinicHoursGuidanceMarkup()
@@ -236,9 +245,9 @@ function ensureGuidancePanel() {
       ${contextDetails}
     </section>
     <section class="clinic-guide-card">
-      <h3>About Clinics</h3>
+      <h3>${context.step === 2 ? 'Set up your clinic' : 'About Clinics'}</h3>
       <p>Complete the following to prepare your clinic for activation.</p>
-      <h4>Set up your clinic</h4>
+      ${context.step === 2 ? '' : '<h4>Set up your clinic</h4>'}
       <ul>${guidanceStatusListMarkup()}</ul>
     </section>
     <section class="clinic-guide-card clinic-guide-note">
@@ -274,7 +283,7 @@ function decoratePhotoTips() {
 }
 
 function decorateSetup(state: GuidanceState) {
-  const card = findGuidanceCard('About Clinics');
+  const card = findGuidanceCard('Set up your clinic') ?? findGuidanceCard('About Clinics');
   if (!card) return;
   const list = card.querySelector('ul');
   if (!list) return;

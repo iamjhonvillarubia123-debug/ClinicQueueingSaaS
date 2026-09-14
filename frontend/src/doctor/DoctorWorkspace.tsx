@@ -93,6 +93,7 @@ export function DoctorWorkspaceShell() {
           </NavLink>
         </div>
 
+        <div id="clinic-setup-header-slot" />
         <div className="doctor-account-summary" aria-label="Signed in doctor account">
           <span className="doctor-avatar" aria-hidden="true">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>

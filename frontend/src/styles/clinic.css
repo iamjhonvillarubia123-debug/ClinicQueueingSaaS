@@ -58,6 +58,10 @@
   place-items: center;
   width: 28px;
   height: 28px;
+  min-height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+  font: inherit;
   border: 1px solid #cbd2da;
   border-radius: 50%;
   background: #fff;
@@ -70,9 +74,9 @@
   border-color: #111;
 }
 .clinic-step-dot.is-complete {
-  background: #edf8ef;
+  background: #fff;
   color: #259344;
-  border-color: #d7eedc;
+  border-color: #259344;
 }
 .clinic-work-card,
 .clinic-table-card {
@@ -114,6 +118,7 @@
 .clinic-form-grid input,
 .clinic-form-grid textarea,
 .clinic-form-grid select,
+.clinic-form-grid .clinic-timezone-trigger,
 .clinic-hours-row select,
 .clinic-question-row input,
 .clinic-question-row select,
@@ -129,6 +134,48 @@
 .clinic-form-grid textarea {
   min-height: 80px;
   resize: vertical;
+}
+.clinic-timezone-trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 13px;
+  border: 1px solid #d5dae0;
+  border-radius: 9px;
+  background: #fff;
+  color: #171717;
+  font: inherit;
+  font-weight: 400;
+  line-height: normal;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+}
+.clinic-timezone-trigger-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+.clinic-timezone-clock {
+  flex: 0 0 auto;
+  color: #727986;
+  font-size: 18px;
+  line-height: 1;
+}
+.clinic-timezone-chevron {
+  flex: 0 0 auto;
+  color: #171717;
+  font-size: 14px;
+  line-height: 1;
+}
+.clinic-timezone-trigger:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
 }
 .clinic-count {
   justify-self: end;

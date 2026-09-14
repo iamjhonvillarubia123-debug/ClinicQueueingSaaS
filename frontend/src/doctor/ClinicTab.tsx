@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import clinicIllustration from '../assets/clinic-illustration.png';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -306,30 +307,19 @@ function TimeZonePicker({
       style={{ position: 'relative', width: '100%' }}
     >
       <button
+        className="clinic-timezone-trigger"
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        style={{
-          width: '100%',
-          minHeight: 46,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          padding: '0 14px',
-          border: '1px solid #d7dce2',
-          borderRadius: 8,
-          background: '#fff',
-          color: '#17191c',
-          font: 'inherit',
-          lineHeight: 1.2,
-          textAlign: 'left',
-          cursor: 'pointer',
-        }}
       >
-        <span>{timeZoneLabel(value)}</span>
-        <span aria-hidden="true" style={{ fontSize: 14 }}>
+        <span className="clinic-timezone-trigger-value">
+          <span className="clinic-timezone-clock" aria-hidden="true">
+            ◷
+          </span>
+          <span>{timeZoneLabel(value)}</span>
+        </span>
+        <span className="clinic-timezone-chevron" aria-hidden="true">
           {open ? '⌃' : '⌄'}
         </span>
       </button>
@@ -714,7 +704,12 @@ function toClinicRecord(
   };
 }
 
-function Stepper({ step }: { step: Step }) {
+function Stepper({ step, completedSteps, onNavigate, disabled }: {
+  step: Step;
+  completedSteps: Step[];
+  onNavigate: (step: Step) => void;
+  disabled: boolean;
+}) {
   const labels = [
     'Basic Information',
     'Clinic Hours',
@@ -726,15 +721,20 @@ function Stepper({ step }: { step: Step }) {
     <div className="clinic-stepper" aria-label="Clinic setup progress">
       {labels.map((label, index) => {
         const number = (index + 1) as Step;
-        const complete = number < step;
+        const complete = completedSteps.includes(number) && number !== step;
         const current = number === step;
         return (
           <div className="clinic-step" key={label}>
-            <span
+            <button
+              type="button"
+              aria-label={`Go to ${label}`}
+              aria-current={current ? 'step' : undefined}
+              disabled={disabled}
+              onClick={() => onNavigate(number)}
               className={`clinic-step-dot${complete ? ' is-complete' : ''}${current ? ' is-current' : ''}`}
             >
               {complete ? '✓' : number}
-            </span>
+            </button>
             <span>{label}</span>
           </div>
         );
@@ -1149,8 +1149,7 @@ export function HoursEditor({
           <span>Day</span>
           <span>Opens</span>
           <span>Closes</span>
-          <span>Online Booking Cutoff</span>
-          <span>Maximum Operating Until</span>
+          <span>Maximum Operating Time</span>
           <span>Actions</span>
         </div>
         {hours.map((row, index) => (
@@ -1165,7 +1164,7 @@ export function HoursEditor({
                 checked={row.open}
                 onChange={(e) => update(index, { open: e.target.checked })}
               />
-              <span>Open</span>
+              <span>{row.open ? 'Open' : 'Closed'}</span>
             </label>
             <strong>{row.day.slice(0, 3)}</strong>
             <ClinicTimeInput
@@ -1188,12 +1187,6 @@ export function HoursEditor({
               onOpen={() => setActiveTimeField(`${row.day}-closes`)}
               onClose={() => setActiveTimeField(null)}
             />
-            <output
-              className="clinic-cutoff-output"
-              aria-label={`${row.day} online booking cutoff`}
-            >
-              {row.open ? onlineCutoffFor(row, cutoffLeadHours) : '—'}
-            </output>
             <ClinicTimeInput
               disabled={!row.open}
               value={row.maximumUntil}
@@ -1234,30 +1227,40 @@ export function HoursEditor({
           </div>
         ))}
       </div>
-      <div className="clinic-info-strip">
-        ⓘ Quarter-hour times are suggested for convenience. You may type any
-        exact valid time, for example 08:07 AM.
-      </div>
-      <div className="clinic-cutoff-setting">
+      <div className="clinic-cutoff-setting clinic-hours-cutoff">
         <div>
-          <strong>Online booking cutoff</strong>
+          <strong className="clinic-cutoff-title">
+            Online Booking Cutoff
+            <span className="clinic-cutoff-info">
+              <button type="button" className="clinic-cutoff-info-trigger" aria-label="About online booking cutoff" aria-describedby="clinic-cutoff-tooltip">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 11v6" />
+                  <circle className="clinic-cutoff-info-dot" cx="12" cy="7.5" r="1" />
+                </svg>
+              </button>
+              <span className="clinic-cutoff-tooltip" id="clinic-cutoff-tooltip" role="tooltip">
+                The system will automatically compute the online booking cutoff for each open day based on your closing time and this setting.
+              </span>
+            </span>
+          </strong>
           <p>
-            Calculated automatically for every open day from the clinic closing
-            time.
+            Stop accepting online bookings this many hours before the clinic closing time.
           </p>
         </div>
         <label>
+          <span>hours</span>
           <input
+            aria-label="Online booking cutoff hours"
             type="number"
             min={0}
             max={12}
             step={1}
             value={cutoffLeadHours}
             onChange={(e) =>
-              setCutoffLeadHours(Math.max(0, Number(e.target.value) || 0))
+              setCutoffLeadHours(Math.min(12, Math.max(0, Number(e.target.value) || 0)))
             }
           />
-          <span>hours before clinic closing</span>
         </label>
       </div>
     </>
@@ -1625,10 +1628,17 @@ function ClinicWizard({
   editingClinicId?: string;
 }) {
   const [step, setStepState] = useState<Step>(initialStep);
+  const [completedSteps, setCompletedSteps] = useState<Step[]>(
+    () => ([1, 2, 3, 4, 5] as Step[]).filter((item) => item < initialStep),
+  );
   function setStep(nextStep: Step) {
     setStepState(nextStep);
     onStepChange?.(nextStep);
   }
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setHeaderSlot(document.getElementById('clinic-setup-header-slot'));
+  }, []);
   const [returnToReview, setReturnToReview] = useState(false);
   const [practiceLocationId, setPracticeLocationId] = useState(editingClinicId);
   const [draft, setDraft] = useState(initialValue ?? initialDraft);
@@ -1771,6 +1781,7 @@ function ClinicWizard({
         );
       }
       await persistDraft();
+      setCompletedSteps((completed) => completed.includes(step) ? completed : [...completed, step]);
       if (returnToReview) {
         setReturnToReview(false);
         setStep(5);
@@ -1809,6 +1820,13 @@ function ClinicWizard({
   function editFromReview(targetStep: Step) {
     setSaveError('');
     setReturnToReview(true);
+    setStep(targetStep);
+  }
+
+  function navigateToStep(targetStep: Step) {
+    if (saving || targetStep === step) return;
+    setSaveError('');
+    setReturnToReview(false);
     setStep(targetStep);
   }
 
@@ -1851,7 +1869,7 @@ function ClinicWizard({
         };
 
   return (
-    <section className="clinic-page clinic-setup-page">
+    <section className={`clinic-page clinic-setup-page${step === 2 ? ' clinic-hours-page' : ''}`}>
       <button className="clinic-back-link" type="button" onClick={onExit}>
         ← Back to Clinics
       </button>
@@ -1869,13 +1887,17 @@ function ClinicWizard({
                 : 'Configure this clinic now or save it as a draft and continue later.'}
         </p>
       </div>
-      <Stepper step={step} />
-      <div className={`clinic-setup-layout${step === 1 ? ' has-guidance' : ''}`}>
+      {step === 2 && headerSlot
+        ? createPortal(<div className="clinic-hours-header-stepper"><Stepper step={step} completedSteps={completedSteps} onNavigate={navigateToStep} disabled={saving} /></div>, headerSlot)
+        : <Stepper step={step} completedSteps={completedSteps} onNavigate={navigateToStep} disabled={saving} />}
+      <div className={`clinic-setup-layout${step === 1 || step === 2 ? ' has-guidance' : ''}`}>
       <div className="clinic-work-card">
         <div className="clinic-work-heading">
           <h2>{step === 1 ? 'Basic Information' : title}</h2>
           {step === 1 ? (
             <p>Start with the clinic identity and location details.</p>
+          ) : step === 2 ? (
+            <p>Set the days and times this clinic operates.</p>
           ) : null}
         </div>
         {step === 1 ? (

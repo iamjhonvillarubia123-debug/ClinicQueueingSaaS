@@ -119,3 +119,54 @@
     gap: 10px;
   }
 }
+/* Clinic hours reference layout. */
+.clinic-hours-page { max-width: none; padding: 0; }
+.clinic-hours-page > .clinic-back-link,
+.clinic-hours-page > .clinic-page-heading { display: none; }
+.doctor-workspace-content:has(.clinic-hours-page) { padding: 12px 18px 24px; }
+.clinic-hours-page .clinic-setup-layout.has-guidance { grid-template-columns: minmax(0, 2.25fr) minmax(300px, 1fr); gap: 14px; }
+.clinic-hours-page .clinic-work-card { padding: 20px; }
+.clinic-hours-page .clinic-work-heading h2 { font-size: 21px; }
+.clinic-hours-page .clinic-work-heading { margin-bottom: 26px; }
+.clinic-hours-page .clinic-footer-actions { margin: 10px -20px -20px; padding: 16px 20px; }
+.clinic-hours-page .clinic-guide-card { padding: 14px 18px; }
+.clinic-hours-page .clinic-guide-card h3 { font-size: 16px; }
+.clinic-hours-page .clinic-guide-card p { font-size: 13px; }
+.clinic-hours-page .clinic-setup-guidance { gap: 8px; }
+.clinic-hours-page .clinic-guide-card > ul { gap: 4px; margin-top: 8px; }
+.clinic-hours-page .clinic-guidance-status-copy { gap: 0; }
+.clinic-hours-page .clinic-guidance-status-copy small { color: #465b7c; }
+.clinic-hours-guide-section ul { list-style: disc; }
+.clinic-hours-guide-section li { font-size: 13px; line-height: 1.5; margin-bottom: 0; }
+.clinic-hours-guide-section { grid-template-columns: 26px minmax(0, 1fr); gap: 14px; margin-top: 20px; }
+.clinic-hours-guide-section h4 { margin: 0 0 3px; font-weight: 700; }
+.clinic-hours-guide-icon svg { width: 25px; height: 25px; fill: none; stroke: #465b7c; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.clinic-hours-cutoff { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; background: white; border-radius: 6px; padding: 14px; }
+.clinic-hours-cutoff .clinic-cutoff-title { position: relative; display: flex; align-items: center; gap: 3px; }
+.clinic-cutoff-info { display: inline-flex; align-self: flex-start; margin-top: -3px; color: #245fff; }
+.clinic-cutoff-info-trigger { display: inline-grid; place-items: center; width: 16px; height: 16px; min-height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: help; }
+.clinic-cutoff-info-trigger svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.clinic-cutoff-info-dot { fill: currentColor; stroke: none; }
+.clinic-cutoff-tooltip { display: none; position: absolute; left: 0; top: 100%; z-index: 30; width: min(340px, 75vw); padding: 12px 14px; border: 1px solid #dce3f5; border-radius: 8px; background: #fff; color: #465b7c; box-shadow: 0 4px 16px #18264a1a; font-size: 13px; font-weight: 400; line-height: 1.5; }
+.clinic-cutoff-info:hover .clinic-cutoff-tooltip,
+.clinic-cutoff-info:focus-within .clinic-cutoff-tooltip { display: block; }
+.clinic-hours-cutoff label { font-weight: 400; }
+.clinic-hours-cutoff input { width: 68px; min-height: 36px; padding: 7px 8px; border-radius: 7px; font-weight: 400; }
+#clinic-setup-header-slot:empty { display: none; }
+#clinic-setup-header-slot:has(.clinic-hours-header-stepper) { flex: 1; min-width: 0; order: 0; margin: 0 26px; }
+.clinic-hours-header-stepper .clinic-stepper { margin: 0; gap: 10px; }
+.clinic-hours-header-stepper .clinic-step { font-size: 12px; }
+.clinic-hours-header-stepper .clinic-step-dot { flex-shrink: 0; }
+.clinic-hours-header-stepper .is-complete { background: #fff; border-color: #259344; color: #259344; }
+.clinic-hours-header-stepper .clinic-step:has(.is-current) { color: #111; font-weight: 700; }
+.clinic-hours-header-stepper .clinic-step:has(.is-complete) { color: #5f6672; font-weight: 600; }
+@media (max-width: 1250px) {
+  .doctor-workspace-header:has(.clinic-hours-header-stepper) { flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; gap: 14px; }
+  #clinic-setup-header-slot:has(.clinic-hours-header-stepper) { order: 3; flex-basis: 100%; margin: 0; }
+  .clinic-hours-page .clinic-setup-layout.has-guidance { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .clinic-hours-header-stepper .clinic-step { flex-direction: column; text-align: center; white-space: normal; font-size: 10px; }
+  .clinic-hours-header-stepper .clinic-step:after { display: none; }
+  .clinic-hours-cutoff { grid-template-columns: minmax(0, 1fr); }
+}
