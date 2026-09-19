@@ -56,3 +56,9 @@ describe('apiRequest', () => {
     expect(new Headers(options.headers).has('Authorization')).toBe(false);
   });
 });
+
+
+it('shows validation messages returned as an array', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ message: ['Short code may contain only letters, numbers, hyphens, and underscores.'] }), { status: 400, headers: { 'Content-Type': 'application/json' } }));
+  await expect(apiRequest('/practice-location/clinic/configuration-draft', { method: 'PUT', body: {} })).rejects.toThrow('Short code may contain only letters, numbers, hyphens, and underscores.');
+});

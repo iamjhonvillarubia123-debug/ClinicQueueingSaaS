@@ -2,6 +2,22 @@
   gap: 12px;
 }
 
+.clinic-setup-guidance[data-guidance-step="5"] .clinic-journey-context-card ul {
+  display: block;
+  list-style: disc;
+  padding-left: 20px;
+}
+
+.clinic-setup-guidance[data-guidance-step="5"] .clinic-journey-context-card li {
+  display: list-item;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.clinic-setup-guidance[data-guidance-step="5"] .clinic-journey-context-card li::before {
+  content: none;
+}
+
 .clinic-guide-card li.clinic-guidance-status-row::before {
   content: none;
 }

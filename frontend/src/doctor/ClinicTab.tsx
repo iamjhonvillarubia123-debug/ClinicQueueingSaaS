@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { OperationsIcon } from './OperationsIcon';
 import clinicIllustration from '../assets/clinic-illustration.png';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -18,6 +19,10 @@ import {
 import type { QueueDrawerBookingConfiguration } from './QueueActionDrawer';
 import type { AppointmentDetailsModel } from './AppointmentDetailsDrawer';
 
+export function formatClinicShortCode(value: string) {
+  return value.trim().replace(/\s+/g, '-').toUpperCase();
+}
+
 type Step = 1 | 2 | 3 | 4 | 5;
 type ClinicStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
 type Weekday =
@@ -30,6 +35,7 @@ type Weekday =
   | 'SUNDAY';
 
 type ClinicDraft = {
+  clinicPhoto?: string;
   name: string;
   shortCode: string;
   address: string;
@@ -90,6 +96,8 @@ type SavedClinicDraftState = {
 };
 
 type ClinicRecord = ClinicDraft & {
+  secretaryName?: string;
+  savedHours?: DayHours[];
   id: string;
   status: ClinicStatus;
   editor: ClinicEditorState;
@@ -127,6 +135,7 @@ type BookingQuestionResponse = {
 };
 
 type DoctorConfigurationDraftResponse = {
+  clinicPhoto?: string | null;
   name: string | null;
   shortCode: string | null;
   addressLine1: string | null;
@@ -145,6 +154,8 @@ type DoctorConfigurationDraftResponse = {
 };
 
 type PracticeLocationResponse = {
+  clinicPhoto?: string | null;
+  currentRegularPracticeStaff?: { isActive: boolean; user: { firstName: string; lastName: string } } | null;
   id: string;
   lifecycleStatus: ClinicStatus | 'PERMANENTLY_DELETED';
   name: string | null;
@@ -584,6 +595,7 @@ function basicInfoFromLocation(
   location: PracticeLocationResponse,
 ): ClinicDraft {
   return {
+    clinicPhoto: location.clinicPhoto ?? '',
     name: location.name ?? '',
     shortCode: location.shortCode ?? '',
     address: location.addressLine1 ?? '',
@@ -599,6 +611,7 @@ function basicInfoFromDoctorDraft(
   draft: DoctorConfigurationDraftResponse,
 ): ClinicDraft {
   return {
+    clinicPhoto: draft.clinicPhoto ?? '',
     name: draft.name ?? '',
     shortCode: draft.shortCode ?? '',
     address: draft.addressLine1 ?? '',
@@ -693,7 +706,9 @@ function toClinicRecord(
   return {
     id: location.id,
     ...effectiveDraft,
+    savedHours: location.practiceSchedules?.length ? hoursFromSchedules(location.practiceSchedules) : [],
     status: location.lifecycleStatus,
+    secretaryName: location.currentRegularPracticeStaff?.isActive ? [location.currentRegularPracticeStaff.user.firstName, location.currentRegularPracticeStaff.user.lastName].filter(Boolean).join(" ") : undefined,
     editor: {
       draft: editorDraft,
       hours: hoursFromSchedules(editorSchedules),
@@ -823,9 +838,13 @@ function BasicInformation({
   onChange: (next: ClinicDraft) => void;
 }) {
   const photoInput = useRef<HTMLInputElement>(null);
-  const [photo, setPhoto] = useState<string | null>(null);
+  const photo = value.clinicPhoto;
+  const currentValue = useRef(value);
+  currentValue.current = value;
+  const photoSelection = useRef(0);
+  function setPhoto(next: string | null) { onChange({ ...currentValue.current, clinicPhoto: next ?? "" }); }
   const [photoError, setPhotoError] = useState('');
-  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo); }, [photo]);
+  useEffect(() => () => { photoSelection.current += 1; }, []);
   function choosePhoto(file?: File) {
     if (!file) return;
     if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5 * 1024 * 1024) {
@@ -833,7 +852,29 @@ function BasicInformation({
       return;
     }
     setPhotoError('');
-    setPhoto(URL.createObjectURL(file));
+    const selection = ++photoSelection.current;
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      try {
+        if (selection !== photoSelection.current) return;
+        const scale = Math.min(1, 640 / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Image processing unavailable');
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const encoded = canvas.toDataURL('image/jpeg', 0.8);
+        if (encoded.length > 400000) throw new Error('Image too large');
+        setPhoto(encoded);
+      } catch { setPhotoError('This image could not be prepared. Choose another JPG or PNG.'); }
+      finally { URL.revokeObjectURL(url); }
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); if (selection === photoSelection.current) setPhotoError('This image could not be opened. Choose another JPG or PNG.'); };
+    image.src = url;
   }
   return (
     <div className="clinic-form-grid clinic-basic-layout">
@@ -846,15 +887,18 @@ function BasicInformation({
         />
       </label>
       <label>
-        Short Code <small>(Optional)</small>
+        Branch Name <small>(Optional)</small>
         <input
-          value={value.shortCode}
+          value={value.shortCode.replace(/[-_]+/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase())}
           onChange={(e) => onChange({ ...value, shortCode: e.target.value })}
-          placeholder="e.g. NORTH"
+          placeholder="e.g. Bajada Branch"
+          maxLength={40}
+          aria-describedby="clinic-short-code-help"
         />
+        <small id="clinic-short-code-help">Enter a branch name to identify this clinic (up to 40 characters).</small>
       </label>
       <label className="clinic-field-wide">
-        Address <b>*</b>
+        Location / Address <b>*</b>
         <textarea
           value={value.address}
           onChange={(e) => onChange({ ...value, address: e.target.value })}
@@ -907,25 +951,26 @@ function BasicInformation({
         />
         <span className="clinic-count">{value.description.length} / 250</span>
       </label>
+      <section className="clinic-photo-section" aria-label="Clinic photo upload and preview">
+        <div className="clinic-photo-heading"><strong>Clinic Photo <small>(Optional)</small></strong><small>Upload a clear photo to help patients recognize this clinic.</small></div>
       <div className="clinic-photo-picker">
-        <div>Clinic Photo <small>(Optional)</small></div>
         <div className="clinic-photo-drop" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); choosePhoto(event.dataTransfer.files[0]); }}>
           <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="3"/><circle cx="11" cy="11" r="2"/><path d="m4 25 8-9 6 6 4-5 7 9"/></svg>
           <span>Drag and drop an image here<br />or</span>
           <button type="button" className="clinic-secondary" onClick={() => photoInput.current?.click()}>Upload Photo</button>
           <input ref={photoInput} type="file" accept="image/jpeg,image/png" aria-label="Clinic photo" hidden onChange={(event) => { choosePhoto(event.target.files?.[0]); event.target.value = ''; }} />
         </div>
-        <small>JPG or PNG, max 5 MB. Preview only — photos are not saved yet.</small>
+        <small>JPG or PNG, max 5 MB. Your photo is saved with the clinic configuration.</small>
         {photoError ? <p role="alert" className="form-error">{photoError}</p> : null}
       </div>
       <div className="clinic-photo-preview">
-        <div>Preview</div>
         <div className="clinic-photo-frame">
           {photo ? <img src={photo} alt="Selected clinic photo preview" onError={() => { setPhoto(null); setPhotoError('This image could not be opened. Choose another JPG or PNG.'); }} /> : <img src={clinicIllustration} alt="Clinic illustration" />}
           <small>{photo ? 'Selected photo preview' : 'Image preview will appear here.'}</small>
         </div>
-        {photo ? <button className="clinic-back-link" type="button" onClick={() => setPhoto(null)}>Remove photo</button> : null}
+        {photo ? <button className="clinic-back-link" type="button" onClick={() => { photoSelection.current += 1; setPhoto(null); }}>Remove photo</button> : null}
       </div>
+      </section>
     </div>
   );
 }
@@ -1449,7 +1494,7 @@ function Review({
           <dl className="clinic-review-basic-grid">
             <dt>Clinic Name</dt>
             <dd>{draft.name || 'Not entered'}</dd>
-            <dt>Short Code</dt>
+            <dt>Branch Name</dt>
             <dd>{draft.shortCode || 'Not entered'}</dd>
             <dt>Address</dt>
             <dd>{draft.address || 'Not entered'}</dd>
@@ -1723,6 +1768,7 @@ function ClinicWizard({
     setPracticeLocationId(saved.id);
     setServices(saved.services);
     setQuestions(saved.questions);
+    window.dispatchEvent(new Event('clinic-configuration-saved'));
     return saved.id;
   }
 
@@ -1869,7 +1915,7 @@ function ClinicWizard({
         };
 
   return (
-    <section className={`clinic-page clinic-setup-page${step === 2 ? ' clinic-hours-page' : ''}`}>
+    <section className={`clinic-page clinic-setup-page${step === 2 ? ' clinic-hours-page' : ''}${step === 3 ? ' clinic-services-page' : ''}${step === 4 ? ' clinic-questions-page' : ''}`}>
       <button className="clinic-back-link" type="button" onClick={onExit}>
         ← Back to Clinics
       </button>
@@ -1887,17 +1933,21 @@ function ClinicWizard({
                 : 'Configure this clinic now or save it as a draft and continue later.'}
         </p>
       </div>
-      {step === 2 && headerSlot
+      {(step === 2 || step === 3 || step === 4) && headerSlot
         ? createPortal(<div className="clinic-hours-header-stepper"><Stepper step={step} completedSteps={completedSteps} onNavigate={navigateToStep} disabled={saving} /></div>, headerSlot)
         : <Stepper step={step} completedSteps={completedSteps} onNavigate={navigateToStep} disabled={saving} />}
-      <div className={`clinic-setup-layout${step === 1 || step === 2 ? ' has-guidance' : ''}`}>
+      <div className={`clinic-setup-layout${step <= 4 ? ' has-guidance' : ''}`}>
       <div className="clinic-work-card">
         <div className="clinic-work-heading">
           <h2>{step === 1 ? 'Basic Information' : title}</h2>
           {step === 1 ? (
-            <p>Start with the clinic identity and location details.</p>
+            <p>Provide the main details for this clinic.</p>
           ) : step === 2 ? (
             <p>Set the days and times this clinic operates.</p>
+          ) : step === 3 ? (
+            <p>Configure services offered at this clinic. Services are optional.</p>
+          ) : step === 4 ? (
+            <p>Configure questions patients answer when booking. Questions are optional.</p>
           ) : null}
         </div>
         {step === 1 ? (
@@ -2122,7 +2172,80 @@ function availableClinicListActions(clinic: ClinicRecord): ClinicListAction[] {
     : ['EDIT', 'ACTIVATE', 'ASSIGN_SECRETARY', 'DELETE'];
 }
 
-function ClinicList({
+function DirectoryIcon({ kind }: { kind: 'building' | 'location' | 'person' | 'search' }) {
+  const paths = {
+    building: <><path d="M4 21V6h10v15M14 10h6v11M2 21h20M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1" /></>,
+    location: <><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2" /></>,
+    person: <><circle cx="12" cy="7" r="3" /><path d="M5 21v-2a7 7 0 0 1 14 0v2H5Z" /></>,
+    search: <><circle cx="10" cy="10" r="6" /><path d="m15 15 6 6" /></>,
+  };
+  return <svg className="clinic-directory-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[kind]}</svg>;
+}
+
+function ClinicDirectoryGuide({ onHide }: { onHide: () => void }) {
+  return <aside className="clinic-directory-guide" aria-label="Clinic list guide">
+    <section className="clinic-directory-guide-card">
+      <button className="clinic-directory-hide" type="button" title="Hide panel" aria-label="Hide clinic guide" onClick={onHide}>«</button>
+      <h2>About Clinics</h2><p>A clinic represents a practice location where patients can book appointments.</p>
+      <div className="clinic-directory-guide-divider"><h3>Actions Menu</h3><p>Click the dropdown button (⌄) to manage each clinic. Select an action, then click the main button to continue.</p></div>
+      <div className="clinic-directory-action-guide">
+        {([
+          ['activate', 'Open Clinic', "Manage the queue operation for this clinic (e.g., view today's queue, call next patient)."],
+          ['edit', 'Edit Clinic', 'Update clinic configuration such as name, location, clinic hours, services, and booking questions.'],
+          ['secretary', 'Assign Secretary', 'Assign or change the clinic secretary who can manage the clinic.'],
+          ['disable', 'Disable Clinic', 'Temporarily close the clinic. Not visible to patients.'],
+          ['delete', 'Delete Clinic', 'Permanently delete the clinic and its data, subject to deletion eligibility.'],
+        ] as const).map(([kind, title, text]) => <div key={title} className={kind === 'delete' ? 'is-danger' : ''}><ClinicActionIcon kind={kind} /><div><h4>{title}</h4><p>{text}</p></div></div>)}
+      </div>
+    </section>
+    <section className="clinic-directory-guide-card"><h2>ⓘ Clinic Status</h2><p>Each clinic can be in one of the following statuses:</p><div className="clinic-directory-status-guide">
+      <span className="clinic-status-pill is-active">● Active</span><p>Patients can book appointments.</p>
+      <span className="clinic-status-pill is-draft">● Draft</span><p>Setup not yet complete.<br />Not visible to patients.</p>
+      <span className="clinic-status-pill is-disabled">● Disabled</span><p>Temporarily closed.<br />Not visible to patients.</p>
+    </div></section>
+    <section className="clinic-directory-guide-card"><h2>ⓘ Need Help?</h2><p>Learn more about managing your clinics.</p><details><summary>View Help Articles</summary><h4>Setting up a clinic</h4><p>Use Add New Clinic to enter clinic details, hours, services, and booking questions. Save your progress and review the clinic before activation.</p><h4>Managing an existing clinic</h4><p>Use the status tabs and search to find a clinic. Open its actions menu to edit its configuration or manage its availability.</p></details></section>
+  </aside>;
+}
+
+function ClinicCardDetails({ clinic }: { clinic: ClinicRecord }) {
+  const [overview, setOverview] = useState<ClinicOperationsOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: clinic.timeZone || 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    apiRequest<ClinicOperationsOverview>(`/practice-location/${encodeURIComponent(clinic.id)}/operations/overview?serviceDate=${date}`)
+      .then((data) => { if (!cancelled) setOverview(data); })
+      .catch(() => { if (!cancelled) setOverview(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [clinic.id, date]);
+  const groups: { first: string; last: string; time: string }[] = [];
+  const savedHours = clinic.savedHours?.length ? clinic.savedHours : overview?.recurringSchedules?.slice().sort((a, b) => ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'].indexOf(a.weekday) - ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'].indexOf(b.weekday)).map((row) => ({ day: row.weekday.charAt(0) + row.weekday.slice(1).toLowerCase(), open: row.isOpen, opens: fromApiLocalTime(row.opensAt, '--'), closes: fromApiLocalTime(row.closesAt, '--') })) ?? [];
+  for (const day of savedHours) {
+    const time = day.open ? `${day.opens} – ${day.closes}` : 'Closed';
+    const previous = groups[groups.length - 1];
+    if (previous?.time === time) previous.last = day.day;
+    else groups.push({ first: day.day, last: day.day, time });
+  }
+  const today = overview?.schedule;
+  const dayStatus = overview?.clinicDay?.status;
+  const status = clinic.status !== 'ACTIVE' ? (clinic.status === 'DRAFT' ? 'Draft' : 'Disabled') : dayStatus === 'STARTED' ? 'Open' : dayStatus ? dayStatus.charAt(0) + dayStatus.slice(1).toLowerCase().replace(/_/g, ' ') : overview ? 'Not started' : loading ? 'Loading…' : 'Unavailable';
+  return <>
+    <div className="clinic-card-top">
+      <div className="clinic-directory-identity">
+        <div className="clinic-building-icon"><img src={clinic.clinicPhoto || clinicIllustration} alt={`${clinic.name || 'Clinic'} photo`} /></div>
+        <div className="clinic-clinic-copy"><div className="clinic-card-title"><strong>{clinic.name.trim() || 'Untitled Clinic'}</strong><span className={`clinic-status-pill is-${clinic.status.toLowerCase()}`}>{clinic.status.charAt(0) + clinic.status.slice(1).toLowerCase()}</span></div><small aria-label="Clinic branch name">{clinic.shortCode.trim() ? clinic.shortCode.trim().replace(/[-_]+/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) : '--'}</small>{overview?.clinic.doctorName ? <span className="clinic-card-doctor">{overview.clinic.doctorName}</span> : null}</div>
+      </div>
+      <div className="clinic-card-schedule"><h3><OperationsIcon name="calendar" />Clinic Schedule</h3>{groups.length ? groups.map((group) => <p key={group.first}><b>{group.first}{group.first !== group.last ? ` – ${group.last}` : ''}:</b> {group.time}</p>) : <p>Schedule not configured</p>}</div>
+      <div className="clinic-card-contact"><div className="clinic-directory-location"><DirectoryIcon kind="location" /><span>{clinic.address || 'Address not entered'}</span></div><div className="clinic-secretary"><DirectoryIcon kind="person" /><span className={clinic.secretaryName ? 'clinic-secretary-name' : undefined}>{clinic.secretaryName || 'Not assigned'}</span></div><div><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 3h4l2 5-3 2c2 3 3 4 6 6l2-3 5 2v4c0 2-2 2-3 2C10 20 4 14 3 6c0-2 0-3 2-3Z"/></svg><span>{clinic.contactNumber || 'Contact number not entered'}</span></div></div>
+    </div>
+    <div className="clinic-card-today"><div><OperationsIcon name="clock" /><span>Today: {today ? today.isOpen ? `${fromApiLocalTime(today.opensAt, '--')} – ${fromApiLocalTime(today.closesAt, '--')}` : 'Closed' : loading ? 'Loading…' : 'Schedule unavailable'}</span></div><div className={dayStatus === 'STARTED' ? 'is-open' : ''}><span className="clinic-card-dot" />Clinic: {status}</div></div>
+    <div className="clinic-card-patients"><OperationsIcon name="users" /><span>{overview ? `${overview.appointments.total} appointments today` : loading ? 'Loading…' : 'Patient count unavailable'}</span></div>
+  </>;
+}
+
+export function ClinicList({
   clinics,
   onAdd,
   onOpen,
@@ -2141,6 +2264,8 @@ function ClinicList({
 }) {
   const [filter, setFilter] = useState<'ALL' | ClinicStatus>('ALL');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [showGuidance, setShowGuidance] = useState(true);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [selectedActionByClinic, setSelectedActionByClinic] = useState<
     Record<string, ClinicListAction>
@@ -2168,10 +2293,16 @@ function ClinicList({
       clinics.filter(
         (clinic) =>
           (filter === 'ALL' || clinic.status === filter) &&
-          clinic.name.toLowerCase().includes(search.toLowerCase()),
+          [clinic.name, clinic.address, clinic.country, clinic.timeZone].join(' ').toLowerCase().includes(search.trim().toLowerCase()),
       ),
     [clinics, filter, search],
   );
+
+  const pageSize = 8;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const visibleClinics = filtered.slice(pageStart, pageStart + pageSize);
 
   function selectedActionFor(clinic: ClinicRecord) {
     return selectedActionByClinic[clinic.id] ?? defaultClinicListAction(clinic);
@@ -2209,7 +2340,7 @@ function ClinicList({
   }
 
   return (
-    <section className="clinic-page">
+    <section className={`clinic-page clinic-directory${showGuidance ? ' has-directory-guide' : ''}`}><div className="clinic-directory-main">
       <div className="clinic-list-heading">
         <div>
           <h1>Clinics</h1>
@@ -2222,17 +2353,19 @@ function ClinicList({
           + Add New Clinic
         </button>
       </div>
+      {!showGuidance && <button className="clinic-directory-show-guide" type="button" onClick={() => setShowGuidance(true)}>ⓘ Show clinic guide</button>}
       <div className="clinic-list-controls">
         <div className="clinic-tabs">
           {(['ALL', 'ACTIVE', 'DRAFT', 'DISABLED'] as const).map((value) => (
             <button
               className={filter === value ? 'is-active' : ''}
               type="button"
-              onClick={() => setFilter(value)}
+              onClick={() => { setFilter(value); setPage(1); setOpenActionMenuId(null); }}
+              aria-pressed={filter === value}
               key={value}
             >
               {value === 'ALL'
-                ? 'All Clinics'
+                ? 'All'
                 : value.charAt(0) + value.slice(1).toLowerCase()}{' '}
               <span>
                 {value === 'ALL'
@@ -2242,25 +2375,25 @@ function ClinicList({
             </button>
           ))}
         </div>
-        <input
-          className="clinic-search"
+        <label className="clinic-directory-search"><DirectoryIcon kind="search" /><input
+          aria-label="Search clinics" className="clinic-search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search clinics…"
-        />
+          onChange={(e) => { setSearch(e.target.value); setPage(1); setOpenActionMenuId(null); }}
+          placeholder="Search clinics by name or location…"
+        /></label>
       </div>
-      <div className="clinic-table-card">
+      <div className="clinic-table-card clinic-card-list">
         {filtered.length === 0 ? (
           <div className="clinic-empty">
             <div className="clinic-empty-icon">+</div>
-            <h2>No clinics yet</h2>
-            <p>Create your first clinic to begin configuration.</p>
+            <h2>{clinics.length ? 'No matching clinics' : 'No clinics yet'}</h2>
+            <p>{clinics.length ? 'Try another name, location, or status filter.' : 'Create your first clinic to begin configuration.'}</p>
             <button className="clinic-primary" type="button" onClick={onAdd}>
               Add New Clinic
             </button>
           </div>
         ) : (
-          filtered.map((clinic) => {
+          visibleClinics.map((clinic) => {
             const selectedAction = selectedActionFor(clinic);
             const selectedLabel = clinicListActionLabel(selectedAction);
             const executableNow =
@@ -2271,31 +2404,7 @@ function ClinicList({
               selectedAction === 'DELETE';
             return (
               <article className="clinic-clinic-row" key={clinic.id}>
-                <div className="clinic-building-icon">+</div>
-                <div className="clinic-clinic-copy">
-                  <strong>
-                    {clinic.name || 'Untitled Clinic'}{' '}
-                    <span>{clinic.status}</span>
-                  </strong>
-                  <p>{clinic.address || 'Address not entered'}</p>
-                  <small>
-                    {clinic.country} · {clinic.timeZone}
-                  </small>
-                </div>
-                <div>
-                  <span
-                    className={`clinic-status-pill${clinic.status === 'ACTIVE' ? ' is-active' : ''}`}
-                  >
-                    {clinic.status}
-                  </span>
-                  <small className="clinic-readiness">
-                    {clinic.status === 'DRAFT' ? 'Ready to continue setup' : ''}
-                  </small>
-                </div>
-                <div className="clinic-secretary">
-                  <strong>Secretary</strong>
-                  <span>Not assigned</span>
-                </div>
+                <ClinicCardDetails clinic={clinic} />
                 <div className="clinic-row-actions">
                   <button
                     className="clinic-row-action-main"
@@ -2361,7 +2470,10 @@ function ClinicList({
             );
           })
         )}
+        <div className="clinic-directory-pagination"><span>Showing {filtered.length ? pageStart + 1 : 0} to {Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} clinics</span><div><button type="button" aria-label="Previous page" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setOpenActionMenuId(null); }}>‹</button><span className="clinic-directory-current-page" aria-label={`Page ${currentPage} of ${pageCount}`}>{currentPage}</span><button type="button" aria-label="Next page" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setOpenActionMenuId(null); }}>›</button></div></div>
       </div>
+      </div>
+      {showGuidance && <ClinicDirectoryGuide onHide={() => setShowGuidance(false)} />}
     </section>
   );
 }
@@ -2505,8 +2617,9 @@ export function ClinicTabPage() {
         {
           method: 'POST',
           body: {
+            clinicPhoto: clinic.clinicPhoto,
             name: clinic.name.trim() || undefined,
-            shortCode: clinic.shortCode.trim() || undefined,
+            shortCode: formatClinicShortCode(clinic.shortCode) || undefined,
             addressLine1: clinic.address.trim() || undefined,
             contactNumber: clinic.contactNumber.trim() || undefined,
             clinicEmail: clinic.email.trim() || undefined,
@@ -2533,8 +2646,9 @@ export function ClinicTabPage() {
         method: 'PUT',
         body: {
           basicInfo: {
+            clinicPhoto: clinic.clinicPhoto,
             name: clinic.name.trim() || undefined,
-            shortCode: clinic.shortCode.trim() || undefined,
+            shortCode: formatClinicShortCode(clinic.shortCode) || undefined,
             addressLine1: clinic.address.trim() || undefined,
             contactNumber: clinic.contactNumber.trim() || undefined,
             clinicEmail: clinic.email.trim() || undefined,

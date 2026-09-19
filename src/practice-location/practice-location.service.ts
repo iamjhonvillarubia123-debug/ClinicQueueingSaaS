@@ -141,6 +141,7 @@ export class PracticeLocationService {
           lifecycleStatus: PracticeLocationLifecycleStatus.DRAFT,
           name,
           shortCode,
+          clinicPhoto: createPracticeLocationDto.clinicPhoto || null,
           addressLine1,
           addressLine2: this.normalizeOptionalText(
             createPracticeLocationDto.addressLine2,
@@ -212,6 +213,7 @@ export class PracticeLocationService {
           contactNumber: true,
           clinicEmail: true,
           clinicDescription: true,
+          clinicPhoto: true,
           countryCode: true,
           timeZone: true,
           isBookingEnabled: true,
@@ -355,6 +357,7 @@ export class PracticeLocationService {
         contactNumber: true,
         clinicEmail: true,
         clinicDescription: true,
+        clinicPhoto: true,
         countryCode: true,
         timeZone: true,
         isBookingEnabled: true,
@@ -411,10 +414,17 @@ export class PracticeLocationService {
         contactNumber: true,
         clinicEmail: true,
         clinicDescription: true,
+        clinicPhoto: true,
         countryCode: true,
         timeZone: true,
         isBookingEnabled: true,
         currentRegularPracticeStaffId: true,
+        currentRegularPracticeStaff: {
+          select: {
+            isActive: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        },
         createdAt: true,
         updatedAt: true,
         services: {
@@ -463,6 +473,7 @@ export class PracticeLocationService {
             contactNumber: true,
             clinicEmail: true,
             clinicDescription: true,
+            clinicPhoto: true,
             countryCode: true,
             timeZone: true,
             schedules: {

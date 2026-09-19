@@ -66,6 +66,7 @@ describe('PracticeLocationOperationsService', () => {
       },
       practiceSchedules: [
         {
+          weekday: 'TUESDAY',
           isOpen: true,
           opensAtLocal: new Date('1970-01-01T08:00:00.000Z'),
           closesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
@@ -156,6 +157,7 @@ describe('PracticeLocationOperationsService', () => {
       },
       practiceSchedules: [
         {
+          weekday: 'TUESDAY',
           isOpen: true,
           opensAtLocal: new Date('1970-01-01T08:00:00.000Z'),
           closesAtLocal: new Date('1970-01-01T17:00:00.000Z'),
@@ -205,6 +207,7 @@ describe('PracticeLocationOperationsService', () => {
       },
       practiceSchedules: [
         {
+          weekday: 'TUESDAY',
           isOpen: true,
           opensAtLocal: new Date('1970-01-01T08:00:00.000Z'),
           closesAtLocal: new Date('1970-01-01T17:00:00.000Z'),

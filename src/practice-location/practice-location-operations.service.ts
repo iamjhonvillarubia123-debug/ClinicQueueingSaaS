@@ -367,8 +367,12 @@ export class PracticeLocationOperationsService {
           },
         },
         practiceSchedules: {
-          where: { weekday: WEEKDAYS[serviceDate.getUTCDay()] },
-          select: { isOpen: true, opensAtLocal: true, closesAtLocal: true },
+          select: {
+            weekday: true,
+            isOpen: true,
+            opensAtLocal: true,
+            closesAtLocal: true,
+          },
         },
         scheduleExceptions: {
           where: { serviceDate },
@@ -438,7 +442,10 @@ export class PracticeLocationOperationsService {
     ]);
 
     const clinicDay = location.clinicDays[0] ?? null;
-    const recurringSchedule = location.practiceSchedules[0] ?? null;
+    const recurringSchedule =
+      location.practiceSchedules.find(
+        (row) => row.weekday === WEEKDAYS[serviceDate.getUTCDay()],
+      ) ?? null;
     const scheduleException = location.scheduleExceptions[0] ?? null;
     const schedule = scheduleException ?? recurringSchedule;
     const counts = Object.values(AppointmentStatus).reduce<
@@ -471,9 +478,20 @@ export class PracticeLocationOperationsService {
         countryCode: location.countryCode,
         timeZone: location.timeZone,
         lifecycleStatus: location.lifecycleStatus,
-        doctorName:
-          `${location.doctorProfile.professionalTitle} ${location.doctorProfile.user.firstName} ${location.doctorProfile.user.lastName}`.trim(),
+        doctorName: [
+          location.doctorProfile.professionalTitle,
+          location.doctorProfile.user.firstName,
+          location.doctorProfile.user.lastName,
+        ]
+          .filter(Boolean)
+          .join(' '),
       },
+      recurringSchedules: location.practiceSchedules.map((row) => ({
+        weekday: row.weekday,
+        isOpen: row.isOpen,
+        opensAt: this.formatTime(row.opensAtLocal),
+        closesAt: this.formatTime(row.closesAtLocal),
+      })),
       serviceDate: serviceDateInput,
       schedule: schedule
         ? {

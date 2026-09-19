@@ -44,7 +44,9 @@ export async function apiRequest<T>(
     const message =
       typeof payload?.message === 'string'
         ? payload.message
-        : 'Something went wrong. Please try again.';
+        : Array.isArray(payload?.message) && payload.message.some((item: unknown) => typeof item === 'string')
+          ? payload.message.filter((item: unknown) => typeof item === 'string').join(' ')
+          : 'Something went wrong. Please try again.';
     const requestId =
       typeof payload?.requestId === 'string' ? payload.requestId : undefined;
     const retryAfter = Number(

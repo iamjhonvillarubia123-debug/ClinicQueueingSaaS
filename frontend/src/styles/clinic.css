@@ -578,13 +578,17 @@
   grid-template-columns: 150px 1fr;
   gap: 8px;
   margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .clinic-review-card dt {
-  color: #69717c;
+  color: #161616;
+  font-weight: 700;
 }
 .clinic-review-card dd {
   margin: 0;
   overflow-wrap: anywhere;
+  font-weight: 400;
 }
 .clinic-review-card p {
   margin: 6px 0;
@@ -1316,17 +1320,21 @@
  .clinic-setup-page .clinic-footer-actions { flex-wrap: wrap; }
 }
 
-.clinic-setup-page .clinic-basic-layout { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; }
-.clinic-basic-layout > label:nth-child(1) { grid-area: 1 / 5 / 2 / 7; }
-.clinic-basic-layout > label:nth-child(2) { grid-area: 2 / 5 / 3 / 7; }
-.clinic-basic-layout > label:nth-child(3) { grid-area: 3 / 1 / 4 / 4; }
-.clinic-basic-layout > label:nth-child(5) { grid-area: 3 / 4 / 4 / 7; }
-.clinic-basic-layout > label:nth-child(6) { grid-area: 4 / 1 / 5 / 4; }
-.clinic-basic-layout > label:nth-child(7) { grid-area: 4 / 4 / 5 / 7; }
-.clinic-basic-layout > label:nth-child(8) { grid-area: 5 / 1 / 6 / 7; }
-.clinic-basic-layout > label:nth-child(4) { grid-area: 6 / 1 / 7 / 4; }
-.clinic-photo-picker { grid-area: 1 / 1 / 3 / 3; }
-.clinic-photo-preview { grid-area: 1 / 3 / 3 / 5; }
+.clinic-setup-page .clinic-basic-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.clinic-basic-layout > label { min-width: 0; }
+.clinic-basic-layout > label:nth-child(1) { grid-area: 1 / 1 / 2 / 2; }
+.clinic-basic-layout > label:nth-child(2) { grid-area: 1 / 2 / 2 / 3; }
+.clinic-basic-layout > label:nth-child(3) { grid-area: 2 / 1 / 3 / 3; }
+.clinic-basic-layout > label:nth-child(5) { grid-area: 3 / 2 / 4 / 3; }
+.clinic-basic-layout > label:nth-child(6) { grid-area: 4 / 1 / 5 / 2; }
+.clinic-basic-layout > label:nth-child(7) { grid-area: 4 / 2 / 5 / 3; }
+.clinic-basic-layout > label:nth-child(8) { grid-area: 5 / 1 / 6 / 3; }
+.clinic-basic-layout > label:nth-child(4) { grid-area: 3 / 1 / 4 / 2; }
+.clinic-photo-section { grid-area: 6 / 1 / 7 / 3; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 12px; border-top: 1px solid #dce3ee; padding-top: 16px; min-width: 0; }
+.clinic-photo-heading { grid-column: 1 / -1; display: grid; gap: 8px; }
+.clinic-photo-heading small { color: #526482; font-size: 12px; font-weight: 400; }
+.clinic-photo-picker, .clinic-photo-preview { align-content: start; }
+.clinic-photo-section .clinic-photo-drop, .clinic-photo-section .clinic-photo-frame { height: 180px; min-height: 180px; box-sizing: border-box; }
 .clinic-photo-picker, .clinic-photo-preview { min-width: 0; display: grid; gap: 10px; font-size: 14px; }
 .clinic-photo-picker small, .clinic-photo-preview small { color: #526482; font-size: 11px; line-height: 1.5; }
 .clinic-photo-drop { border: 1px dashed #98a8c0; border-radius: 6px; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 12px; color: #465b7c; }
@@ -1338,13 +1346,15 @@
 @media (max-width: 700px) {
  .clinic-setup-page .clinic-basic-layout { grid-template-columns: 1fr 1fr; }
  .clinic-basic-layout > label:nth-child(n) { grid-area: auto; grid-column: 1 / -1; }
- .clinic-photo-picker { grid-area: 1 / 1 / 2 / 2; }
- .clinic-photo-preview { grid-area: 1 / 2 / 2 / 3; }
+ .clinic-photo-section { grid-area: auto; grid-column: 1 / -1; }
+ .clinic-photo-picker { grid-area: auto; }
+ .clinic-photo-preview { grid-area: auto; }
 }
 @media (max-width: 420px) {
  .clinic-setup-page .clinic-basic-layout { display: flex; flex-direction: column; }
  .clinic-basic-layout > * { width: 100%; }
- .clinic-photo-picker, .clinic-photo-preview { order: -1; }
+ .clinic-photo-section { grid-template-columns: 1fr; }
+ .clinic-photo-picker, .clinic-photo-preview { order: 0; }
 }
 
 img.clinic-guide-illustration { object-fit: contain; }

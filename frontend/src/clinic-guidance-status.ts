@@ -84,23 +84,23 @@ const STEP_GUIDANCE: Record<
     tips: [],
   },
   3: {
-    heading: 'About Services',
+    heading: 'About Clinic Services',
     body: 'Add the services patients can choose when booking at this clinic.',
     tips: [
-      'Services are optional for activation',
-      'Use clear patient-facing service names',
-      'Set an expected duration for each service',
-      'You can add or change services later',
+      'Services are optional for activation.',
+      'Use clear patient-facing service names.',
+      'Set an expected duration for each service.',
+      'You can add or change services later.',
     ],
   },
   4: {
-    heading: 'About Booking Questions',
+    heading: 'About Clinic Questions',
     body: 'Collect information that is useful before the patient arrives.',
     tips: [
-      'Booking questions are optional for activation',
-      'Only ask for information needed for the visit',
-      'Mark a question required only when necessary',
-      'You can add or change questions later',
+      'Booking questions are optional for activation.',
+      'Only ask for information needed for the visit.',
+      'Mark a question required only when necessary.',
+      'You can add or change questions later.',
     ],
   },
   5: {
@@ -115,6 +115,7 @@ const STEP_GUIDANCE: Record<
   },
 };
 
+let requestVersion = 0;
 let lastClinicId = '';
 let latestState: GuidanceState | null = null;
 let refreshTimer: number | null = null;
@@ -122,14 +123,14 @@ let observerStarted = false;
 
 function normalizeClock(value?: string | null) {
   if (!value) return null;
-  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  const match = value.match(/(?:^|T)(\d{1,2}):(\d{2})/);
   if (!match) return null;
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function schedulesReady(schedules: Schedule[]) {
-  return schedules.some((schedule) => {
-    if (!schedule.isOpen) return false;
+  const openDays = schedules.filter((schedule) => schedule.isOpen);
+  return openDays.length > 0 && openDays.every((schedule) => {
     const opens = normalizeClock(schedule.opensAtLocal);
     const closes = normalizeClock(schedule.closesAtLocal);
     const maximum = normalizeClock(
@@ -235,9 +236,9 @@ export function ensureGuidancePanel() {
   const contextDetails =
     context.step === 2
       ? clinicHoursGuidanceMarkup()
-      : `<h4>Tips</h4><ul>${guidance.tips
+      : `<div class="${context.step === 3 || context.step === 4 ? 'clinic-services-tips' : ''}">${context.step === 3 || context.step === 4 ? '<svg class="clinic-services-tips-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 2h9l5 5v15H5ZM14 2v6h5M8 12h8M8 16h8"/></svg>' : ''}<h4>Tips</h4><ul>${guidance.tips
           .map((tip) => `<li>${tip}</li>`)
-          .join('')}</ul>`;
+          .join('')}</ul></div>${context.step === 3 ? '<div class="clinic-services-duration-note"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/></svg></span><div><h4>Service duration and queue</h4><p>The service duration determines the estimated time for each patient in the queue.<br>A longer duration will allocate more time per patient and may reduce the number of available queue slots for the same clinic hours.</p></div></div>' : ''}`;
   aside.innerHTML = `
     <section class="clinic-guide-card clinic-journey-context-card${context.step === 2 ? ' clinic-hours-guide-card' : ''}">
       <h3>${guidance.heading}</h3>
@@ -245,9 +246,9 @@ export function ensureGuidancePanel() {
       ${contextDetails}
     </section>
     <section class="clinic-guide-card">
-      <h3>${context.step === 2 ? 'Set up your clinic' : 'About Clinics'}</h3>
+      <h3>${context.step === 2 || context.step === 3 || context.step === 4 ? 'Set up your clinic' : 'About Clinics'}</h3>
       <p>Complete the following to prepare your clinic for activation.</p>
-      ${context.step === 2 ? '' : '<h4>Set up your clinic</h4>'}
+      ${context.step === 2 || context.step === 3 || context.step === 4 ? '' : '<h4>Set up your clinic</h4>'}
       <ul>${guidanceStatusListMarkup()}</ul>
     </section>
     <section class="clinic-guide-card clinic-guide-note">
@@ -309,36 +310,6 @@ function decorateSetup(state: GuidanceState) {
   }
 }
 
-function visibleBasicInformationComplete(serverBasic: boolean) {
-  const labels = [
-    ...document.querySelectorAll<HTMLLabelElement>(
-      '.clinic-basic-layout > label',
-    ),
-  ];
-  const valueFor = (caption: string) => {
-    const label = labels.find((candidate) =>
-      candidate.textContent?.trim().startsWith(caption),
-    );
-    if (!label) return '';
-    const control = label.querySelector<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >('input, textarea, select');
-    if (control) return control.value.trim();
-    const picker = label.querySelector<HTMLButtonElement>(
-      'button[aria-haspopup="listbox"]',
-    );
-    return picker?.textContent?.trim() ?? '';
-  };
-
-  if (!labels.length) return serverBasic;
-  return Boolean(
-    valueFor('Clinic Name') &&
-      valueFor('Address') &&
-      valueFor('Country') &&
-      valueFor('Timezone'),
-  );
-}
-
 async function fetchState(clinicId: string): Promise<GuidanceState | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/practice-location`, {
@@ -391,12 +362,7 @@ function applyLatestState() {
     ensureGuidancePanel();
     decoratePhotoTips();
     if (!latestState) return;
-    const basic = visibleBasicInformationComplete(latestState.basic);
-    decorateSetup({
-      ...latestState,
-      basic,
-      review: basic && latestState.hours,
-    });
+    decorateSetup(latestState);
   } finally {
     startObserver();
   }
@@ -420,7 +386,10 @@ async function refresh() {
 
   if (clinicId !== lastClinicId || !latestState) {
     lastClinicId = clinicId;
-    latestState = await fetchState(clinicId);
+    const version = ++requestVersion;
+    const state = await fetchState(clinicId);
+    if (version !== requestVersion || currentClinicId() !== clinicId) return;
+    latestState = state;
   }
   applyLatestState();
 }
@@ -437,5 +406,10 @@ startObserver();
 document.addEventListener('input', scheduleRefresh, true);
 document.addEventListener('change', scheduleRefresh, true);
 window.addEventListener('popstate', scheduleRefresh);
+window.addEventListener('clinic-configuration-saved', () => {
+  requestVersion += 1;
+  latestState = null;
+  scheduleRefresh();
+});
 
 scheduleRefresh();

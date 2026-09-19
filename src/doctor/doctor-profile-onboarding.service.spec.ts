@@ -47,6 +47,7 @@ describe('DoctorProfileOnboardingService', () => {
   };
 
   const prismaServiceMock = {
+    doctorProfile: { upsert: jest.fn() },
     user: { findUnique: jest.fn() },
     $transaction: jest.fn(),
   };
@@ -64,6 +65,45 @@ describe('DoctorProfileOnboardingService', () => {
     lastName: 'Doe',
     doctorProfile: null,
   };
+
+  it('saves photos without publishing an incomplete profile', async () => {
+    await service.updatePresentation('doctor-user', {
+      profilePhotoUrl: 'data:image/jpeg;base64,/9j/AA==',
+    });
+    expect(prismaServiceMock.doctorProfile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          userId: 'doctor-user',
+          isProfilePublic: false,
+          profilePhotoUrl: 'data:image/jpeg;base64,/9j/AA==',
+        }),
+      }),
+    );
+  });
+  it('rejects publishing before professional information is complete', async () => {
+    await expect(
+      service.updatePresentation('doctor-user', { isProfilePublic: true }),
+    ).rejects.toThrow('Complete your professional information');
+    expect(prismaServiceMock.doctorProfile.upsert).not.toHaveBeenCalled();
+  });
+
+  it('saves photo position without replacing the image or publication flag', async () => {
+    await service.updatePresentation('doctor-user', {
+      profilePhotoX: 25,
+      profilePhotoY: 70,
+    });
+    expect(prismaServiceMock.doctorProfile.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: {
+          profilePhotoUrl: undefined,
+          profilePhotoZoom: undefined,
+          isProfilePublic: undefined,
+          profilePhotoX: 25,
+          profilePhotoY: 70,
+        },
+      }),
+    );
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

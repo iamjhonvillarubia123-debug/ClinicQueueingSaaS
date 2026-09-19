@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ensureGuidancePanel } from './clinic-guidance-status';
 
 function visitStep(step: number) {
@@ -9,15 +9,43 @@ function visitStep(step: number) {
 afterEach(() => {
   window.history.replaceState({}, '', '/');
   document.body.innerHTML = '';
+  vi.unstubAllGlobals();
 });
 
 describe('clinic setup guidance navigation', () => {
+  it('refreshes saved completion across steps and recognizes serialized schedule times', async () => {
+    let saved = {
+      id: 'test-clinic', name: 'Clinic', addressLine1: 'Street', countryCode: 'PH', timeZone: 'Asia/Manila',
+      practiceSchedules: [] as Record<string, unknown>[], services: [] as unknown[], bookingQuestions: [] as unknown[],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [saved] })));
+    document.body.innerHTML = '<div class="clinic-setup-layout"></div>';
+    visitStep(2);
+    window.dispatchEvent(new Event('clinic-configuration-saved'));
+    const row = (label: string) => document.querySelector(`[data-guidance-label="${label}"]`);
+    await vi.waitFor(() => expect(row('Clinic hours and schedules')).toHaveClass('is-incomplete'));
+    saved = { ...saved, practiceSchedules: [{ isOpen: true, opensAtLocal: '1970-01-01T08:00:00.000Z', closesAtLocal: '1970-01-01T17:00:00.000Z', maximumOperatingUntilLocal: '1970-01-01T18:00:00.000Z' }], services: [{}], bookingQuestions: [{}] };
+    window.dispatchEvent(new Event('clinic-configuration-saved'));
+    await vi.waitFor(() => expect(row('Clinic hours and schedules')).toHaveClass('is-complete'));
+    expect(row('Services offered')).toHaveClass('is-complete');
+    expect(row('Booking questions')).toHaveClass('is-complete');
+    expect(row('Review before activation')).toHaveClass('is-complete');
+    visitStep(5);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await vi.waitFor(() => expect(row('Review before activation')).toHaveClass('is-complete'));
+    saved = { ...saved, practiceSchedules: [], services: [], bookingQuestions: [] };
+    window.dispatchEvent(new Event('clinic-configuration-saved'));
+    await vi.waitFor(() => expect(row('Clinic hours and schedules')).toHaveClass('is-incomplete'));
+    expect(row('Services offered')).toHaveClass('is-incomplete');
+    expect(row('Booking questions')).toHaveClass('is-incomplete');
+    expect(row('Review before activation')).toHaveClass('is-incomplete');
+  });
   it('replaces guidance on forward and backward navigation without duplicates', () => {
     document.body.innerHTML = '<div class="clinic-setup-layout"></div>';
     for (const [step, heading] of [
       [2, 'About Clinic Hours'],
-      [3, 'About Services'],
-      [4, 'About Booking Questions'],
+      [3, 'About Clinic Services'],
+      [4, 'About Clinic Questions'],
       [5, 'Before Activation'],
       [2, 'About Clinic Hours'],
       [5, 'Before Activation'],

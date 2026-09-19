@@ -12,6 +12,7 @@ import {
 } from '../../generated/prisma/client';
 import { accountIdentifierIsVerified } from '../auth/security/account-identifier';
 import { PrismaService } from '../prisma/prisma.service';
+import { UpdateDoctorPresentationDto } from './dto/update-doctor-presentation.dto';
 import { CompleteDoctorOnboardingDto } from './dto/complete-doctor-onboarding.dto';
 
 @Injectable()
@@ -29,6 +30,8 @@ export class DoctorProfileOnboardingService {
         loginIdentifierType: true,
         emailVerifiedAt: true,
         mobileVerifiedAt: true,
+        email: true,
+        mobileNumber: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -42,6 +45,9 @@ export class DoctorProfileOnboardingService {
             licenseNumber: true,
             profileDescription: true,
             profilePhotoUrl: true,
+            profilePhotoZoom: true,
+            profilePhotoX: true,
+            profilePhotoY: true,
             publicIdentifier: true,
             publicSlug: true,
             isProfilePublic: true,
@@ -55,12 +61,41 @@ export class DoctorProfileOnboardingService {
     return {
       onboardingComplete: this.profileIsComplete(user!.doctorProfile),
       user: {
+        email: user!.email,
+        mobileNumber: user!.mobileNumber,
         firstName: user!.firstName,
         middleName: user!.middleName,
         lastName: user!.lastName,
       },
       profile: user!.doctorProfile,
     };
+  }
+
+  async updatePresentation(userId: string, dto: UpdateDoctorPresentationDto) {
+    const state = await this.getProfileState(userId);
+    if (dto.isProfilePublic && !state.onboardingComplete)
+      throw new ConflictException(
+        'Complete your professional information before publishing.',
+      );
+    await this.prisma.doctorProfile.upsert({
+      where: { userId },
+      create: {
+        userId,
+        profilePhotoUrl: dto.profilePhotoUrl,
+        profilePhotoZoom: dto.profilePhotoZoom,
+        profilePhotoX: dto.profilePhotoX,
+        profilePhotoY: dto.profilePhotoY,
+        isProfilePublic: false,
+      },
+      update: {
+        profilePhotoUrl: dto.profilePhotoUrl,
+        profilePhotoZoom: dto.profilePhotoZoom,
+        profilePhotoX: dto.profilePhotoX,
+        profilePhotoY: dto.profilePhotoY,
+        isProfilePublic: dto.isProfilePublic,
+      },
+    });
+    return this.getProfileState(userId);
   }
 
   async completeOnboarding(
@@ -161,6 +196,9 @@ export class DoctorProfileOnboardingService {
           licenseNumber: true,
           profileDescription: true,
           profilePhotoUrl: true,
+          profilePhotoZoom: true,
+          profilePhotoX: true,
+          profilePhotoY: true,
           publicIdentifier: true,
           publicSlug: true,
           isProfilePublic: true,

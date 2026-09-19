@@ -181,6 +181,7 @@ export class PracticeLocationConfigurationApplyService {
             contactNumber: draft.contactNumber,
             clinicEmail: draft.clinicEmail,
             clinicDescription: draft.clinicDescription,
+            clinicPhoto: draft.clinicPhoto,
             countryCode: draft.countryCode,
             timeZone: draft.timeZone,
           },

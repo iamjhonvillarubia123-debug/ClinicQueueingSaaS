@@ -277,6 +277,8 @@ export class PracticeLocationConfigurationDraftService {
       clinicEmail:
         this.normalizeOptionalText(info.clinicEmail)?.toLowerCase() ?? null,
       clinicDescription: this.normalizeOptionalText(info.clinicDescription),
+      clinicPhoto:
+        info.clinicPhoto === undefined ? undefined : info.clinicPhoto || null,
       countryCode:
         this.normalizeOptionalText(info.countryCode)?.toUpperCase() ?? null,
       timeZone:
@@ -489,6 +491,7 @@ export class PracticeLocationConfigurationDraftService {
         contactNumber: true,
         clinicEmail: true,
         clinicDescription: true,
+        clinicPhoto: true,
         countryCode: true,
         timeZone: true,
         services: { orderBy: [{ name: 'asc' }, { id: 'asc' }] },

@@ -1,6 +1,20 @@
-import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  Matches,
+  IsEmail,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class CreatePracticeLocationDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(400000)
+  @Matches(/^(?:data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2})?$/, {
+    message: 'Choose a valid clinic JPEG photo.',
+  })
+  clinicPhoto?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(200)
