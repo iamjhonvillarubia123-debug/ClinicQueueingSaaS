@@ -24,6 +24,7 @@ import { SecretarySettingsDraftExceptionService } from './secretary-settings-dra
 import { SecretarySettingsDraftScheduleService } from './secretary-settings-draft-schedule.service';
 import { SecretarySettingsDraftServiceProposalService } from './secretary-settings-draft-service.service';
 import { SecretarySettingsDraftService } from './secretary-settings-draft.service';
+import { SaveAppointmentModeProposalDto } from './dto/save-appointment-mode-proposal.dto';
 
 @Controller('secretary-settings-drafts')
 @UseGuards(SessionAuthGuard, CsrfOriginGuard)
@@ -43,6 +44,19 @@ export class SecretarySettingsDraftController {
     @Request() request: AuthenticatedRequest,
   ) {
     return this.secretarySettingsDraftService.create(request.user.userId, dto);
+  }
+
+  @Put(':draftId/appointment-mode')
+  saveAppointmentMode(
+    @Param('draftId') draftId: string,
+    @Body() dto: SaveAppointmentModeProposalDto,
+    @Request() request: AuthenticatedRequest,
+  ) {
+    return this.secretarySettingsDraftScheduleService.saveAppointmentModeProposal(
+      request.user.userId,
+      draftId,
+      dto.proposal,
+    );
   }
 
   @Post(':draftId/services')

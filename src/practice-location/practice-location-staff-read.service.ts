@@ -1,3 +1,4 @@
+import { invitationCoverageRanges } from '../practice-staff/invitation-coverage';
 import {
   BadRequestException,
   Injectable,
@@ -17,7 +18,6 @@ export class PracticeLocationStaffReadService {
         name: true,
         currentRegularPracticeStaffId: true,
         staffAssignments: {
-          where: { disconnectedAt: null },
           orderBy: [{ isActive: 'desc' }, { activatedAt: 'asc' }],
           select: {
             id: true,
@@ -25,6 +25,7 @@ export class PracticeLocationStaffReadService {
             isActive: true,
             activatedAt: true,
             deactivatedAt: true,
+            disconnectedAt: true,
             updatedAt: true,
             user: {
               select: {
@@ -33,9 +34,11 @@ export class PracticeLocationStaffReadService {
                 lastName: true,
                 email: true,
                 mobileNumber: true,
+                loginIdentifierType: true,
                 role: true,
                 accountStatus: true,
                 emailVerifiedAt: true,
+                mobileVerifiedAt: true,
               },
             },
             authorityBundles: {
@@ -57,19 +60,25 @@ export class PracticeLocationStaffReadService {
           },
         },
         secretaryInvitations: {
-          where: { status: 'PENDING' },
+          where: { status: { in: ['PENDING', 'DECLINED'] } },
           orderBy: { createdAt: 'desc' },
           select: {
             id: true,
             firstName: true,
             lastName: true,
             normalizedEmail: true,
+            targetUserId: true,
+            identifierType: true,
+            normalizedIdentifier: true,
+            updatedAt: true,
             mobileNumber: true,
             status: true,
             requestedAssignmentType: true,
             requestedAuthorityBundles: true,
             requestedCancelClinicDay: true,
             requestedCoverageMode: true,
+            coverageRevisions: true,
+            requestedCoverageRanges: true,
             requestedFromServiceDate: true,
             requestedToServiceDate: true,
             expiresAt: true,
@@ -86,11 +95,9 @@ export class PracticeLocationStaffReadService {
     const candidates = await this.prisma.user.findMany({
       where: {
         role: 'SECRETARY',
-        accountStatus: 'ACTIVE',
-        emailVerifiedAt: { not: null },
         practiceStaffAssignments: {
           some: {
-            disconnectedAt: null,
+            removedByDoctorAt: null,
             practiceLocation: { doctorProfile: { userId } },
           },
         },
@@ -102,9 +109,35 @@ export class PracticeLocationStaffReadService {
         lastName: true,
         email: true,
         mobileNumber: true,
+        loginIdentifierType: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        emailVerifiedAt: true,
+        mobileVerifiedAt: true,
       },
     });
 
+    const invitations = location.secretaryInvitations.map((invitation) => ({
+      invitationId: invitation.id,
+      targetUserId: invitation.targetUserId,
+      identityKey: invitation.targetUserId
+        ? `user:${invitation.targetUserId}`
+        : `identifier:${invitation.identifierType}:${invitation.normalizedIdentifier}`,
+      updatedAt: invitation.updatedAt,
+      name: `${invitation.firstName} ${invitation.lastName}`.trim(),
+      email: invitation.normalizedEmail,
+      mobileNumber: invitation.mobileNumber,
+      status: invitation.status,
+      assignmentType: invitation.requestedAssignmentType,
+      authorityBundles: invitation.requestedAuthorityBundles,
+      requestedCancelClinicDay: invitation.requestedCancelClinicDay,
+      coverageMode: invitation.requestedCoverageMode,
+      coverageRanges: invitationCoverageRanges(invitation),
+      fromServiceDate: invitation.requestedFromServiceDate,
+      toServiceDate: invitation.requestedToServiceDate,
+      invitedAt: invitation.createdAt,
+      expiresAt: invitation.expiresAt,
+    }));
     return {
       clinic: { id: location.id, name: location.name },
       staffAssignments: location.staffAssignments.map((assignment) => ({
@@ -113,18 +146,23 @@ export class PracticeLocationStaffReadService {
         name: `${assignment.user.firstName} ${assignment.user.lastName}`.trim(),
         email: assignment.user.email,
         mobileNumber: assignment.user.mobileNumber,
-        assignmentActive: assignment.isActive,
+        disconnectedAt: assignment.disconnectedAt,
+        assignmentActive: assignment.isActive && !assignment.disconnectedAt,
         operationallyReady:
+          !assignment.disconnectedAt &&
           assignment.isActive &&
           assignment.staffRole === 'SECRETARY' &&
           assignment.user.role === 'SECRETARY' &&
           assignment.user.accountStatus === 'ACTIVE' &&
-          assignment.user.emailVerifiedAt !== null,
+          this.hasVerifiedPrimaryIdentity(assignment.user),
         isClinicSecretary:
           assignment.id === location.currentRegularPracticeStaffId,
         assignmentType:
           assignment.id === location.currentRegularPracticeStaffId ||
-          assignment.authorityBundles.length > 0
+          (!assignment.substituteSecretaryCoverages.some(
+            (coverage) => coverage.status === 'ACTIVE',
+          ) &&
+            assignment.authorityBundles.length > 0)
             ? 'CLINIC_SECRETARY'
             : 'SUBSTITUTE_SECRETARY',
         assignedAt: assignment.activatedAt,
@@ -141,26 +179,28 @@ export class PracticeLocationStaffReadService {
         substituteCoverages: assignment.substituteSecretaryCoverages,
       })),
       candidates: candidates.map((candidate) => ({
+        unavailableReason:
+          candidate.accountStatus &&
+          (candidate.accountStatus !== 'ACTIVE' ||
+            candidate.administrativeRestrictionStatus !== 'NONE' ||
+            !this.hasVerifiedPrimaryIdentity(candidate))
+            ? 'This account must be active and verified to receive an invitation.'
+            : null,
         userId: candidate.id,
         name: `${candidate.firstName} ${candidate.lastName}`.trim(),
+        identifier:
+          candidate.loginIdentifierType === 'MOBILE'
+            ? candidate.mobileNumber
+            : candidate.email,
         email: candidate.email,
         mobileNumber: candidate.mobileNumber,
       })),
-      pendingInvitations: location.secretaryInvitations.map((invitation) => ({
-        invitationId: invitation.id,
-        name: `${invitation.firstName} ${invitation.lastName}`.trim(),
-        email: invitation.normalizedEmail,
-        mobileNumber: invitation.mobileNumber,
-        status: invitation.status,
-        assignmentType: invitation.requestedAssignmentType,
-        authorityBundles: invitation.requestedAuthorityBundles,
-        requestedCancelClinicDay: invitation.requestedCancelClinicDay,
-        coverageMode: invitation.requestedCoverageMode,
-        fromServiceDate: invitation.requestedFromServiceDate,
-        toServiceDate: invitation.requestedToServiceDate,
-        invitedAt: invitation.createdAt,
-        expiresAt: invitation.expiresAt,
-      })),
+      pendingInvitations: invitations.filter(
+        (item) => item.status === 'PENDING',
+      ),
+      declinedInvitations: invitations.filter(
+        (item) => item.status === 'DECLINED',
+      ),
     };
   }
 
@@ -170,6 +210,17 @@ export class PracticeLocationStaffReadService {
     serviceDateInput: string,
   ) {
     const serviceDate = this.parseServiceDate(serviceDateInput);
+    const staffUserSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      loginIdentifierType: true,
+      role: true,
+      accountStatus: true,
+      emailVerifiedAt: true,
+      mobileVerifiedAt: true,
+    } as const;
     const location = await this.prisma.practiceLocation.findFirst({
       where: { id: practiceLocationId, doctorProfile: { userId } },
       select: {
@@ -183,17 +234,7 @@ export class PracticeLocationStaffReadService {
             isActive: true,
             createdAt: true,
             updatedAt: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                role: true,
-                accountStatus: true,
-                emailVerifiedAt: true,
-              },
-            },
+            user: { select: staffUserSelect },
           },
         },
         staffAssignments: {
@@ -205,17 +246,7 @@ export class PracticeLocationStaffReadService {
             isActive: true,
             createdAt: true,
             updatedAt: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                role: true,
-                accountStatus: true,
-                emailVerifiedAt: true,
-              },
-            },
+            user: { select: staffUserSelect },
           },
         },
         clinicDays: {
@@ -232,17 +263,7 @@ export class PracticeLocationStaffReadService {
                 isActive: true,
                 createdAt: true,
                 updatedAt: true,
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true,
-                    role: true,
-                    accountStatus: true,
-                    emailVerifiedAt: true,
-                  },
-                },
+                user: { select: staffUserSelect },
               },
             },
           },
@@ -289,10 +310,12 @@ export class PracticeLocationStaffReadService {
       id: string;
       firstName: string;
       lastName: string;
-      email: string;
+      email: string | null;
+      loginIdentifierType: 'EMAIL' | 'MOBILE';
       role: string;
       accountStatus: string;
       emailVerifiedAt: Date | null;
+      mobileVerifiedAt: Date | null;
     };
   }) {
     return {
@@ -309,10 +332,20 @@ export class PracticeLocationStaffReadService {
         staff.staffRole === 'SECRETARY' &&
         staff.user.role === 'SECRETARY' &&
         staff.user.accountStatus === 'ACTIVE' &&
-        staff.user.emailVerifiedAt !== null,
+        this.hasVerifiedPrimaryIdentity(staff.user),
       assignedAt: staff.createdAt,
       updatedAt: staff.updatedAt,
     };
+  }
+
+  private hasVerifiedPrimaryIdentity(user: {
+    loginIdentifierType: 'EMAIL' | 'MOBILE';
+    emailVerifiedAt: Date | null;
+    mobileVerifiedAt: Date | null;
+  }): boolean {
+    return user.loginIdentifierType === 'EMAIL'
+      ? user.emailVerifiedAt !== null
+      : user.mobileVerifiedAt !== null;
   }
 
   private parseServiceDate(value: string): Date {

@@ -70,6 +70,13 @@ jobs:
           src/practice-location/practice-location-staff-read.service.spec.ts
           src/queue/substitute-secretary.service.spec.ts
           src/queue/start-clinic-operating-secretary.service.spec.ts
+      - name: Lint Secretary invitation controls
+        run: >-
+          npx eslint
+          src/practice-staff/secretary-invitation.service.ts
+          src/practice-staff/secretary-invitation.service.spec.ts
+          src/practice-staff/dto/create-secretary-invitation.dto.ts
+          src/practice-staff/dto/update-secretary-invitation.dto.ts
       - name: Check development acceptance scripts
         run: |
           node --check scripts/create-dev-public-fixture.cjs
@@ -77,7 +84,7 @@ jobs:
           node --check scripts/show-dev-latest-booking-group-recovery-otp.cjs
           node --check scripts/show-dev-latest-appointment-recovery-otp.cjs
           node --check scripts/wire-clinic-activation-ui.mjs
-      - name: Test public booking, patient recovery, clinic configuration, open clinic reads, and operating staff authority
+      - name: Test public booking, patient recovery, clinic configuration, open clinic reads, operating staff authority, and Secretary invitations
         run: >-
           npm test -- --runInBand
           public-booking-entry.service.spec.ts
@@ -95,4 +102,5 @@ jobs:
           practice-location-staff-read.service.spec.ts
           substitute-secretary.service.spec.ts
           start-clinic-operating-secretary.service.spec.ts
+          secretary-invitation.service.spec.ts
       - run: npm run build

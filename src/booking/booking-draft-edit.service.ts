@@ -9,6 +9,8 @@ import {
   ServiceAvailabilityStatus,
 } from '../../generated/prisma/client';
 import { OtpService } from '../otp/otp.service';
+import { resolveAppointmentMode } from '../schedule/appointment-mode.configuration';
+import { ActiveBookingIdentityService } from './active-booking-identity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import {
@@ -101,7 +103,10 @@ export class BookingDraftEditService {
           dto.draftControlToken,
         );
 
-      if (locked.practiceLocationId !== dto.practiceLocationId) {
+      if (
+        locked.practiceLocationId !== dto.practiceLocationId &&
+        !dto.continueVerifiedTimeSlot
+      ) {
         throw new BadRequestException(
           'PracticeLocation cannot be changed on an existing BookingDraft. Start a new booking instead.',
         );
@@ -125,6 +130,8 @@ export class BookingDraftEditService {
           existingPatientResponse: true,
           mobileNumberHash: true,
           serviceDate: true,
+          reservationAt: true,
+          fragmentedReservations: true,
           privacyNoticeAcknowledgedAt: true,
           privacyNoticeVersion: true,
           scheduledReminderOptIn: true,
@@ -141,6 +148,7 @@ export class BookingDraftEditService {
             select: {
               id: true,
               memberOrder: true,
+              reservationAt: true,
               firstName: true,
               middleName: true,
               lastName: true,
@@ -163,7 +171,98 @@ export class BookingDraftEditService {
         prepared,
         acknowledgement,
       );
-      const materialChanged = before !== after;
+      const reservationChanged =
+        (dto.reservationAt !== undefined &&
+          new Date(dto.reservationAt).getTime() !==
+            existing.reservationAt?.getTime()) ||
+        (dto.fragmentedReservations !== undefined &&
+          dto.fragmentedReservations !== existing.fragmentedReservations) ||
+        (dto.members?.some(
+          (member, i) =>
+            member.reservationAt !== undefined &&
+            new Date(member.reservationAt).getTime() !==
+              existing.bookingDraftMembers[i]?.reservationAt?.getTime(),
+        ) ??
+          false);
+      const materialChanged = before !== after || reservationChanged;
+      let preserveOtp = false;
+      let newActiveDraftKey: string | undefined;
+      if (dto.continueVerifiedTimeSlot) {
+        const originalMode = await resolveAppointmentMode(
+          transaction,
+          existing.practiceLocationId,
+          existing.serviceDate,
+        );
+        const source = await transaction.practiceLocation.findUniqueOrThrow({
+          where: { id: existing.practiceLocationId },
+          select: { doctorProfileId: true },
+        });
+        const target = await transaction.practiceLocation.findUniqueOrThrow({
+          where: { id: dto.practiceLocationId },
+          select: { doctorProfileId: true },
+        });
+        const identity = (p: {
+          firstName?: string | null;
+          middleName?: string | null;
+          lastName?: string | null;
+          suffix?: string | null;
+        }) =>
+          JSON.stringify([
+            p.firstName?.trim() || null,
+            p.middleName?.trim() || null,
+            p.lastName?.trim() || null,
+            p.suffix?.trim() || null,
+          ]);
+        const samePeople =
+          dto.mode === 'INDIVIDUAL'
+            ? identity(existing) === identity(dto)
+            : existing.bookingDraftMembers.length === dto.members?.length &&
+              existing.bookingDraftMembers.every(
+                (member, i) => identity(member) === identity(dto.members![i]),
+              );
+        if (
+          originalMode.appointmentMode !== 'TIME_SLOT_MODE' ||
+          source.doctorProfileId !== target.doctorProfileId ||
+          existing.mobileNumberHash !== protectedMobile.hash ||
+          !samePeople
+        ) {
+          throw new BadRequestException(
+            'Verified Time-Slot continuation may change scheduling within the same Doctor, but not patient identity.',
+          );
+        }
+        const otp = await transaction.otpVerification.findFirst({
+          where: {
+            bookingDraftId,
+            purpose: 'BOOKING',
+            activeContextKey: `BOOKING:${bookingDraftId}`,
+            verifiedAt: { not: null },
+            invalidatedAt: null,
+            consumedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!otp)
+          throw new BadRequestException(
+            'A currently verified booking continuation is required.',
+          );
+        preserveOtp = true;
+        if (
+          existing.practiceLocationId !== dto.practiceLocationId ||
+          existing.serviceDate.getTime() !== serviceDate.getTime()
+        ) {
+          const identities = new ActiveBookingIdentityService();
+          newActiveDraftKey = identities.deriveDraftKey(
+            protectedMobile.hash,
+            dto.practiceLocationId,
+            serviceDate,
+          );
+          await identities.acquireDraftScopeLock(
+            transaction,
+            newActiveDraftKey,
+          );
+          await identities.assertNoActiveDraft(transaction, newActiveDraftKey);
+        }
+      }
 
       if (!materialChanged) {
         return {
@@ -175,19 +274,21 @@ export class BookingDraftEditService {
         };
       }
 
-      const invalidated = await transaction.otpVerification.updateMany({
-        where: {
-          bookingDraftId,
-          purpose: 'BOOKING',
-          consumedAt: null,
-          invalidatedAt: null,
-        },
-        data: {
-          invalidatedAt: new Date(),
-          activeContextKey: null,
-          otpHash: null,
-        },
-      });
+      const invalidated = preserveOtp
+        ? { count: 0 }
+        : await transaction.otpVerification.updateMany({
+            where: {
+              bookingDraftId,
+              purpose: 'BOOKING',
+              consumedAt: null,
+              invalidatedAt: null,
+            },
+            data: {
+              invalidatedAt: new Date(),
+              activeContextKey: null,
+              otpHash: null,
+            },
+          });
 
       await transaction.bookingDraftAnswer.deleteMany({
         where: { bookingDraftId },
@@ -197,6 +298,13 @@ export class BookingDraftEditService {
       });
 
       const acknowledgementData = {
+        practiceLocationId: dto.practiceLocationId,
+        ...(newActiveDraftKey ? { activeDraftKey: newActiveDraftKey } : {}),
+        reservationAt: dto.reservationAt
+          ? new Date(dto.reservationAt)
+          : existing.reservationAt,
+        fragmentedReservations:
+          dto.fragmentedReservations ?? existing.fragmentedReservations,
         privacyNoticeAcknowledgedAt:
           acknowledgement.privacyNoticeAcknowledgedAt,
         privacyNoticeVersion: acknowledgement.privacyNoticeVersion,
@@ -532,6 +640,9 @@ export class BookingDraftEditService {
         data: {
           bookingDraftId,
           memberOrder: prepared.memberOrder,
+          reservationAt: prepared.member.reservationAt
+            ? new Date(prepared.member.reservationAt)
+            : null,
           firstName: prepared.member.firstName.trim(),
           middleName: prepared.member.middleName?.trim() || null,
           lastName: prepared.member.lastName.trim(),

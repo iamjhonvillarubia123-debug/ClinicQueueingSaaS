@@ -80,7 +80,10 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
     ).toBe(0);
 
     const browser = request.agent(app.getHttpServer());
-    await browser.post('/auth/login').send({ email, password }).expect(201);
+    await browser
+      .post('/auth/login')
+      .send({ identifier: email, password })
+      .expect(201);
 
     await browser
       .post('/secretary/account/disable')
@@ -126,13 +129,13 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
     await request(app.getHttpServer())
       .post('/secretary/account/reactivate')
       .set('Idempotency-Key', `reactivate-wrong-${unique}`)
-      .send({ email, password: 'wrong-password' })
+      .send({ identifier: email, password: 'wrong-password' })
       .expect(401);
 
     await request(app.getHttpServer())
       .post('/secretary/account/reactivate')
       .set('Idempotency-Key', `reactivate-correct-${unique}`)
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(201)
       .expect({ reactivated: true, replayed: false });
 
@@ -152,9 +155,21 @@ describe('R1 Secretary disable and reactivation controls (e2e)', () => {
     await request(app.getHttpServer()).get('/secretary/workspace').expect(401);
 
     const newBrowser = request.agent(app.getHttpServer());
-    await newBrowser.post('/auth/login').send({ email, password }).expect(201);
+    await newBrowser
+      .post('/auth/login')
+      .send({ identifier: email, password })
+      .expect(201);
     const workspace = await newBrowser.get('/secretary/workspace').expect(200);
-    expect(workspace.body).toEqual({ clinics: [], invitations: [] });
+    expect(workspace.body).toEqual({
+      account: {
+        firstName: 'Maria',
+        lastName: 'Secretary',
+        email,
+        mobileNumber: '+639171234567',
+      },
+      clinics: [],
+      invitations: [],
+    });
     expect(
       await prisma.practiceStaff.count({ where: { userId: user.id } }),
     ).toBe(0);

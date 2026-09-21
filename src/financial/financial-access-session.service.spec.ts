@@ -14,7 +14,8 @@ describe('FinancialAccessSessionService', () => {
           return Promise.resolve([
             {
               id: 'challenge-1',
-              recoveryEmailHash: 'hash-1',
+              recoveryIdentifierType: 'EMAIL',
+              recoveryIdentifierHash: 'hash-1',
               expiresAt: new Date(now.getTime() + 60_000),
               verifiedAt: new Date(now.getTime() - 1_000),
               consumedAt: null,
@@ -25,7 +26,8 @@ describe('FinancialAccessSessionService', () => {
         return Promise.resolve([
           {
             id: 'financial-1',
-            recoveryEmailHash: 'hash-1',
+            recoveryIdentifierType: 'EMAIL',
+            recoveryIdentifierHash: 'hash-1',
             accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
           },
         ]);
@@ -84,7 +86,8 @@ describe('FinancialAccessSessionService', () => {
       .mockResolvedValueOnce([
         {
           id: 'challenge-1',
-          recoveryEmailHash: 'hash-1',
+          recoveryIdentifierType: 'EMAIL',
+          recoveryIdentifierHash: 'hash-1',
           expiresAt: new Date(now.getTime() + 60_000),
           verifiedAt: now,
           consumedAt: null,
@@ -94,7 +97,38 @@ describe('FinancialAccessSessionService', () => {
       .mockResolvedValueOnce([
         {
           id: 'financial-1',
-          recoveryEmailHash: 'different-hash',
+          recoveryIdentifierType: 'EMAIL',
+          recoveryIdentifierHash: 'different-hash',
+          accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
+        },
+      ]);
+
+    await expect(
+      service.issueFromVerifiedChallenge('challenge-1', 'financial-1', now),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(transaction.financialAccessSession.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a challenge whose recovery identity type does not match the financial account', async () => {
+    const { service, transaction } = createFixture();
+    transaction.$queryRaw
+      .mockReset()
+      .mockResolvedValueOnce([
+        {
+          id: 'challenge-1',
+          recoveryIdentifierType: 'MOBILE',
+          recoveryIdentifierHash: 'hash-1',
+          expiresAt: new Date(now.getTime() + 60_000),
+          verifiedAt: now,
+          consumedAt: null,
+          invalidatedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'financial-1',
+          recoveryIdentifierType: 'EMAIL',
+          recoveryIdentifierHash: 'hash-1',
           accountStatus: UserAccountStatus.PERMANENTLY_CLOSED,
         },
       ]);

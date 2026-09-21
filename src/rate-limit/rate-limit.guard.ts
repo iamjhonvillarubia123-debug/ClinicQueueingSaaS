@@ -54,6 +54,7 @@ export class RateLimitGuard implements CanActivate {
         statusCode: 429,
         code: 'RATE_LIMIT_EXCEEDED',
         message: 'Too many requests. Please try again later.',
+        retryAfterSeconds: result.retryAfterSeconds,
       },
       429,
     );

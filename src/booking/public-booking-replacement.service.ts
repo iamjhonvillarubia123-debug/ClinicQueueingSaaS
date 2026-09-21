@@ -126,6 +126,25 @@ export class PublicBookingReplacementService {
         );
       }
 
+      const replacedAppointments: {
+        appointmentMode?: string;
+        serviceStartedAt?: Date | null;
+      }[] =
+        context.kind === 'INDIVIDUAL'
+          ? [context.appointment]
+          : context.bookingGroup.appointments;
+      if (
+        replacedAppointments.some(
+          (appointment) =>
+            appointment.appointmentMode === 'TIME_SLOT_MODE' &&
+            appointment.serviceStartedAt,
+        )
+      ) {
+        throw new ConflictException(
+          'A Time-Slot appointment cannot be replaced after active service begins.',
+        );
+      }
+
       if (context.kind === 'INDIVIDUAL') {
         await transaction.appointment.update({
           where: { id: context.appointment.id },
@@ -251,6 +270,8 @@ export class PublicBookingReplacementService {
         bookingReference: true,
         queueNumber: true,
         serviceDate: true,
+        appointmentMode: true,
+        serviceStartedAt: true,
         firstName: true,
         lastName: true,
         practiceLocation: { select: { name: true } },
@@ -285,6 +306,8 @@ export class PublicBookingReplacementService {
             firstName: true,
             lastName: true,
             status: true,
+            appointmentMode: true,
+            serviceStartedAt: true,
           },
         },
       },

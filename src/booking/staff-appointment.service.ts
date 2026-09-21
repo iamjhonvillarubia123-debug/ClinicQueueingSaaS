@@ -1,3 +1,4 @@
+import { resolveAppointmentMode } from '../schedule/appointment-mode.configuration';
 import {
   ConflictException,
   ForbiddenException,
@@ -62,6 +63,8 @@ export class StaffAppointmentService {
       existingPatientResponse: dto.existingPatientResponse,
       mobileNumber: dto.mobileNumber,
       selectedServiceIds: dto.selectedServiceIds,
+      reservationAt: dto.reservationAt ?? null,
+      confirmAvailabilityOverride: dto.confirmAvailabilityOverride ?? false,
       answers: dto.answers?.map((answer) => ({
         bookingQuestionId: answer.bookingQuestionId,
         answerText: answer.answerText ?? null,
@@ -90,6 +93,12 @@ export class StaffAppointmentService {
         };
       }
 
+      await transaction.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${`queue|${dto.practiceLocationId}|${dto.serviceDate}`}, 0))`,
+      );
+      await transaction.$queryRaw(
+        Prisma.sql`SELECT "id" FROM "PracticeLocation" WHERE "id" = ${dto.practiceLocationId} FOR UPDATE`,
+      );
       const context = await transaction.practiceLocation.findUnique({
         where: { id: dto.practiceLocationId },
         select: {
@@ -233,13 +242,49 @@ export class StaffAppointmentService {
         dto.practiceLocationId,
         serviceDate,
       );
-      await this.admission.assertCapacityAvailable(
+      const mode = await resolveAppointmentMode(
         transaction,
         dto.practiceLocationId,
         serviceDate,
-        schedule.maximumOperatingUntilAt,
-        estimatedServiceMinutes,
       );
+      if (mode.appointmentMode === 'TIME_SLOT_MODE' && !dto.reservationAt) {
+        throw new ConflictException(
+          'Select a Reservation Time for this Time-Slot appointment.',
+        );
+      }
+      const reservation = dto.reservationAt
+        ? (
+            await this.admission.claimReservations(transaction, {
+              practiceLocationId: dto.practiceLocationId,
+              serviceDate,
+              members: [
+                {
+                  reservationAt: new Date(dto.reservationAt),
+                  actualMinutes: selectedMinutes,
+                },
+              ],
+              staff: true,
+              confirmOverride: dto.confirmAvailabilityOverride,
+            })
+          )[0]
+        : null;
+      if (
+        !isOwningDoctor &&
+        reservation &&
+        reservation.reservationAt.getTime() + 30 * 60_000 <= Date.now()
+      ) {
+        throw new ForbiddenException(
+          'A Secretary cannot assign an expired Reservation Time.',
+        );
+      }
+      if (!reservation)
+        await this.admission.assertCapacityAvailable(
+          transaction,
+          dto.practiceLocationId,
+          serviceDate,
+          schedule.maximumOperatingUntilAt,
+          estimatedServiceMinutes,
+        );
       const queueNumber = await this.queueNumbers.allocateNext(
         transaction,
         dto.practiceLocationId,
@@ -264,6 +309,29 @@ export class StaffAppointmentService {
           mobileNumberLastFour: protectedMobile.lastFour,
           activeAppointmentKey,
           createdByUserId: actorUserId,
+          ...(reservation
+            ? {
+                appointmentMode: reservation.appointmentMode,
+                reservationAt: reservation.reservationAt,
+                originalReservationAt: reservation.originalReservationAt,
+                schedulingAllotmentMinutes:
+                  reservation.schedulingAllotmentMinutes,
+                estimatedServiceMinutes: reservation.estimatedServiceMinutes,
+                servingOrderKey: new Prisma.Decimal(
+                  reservation.reservationAt.getTime(),
+                ).plus(new Prisma.Decimal(queueNumber).div(1000000)),
+                reservationHistory: {
+                  create: {
+                    actorType: 'USER',
+                    actorUserId,
+                    action: 'STAFF_BOOKED',
+                    reservationAt: reservation.reservationAt,
+                    availabilityOverride: reservation.availabilityOverride,
+                    details: {},
+                  },
+                },
+              }
+            : {}),
           bookedServices: {
             create: services.map((service) => ({
               practiceLocationServiceId: service.id,
@@ -290,6 +358,7 @@ export class StaffAppointmentService {
           serviceDate,
           actorUserId,
           resultAppointmentId: appointment.id,
+          createdAt: times.completedAt,
           ...times,
         },
       });

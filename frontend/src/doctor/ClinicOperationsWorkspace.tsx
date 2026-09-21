@@ -83,6 +83,7 @@ type OperationsQueuePatient = {
   completedAt: string | null;
 };
 export type ClinicOperationsOverview = {
+  recurringSchedules?: Array<{ weekday: string; isOpen: boolean; opensAt: string | null; closesAt: string | null }>;
   clinic: {
     id: string;
     name: string | null;

@@ -265,6 +265,7 @@ export class AppointmentErasureService {
       data: {
         appointmentId: null,
         resultAppointmentId: null,
+        privacyErasedAt: now,
       },
     });
 
@@ -344,6 +345,8 @@ export class AppointmentErasureService {
       data: {
         bookingGroupId: null,
         resultBookingGroupId: null,
+        resultBookingGroupAccessTokenId: null,
+        privacyErasedAt: now,
       },
     });
 

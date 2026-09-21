@@ -1,0 +1,31 @@
+// Append-only effective-dated configuration. Existing dates keep their appointment mode.
+model AppointmentModeConfiguration {
+  id String @id @default(uuid())
+  practiceLocationId String
+  effectiveServiceDate DateTime @db.Date
+  appointmentMode AppointmentMode
+  maximumBookableMinutes Int?
+  protectedPeriods Json
+  actorUserId String
+  sourceDraftId String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  practiceLocation PracticeLocation @relation(fields: [practiceLocationId], references: [id], onDelete: Restrict)
+  @@index([practiceLocationId, effectiveServiceDate, createdAt])
+}
+
+// Reservation history does not represent progression through the live queue.
+// QueueEvent remains the authority for operational queue changes.
+model AppointmentReservationEvent {
+  id String @id @default(uuid())
+  appointmentId String
+  actorUserId String?
+  actorType QueueEventActorType
+  action String @db.VarChar(40)
+  previousReservationAt DateTime? @db.Timestamptz(3)
+  reservationAt DateTime @db.Timestamptz(3)
+  availabilityOverride Boolean @default(false)
+  details Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  @@index([appointmentId, createdAt])
+}

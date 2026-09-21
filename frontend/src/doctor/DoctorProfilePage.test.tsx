@@ -39,6 +39,8 @@ const doctor = {
 const completedProfileState = {
   onboardingComplete: true,
   user: {
+    email: 'personal@example.test',
+    mobileNumber: '+639171234567',
     firstName: doctor.firstName,
     middleName: doctor.middleName,
     lastName: doctor.lastName,
@@ -110,10 +112,10 @@ describe('Doctor Profile', () => {
     expect(
       screen.getByDisplayValue('Patient-centered internal medicine care.'),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Dela Cruz Medical Clinic · Manila, Metro Manila/)).toBeInTheDocument();
-    expect(screen.getByText('clinic@example.test')).toBeInTheDocument();
+    expect(screen.getByText('1 active clinic')).toBeInTheDocument();
+    expect(screen.getByText('personal@example.test')).toBeInTheDocument();
     expect(screen.getByText('+639171234567')).toBeInTheDocument();
-    expect(screen.getAllByText('Published').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Public').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Preview Webpage' })[0]).toBeEnabled();
   });
 
@@ -166,32 +168,26 @@ describe('Doctor Profile', () => {
     const onboardingRequest = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/doctor/profile/onboarding'));
     expect(onboardingRequest?.[1]?.method).toBe('POST');
     expect(String(onboardingRequest?.[1]?.body)).toContain('"licenseNumber":"LIC-NEW"');
-    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/practice-location'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/practice-location'))).toBe(true);
   });
 
-  it('treats an authoritative doctor-route 404 as a private profile while retaining authenticated license data', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
-      const value = String(url);
-      if (value.endsWith('/doctor/profile')) return response(completedProfileState);
-      if (value.endsWith('/practice-location')) return response([clinic]);
-      if (value.includes('/public/practice-locations/clinic-public-1')) {
-        return response({
-          publicIdentifier: clinic.publicIdentifier,
-          publicUrl: 'https://example.test/public/practice-locations/clinic-public-1',
-          qrPayload: 'https://example.test/public/practice-locations/clinic-public-1',
-          doctorPublicUrl: 'https://example.test/public/doctors/doctor-public-1',
-          doctor,
-        });
-      }
-      if (value.includes('/public/doctors/doctor-public-1')) return response({ message: 'Not found' }, 404);
+  it('keeps unpublished profiles private and publishes only inside the blank preview', async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).endsWith('/presentation')) return response(completedProfileState);
+      if (String(url).endsWith('/doctor/profile')) return response({ ...completedProfileState, profile: { ...completedProfileState.profile, isProfilePublic: false } });
+      if (String(url).endsWith('/practice-location')) return response([clinic]);
       return response({}, 404);
     });
-
     render(<DoctorProfilePage />);
-
-    expect((await screen.findAllByText('Private')).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Preview Webpage' })[0]).toBeDisabled();
-    expect(screen.getByDisplayValue('LIC-123')).toHaveAttribute('readonly');
+    await screen.findAllByText('Private');
+    await user.click(screen.getAllByRole('button', { name: 'Preview Webpage' })[0]);
+    expect(screen.getByLabelText('Blank webpage preview')).toBeEmptyDOMElement();
+    await user.click(screen.getByRole('button', { name: 'Publish Webpage' }));
+    expect(await screen.findByRole('button', { name: 'Unpublish Webpage' })).toBeEnabled();
+    expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith('/presentation'))?.[1]?.body).toBe(JSON.stringify({ isProfilePublic: true }));
+    await user.click(screen.getByRole('button', { name: 'Back to Profile' }));
+    expect(screen.getAllByText('Public').length).toBeGreaterThan(0);
   });
 
   it('copies the backend-provided doctor public URL without creating a new API write', async () => {
@@ -215,11 +211,29 @@ describe('Doctor Profile', () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText');
     render(<DoctorProfilePage />);
-    await screen.findByText('https://example.test/public/doctors/doctor-public-1');
+    await screen.findByText(`${window.location.origin}/public/doctors/doctor-public-1`);
     await user.click(screen.getByRole('button', { name: 'Copy Link' }));
 
-    expect(writeText).toHaveBeenCalledWith('https://example.test/public/doctors/doctor-public-1');
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/public/doctors/doctor-public-1`);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument());
     expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
   });
+});
+
+
+it('saves zoom and restores it in the photo frame', async () => {
+  const user = userEvent.setup();
+  const initial = { ...completedProfileState, profile: { ...completedProfileState.profile, profilePhotoUrl: 'data:image/jpeg;base64,/9j/AA==', profilePhotoZoom: 1, profilePhotoX: 50, profilePhotoY: 60 } };
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+    if (String(url).endsWith('/presentation')) return response({ ...initial, profile: { ...initial.profile, ...JSON.parse(String(options?.body)) } });
+    if (String(url).endsWith('/doctor/profile')) return response(initial);
+    return response([]);
+  });
+  render(<DoctorProfilePage />);
+  const zoomIn = await screen.findByRole('button', { name: 'Zoom in photo' });
+  expect(screen.getByRole('button', { name: 'Zoom out photo' })).toBeDisabled();
+  await user.click(zoomIn);
+  expect(await screen.findByText('120%')).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /Drag to reposition/ })).toHaveStyle({ transform: 'scale(1.2)', transformOrigin: '50% 60%' });
+  expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith('/presentation'))?.[1]?.body).toBe('{"profilePhotoZoom":1.2}');
 });

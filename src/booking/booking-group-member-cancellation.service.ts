@@ -31,6 +31,8 @@ const OUTBOX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 type TransactionClient = Prisma.TransactionClient;
 
 type LockedMember = {
+  appointmentMode?: string;
+  serviceStartedAt?: Date | null;
   id: string;
   bookingGroupId: string | null;
   practiceLocationId: string;
@@ -144,7 +146,11 @@ export class BookingGroupMemberCancellationService {
         );
       }
 
-      if (!this.isCancellableStatus(member.status)) {
+      if (
+        (member.appointmentMode === 'TIME_SLOT_MODE' &&
+          member.serviceStartedAt) ||
+        !this.isCancellableStatus(member.status)
+      ) {
         throw new ConflictException(
           'BookingGroup member is not eligible for cancellation in its current state.',
         );
@@ -334,6 +340,7 @@ export class BookingGroupMemberCancellationService {
         "waitingPlacementType",
         "terminalAt",
         "calledAt"
+        , "appointmentMode", "serviceStartedAt"
       FROM "Appointment"
       WHERE "id" = ${appointmentId}
       LIMIT 1

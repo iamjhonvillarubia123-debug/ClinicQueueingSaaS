@@ -34,7 +34,26 @@ export class PracticeLocationOperationsContextService {
           },
         ],
       },
-      select: { id: true, name: true, timeZone: true },
+      select: {
+        id: true,
+        name: true,
+        timeZone: true,
+        doctorProfile: { select: { userId: true } },
+        staffAssignments: {
+          where: { userId, isActive: true, disconnectedAt: null },
+          select: {
+            authorityBundles: {
+              where: { status: 'ACTIVE' },
+              select: { id: true },
+            },
+            substituteSecretaryCoverages: {
+              where: { status: 'ACTIVE' },
+              orderBy: { fromServiceDate: 'asc' },
+              select: { fromServiceDate: true, toServiceDate: true },
+            },
+          },
+        },
+      },
     });
 
     if (!location) {
@@ -46,11 +65,47 @@ export class PracticeLocationOperationsContextService {
       );
     }
 
+    const currentServiceDate = this.dateInTimeZone(
+      new Date(),
+      location.timeZone,
+    );
+    const unrestricted =
+      location.doctorProfile.userId === userId ||
+      location.staffAssignments.some(
+        (staff) => staff.authorityBundles.length > 0,
+      );
+    const allowedServiceDateRanges = unrestricted
+      ? null
+      : location.staffAssignments
+          .flatMap((staff) =>
+            staff.substituteSecretaryCoverages.map((coverage) => ({
+              fromServiceDate: coverage.fromServiceDate
+                .toISOString()
+                .slice(0, 10),
+              toServiceDate: coverage.toServiceDate.toISOString().slice(0, 10),
+            })),
+          )
+          .sort((a, b) => a.fromServiceDate.localeCompare(b.fromServiceDate));
+    const defaultServiceDate =
+      allowedServiceDateRanges === null ||
+      allowedServiceDateRanges.some(
+        (range) =>
+          range.fromServiceDate <= currentServiceDate &&
+          range.toServiceDate >= currentServiceDate,
+      )
+        ? currentServiceDate
+        : (allowedServiceDateRanges.find(
+            (range) => range.fromServiceDate > currentServiceDate,
+          )?.fromServiceDate ??
+          allowedServiceDateRanges.at(-1)?.toServiceDate ??
+          null);
     return {
+      allowedServiceDateRanges,
+      defaultServiceDate,
       practiceLocationId: location.id,
       clinicName: location.name,
       timeZone: location.timeZone,
-      currentServiceDate: this.dateInTimeZone(new Date(), location.timeZone),
+      currentServiceDate,
     };
   }
 

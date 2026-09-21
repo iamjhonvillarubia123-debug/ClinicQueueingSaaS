@@ -15,7 +15,11 @@ import {
   UserRole,
 } from '../../generated/prisma/client';
 import { PasswordSecurityService } from '../auth/security/password-security.service';
-import { normalizeEmail } from '../auth/security/session-security';
+import {
+  accountIdentifierIsVerified,
+  parseAccountIdentifier,
+} from '../auth/security/account-identifier';
+import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -40,6 +44,7 @@ export class SecretaryLifecycleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordSecurityService: PasswordSecurityService,
+    private readonly mobileNumbers: MobileNumberService,
   ) {}
 
   async disable(
@@ -144,13 +149,25 @@ export class SecretaryLifecycleService {
     });
   }
 
-  async reactivate(email: string, password: string, idempotencyKey: string) {
+  async reactivate(
+    identifierInput: string,
+    password: string,
+    idempotencyKey: string,
+  ) {
     const key = this.normalizeIdempotencyKey(idempotencyKey);
-    const normalizedEmail = normalizeEmail(email);
+    const identifier = this.parseIdentifier(
+      identifierInput,
+      'Unable to reactivate account.',
+    );
 
     const currentUser = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        ...(identifier.type === 'EMAIL'
+          ? { loginIdentifierType: 'EMAIL', email: identifier.normalized }
+          : {
+              loginIdentifierType: 'MOBILE',
+              mobileNumberHash: identifier.mobileHash,
+            }),
         role: UserRole.SECRETARY,
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
@@ -235,7 +252,8 @@ export class SecretaryLifecycleService {
   }
 
   async permanentlyDelete(
-    email: string,
+    actorUserId: string,
+    identifierInput: string,
     password: string,
     confirmPermanentDelete: boolean,
     idempotencyKey: string,
@@ -247,18 +265,31 @@ export class SecretaryLifecycleService {
     }
 
     const key = this.normalizeIdempotencyKey(idempotencyKey);
-    const normalizedEmail = normalizeEmail(email);
+    const identifier = this.parseIdentifier(
+      identifierInput,
+      'Unable to permanently close account.',
+    );
+
+    if (!actorUserId) {
+      throw new UnauthorizedException('Unable to permanently close account.');
+    }
 
     const target = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        id: actorUserId,
+        ...(identifier.type === 'EMAIL'
+          ? { loginIdentifierType: 'EMAIL', email: identifier.normalized }
+          : {
+              loginIdentifierType: 'MOBILE',
+              mobileNumberHash: identifier.mobileHash,
+            }),
         role: UserRole.SECRETARY,
       },
       orderBy: { createdAt: 'desc' },
       select: { id: true },
     });
 
-    if (!target) {
+    if (!target || target.id !== actorUserId) {
       throw new UnauthorizedException('Unable to permanently close account.');
     }
 
@@ -281,10 +312,24 @@ export class SecretaryLifecycleService {
           role: true,
           accountStatus: true,
           passwordHash: true,
+          loginIdentifierType: true,
+          email: true,
+          mobileNumberHash: true,
+          emailVerifiedAt: true,
+          mobileVerifiedAt: true,
+          administrativeRestrictionStatus: true,
         },
       });
 
-      if (!user || user.role !== UserRole.SECRETARY) {
+      if (
+        !user ||
+        user.id !== actorUserId ||
+        user.role !== UserRole.SECRETARY ||
+        user.loginIdentifierType !== identifier.type ||
+        (identifier.type === 'EMAIL'
+          ? user.email !== identifier.normalized
+          : user.mobileNumberHash !== identifier.mobileHash)
+      ) {
         throw new UnauthorizedException('Unable to permanently close account.');
       }
 
@@ -308,8 +353,9 @@ export class SecretaryLifecycleService {
       }
 
       if (
-        user.accountStatus !== UserAccountStatus.ACTIVE &&
-        user.accountStatus !== UserAccountStatus.VOLUNTARILY_DISABLED
+        user.accountStatus !== UserAccountStatus.ACTIVE ||
+        user.administrativeRestrictionStatus !== 'NONE' ||
+        !accountIdentifierIsVerified(user)
       ) {
         throw new ConflictException(
           'Secretary account cannot be permanently closed from its current state.',
@@ -371,6 +417,14 @@ export class SecretaryLifecycleService {
 
       return { permanentlyClosed: true, replayed: false };
     });
+  }
+
+  private parseIdentifier(input: string, message: string) {
+    try {
+      return parseAccountIdentifier(input, this.mobileNumbers);
+    } catch {
+      throw new UnauthorizedException(message);
+    }
   }
 
   private async lockActiveAssignments(

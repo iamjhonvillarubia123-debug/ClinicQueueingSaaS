@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest } from '../api/client';
 import './DoctorProfilePage.css';
 
@@ -36,11 +36,16 @@ type DoctorIdentity = {
   specialization: string;
   profileDescription: string | null;
   profilePhotoUrl: string | null;
+  profilePhotoZoom?: number;
+  profilePhotoX?: number;
+  profilePhotoY?: number;
 };
 
 type DoctorProfileStateResponse = {
   onboardingComplete: boolean;
   user: {
+    email?: string | null;
+    mobileNumber?: string | null;
     firstName: string;
     middleName: string | null;
     lastName: string;
@@ -54,26 +59,13 @@ type DoctorProfileStateResponse = {
     licenseNumber: string;
     profileDescription: string | null;
     profilePhotoUrl: string | null;
+  profilePhotoZoom?: number;
+  profilePhotoX?: number;
+  profilePhotoY?: number;
     publicIdentifier: string;
     publicSlug: string | null;
     isProfilePublic: boolean;
   } | null;
-};
-
-type PublicPracticeLocationRoute = {
-  publicIdentifier: string;
-  publicUrl: string;
-  qrPayload: string;
-  doctorPublicUrl: string;
-  doctor: DoctorIdentity;
-};
-
-type PublicDoctorRoute = {
-  publicIdentifier: string;
-  publicSlug: string | null;
-  publicUrl: string;
-  qrPayload: string;
-  doctor: DoctorIdentity;
 };
 
 type PublicationState = 'loading' | 'published' | 'private' | 'unknown';
@@ -115,11 +107,6 @@ function profileName(doctor: DoctorIdentity | null) {
     .join(' ');
 }
 
-function clinicLocation(clinic: PracticeLocationResponse | null) {
-  if (!clinic) return 'No clinic connected yet';
-  const place = [clinic.cityMunicipality, clinic.province].filter(Boolean).join(', ');
-  return place ? `${clinic.name ?? 'Clinic'} · ${place}` : (clinic.name ?? clinic.addressLine1 ?? 'Clinic');
-}
 
 function profileInitials(doctor: DoctorIdentity | null, firstName: string, lastName: string) {
   if (doctor) return `${doctor.firstName.charAt(0)}${doctor.lastName.charAt(0)}`.toUpperCase();
@@ -140,12 +127,23 @@ function identityFromProfileState(state: DoctorProfileStateResponse): DoctorIden
     specialization: state.profile.specialization,
     profileDescription: state.profile.profileDescription,
     profilePhotoUrl: state.profile.profilePhotoUrl,
+    profilePhotoZoom: state.profile.profilePhotoZoom ?? 1,
+    profilePhotoX: state.profile.profilePhotoX ?? 50,
+    profilePhotoY: state.profile.profilePhotoY ?? 50,
   };
 }
 
 export function DoctorProfilePage() {
   const [doctor, setDoctor] = useState<DoctorIdentity | null>(null);
-  const [primaryClinic, setPrimaryClinic] = useState<PracticeLocationResponse | null>(null);
+  const [activeClinics, setActiveClinics] = useState(0);
+  const [accountContact, setAccountContact] = useState<{ email: string | null; phone: string | null }>({ email: null, phone: null });
+  const [preview, setPreview] = useState(false);
+  const [presentationBusy, setPresentationBusy] = useState(false);
+  const [presentationError, setPresentationError] = useState('');
+  const photoInput = useRef<HTMLInputElement>(null);
+  const photoDrag = useRef<{ x: number; y: number; startX: number; startY: number; overflowX: number; overflowY: number } | null>(null);
+  const photoPosition = useRef({ x: 50, y: 50 });
+  const [positionMessage, setPositionMessage] = useState('');
   const [profileUrl, setProfileUrl] = useState<string | null>(null);
   const [publicationState, setPublicationState] = useState<PublicationState>('loading');
   const [loadError, setLoadError] = useState(false);
@@ -185,45 +183,13 @@ export function DoctorProfilePage() {
         const authenticatedDoctor = identityFromProfileState(profileState);
         setDoctor(authenticatedDoctor);
 
-        if (!profileState.onboardingComplete) {
-          setPublicationState('private');
-          return;
-        }
-
+        setAccountContact({ email: profileState.user.email ?? null, phone: profileState.user.mobileNumber ?? null });
+        setPublicationState(profileState.profile?.isProfilePublic ? 'published' : 'private');
+        setProfileUrl(profileState.profile ? `${window.location.origin}/public/doctors/${profileState.profile.publicIdentifier}` : null);
         const locations = await apiRequest<PracticeLocationResponse[]>('/practice-location');
         if (!active) return;
+        setActiveClinics(locations.filter((location) => location.lifecycleStatus === 'ACTIVE').length);
 
-        const clinic = locations.find((location) => location.lifecycleStatus !== 'PERMANENTLY_DELETED') ?? null;
-        setPrimaryClinic(clinic);
-
-        if (!clinic?.publicIdentifier) {
-          setPublicationState('private');
-          return;
-        }
-
-        try {
-          const locationRoute = await apiRequest<PublicPracticeLocationRoute>(
-            `/public/practice-locations/${encodeURIComponent(clinic.publicIdentifier)}`,
-          );
-          if (!active) return;
-          setProfileUrl(locationRoute.doctorPublicUrl);
-
-          try {
-            const publicDoctor = await apiRequest<PublicDoctorRoute>(
-              `/public/doctors/${encodeURIComponent(locationRoute.doctor.publicIdentifier)}`,
-            );
-            if (!active) return;
-            setDoctor(publicDoctor.doctor);
-            setProfileUrl(publicDoctor.publicUrl);
-            setPublicationState('published');
-          } catch (error) {
-            if (!active) return;
-            setPublicationState(error instanceof ApiError && error.status === 404 ? 'private' : 'unknown');
-          }
-        } catch (error) {
-          if (!active) return;
-          setPublicationState(error instanceof ApiError && error.status === 404 ? 'private' : 'unknown');
-        }
       } catch {
         if (!active) return;
         setLoadError(true);
@@ -240,7 +206,7 @@ export function DoctorProfilePage() {
   const publicStatusLabel = publicationState === 'loading'
     ? 'Checking…'
     : publicationState === 'published'
-      ? 'Published'
+      ? 'Public'
       : publicationState === 'private'
         ? 'Private'
         : 'Unavailable';
@@ -255,14 +221,36 @@ export function DoctorProfilePage() {
           ? 'Checking your public webpage status.'
           : 'Public webpage status is not available right now.';
 
-  const accountContact = useMemo(() => ({
-    email: primaryClinic?.clinicEmail ?? null,
-    phone: primaryClinic?.contactNumber ?? null,
-  }), [primaryClinic]);
+  function previewWebpage() { setPreview(true); }
 
-  function previewWebpage() {
-    if (!isPublished || !profileUrl) return;
-    window.open(profileUrl, '_blank', 'noopener,noreferrer');
+  async function updatePresentation(body: { profilePhotoZoom?: number; profilePhotoUrl?: string; profilePhotoX?: number; profilePhotoY?: number; isProfilePublic?: boolean }) {
+    setPresentationBusy(true); setPresentationError('');
+    try {
+      const state = await apiRequest<DoctorProfileStateResponse>('/doctor/profile/presentation', { method: 'PATCH', body });
+      setDoctor(identityFromProfileState(state));
+      setPublicationState(state.profile?.isProfilePublic ? 'published' : 'private');
+      if (body.profilePhotoZoom !== undefined || body.profilePhotoX !== undefined || body.profilePhotoY !== undefined) setPositionMessage('Photo framing saved.');
+    } catch (error) { setPresentationError(error instanceof Error ? error.message : 'Unable to save profile.'); }
+    finally { setPresentationBusy(false); }
+  }
+
+  async function uploadPhoto(file?: File) {
+    if (!file) return;
+    setPresentationError('');
+    if (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 5 * 1024 * 1024) { setPresentationError('Choose a JPG or PNG up to 5 MB.'); return; }
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image(); image.src = url; await image.decode();
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 640 / Math.max(image.width, image.height));
+      canvas.width = Math.round(image.width * scale); canvas.height = Math.round(image.height * scale);
+      const context = canvas.getContext('2d'); if (!context) throw new Error('Image processing unavailable');
+      context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const photo = canvas.toDataURL('image/jpeg', .8);
+      if (photo.length > 400000) throw new Error('Choose a smaller image.');
+      await updatePresentation({ profilePhotoUrl: photo, profilePhotoZoom: 1, profilePhotoX: 50, profilePhotoY: 50 });
+    } catch { setPresentationError('Could not upload this photo. Try another JPG or PNG.'); }
+    finally { URL.revokeObjectURL(url); }
   }
 
   async function copyProfileLink() {
@@ -309,6 +297,13 @@ export function DoctorProfilePage() {
     }
   }
 
+  if (preview) return <section className="doctor-webpage-preview">
+    <header><button type="button" className="doctor-profile-secondary" onClick={() => setPreview(false)}>Back to Profile</button><span>Webpage Preview · {isPublished ? 'Public' : 'Private'}</span><button type="button" className="doctor-profile-primary" disabled={presentationBusy || !onboardingComplete} onClick={() => void updatePresentation({ isProfilePublic: !isPublished })}>{presentationBusy ? 'Saving…' : isPublished ? 'Unpublish Webpage' : 'Publish Webpage'}</button></header>
+    {!onboardingComplete ? <p>Complete and save your professional information before publishing.</p> : null}
+    {presentationError ? <p role="alert">{presentationError}</p> : null}
+    <div className="doctor-webpage-blank" aria-label="Blank webpage preview" />
+  </section>;
+
   return (
     <div className="doctor-profile-page">
       <div className="doctor-profile-main">
@@ -319,24 +314,70 @@ export function DoctorProfilePage() {
           {loadError ? <p className="doctor-profile-load-note" role="status">Your authenticated Doctor profile could not be loaded. Try again before changing professional information.</p> : null}
         </header>
 
+        {positionMessage ? <p role="status" className="doctor-photo-save-status">{positionMessage}</p> : null}
+        {presentationError ? <p role="alert">{presentationError}</p> : null}
         <section className="doctor-profile-hero">
+          <div className="doctor-profile-photo-editor">
           <div className="doctor-profile-photo" aria-label="Profile photo">
-            {doctor?.profilePhotoUrl ? <img src={doctor.profilePhotoUrl} alt="" /> : <span>{profileInitials(doctor, firstName, lastName)}</span>}
-            <button type="button" className="doctor-profile-camera" aria-label="Change profile photo" title="Profile photo upload is not connected yet" disabled={isOnboarding}>
+            <div className="doctor-profile-photo-frame">
+            {doctor?.profilePhotoUrl ? <img src={doctor.profilePhotoUrl} alt="Doctor profile photo" draggable={false}
+              className="doctor-profile-draggable-photo" style={{ objectPosition: `${doctor.profilePhotoX ?? 50}% ${doctor.profilePhotoY ?? 50}%`, transform: `scale(${doctor.profilePhotoZoom ?? 1})`, transformOrigin: `${doctor.profilePhotoX ?? 50}% ${doctor.profilePhotoY ?? 50}%` }}
+              tabIndex={0} role="img" aria-label="Profile photo. Drag to reposition, or use arrow keys." title="Drag to position your photo"
+              onPointerDown={(event) => {
+                if (presentationBusy || event.button !== 0) return;
+                const image = event.currentTarget;
+                const box = image.parentElement!.getBoundingClientRect();
+                const scale = Math.max(box.width / image.naturalWidth, box.height / image.naturalHeight) * (doctor.profilePhotoZoom ?? 1);
+                photoPosition.current = { x: doctor.profilePhotoX ?? 50, y: doctor.profilePhotoY ?? 50 };
+                photoDrag.current = { x: event.clientX, y: event.clientY, startX: photoPosition.current.x, startY: photoPosition.current.y, overflowX: image.naturalWidth * scale - box.width, overflowY: image.naturalHeight * scale - box.height };
+                image.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                const drag = photoDrag.current; if (!drag) return;
+                const clamp = (value: number) => Math.max(0, Math.min(100, value));
+                const x = drag.overflowX > 0.5 ? clamp(drag.startX - (event.clientX - drag.x) * 100 / drag.overflowX) : drag.startX;
+                const y = drag.overflowY > 0.5 ? clamp(drag.startY - (event.clientY - drag.y) * 100 / drag.overflowY) : drag.startY;
+                photoPosition.current = { x, y };
+                setDoctor((current) => current ? { ...current, profilePhotoX: x, profilePhotoY: y } : current);
+              }}
+              onPointerUp={() => {
+                const drag = photoDrag.current; photoDrag.current = null;
+                if (!drag || (drag.startX === photoPosition.current.x && drag.startY === photoPosition.current.y)) return;
+                setPositionMessage('');
+                void updatePresentation({ profilePhotoX: photoPosition.current.x, profilePhotoY: photoPosition.current.y });
+              }}
+              onPointerCancel={() => { const drag = photoDrag.current; photoDrag.current = null; if (drag) setDoctor((current) => current ? { ...current, profilePhotoX: drag.startX, profilePhotoY: drag.startY } : current); }}
+              onKeyDown={(event) => {
+                if (presentationBusy || !['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
+                event.preventDefault();
+                const x = Math.max(0, Math.min(100, (doctor.profilePhotoX ?? 50) + (event.key === 'ArrowLeft' ? 5 : event.key === 'ArrowRight' ? -5 : 0)));
+                const y = Math.max(0, Math.min(100, (doctor.profilePhotoY ?? 50) + (event.key === 'ArrowUp' ? 5 : event.key === 'ArrowDown' ? -5 : 0)));
+                void updatePresentation({ profilePhotoX: x, profilePhotoY: y });
+              }} /> : <span>{profileInitials(doctor, firstName, lastName)}</span>}
+            </div>
+            <button type="button" className="doctor-profile-camera" aria-label="Change profile photo" title="Upload profile photo" onClick={() => photoInput.current?.click()} disabled={presentationBusy}>
               <Icon name="camera" />
             </button>
           </div>
+          {doctor?.profilePhotoUrl ? <div className="doctor-photo-zoom" aria-label="Photo zoom controls">
+            <button type="button" aria-label="Zoom out photo" disabled={presentationBusy || (doctor.profilePhotoZoom ?? 1) <= 1} onClick={() => void updatePresentation({ profilePhotoZoom: Math.max(1, Math.round(((doctor.profilePhotoZoom ?? 1) - .2) * 10) / 10) })}>−</button>
+            <span>{Math.round((doctor.profilePhotoZoom ?? 1) * 100)}%</span>
+            <button type="button" aria-label="Zoom in photo" disabled={presentationBusy || (doctor.profilePhotoZoom ?? 1) >= 3} onClick={() => void updatePresentation({ profilePhotoZoom: Math.min(3, Math.round(((doctor.profilePhotoZoom ?? 1) + .2) * 10) / 10) })}>+</button>
+          </div> : null}
+          {doctor?.profilePhotoUrl ? <small className="doctor-photo-drag-hint">Zoom in, then drag to position.</small> : null}
+          </div>
+          <input ref={photoInput} type="file" accept="image/jpeg,image/png" hidden aria-label="Upload profile photo" onChange={(event) => { void uploadPhoto(event.target.files?.[0]); event.target.value = ''; }} />
           <div className="doctor-profile-identity">
             <h2>{doctor ? profileName(doctor) : [professionalTitle || 'Doctor', firstName, middleName, lastName, suffix].filter(Boolean).join(' ') || 'Doctor account'}</h2>
             <strong>{doctor?.specialization ?? (specialization || 'Specialization')}</strong>
-            <p><Icon name="location" /> {clinicLocation(primaryClinic)}</p>
-            <p><Icon name="mail" /> {accountContact.email ?? 'Clinic email not available'}</p>
-            <p><Icon name="phone" /> {accountContact.phone ?? 'Clinic contact number not available'}</p>
+            <p><Icon name="location" /> {activeClinics} active {activeClinics === 1 ? 'clinic' : 'clinics'}</p>
+            <p><Icon name="mail" /> {accountContact.email ?? 'Email not entered'}</p>
+            <p><Icon name="phone" /> {accountContact.phone ?? 'Contact number not entered'}</p>
           </div>
           <div className="doctor-profile-public-state">
             <span className={`doctor-profile-status-pill ${isPublished ? 'published' : ''}`}><Icon name={isPublished ? 'check' : 'lock'} /> {publicStatusLabel}</span>
             <p>{publicStatusCopy}</p>
-            <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={!isPublished || !profileUrl}><Icon name="eye" /> Preview Webpage</button>
+            <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={loadError}><Icon name="eye" /> Preview Webpage</button>
           </div>
         </section>
 
@@ -390,7 +431,7 @@ export function DoctorProfilePage() {
             </div>
           </div>
           <div className="doctor-profile-actions">
-            <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={!isPublished || !profileUrl}><Icon name="eye" /> Preview Webpage</button>
+            <button type="button" className="doctor-profile-secondary" onClick={previewWebpage} disabled={loadError}><Icon name="eye" /> Preview Webpage</button>
             <button type="button" className="doctor-profile-primary" title="Publishing is not connected yet">◎ Publish Webpage</button>
             <button type="button" className="doctor-profile-secondary" title="Doctor-profile QR generation is not connected yet"><Icon name="qr" /> Generate QR</button>
             <button type="button" className="doctor-profile-secondary" title="Calling-card printing is not connected yet"><Icon name="print" /> Print Calling Card</button>

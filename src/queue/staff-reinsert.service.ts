@@ -58,6 +58,8 @@ type OperatingStaff = {
 };
 
 type TargetAppointment = {
+  appointmentMode?: string;
+  reservationAt?: Date | null;
   id: string;
   bookingGroupId: string | null;
   status: AppointmentStatus;
@@ -93,6 +95,8 @@ export class StaffReinsertService {
       appointmentId: dto.appointmentId,
       actorUserId: authenticatedUserId,
       afterAppointmentId: dto.afterAppointmentId ?? null,
+      confirmReservationPriorityOverride:
+        dto.confirmReservationPriorityOverride ?? false,
     };
     const commandIdentityKey = this.idempotency.deriveIdentity({
       idempotencyKey: key,
@@ -164,14 +168,44 @@ export class StaffReinsertService {
         );
       }
 
-      const servingOrderKey =
-        await this.placement.calculateStaffReinsertPlacement(
+      const servingOrderKey = await (async () => {
+        if (
+          target.appointmentMode === 'TIME_SLOT_MODE' &&
+          target.reservationAt
+        ) {
+          if (
+            actor.role === 'SECRETARY' &&
+            target.reservationAt.getTime() + 30 * 60000 <= Date.now()
+          )
+            throw new ForbiddenException(
+              'A Secretary cannot reinsert a patient into an expired Reservation Time. Reschedule first.',
+            );
+          if (!dto.confirmReservationPriorityOverride)
+            throw new ConflictException({
+              code: 'RESERVATION_PRIORITY_CONFIRMATION_REQUIRED',
+              message:
+                "Reinsertion may change other patients' reservation priority. Explicit confirmation is required.",
+            });
+          await transaction.appointmentReservationEvent.create({
+            data: {
+              appointmentId: target.id,
+              actorType: 'USER',
+              actorUserId: authenticatedUserId,
+              action: 'REINSERT_PRIORITY_OVERRIDE',
+              reservationAt: target.reservationAt,
+              availabilityOverride: true,
+              details: { afterAppointmentId: dto.afterAppointmentId ?? null },
+            },
+          });
+        }
+        return this.placement.calculateStaffReinsertPlacement(
           transaction,
           dto.practiceLocationId,
           serviceDate,
           target,
           dto.afterAppointmentId,
         );
+      })();
       const now = new Date();
 
       await transaction.appointment.update({
@@ -486,6 +520,7 @@ export class StaffReinsertService {
       SELECT
         "id",
         "bookingGroupId",
+        "appointmentMode", "reservationAt",
         "status",
         "servingOrderKey",
         "waitingPlacementType",

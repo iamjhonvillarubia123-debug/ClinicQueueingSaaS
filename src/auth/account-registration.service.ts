@@ -1,15 +1,21 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import {
+  AccountLoginIdentifierType,
   AdministrativeRestrictionStatus,
   Prisma,
   UserAccountStatus,
+  UserRole,
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileNumberService } from '../security/mobile-number/mobile-number.service';
+import { AccountMobileVerificationService } from './account-mobile-verification.service';
 import { RegisterAccountDto } from './dto/register-account.dto';
 import { EmailVerificationService } from './email-verification.service';
 import { PasswordSecurityService } from './security/password-security.service';
-import { normalizeEmail } from './security/session-security';
+import {
+  accountIdentifierIsVerified,
+  parseAccountIdentifier,
+} from './security/account-identifier';
 
 @Injectable()
 export class AccountRegistrationService {
@@ -17,27 +23,79 @@ export class AccountRegistrationService {
     private readonly prisma: PrismaService,
     private readonly mobileNumberService: MobileNumberService,
     private readonly emailVerificationService: EmailVerificationService,
+    private readonly mobileVerificationService: AccountMobileVerificationService,
     private readonly passwordSecurityService: PasswordSecurityService,
   ) {}
 
   async register(dto: RegisterAccountDto) {
-    const normalizedEmail = normalizeEmail(dto.email);
+    const identifier = parseAccountIdentifier(
+      dto.identifier,
+      this.mobileNumberService,
+    );
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
-    const mobileNumber = this.mobileNumberService.normalize(
-      dto.mobileNumber,
-    ).canonical;
 
     const existingCurrentUser = await this.prisma.user.findFirst({
       where: {
-        email: normalizedEmail,
+        ...(identifier.type === 'EMAIL'
+          ? {
+              loginIdentifierType: AccountLoginIdentifierType.EMAIL,
+              email: identifier.normalized,
+            }
+          : {
+              loginIdentifierType: AccountLoginIdentifierType.MOBILE,
+              mobileNumberHash: identifier.mobileHash,
+            }),
         accountStatus: { not: UserAccountStatus.PERMANENTLY_CLOSED },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        passwordHash: true,
+        role: true,
+        accountStatus: true,
+        administrativeRestrictionStatus: true,
+        loginIdentifierType: true,
+        emailVerifiedAt: true,
+        mobileVerifiedAt: true,
+      },
     });
 
     if (existingCurrentUser) {
-      throw new ConflictException('A current account already uses this email.');
+      const passwordMatches = await this.passwordSecurityService.verify(
+        dto.password,
+        existingCurrentUser.passwordHash,
+      );
+      const publicRole =
+        existingCurrentUser.role === UserRole.DOCTOR ||
+        existingCurrentUser.role === UserRole.SECRETARY;
+      const baseEligible =
+        existingCurrentUser.accountStatus === UserAccountStatus.ACTIVE &&
+        (existingCurrentUser.role !== UserRole.DOCTOR ||
+          existingCurrentUser.administrativeRestrictionStatus ===
+            AdministrativeRestrictionStatus.NONE);
+
+      if (
+        passwordMatches &&
+        publicRole &&
+        baseEligible &&
+        !accountIdentifierIsVerified(existingCurrentUser)
+      ) {
+        return {
+          registrationStatus: 'VERIFICATION_PENDING' as const,
+          userId: existingCurrentUser.id,
+          role: existingCurrentUser.role,
+          verificationChannel:
+            existingCurrentUser.loginIdentifierType ===
+            AccountLoginIdentifierType.EMAIL
+              ? ('EMAIL' as const)
+              : ('MOBILE' as const),
+          verificationRequired: true as const,
+        };
+      }
+
+      throw new ConflictException(
+        'A current account already uses this email address or mobile number.',
+      );
     }
 
     const passwordHash = await this.passwordSecurityService.hash(dto.password);
@@ -49,29 +107,56 @@ export class AccountRegistrationService {
             firstName,
             middleName: null,
             lastName,
-            email: normalizedEmail,
-            mobileNumber,
+            email: identifier.type === 'EMAIL' ? identifier.normalized : null,
+            mobileNumber:
+              identifier.type === 'MOBILE' ? identifier.normalized : null,
+            mobileNumberHash:
+              identifier.type === 'MOBILE' ? identifier.mobileHash : null,
+            loginIdentifierType:
+              identifier.type === 'EMAIL'
+                ? AccountLoginIdentifierType.EMAIL
+                : AccountLoginIdentifierType.MOBILE,
             passwordHash,
             role: dto.role,
             accountStatus: UserAccountStatus.ACTIVE,
             administrativeRestrictionStatus:
               AdministrativeRestrictionStatus.NONE,
             emailVerifiedAt: null,
+            mobileVerifiedAt: null,
           },
         });
 
-        const emailVerification =
-          await this.emailVerificationService.createInitialVerification(
+        if (identifier.type === 'EMAIL') {
+          const verification =
+            await this.emailVerificationService.createInitialVerification(
+              transaction,
+              user.id,
+              identifier.normalized,
+            );
+          return {
+            registrationStatus: 'CREATED' as const,
+            userId: user.id,
+            role: user.role,
+            verificationChannel: 'EMAIL' as const,
+            verificationRequired: true as const,
+            verificationExpiresAt: verification.expiresAt,
+          };
+        }
+
+        const verification =
+          await this.mobileVerificationService.createInitialVerification(
             transaction,
             user.id,
-            normalizedEmail,
+            identifier.normalized,
+            identifier.mobileHash,
           );
-
         return {
+          registrationStatus: 'CREATED' as const,
           userId: user.id,
           role: user.role,
-          emailVerificationRequired: true,
-          emailVerificationExpiresAt: emailVerification.expiresAt,
+          verificationChannel: 'MOBILE' as const,
+          verificationRequired: true as const,
+          verificationExpiresAt: verification.expiresAt,
         };
       });
     } catch (error: unknown) {
@@ -80,7 +165,7 @@ export class AccountRegistrationService {
         error.code === 'P2002'
       ) {
         throw new ConflictException(
-          'A current account already uses this email.',
+          'A current account already uses this email address or mobile number.',
         );
       }
       throw error;

@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -10,6 +11,9 @@ import {
 } from 'class-validator';
 
 export class UpdateDoctorAccountSettingsDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsIn(['QUEUE_MODE', 'TIME_SLOT_MODE'])
+  defaultAppointmentMode?: 'QUEUE_MODE' | 'TIME_SLOT_MODE';
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @MaxLength(100)

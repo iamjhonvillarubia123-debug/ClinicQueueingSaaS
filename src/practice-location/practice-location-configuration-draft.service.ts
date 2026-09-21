@@ -13,6 +13,10 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SaveDoctorClinicConfigurationDraftDto } from './dto/save-doctor-clinic-configuration-draft.dto';
+import {
+  parseAppointmentModeProposal,
+  applyAppointmentModeProposal,
+} from '../schedule/appointment-mode.configuration';
 
 @Injectable()
 export class PracticeLocationConfigurationDraftService {
@@ -34,6 +38,10 @@ export class PracticeLocationConfigurationDraftService {
     }
 
     this.validateSchedules(dto);
+    const modeProposal =
+      dto.appointmentModeProposal === undefined
+        ? undefined
+        : parseAppointmentModeProposal(dto.appointmentModeProposal);
     this.validateServices(dto);
     this.validateQuestions(dto);
 
@@ -96,6 +104,14 @@ export class PracticeLocationConfigurationDraftService {
             where: { id: practiceLocationId },
             data: basicInfo,
           });
+          if (modeProposal)
+            await applyAppointmentModeProposal(
+              transaction,
+              practiceLocationId,
+              modeProposal,
+              userId,
+              null,
+            );
 
           for (const row of this.scheduleRows(dto)) {
             const { weekday, ...data } = row;
@@ -160,8 +176,15 @@ export class PracticeLocationConfigurationDraftService {
 
         const draft = await transaction.doctorPracticeScheduleDraft.upsert({
           where: { practiceLocationId },
-          create: { practiceLocationId, ...basicInfo },
-          update: basicInfo,
+          create: {
+            practiceLocationId,
+            ...basicInfo,
+            ...(modeProposal ? { appointmentModeProposal: modeProposal } : {}),
+          },
+          update: {
+            ...basicInfo,
+            ...(modeProposal ? { appointmentModeProposal: modeProposal } : {}),
+          },
           select: { id: true },
         });
 
@@ -277,10 +300,36 @@ export class PracticeLocationConfigurationDraftService {
       clinicEmail:
         this.normalizeOptionalText(info.clinicEmail)?.toLowerCase() ?? null,
       clinicDescription: this.normalizeOptionalText(info.clinicDescription),
+      clinicPhoto:
+        info.clinicPhoto === undefined ? undefined : info.clinicPhoto || null,
       countryCode:
         this.normalizeOptionalText(info.countryCode)?.toUpperCase() ?? null,
-      timeZone: this.normalizeOptionalText(info.timeZone),
+      timeZone:
+        info.timeZone === undefined
+          ? null
+          : this.normalizeTimeZone(info.timeZone),
     };
+  }
+
+  private normalizeTimeZone(value: string): string {
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new BadRequestException('A valid IANA time zone is required.');
+    }
+    if (/^(?:UTC|GMT)?[+-]\d{1,2}(?::?\d{2})?$/i.test(normalized)) {
+      throw new BadRequestException(
+        'timeZone must be an IANA time zone, not a fixed UTC/GMT offset.',
+      );
+    }
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        timeZone: normalized,
+      }).resolvedOptions().timeZone;
+    } catch {
+      throw new BadRequestException(
+        'timeZone must be a valid supported IANA time zone.',
+      );
+    }
   }
 
   private scheduleRows(dto: SaveDoctorClinicConfigurationDraftDto) {
@@ -465,6 +514,7 @@ export class PracticeLocationConfigurationDraftService {
         contactNumber: true,
         clinicEmail: true,
         clinicDescription: true,
+        clinicPhoto: true,
         countryCode: true,
         timeZone: true,
         services: { orderBy: [{ name: 'asc' }, { id: 'asc' }] },

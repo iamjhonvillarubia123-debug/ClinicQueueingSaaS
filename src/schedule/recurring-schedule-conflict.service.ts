@@ -90,6 +90,25 @@ export class RecurringScheduleConflictService {
     }
   }
 
+  assertSchedulesDoNotOverlap(
+    candidate: RecurringSchedule[],
+    candidateTimeZone: string,
+    other: RecurringSchedule[],
+    otherTimeZone: string,
+  ) {
+    this.assertValidConfiguredTimeZone(candidateTimeZone);
+    this.assertValidConfiguredTimeZone(otherTimeZone);
+    if (candidateTimeZone === otherTimeZone)
+      this.assertSameTimeZoneSchedulesDoNotOverlap(candidate, other);
+    else
+      this.assertDifferentTimeZoneSchedulesDoNotOverlap(
+        candidate,
+        candidateTimeZone,
+        other,
+        otherTimeZone,
+      );
+  }
+
   private async loadOpenSchedules(
     db: RecurrenceClient,
     practiceLocationId: string,

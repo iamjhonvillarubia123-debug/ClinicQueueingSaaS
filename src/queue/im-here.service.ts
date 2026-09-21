@@ -18,6 +18,7 @@ import { QueueServingOrderPlacementService } from './queue-serving-order-placeme
 type TransactionClient = Prisma.TransactionClient;
 
 type TargetAppointment = {
+  appointmentMode?: string;
   id: string;
   bookingReference: string;
   practiceLocationId: string;
@@ -90,6 +91,10 @@ export class ImHereService {
         appointment.id,
       );
       this.assertTargetMatchesAccess(target, bookingReference);
+      if (target.appointmentMode === 'TIME_SLOT_MODE')
+        throw new ConflictException(
+          "Time-Slot appointments use RESCHEDULE or CANCEL, not I'M HERE.",
+        );
       await this.assertOperationalQueue(transaction, target);
       this.assertEligibleTarget(target);
 
@@ -257,6 +262,7 @@ export class ImHereService {
       SELECT
         "id",
         "bookingReference",
+        "appointmentMode",
         "practiceLocationId",
         "serviceDate",
         "bookingGroupId",

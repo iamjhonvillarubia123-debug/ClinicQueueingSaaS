@@ -32,6 +32,8 @@ type ConfirmMultiPersonBookingInput = {
 };
 
 type GroupDraftSnapshot = {
+  reservationAt: Date | null;
+  fragmentedReservations: boolean;
   id: string;
   practiceLocationId: string;
   serviceDate: Date;
@@ -53,6 +55,7 @@ type AnswerSnapshot = {
 };
 
 type MemberSnapshot = {
+  reservationAt: Date | null;
   id: string;
   memberOrder: number;
   firstName: string;
@@ -116,6 +119,8 @@ export class MultiPersonBookingConfirmationService {
                 id: true,
                 bookingReference: true,
                 queueNumber: true,
+                appointmentMode: true,
+                reservationAt: true,
                 status: true,
                 firstName: true,
                 lastName: true,
@@ -150,6 +155,14 @@ export class MultiPersonBookingConfirmationService {
         transaction,
         input.bookingDraftId,
       );
+      if (
+        admission.draft.appointmentMode === 'QUEUE_MODE' &&
+        draft.reservationAt
+      ) {
+        throw new ConflictException(
+          'The clinic Appointment Mode changed. Review the booking configuration before confirming. Your existing verification has not been consumed.',
+        );
+      }
       const { members, practiceLocationName } =
         await this.loadAndValidateMembers(transaction, draft);
       if (members.length < 2 || members.length > 5) {
@@ -167,13 +180,33 @@ export class MultiPersonBookingConfirmationService {
         draft.practiceLocationId,
         draft.serviceDate,
       );
-      await this.admission.assertCapacityAvailable(
-        transaction,
-        draft.practiceLocationId,
-        draft.serviceDate,
-        admission.maximumOperatingUntilAt,
-        totalEstimatedMinutes,
-      );
+      const reservations =
+        admission.draft.appointmentMode === 'TIME_SLOT_MODE'
+          ? await this.admission.claimReservations(transaction, {
+              practiceLocationId: draft.practiceLocationId,
+              serviceDate: draft.serviceDate,
+              fragmented: draft.fragmentedReservations,
+              members: members.map((m, i) => ({
+                reservationAt: draft.fragmentedReservations
+                  ? m.reservationAt
+                  : i === 0
+                    ? draft.reservationAt
+                    : null,
+                actualMinutes: m.services.reduce(
+                  (sum, s) => sum + s.durationMinutes,
+                  0,
+                ),
+              })),
+            })
+          : null;
+      if (!reservations)
+        await this.admission.assertCapacityAvailable(
+          transaction,
+          draft.practiceLocationId,
+          draft.serviceDate,
+          admission.maximumOperatingUntilAt,
+          totalEstimatedMinutes,
+        );
 
       const bookingGroup = await transaction.bookingGroup.create({
         data: {
@@ -194,12 +227,14 @@ export class MultiPersonBookingConfirmationService {
         id: string;
         bookingReference: string;
         queueNumber: number;
+        reservationAt?: Date | null;
         status: string;
         firstName: string | null;
         lastName: string | null;
       }> = [];
 
       for (const member of members) {
+        const reservation = reservations?.[members.indexOf(member)];
         const queueNumber = await this.queueNumbers.allocateNext(
           transaction,
           draft.practiceLocationId,
@@ -213,8 +248,33 @@ export class MultiPersonBookingConfirmationService {
             serviceDate: draft.serviceDate,
             estimatedServiceMinutes:
               member.authoritativeEstimatedServiceMinutes,
+            ...(reservation
+              ? {
+                  appointmentMode: reservation.appointmentMode,
+                  reservationAt: reservation.reservationAt,
+                  originalReservationAt: reservation.originalReservationAt,
+                  schedulingAllotmentMinutes:
+                    reservation.schedulingAllotmentMinutes,
+                  estimatedServiceMinutes: reservation.estimatedServiceMinutes,
+                  reservationHistory: {
+                    create: {
+                      actorType: 'PATIENT',
+                      action: 'BOOKED',
+                      reservationAt: reservation.reservationAt,
+                      details: {
+                        fragmented: draft.fragmentedReservations,
+                        bookingGroupId: bookingGroup.id,
+                      },
+                    },
+                  },
+                }
+              : {}),
             queueNumber,
-            servingOrderKey: new Prisma.Decimal(queueNumber),
+            servingOrderKey: reservation
+              ? new Prisma.Decimal(reservation.reservationAt.getTime()).plus(
+                  new Prisma.Decimal(queueNumber).div(1000000),
+                )
+              : new Prisma.Decimal(queueNumber),
             waitingPlacementType: WaitingPlacementType.ORDINARY,
             firstName: member.firstName,
             middleName: member.middleName,
@@ -230,6 +290,8 @@ export class MultiPersonBookingConfirmationService {
             id: true,
             bookingReference: true,
             queueNumber: true,
+            appointmentMode: true,
+            reservationAt: true,
             status: true,
             firstName: true,
             lastName: true,
@@ -372,6 +434,8 @@ export class MultiPersonBookingConfirmationService {
         mobileNumberLastFour: true,
         privacyNoticeAcknowledgedAt: true,
         privacyNoticeVersion: true,
+        reservationAt: true,
+        fragmentedReservations: true,
         scheduledReminderOptIn: true,
       },
     });
@@ -401,6 +465,7 @@ export class MultiPersonBookingConfirmationService {
         select: {
           id: true,
           memberOrder: true,
+          reservationAt: true,
           firstName: true,
           middleName: true,
           lastName: true,
@@ -551,6 +616,7 @@ export class MultiPersonBookingConfirmationService {
       }
 
       preparedMembers.push({
+        reservationAt: member.reservationAt,
         id: member.id,
         memberOrder: member.memberOrder,
         firstName: member.firstName.trim(),
@@ -668,6 +734,7 @@ export class MultiPersonBookingConfirmationService {
       firstName: string | null;
       lastName: string | null;
       queueNumber: number;
+      reservationAt?: Date | null;
     }>,
     rawToken: string,
   ): string {
@@ -683,7 +750,7 @@ export class MultiPersonBookingConfirmationService {
         const name = [appointment.firstName, appointment.lastName]
           .filter(Boolean)
           .join(' ');
-        return `${name}: Queue ${appointment.queueNumber}`;
+        return `${name}: Queue ${appointment.queueNumber}${appointment.reservationAt ? `, reservation ${appointment.reservationAt.toISOString()}` : ''}`;
       })
       .join('; ');
     return [

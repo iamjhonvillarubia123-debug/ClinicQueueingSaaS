@@ -24,6 +24,9 @@ export type ExistingPatientResponse =
 export type BookingDraftModeInput = (typeof BOOKING_DRAFT_MODES)[number];
 
 export class CreateBookingDraftMemberDto {
+  @IsOptional()
+  @IsDateString({ strict: true })
+  reservationAt?: string;
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
@@ -61,6 +64,16 @@ export class CreateBookingDraftMemberDto {
 }
 
 export class CreateBookingDraftDto {
+  @IsOptional()
+  @IsBoolean()
+  continueVerifiedTimeSlot?: boolean;
+  @IsOptional()
+  @IsDateString({ strict: true })
+  reservationAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  fragmentedReservations?: boolean;
   @IsString()
   @IsNotEmpty()
   practiceLocationId!: string;

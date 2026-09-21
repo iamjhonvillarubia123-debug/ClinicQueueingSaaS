@@ -71,6 +71,7 @@ describe('PracticeLocationConfigurationDraftService', () => {
       addressLine1: 'Draft Street',
       clinicEmail: 'draft@example.com',
       clinicDescription: 'Draft description',
+      clinicPhoto: 'data:image/jpeg;base64,/9j/AA==',
       countryCode: 'PH',
       timeZone: 'Asia/Manila',
     },
@@ -127,6 +128,21 @@ describe('PracticeLocationConfigurationDraftService', () => {
     });
   });
 
+  it('persists photo removal in the saved proposal', async () => {
+    await service.save('user-1', 'location-1', {
+      ...dto,
+      basicInfo: { ...dto.basicInfo, clinicPhoto: '' },
+    });
+    expect(
+      transactionMock.doctorPracticeScheduleDraft.upsert,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ clinicPhoto: null }) as unknown,
+        create: expect.objectContaining({ clinicPhoto: null }) as unknown,
+      }),
+    );
+  });
+
   it('stores an ACTIVE clinic proposal without mutating effective configuration', async () => {
     await service.save('user-1', 'location-1', dto);
 
@@ -147,6 +163,7 @@ describe('PracticeLocationConfigurationDraftService', () => {
       '"name":"Draft Clinic Name"',
     );
     expect(serializedScheduleDraftCalls).toContain('"shortCode":"NORTH"');
+    expect(serializedScheduleDraftCalls).toContain(dto.basicInfo.clinicPhoto);
     expect(serializedScheduleDraftCalls).toContain('"timeZone":"Asia/Manila"');
     expect(
       transactionMock.doctorPracticeConfigurationDraftService.createMany,

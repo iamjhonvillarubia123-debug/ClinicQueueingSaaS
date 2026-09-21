@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import { CsrfOriginGuard } from '../auth/guards/csrf-origin.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request';
 import { DoctorProfileOnboardingService } from './doctor-profile-onboarding.service';
+import { UpdateDoctorPresentationDto } from './dto/update-doctor-presentation.dto';
 import { CompleteDoctorOnboardingDto } from './dto/complete-doctor-onboarding.dto';
 
 @Controller('doctor/profile')
@@ -23,6 +25,18 @@ export class DoctorProfileOnboardingController {
   getProfileState(@Request() request: AuthenticatedRequest) {
     return this.doctorProfileOnboardingService.getProfileState(
       request.user.userId,
+    );
+  }
+
+  @UseGuards(SessionAuthGuard, CsrfOriginGuard)
+  @Patch('presentation')
+  updatePresentation(
+    @Request() request: AuthenticatedRequest,
+    @Body() dto: UpdateDoctorPresentationDto,
+  ) {
+    return this.doctorProfileOnboardingService.updatePresentation(
+      request.user.userId,
+      dto,
     );
   }
 

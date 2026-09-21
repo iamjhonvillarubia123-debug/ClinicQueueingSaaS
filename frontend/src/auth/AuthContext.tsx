@@ -10,7 +10,7 @@ interface AuthContextValue {
   profile: SessionProfile | null;
   refresh: () => Promise<void>;
   clearSession: () => void;
-  login: (email: string, password: string) => Promise<SessionProfile>;
+  login: (identifier: string, password: string) => Promise<SessionProfile>;
   logout: () => Promise<void>;
 }
 
@@ -40,8 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    await apiRequest('/auth/login', { method: 'POST', body: { email, password } });
+  const login = useCallback(async (identifier: string, password: string) => {
+    await apiRequest('/auth/login', { method: 'POST', body: { identifier, password } });
     const nextProfile = await apiRequest<SessionProfile>('/auth/profile');
     setProfile(nextProfile);
     setStatus('authenticated');

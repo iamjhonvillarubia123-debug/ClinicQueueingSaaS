@@ -75,7 +75,7 @@ describe('HoursEditor', () => {
     expect(mondayMaximum).toHaveFocus();
   });
 
-  it('copies only schedule inputs and lets the cutoff recalculate from the pasted closing time', async () => {
+  it('copies schedule inputs while keeping the shared booking cutoff setting', async () => {
     const user = userEvent.setup();
     render(<HoursHarness />);
 
@@ -85,7 +85,8 @@ describe('HoursEditor', () => {
     expect(screen.getByLabelText('Tuesday opening time')).toHaveValue('08:00 AM');
     expect(screen.getByLabelText('Tuesday closing time')).toHaveValue('05:00 PM');
     expect(screen.getByLabelText('Tuesday maximum operating time')).toHaveValue('06:00 PM');
-    expect(screen.getByLabelText('Tuesday online booking cutoff')).toHaveTextContent('03:00 PM');
+    expect(screen.queryByLabelText('Tuesday online booking cutoff')).not.toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Online booking cutoff hours' })).toHaveValue(2);
   });
 
   it('does not allow maximum operating time to be earlier than closing in the frontend', async () => {

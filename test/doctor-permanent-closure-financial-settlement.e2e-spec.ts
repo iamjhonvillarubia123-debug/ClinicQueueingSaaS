@@ -87,6 +87,7 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
 
     return {
       doctor,
+      email,
       password,
       financialAccountId: doctor.doctorFinancialAccount.id,
     };
@@ -115,7 +116,7 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
 
     await expect(
       lifecycle.permanentlyDelete(
-        fixture.doctor.email,
+        fixture.email,
         fixture.password,
         true,
         `m12s6-pending-${randomUUID()}`,
@@ -165,7 +166,7 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
 
     await expect(
       lifecycle.permanentlyDelete(
-        fixture.doctor.email,
+        fixture.email,
         fixture.password,
         true,
         idempotencyKey,
@@ -178,7 +179,7 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
 
     await expect(
       lifecycle.permanentlyDelete(
-        fixture.doctor.email,
+        fixture.email,
         fixture.password,
         true,
         idempotencyKey,
@@ -217,7 +218,7 @@ describe('Doctor permanent closure financial settlement (e2e)', () => {
     expect(account.recoveryEmailEncrypted).not.toBeNull();
     expect(account.recoveryEmailHash).toBe(
       createHash('sha256')
-        .update(fixture.doctor.email.trim().toLowerCase(), 'utf8')
+        .update(fixture.email.trim().toLowerCase(), 'utf8')
         .digest('hex'),
     );
     expect(creditEntries).toHaveLength(1);

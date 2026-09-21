@@ -47,6 +47,7 @@ describe('SessionManagementService', () => {
     transaction.user.findUnique.mockResolvedValue({
       id: actor.userId,
       role: 'DOCTOR',
+      loginIdentifierType: 'EMAIL',
       accountStatus: 'ACTIVE',
       administrativeRestrictionStatus: 'NONE',
       emailVerifiedAt: new Date(),
@@ -219,5 +220,54 @@ describe('SessionManagementService', () => {
       revoked: true,
       changed: false,
     });
+  });
+
+  it.each(['EMAIL', 'MOBILE'])(
+    'allows verified %s Secretary password change and revokes sessions',
+    async (identifierType) => {
+      transaction.user.findUnique.mockResolvedValue({
+        id: actor.userId,
+        role: 'SECRETARY',
+        accountStatus: 'ACTIVE',
+        administrativeRestrictionStatus: 'NONE',
+        loginIdentifierType: identifierType,
+        emailVerifiedAt: identifierType === 'EMAIL' ? new Date() : null,
+        mobileVerifiedAt: identifierType === 'MOBILE' ? new Date() : null,
+        passwordHash: 'private-hash',
+      });
+      passwords.verify.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      passwords.hashStrong.mockResolvedValue('replacement-hash');
+      await expect(
+        service.changePassword(
+          { ...actor, role: UserRole.SECRETARY },
+          'current',
+          'a long new passphrase',
+          'a long new passphrase',
+        ),
+      ).resolves.toEqual({ changed: true, signInRequired: true });
+      expect(transaction.user.update).toHaveBeenCalled();
+      expect(transaction.userSession.updateMany).toHaveBeenCalled();
+      expect(transaction.passwordReset.updateMany).toHaveBeenCalled();
+    },
+  );
+  it('rejects an unverified mobile Secretary before changing credentials', async () => {
+    transaction.user.findUnique.mockResolvedValue({
+      id: actor.userId,
+      role: 'SECRETARY',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+      loginIdentifierType: 'MOBILE',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+    });
+    await expect(
+      service.changePassword(
+        { ...actor, role: UserRole.SECRETARY },
+        'current',
+        'a long new passphrase',
+        'a long new passphrase',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(transaction.user.update).not.toHaveBeenCalled();
   });
 });

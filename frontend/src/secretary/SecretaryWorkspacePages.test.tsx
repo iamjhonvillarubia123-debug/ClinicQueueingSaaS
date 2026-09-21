@@ -92,18 +92,20 @@ describe('Secretary workspace pages', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows only modules represented by granted authority', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+  it.each([false, true])('opens authorized clinic modules (substitute: %s)', async (substitute) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input);
       if (url.includes('/secretary/workspace'))
-        return Promise.resolve(response(workspace));
+        return Promise.resolve(response(substitute ? { ...workspace, clinics: [{ ...workspace.clinics[0], assignmentType: 'SUBSTITUTE_SECRETARY', authorityBundles: [], substituteCoverages: [{ status: 'ACTIVE', fromServiceDate: '2026-09-02', toServiceDate: '2026-09-02' }] }] } : workspace));
       if (url.includes('/operations/context'))
         return Promise.resolve(
           response({
             practiceLocationId: 'clinic-1',
             clinicName: 'North Clinic',
             timeZone: 'Asia/Manila',
-            currentServiceDate: '2026-09-02',
+            currentServiceDate: '2026-09-01',
+            defaultServiceDate: '2026-09-02',
+            allowedServiceDateRanges: substitute ? [{ fromServiceDate: '2026-09-02', toServiceDate: '2026-09-02' }] : null,
           }),
         );
       const clinic = {
@@ -159,9 +161,10 @@ describe('Secretary workspace pages', () => {
       await screen.findByRole('button', { name: 'Overview' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Queue' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Appointments' }),
-    ).toBeInTheDocument();
+    if (substitute) expect(screen.queryByRole('button', { name: 'Appointments' })).not.toBeInTheDocument();
+    else expect(screen.getByRole('button', { name: 'Appointments' })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/operations/overview?serviceDate=2026-09-02'))).toBe(true));
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('serviceDate=2026-09-01'))).toBe(false);
     expect(
       screen.queryByRole('button', { name: 'Staff' }),
     ).not.toBeInTheDocument();
@@ -224,4 +227,29 @@ describe('Secretary workspace pages', () => {
       screen.queryByRole('button', { name: 'Queue' }),
     ).not.toBeInTheDocument();
   });
+});
+it('declines an invitation and keeps the conflict response actionable', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(workspace)).mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Disconnect from that clinic in Clinics before accepting, or decline this invitation.' }), { status: 409, headers: { 'content-type': 'application/json' } })).mockResolvedValueOnce(response({ declined: true })).mockResolvedValueOnce(response({ ...workspace, invitations: [] }));
+  const user = userEvent.setup();
+  render(<MemoryRouter><SecretaryInvitationsPage /></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: 'Accept Invitation' }));
+  expect(await screen.findByText(/Disconnect from that clinic/)).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Decline Invitation' }));
+  expect(await screen.findByText('No pending invitations')).toBeInTheDocument();
+  expect(fetchMock.mock.calls[2][0]).toContain('/invite-1/decline');
+});
+it('requires a password to disconnect and removes the clinic after confirmation', async () => {
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function(this: HTMLDialogElement) { this.setAttribute('open', ''); } });
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(workspace)).mockResolvedValueOnce(response({ disconnected: true })).mockResolvedValueOnce(response({ ...workspace, clinics: [] }));
+  const user = userEvent.setup();
+  render(<MemoryRouter><SecretaryClinicsPage /></MemoryRouter>);
+  await user.click(await screen.findByRole('button', { name: 'Disconnect' }));
+  expect(screen.getByRole('button', { name: 'Confirm disconnection' })).toBeDisabled();
+  await user.type(screen.getByLabelText('Current password'), 'Synthetic test password 42!');
+  await user.click(screen.getByRole('button', { name: 'Confirm disconnection' }));
+  expect(await screen.findByText('No connected clinics')).toBeInTheDocument();
+  expect(fetchMock.mock.calls[1][0]).toContain('/secretary/workspace/clinics/staff-1/disconnect');
+  const request = fetchMock.mock.calls[1][1];
+  expect(request?.method).toBe('POST');
+  expect(JSON.parse(String(request?.body))).toEqual({ password: 'Synthetic test password 42!' });
 });

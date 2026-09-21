@@ -19,6 +19,9 @@ import { PatientBookingAccessService } from './patient-booking-access.service';
 type TransactionClient = Prisma.TransactionClient;
 
 type DashboardAppointment = {
+  appointmentMode?: string;
+  reservationAt?: Date | null;
+  serviceStartedAt?: Date | null;
   id: string;
   bookingReference: string;
   practiceLocationId: string;
@@ -68,6 +71,11 @@ export class PatientAppointmentDashboardService {
     nowServingQueueNumber: number | null;
     patientsAhead: number | null;
     canUseImHere: boolean;
+    appointmentMode?: string;
+    reservationAt?: Date | null;
+    canReschedule?: boolean;
+    canCancel?: boolean;
+    reservationHasPassed?: boolean;
     activeOperationalNotice: {
       id: string;
       kind: ClinicDayOperationalNoticeKind;
@@ -131,6 +139,37 @@ export class PatientAppointmentDashboardService {
         nowServingQueueNumber,
         patientsAhead,
         canUseImHere: this.canUseImHere(appointment, access.purpose),
+        ...(appointment.appointmentMode === 'TIME_SLOT_MODE'
+          ? {
+              appointmentMode: appointment.appointmentMode,
+              reservationAt: appointment.reservationAt,
+              reservationHasPassed:
+                !!appointment.reservationAt &&
+                appointment.reservationAt.getTime() + 30 * 60000 <= Date.now(),
+              canReschedule:
+                access.purpose === 'VIEW_AND_MANAGE_BOOKING' &&
+                !appointment.serviceStartedAt &&
+                [
+                  'WAITING',
+                  'TEMPORARILY_ABSENT',
+                  'CALLED',
+                  'OUT_FOR_PROCEDURE',
+                ].includes(appointment.status) &&
+                appointment.clinicDayStatus !== 'CLOSED' &&
+                appointment.clinicDayStatus !== 'CANCELLED',
+              canCancel:
+                access.purpose === 'VIEW_AND_MANAGE_BOOKING' &&
+                !appointment.serviceStartedAt &&
+                [
+                  'WAITING',
+                  'TEMPORARILY_ABSENT',
+                  'CALLED',
+                  'OUT_FOR_PROCEDURE',
+                ].includes(appointment.status) &&
+                appointment.clinicDayStatus !== 'CLOSED' &&
+                appointment.clinicDayStatus !== 'CANCELLED',
+            }
+          : {}),
         activeOperationalNotice,
       };
     });
@@ -144,6 +183,7 @@ export class PatientAppointmentDashboardService {
       SELECT
         a."id",
         a."bookingReference",
+        a."appointmentMode", a."reservationAt", a."serviceStartedAt",
         a."practiceLocationId",
         pl."name" AS "practiceLocationName",
         a."serviceDate",
@@ -250,6 +290,7 @@ export class PatientAppointmentDashboardService {
   ): boolean {
     return (
       purpose === BookingAccessTokenPurpose.VIEW_AND_MANAGE_BOOKING &&
+      appointment.appointmentMode !== 'TIME_SLOT_MODE' &&
       appointment.clinicDayStatus === ClinicDayStatus.STARTED &&
       appointment.bookingGroupId === null &&
       appointment.status === AppointmentStatus.TEMPORARILY_ABSENT &&

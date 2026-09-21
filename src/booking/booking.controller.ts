@@ -28,8 +28,11 @@ import { ReplacePublicBookingDraftDto } from './dto/replace-public-booking-draft
 import { VerifyBookingOtpDto } from './dto/verify-booking-otp.dto';
 import { PublicBookingEntryService } from './public-booking-entry.service';
 import { PublicBookingReplacementService } from './public-booking-replacement.service';
+import { TimeSlotAvailabilityDto } from './dto/time-slot-availability.dto';
 
 type PublicBookingGroupAppointment = {
+  appointmentMode?: string;
+  reservationAt?: Date | null;
   bookingReference: string;
   queueNumber: number;
   status: string;
@@ -89,6 +92,20 @@ export class BookingController {
     @Body() dto: CreatePublicBookingDraftDto,
   ) {
     return this.publicBookingEntryService.createDraft(publicIdentifier, dto);
+  }
+
+  @RateLimit({
+    id: 'booking-public-time-slots',
+    limit: 60,
+    windowMs: 60000,
+    subject: { kind: 'PARAM', field: 'publicIdentifier' },
+  })
+  @Post('public/time-slots/:publicIdentifier')
+  getTimeSlots(
+    @Param('publicIdentifier') publicIdentifier: string,
+    @Body() dto: TimeSlotAvailabilityDto,
+  ) {
+    return this.publicBookingEntryService.getTimeSlots(publicIdentifier, dto);
   }
 
   @Put('public/draft/:publicIdentifier/:bookingDraftId')
@@ -264,6 +281,12 @@ export class BookingController {
         bookingGroup: {
           serviceDate: result.bookingGroup.serviceDate,
           appointments: appointments.map((appointment) => ({
+            ...(appointment.appointmentMode === 'TIME_SLOT_MODE'
+              ? {
+                  appointmentMode: appointment.appointmentMode,
+                  reservationAt: appointment.reservationAt,
+                }
+              : {}),
             bookingReference: appointment.bookingReference,
             queueNumber: appointment.queueNumber,
             status: appointment.status,

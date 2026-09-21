@@ -69,8 +69,7 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
       .send({
         firstName: 'Maria',
         lastName: 'Secretary',
-        email,
-        mobileNumber: '09171234567',
+        identifier: email,
         password,
         role: 'SECRETARY',
       })
@@ -78,7 +77,7 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
     const registrationBody = registration.body as unknown as {
       userId: string;
       role: 'SECRETARY';
-      emailVerificationRequired: boolean;
+      verificationRequired: boolean;
     };
     const userId = registrationBody.userId;
 
@@ -86,7 +85,7 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
       expect.objectContaining({
         userId,
         role: 'SECRETARY',
-        emailVerificationRequired: true,
+        verificationRequired: true,
       }),
     );
 
@@ -95,7 +94,7 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/auth/login')
-      .send({ email, password })
+      .send({ identifier: email, password })
       .expect(401);
 
     const verification = await prisma.emailVerification.findFirstOrThrow({
@@ -123,7 +122,10 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
       .expect(201);
 
     const browser = request.agent(app.getHttpServer());
-    await browser.post('/auth/login').send({ email, password }).expect(201);
+    await browser
+      .post('/auth/login')
+      .send({ identifier: email, password })
+      .expect(201);
 
     const profile = await browser.get('/auth/profile').expect(200);
     expect(profile.body).toEqual({ userId, role: 'SECRETARY' });
@@ -134,7 +136,7 @@ describe('R1 Secretary zero-assignment account journey (e2e)', () => {
         firstName: 'Maria',
         lastName: 'Secretary',
         email,
-        mobileNumber: '09171234567',
+        mobileNumber: null,
       },
       clinics: [],
       invitations: [],

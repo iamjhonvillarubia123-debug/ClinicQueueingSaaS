@@ -1,6 +1,9 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsUUID } from 'class-validator';
 
 export class StaffReinsertDto {
+  @IsOptional()
+  @IsBoolean()
+  confirmReservationPriorityOverride?: boolean;
   @IsUUID()
   practiceLocationId!: string;
 

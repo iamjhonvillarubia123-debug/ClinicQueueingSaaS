@@ -4,7 +4,7 @@ import { PracticeLocationService } from './practice-location.service';
 
 describe('PracticeLocationService Single Choice loading', () => {
   const prismaMock = {
-    doctorProfile: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn() },
     practiceLocation: { findMany: jest.fn() },
     doctorPracticeConfigurationDraftBookingQuestionOption: {
       findMany: jest.fn(),
@@ -17,7 +17,15 @@ describe('PracticeLocationService Single Choice loading', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prismaMock.doctorProfile.findUnique.mockResolvedValue({ id: 'doctor-1' });
+    prismaMock.user.findUnique.mockResolvedValue({
+      role: 'DOCTOR',
+      accountStatus: 'ACTIVE',
+      administrativeRestrictionStatus: 'NONE',
+      loginIdentifierType: 'EMAIL',
+      emailVerifiedAt: new Date(),
+      mobileVerifiedAt: null,
+      doctorProfile: { id: 'doctor-1' },
+    });
   });
 
   it('returns persisted draft Single Choice options in display order', async () => {

@@ -8,6 +8,7 @@ import {
   IsEnum,
   IsInt,
   IsOptional,
+  IsObject,
   IsString,
   Matches,
   Max,
@@ -22,6 +23,14 @@ import {
 import { DraftPracticeScheduleRowDto } from './save-draft-practice-schedule.dto';
 
 export class DoctorClinicDraftBasicInfoDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(400000)
+  @Matches(/^(?:data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2})?$/, {
+    message: 'Choose a valid clinic JPEG photo.',
+  })
+  clinicPhoto?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -158,6 +167,9 @@ export class DoctorClinicDraftQuestionDto {
 }
 
 export class SaveDoctorClinicConfigurationDraftDto {
+  @IsOptional()
+  @IsObject()
+  appointmentModeProposal?: Record<string, unknown>;
   @ValidateNested()
   @Type(() => DoctorClinicDraftBasicInfoDto)
   basicInfo!: DoctorClinicDraftBasicInfoDto;

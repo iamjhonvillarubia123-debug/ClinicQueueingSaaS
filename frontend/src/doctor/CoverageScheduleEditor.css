@@ -1,0 +1,29 @@
+.coverage-schedule-editor { display: grid; gap: 14px; }
+.coverage-entry-modes { display: grid; gap: 8px; }
+.coverage-entry-modes label { display: flex; gap: 8px; padding: 12px; border: 1px solid #dbe3ed; border-radius: 8px; align-items: center; }
+.coverage-weekdays { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.coverage-weekdays legend { margin-bottom: 10px; font-size: 12px; }
+.coverage-weekdays label { display: flex; gap: 4px; align-items: center; border: 1px solid #dbe3ed; border-radius: 6px; padding: 8px; font-size: 12px; }
+.coverage-weekdays input { accent-color: #1755c5; }
+.coverage-entry-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.coverage-entry-actions button, .coverage-entry-list button { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer; }
+.coverage-entry-actions button:disabled { opacity: .5; cursor: default; }
+.coverage-entry-list { padding: 0; list-style: none; display: grid; gap: 8px; }
+.coverage-entry-list li { display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px; background: #f7f9fc; border-radius: 8px; font-size: 12px; }
+.coverage-entry-preview { font-size: 12px; line-height: 1.7; }
+.coverage-schedule-editor .staff-neutral-note p { overflow-wrap: anywhere; }
+
+.coverage-period { display: grid; gap: 14px; padding: 14px; border: 1px solid #dbe3ed; border-radius: 10px; min-width: 0; }
+.coverage-period-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.coverage-period-header h4 { margin: 0; font-size: 15px; }
+.coverage-period-header button { border: 0; background: transparent; color: #b42318; cursor: pointer; padding: 6px; }
+.coverage-period .coverage-entry-modes { gap: 6px; }
+.coverage-period .coverage-entry-modes label { padding: 8px; font-size: 13px; }
+.coverage-period .coverage-entry-preview { margin: 0; }
+.coverage-entry-list { margin: 0; }
+.coverage-period-summary { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.coverage-row-actions { display: flex; flex-shrink: 0; gap: 4px; }
+.coverage-row-actions button { display: grid; place-items: center; padding: 8px; }
+.coverage-row-actions button:disabled { opacity: .4; cursor: default; }
+.coverage-row-actions button:last-child { color: #b42318; }
+.coverage-total { display: grid; gap: 4px; font-size: 12px; }

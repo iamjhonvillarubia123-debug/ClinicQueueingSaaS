@@ -95,6 +95,10 @@ export class MobileNumberService {
     };
   }
 
+  encrypt(input: string): string {
+    return this.encryptCanonical(this.normalize(input).canonical);
+  }
+
   hashCanonical(canonical: string): string {
     return createHmac('sha256', this.lookupHmacKey)
       .update(canonical, 'utf8')

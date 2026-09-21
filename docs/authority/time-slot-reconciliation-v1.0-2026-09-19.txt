@@ -1,0 +1,1033 @@
+TIME-SLOT MODE EXISTING-SAAS RECONCILIATION AND BACKEND IMPLEMENTATION AUTHORITY
+Version 1.0
+Date: 2026-09-19
+Status: APPROVED RECONCILIATION BASELINE FOR CODEX BACKEND IMPLEMENTATION
+
+======================================================================
+1. PURPOSE
+======================================================================
+
+This record reconciles the approved Time-Slot Mode Business Rules v1.0 with the
+existing Queue Mode SaaS for backend implementation.
+
+It is intended to serve as the implementation authority for Codex together with
+the existing approved canonical Project Sources.
+
+This record does not replace the existing Queue Mode rules. Unless this record
+explicitly changes or specializes a rule for Time-Slot Mode, the current SaaS
+rule remains applicable.
+
+Frontend placement and detailed Time-Slot UI design are deferred to frontend
+reconciliation. Backend/API responses must nevertheless expose the information
+needed to support the approved future UI behavior described here.
+
+Source priority for implementation:
+1. This approved Time-Slot reconciliation record for Time-Slot integration.
+2. Time-Slot Mode Business Rules v1.0.
+3. Existing consolidated canonical SaaS specifications.
+4. Existing approved architecture/design decisions.
+5. Existing code, where consistent with the above.
+6. Engineering judgment for routine implementation mechanics.
+
+Codex must not silently alter approved business rules.
+
+======================================================================
+2. CORE ARCHITECTURAL DECISION
+======================================================================
+
+Queue Mode and Time-Slot Mode use ONE SHARED BACKEND.
+
+Do not create a separate Time-Slot backend, authentication system, OTP system,
+Service system, Appointment system, ClinicDay system, queue engine, notification
+system, or audit system merely because a clinic uses Time-Slot Mode.
+
+The implementation direction is:
+
+SHARED BACKEND
+    |
+    +-- PracticeLocation / clinic effective Appointment Mode
+    |      +-- QUEUE_MODE
+    |      +-- TIME_SLOT_MODE
+    |
+    +-- shared domain services
+    |      +-- mode-aware booking/availability policies where rules differ
+    |      +-- shared Appointment/ClinicDay/Queue operations where rules converge
+    |
+    +-- shared authorization, audit, notification, idempotency and privacy controls
+
+Mode-specific business logic should be isolated into maintainable components or
+policies rather than spread as uncontrolled conditional logic throughout the
+codebase.
+
+======================================================================
+3. TERMINOLOGY
+======================================================================
+
+The user-facing concept should be treated as Appointment Mode.
+
+Approved values:
+- QUEUE_MODE
+- TIME_SLOT_MODE
+
+Queue Number, Reservation Time and Serving Order are separate concepts.
+
+Queue Number:
+Permanent ordinary queue/appointment identifier under the existing SaaS rules.
+
+Reservation Time:
+The scheduled reservation right of a Time-Slot Appointment.
+
+Serving Order:
+The actual live operational progression of the clinic.
+
+Changing Serving Order must not rewrite Reservation Time.
+
+Rescheduling changes Reservation Time only through an approved rescheduling
+operation.
+
+======================================================================
+4. DOCTOR CONFIGURATION
+======================================================================
+
+4.1 DEFAULT APPOINTMENT MODE
+
+Doctor Settings gains a Doctor-wide Default Appointment Mode.
+
+Values:
+- QUEUE_MODE
+- TIME_SLOT_MODE
+
+This is a default layer, consistent with the existing Doctor Settings/default
+architecture.
+
+4.2 SELECTIVE APPLICATION TO CLINICS
+
+The Doctor may selectively apply the default Appointment Mode to clinics.
+
+Each PracticeLocation retains its own effective Appointment Mode.
+
+A Doctor may therefore operate different clinics in different modes, subject to
+the Service-Date transition controls in Section 16.
+
+4.3 EXISTING CLINIC CONFIGURATION
+
+The existing Edit Clinic/configuration structure remains the foundation.
+
+Time-Slot Mode adds applicable configuration to the existing clinic
+configuration. It does not create a parallel clinic-configuration subsystem.
+
+Exact frontend placement is deferred.
+
+4.4 TIME-SLOT-SPECIFIC CLINIC CONFIGURATION
+
+When TIME_SLOT_MODE applies, the backend must support the approved Time-Slot
+configuration, including:
+
+- protected/non-bookable periods;
+- Maximum Bookable Service Duration Per Patient;
+- existing Service expected durations as inputs to availability.
+
+Protected/non-bookable periods are not equivalent to clinic closure. The clinic
+may continue operating to finish existing patients during such a period.
+
+4.5 SERVICES
+
+Existing PracticeLocation Service records remain authoritative.
+
+Do not create Time-Slot-specific duplicate Service records.
+
+Existing configured Service durations are used by Time-Slot availability and
+workload calculations.
+
+======================================================================
+5. SECRETARY CONFIGURATION AUTHORITY
+======================================================================
+
+5.1 NO SEPARATE TIME-SLOT SECRETARY AUTHORITY SYSTEM
+
+Existing Secretary capability and settings-draft governance remain authoritative.
+
+5.2 DOCTOR-GRANTED ACCESS
+
+A regular Secretary may access/propose applicable Appointment Mode and
+Time-Slot-specific clinic configuration only when the Doctor has granted the
+required authority.
+
+Granting this authority requires the existing applicable Doctor password
+re-entry/high-risk control.
+
+5.3 DRAFT AND APPROVAL WORKFLOW
+
+Secretary configuration changes remain proposals.
+
+Flow:
+
+Secretary edits permitted configuration
+-> DRAFT
+-> SUBMIT
+-> Doctor reviews
+-> APPROVE / REJECT / RETURN FOR REWORK
+-> only approved configuration becomes effective.
+
+Secretary authority to access/propose does not equal authority to make the
+configuration effective.
+
+5.4 SUBSTITUTE SECRETARY
+
+Existing Substitute Secretary restrictions remain unchanged.
+
+Substitute status alone does not grant recurring settings, Services,
+BookingQuestions, Doctor Settings, Appointment Mode, or Time-Slot configuration
+draft authority.
+
+======================================================================
+6. PUBLIC PATIENT BOOKING ARCHITECTURE
+======================================================================
+
+6.1 SHARED BOOKING FLOW
+
+Reuse the existing BookingDraft -> OTP -> Appointment architecture.
+
+Do not create a separate TimeSlotBookingDraft or Time-Slot OTP subsystem.
+
+The selected PracticeLocation/effective Service-Date mode determines which
+booking policy applies.
+
+QUEUE_MODE:
+Use the existing Queue Mode booking rules.
+
+TIME_SLOT_MODE:
+Use the existing booking flow plus Time-Slot reservation selection,
+availability validation and reservation finalization rules.
+
+6.2 OTP AND BOOKING EXPIRATION
+
+Time-Slot Mode uses the SAME existing SaaS rules for:
+
+- BookingDraft expiration;
+- OTP validity;
+- OTP attempts;
+- OTP resend controls;
+- booking continuation validity;
+- temporary cleanup/expiration.
+
+Do not create Time-Slot-specific expiration windows.
+
+6.3 OTP DOES NOT RESERVE CAPACITY
+
+Successful OTP verification does not guarantee that a previously selected
+Reservation Time remains available.
+
+If the selected Reservation Time becomes unavailable after OTP succeeds:
+
+- OTP remains valid under the existing booking/OTP validity rules;
+- the failure is an availability conflict, not OTP failure;
+- the patient may select another applicable available time/date/clinic within
+  the existing valid booking continuation.
+
+6.4 RESERVATION DATA
+
+A Time-Slot public booking must carry the selected Reservation Time in the
+temporary booking context and persist the authoritative Reservation Time on the
+resulting Appointment.
+
+Exact database representation is an engineering decision, but the stored value
+must be authoritative and timezone-safe under the existing PracticeLocation
+Service-Date/timezone architecture.
+
+Queue Mode Appointments do not require a Time-Slot Reservation Time.
+
+======================================================================
+7. TIME-SLOT AVAILABILITY ENGINE
+======================================================================
+
+7.1 AUTHORITATIVE BACKEND CALCULATION
+
+Implement one authoritative backend Time-Slot availability engine/service.
+
+It must be reusable for:
+
+- available dates/times;
+- final booking validation;
+- rescheduling;
+- cancellation capacity release;
+- group booking;
+- staff conflict detection;
+- other approved availability checks.
+
+Frontend calculations must not be authoritative.
+
+7.2 INPUTS
+
+Availability must consider the approved applicable inputs, including:
+
+- PracticeLocation;
+- Service Date;
+- resolved clinic schedule;
+- protected/non-bookable periods;
+- existing reservations;
+- selected Services and expected durations;
+- applicable maximum self-bookable duration rules;
+- standardized 30-minute Reservation Times;
+- approved 15-minute tolerance;
+- other approved Time-Slot capacity rules.
+
+7.3 STANDARDIZED SLOTS
+
+Patient-facing Reservation Times use the approved standardized 30-minute slot
+model.
+
+Do not add a configurable patient-facing slot interval unless separately
+approved later.
+
+7.4 SERVICE DURATION
+
+For one patient:
+
+actual expected service duration =
+sum of the configured expected durations of all selected Services.
+
+Do not alter Service history merely to satisfy availability calculations.
+
+======================================================================
+8. PUBLIC BOOKING CONCURRENCY
+======================================================================
+
+8.1 SELECTING A TIME DOES NOT CLAIM IT
+
+Viewing or selecting a Reservation Time in a BookingDraft does not reserve
+capacity.
+
+Multiple patients may temporarily see/select the same currently available time.
+
+8.2 FINAL CONFIRMATION MUST RECHECK
+
+Final conversion must re-read/revalidate all applicable current state and
+recalculate availability before creating the reservation.
+
+8.3 ATOMIC RESERVATION CLAIM
+
+Final Time-Slot booking must be concurrency-safe and atomic.
+
+The implementation must prevent two concurrent public self-service transactions
+from both successfully claiming capacity that only one is entitled to claim.
+
+The final transaction must, as applicable:
+
+- re-read current effective configuration;
+- verify Service-Date booking eligibility;
+- recalculate current availability;
+- verify the selected Reservation Time/capacity;
+- create the Appointment(s);
+- persist Reservation Time and applicable booked-Service snapshots;
+- perform existing required booking conversion/queue actions;
+- commit as one protected operation.
+
+The exact PostgreSQL locking, transaction isolation, advisory lock, constraint,
+or equivalent implementation strategy is an engineering decision. It must be
+covered by concurrency tests.
+
+======================================================================
+9. CANCELLATION AND RESCHEDULING
+======================================================================
+
+9.1 EXISTING ELIGIBILITY RULES
+
+Existing SaaS cancellation/rescheduling eligibility rules remain applicable
+unless explicitly specialized here.
+
+Passing Reservation Time alone does not automatically cancel the Appointment or
+independently remove cancellation/rescheduling rights.
+
+9.2 CAPACITY RELEASE
+
+Successful Time-Slot cancellation or rescheduling releases the affected
+reservation workload and recalculates public availability.
+
+A long-duration Appointment may reopen capacity beyond only its displayed
+30-minute Reservation Time.
+
+9.3 ATOMIC SELF-RESCHEDULING
+
+Patient self-rescheduling must be atomic.
+
+The system must successfully claim the new reservation and update/release the
+old reservation as one protected operation.
+
+If the new Reservation Time cannot be obtained, the existing reservation must
+remain intact.
+
+======================================================================
+10. MULTI-PERSON TIME-SLOT BOOKING
+======================================================================
+
+10.1 EXISTING IDENTITY MODEL REMAINS
+
+Reuse the current SaaS multi-person architecture.
+
+A public multi-person booking remains one shared booking context with temporary
+members and, on successful conversion, creates one durable ordinary Appointment
+per final member under the existing BookingGroup rules.
+
+Do not create reusable dependent/family patient profiles.
+
+10.2 MEMBER ACTUAL DURATION
+
+For each member:
+
+member actual expected duration =
+sum of that member's selected Service durations.
+
+The member's actual booked Services and actual expected duration remain
+authoritative for history/reporting.
+
+10.3 MAXIMUM BOOKABLE SERVICE DURATION IS APPLIED INDIVIDUALLY
+
+The clinic's Maximum Bookable Service Duration Per Patient applies separately to
+each member for the group self-booking capacity calculation.
+
+For multi-person Time-Slot self-booking:
+
+member scheduling allotment =
+MIN(member actual expected duration,
+    configured Maximum Bookable Service Duration Per Patient)
+
+If no maximum is configured, use the member's actual expected duration for this
+calculation.
+
+Examples with a 60-minute maximum:
+
+Example A:
+G1 actual 90 -> allotment 60
+G2 actual 90 -> allotment 60
+G3 actual 90 -> allotment 60
+Group scheduling workload = 180 minutes.
+
+Example B:
+G1 actual 90 -> allotment 60
+G2 actual 10 -> allotment 10
+G3 actual 30 -> allotment 30
+Group scheduling workload = 100 minutes, NOT 140 minutes.
+
+This group-specific rule specializes the standalone individual maximum rule for
+multi-person booking. It does not reduce or falsify the member's actual Service
+duration.
+
+10.4 PRIMARY GROUP ATTEMPT
+
+The system first attempts to accommodate the group as one uninterrupted
+sequential workload beginning from the selected group Reservation Time.
+
+Group scheduling workload =
+sum of the member scheduling allotments.
+
+Existing SaaS BookingGroup/member ordering and protection rules remain
+applicable unless explicitly amended.
+
+10.5 WHEN THE GROUP CANNOT FIT TOGETHER
+
+If there is not enough uninterrupted capacity to accommodate the entire group
+from the selected starting time, the system must explicitly inform the patient
+that no available Time-Slot arrangement at that selected start can accommodate
+the whole group together.
+
+The patient must be offered the following recovery paths:
+
+A. FRAGMENTED SAME-DAY BOOKING
+
+The UI may offer an available Reservation Time beside each group member.
+
+Each member selector must contain only Reservation Times currently available for
+that member's applicable scheduling workload.
+
+The group remains one BookingGroup even if members receive different Reservation
+Times.
+
+The fragmented group finalization must be atomic:
+- all selected member reservations succeed; or
+- none are committed.
+
+Do not leave the patient with a partially committed fragmented group booking.
+
+B. KEEP GROUP TOGETHER
+
+Offer another active Service Date where the whole group can be accommodated
+continuously.
+
+The patient may also choose another applicable clinic, where availability must
+be recalculated against that clinic's configuration and schedule.
+
+C. CONTACT CLINIC / STAFF-ASSISTED BOOKING
+
+The UI must advise the patient that if the specific date is important, the
+patient may contact the clinic/Secretary for staff-assisted scheduling.
+
+This must not promise that the clinic can accommodate the request.
+
+Public availability is a capacity-control rule, not a declaration that staff
+can never accommodate the patient.
+
+10.6 NO SAME-DAY CONTINUOUS GROUP CAPACITY
+
+If no uninterrupted same-day capacity can accommodate the whole group, the
+system should recommend another active date and expose the fragmented same-day
+and staff-assisted alternatives described above.
+
+Do not automatically:
+- split the group without patient approval;
+- shorten/remove selected Services;
+- fabricate capacity;
+- silently move members to unrelated times.
+
+======================================================================
+11. STAFF-ASSISTED TIME-SLOT BOOKING
+======================================================================
+
+11.1 SHARED STAFF-ASSISTED ARCHITECTURE
+
+Use the existing authenticated staff-assisted Appointment creation path.
+
+Do not fabricate:
+- BookingDraft;
+- BookingDraftMember;
+- BookingDraftAnswer;
+- patient booking OTP
+
+merely to reuse the public booking workflow.
+
+11.2 STAFF AVAILABILITY OVERRIDE
+
+Authorized clinic staff may deliberately create/assign a reservation that
+patient self-service considers unavailable where the approved operational
+discretion permits.
+
+The system must:
+- detect the applicable conflict;
+- show a conflict warning;
+- require explicit authorized confirmation to proceed;
+- preserve existing reservations rather than automatically moving/cancelling
+  them;
+- durably audit the override.
+
+11.3 DUPLICATE RESERVATION TIMES
+
+Authorized staff may deliberately create two or more legitimate Appointments
+with the same Reservation Time after the applicable warning/confirmation.
+
+Do not reinterpret equal Reservation Times as automatically sequential
+Reservation Times.
+
+Live Serving Order remains independently controlled by clinic operations.
+
+11.4 WALK-INS
+
+Walk-ins are not an ordinary patient entitlement or normal Time-Slot public
+workflow.
+
+The clinic may accommodate a walk-in at its discretion using the approved
+staff-assisted Appointment path.
+
+Applicable reservation-conflict warnings and audit controls must be enforced.
+
+======================================================================
+12. CLINICDAY AND LIVE QUEUE
+======================================================================
+
+12.1 SHARED CLINICDAY
+
+Time-Slot Mode uses the existing ClinicDay model and lifecycle.
+
+Do not create a separate TimeSlotClinicDay.
+
+START, CLOSE and CANCEL CLINIC use the existing SaaS lifecycle, authority,
+idempotency, audit and notification rules unless explicitly specialized.
+
+12.2 CLINICDAY ENTRY
+
+Time-Slot Appointments enter/participate in ClinicDay according to the current
+SaaS ClinicDay/queue-entry rules.
+
+Do not invent a separate Time-Slot admission lifecycle.
+
+12.3 PERMANENT QUEUE NUMBER
+
+Every successful Time-Slot Appointment receives/retains the ordinary permanent
+Queue Number under the existing SaaS rules.
+
+Queue Number does not establish normal scheduled priority in Time-Slot Mode.
+
+12.4 NORMAL SCHEDULED PRIORITY
+
+Among patients who are otherwise present/waiting/eligible under the applicable
+current SaaS rules, earlier Reservation Time normally has greater scheduled
+priority than later Reservation Time.
+
+For members of the same BookingGroup, preserve the existing SaaS group
+protection/order rules.
+
+12.5 EARLY ARRIVAL
+
+Arriving early does not create an automatic entitlement to be served before an
+earlier reservation.
+
+The clinic may serve an early patient sooner at its operational discretion.
+
+Reservation Time is not rewritten.
+
+12.6 LATE ARRIVAL
+
+The patient theoretically retains the reservation right associated with the
+booked time, but actual accommodation remains subject to clinic operational
+discretion.
+
+Lateness does not automatically cancel the Appointment.
+
+Reservation Time is not rewritten.
+
+12.7 CLINIC RUNNING LATE
+
+Do not automatically shift or rewrite Reservation Times when clinic operations
+run late.
+
+Reservation Time remains the original/current booked reservation.
+
+Serving Order/live status reflects actual clinic progression independently.
+
+12.8 CLINIC RUNNING EARLY
+
+Authorized clinic staff may call an eligible present patient earlier than the
+Reservation Time at clinic discretion.
+
+Reservation Time remains unchanged.
+
+======================================================================
+13. NEXT, MISSED TURN AND REINSERTION
+======================================================================
+
+13.1 NEXT / MISSED TURN
+
+Use the existing applicable SaaS NEXT/missed-turn operational state and controls.
+
+When staff calls NEXT because the applicable Time-Slot patient is absent:
+
+- the Appointment remains;
+- Queue Number remains;
+- Reservation Time remains;
+- reservation/audit history remains;
+- the Appointment is not automatically cancelled;
+- the next applicable patient may progress under existing operational rules.
+
+13.2 NO PATIENT "I'M HERE" FLOW IN TIME-SLOT MODE
+
+Time-Slot Mode does NOT use the Queue Mode patient "I'M HERE" recovery flow.
+
+For the applicable missed Time-Slot patient, the patient-facing recovery actions
+are:
+- RESCHEDULE
+- CANCEL
+
+Exact frontend presentation is deferred.
+
+13.3 STAFF REINSERTION
+
+Doctor/authorized Secretary may reinsert/reorder a missed Time-Slot patient at
+clinic discretion under the applicable authorization rules.
+
+The system must warn when the action may interfere with other patients'
+Reservation Time priority.
+
+The original Reservation Time must not be rewritten merely because the patient
+is reinserted.
+
+13.4 SECRETARY EXPIRED-SLOT RESTRICTION
+
+A Secretary cannot move/reinsert a patient into an expired Reservation Time.
+
+The backend must enforce this authorization/business constraint, not merely hide
+a frontend control.
+
+The patient's resulting operational UI/state may change, but the material
+change must be recorded in the audit log.
+
+13.5 UNCONFIRMED APPOINTMENTS
+
+Use the existing SaaS confirmation/ClinicDay behavior.
+
+An unconfirmed Appointment is not automatically cancelled solely because it is
+unconfirmed.
+
+The clinic may CALL/NEXT under the applicable existing rules and clinic
+discretion.
+
+======================================================================
+14. QUEUE/API DATA REQUIREMENTS
+======================================================================
+
+For Time-Slot operational screens/APIs, the backend must be capable of exposing,
+as applicable:
+
+- patient/Appointment identity permitted for the caller;
+- Queue Number;
+- Reservation Time;
+- Appointment status;
+- confirmation status;
+- Serving Order/live position;
+- selected/booked Services;
+- expected Service duration;
+- BookingGroup relationship where applicable;
+- mode;
+- applicable missed/late/rescheduled operational state.
+
+Moving a patient in Serving Order must not modify Reservation Time.
+
+Frontend display details are deferred.
+
+======================================================================
+15. NOTIFICATIONS
+======================================================================
+
+15.1 SHARED INFRASTRUCTURE
+
+Reuse the existing notification/SMS/reminder infrastructure and existing
+recipient/security rules.
+
+Time-Slot Mode may supply Reservation Time and other applicable Time-Slot
+context to existing/new approved templates/events.
+
+15.2 V1 RUNNING-LATE SMS
+
+Do NOT create a new automatic "clinic running late" SMS mechanism for V1 merely
+because the clinic is behind Reservation Time.
+
+Unless an existing SaaS notification already applies, the V1 patient live
+status page is the mechanism for communicating live delay.
+
+A future late-running SMS feature requires separate approval and trigger rules.
+
+======================================================================
+16. APPOINTMENT MODE TRANSITIONS
+======================================================================
+
+16.1 NO AUTOMATIC CONVERSION
+
+Changing a clinic's Appointment Mode must not automatically convert existing
+Appointments.
+
+Existing Appointments retain the business meaning under which they were booked,
+including:
+- original booking/appointment mode;
+- Queue Number;
+- Reservation Time where applicable;
+- existing reservation rights/history.
+
+Do not erase Time-Slot Reservation Times when the clinic later changes to Queue
+Mode.
+
+16.2 DURABLE APPOINTMENT MODE
+
+The backend must preserve enough durable information on or associated with each
+Appointment to determine the Appointment Mode under which it was created/
+governed.
+
+Exact schema design is an engineering decision.
+
+16.3 PROSPECTIVE MODE CHANGE
+
+Appointment Mode changes are prospective.
+
+Approved option: B.
+
+A Service Date that already contains Appointments under the current mode must
+remain governed by that mode.
+
+The new Appointment Mode begins only on an eligible future Service Date.
+
+The system must prevent a configuration change from producing a mixed Queue
+Mode/Time-Slot Mode ClinicDay for the same PracticeLocation + Service Date.
+
+The exact effective-date persistence and validation mechanism is an engineering
+decision, but the business invariant is mandatory.
+
+======================================================================
+17. AUDIT AND REPORTING
+======================================================================
+
+Material Time-Slot reservation and operational changes must be durably
+attributable and reconstructable.
+
+The implementation must preserve/reconstruct, where applicable:
+
+- original Reservation Time;
+- current Reservation Time;
+- rescheduling history;
+- actor performing staff reschedule/change;
+- staff availability override;
+- duplicate/overlapping reservation override;
+- missed turn;
+- staff reinsertion/reordering;
+- cancellation;
+- fragmented group booking;
+- BookingGroup relationship;
+- ClinicDay Serving Order events;
+- Appointment Mode;
+- applicable configuration/effective-mode changes.
+
+Reuse QueueEvent and existing audit architecture where semantically appropriate.
+
+If reservation-history events do not semantically belong in QueueEvent, Codex
+may introduce the smallest appropriate audited persistence mechanism consistent
+with the approved architecture.
+
+Do not create an uncontrolled generic audit dumping ground.
+
+======================================================================
+18. AUTHORIZATION AND SECURITY
+======================================================================
+
+All existing authentication/authorization boundaries remain applicable.
+
+Time-Slot additions must enforce authorization server-side.
+
+At minimum:
+- only authorized Doctor/Secretary operations may perform staff booking/
+  override/reinsertion;
+- Secretary configuration authority follows the existing Doctor-granted
+  capability and approval workflow;
+- Secretary expired-slot restrictions are backend enforced;
+- high-risk authority grants retain required password re-entry;
+- public booking cannot invoke staff override paths;
+- staff override actions require explicit confirmation where specified;
+- sensitive patient data exposure remains bounded by existing privacy rules;
+- idempotency protections apply to applicable protected commands.
+
+======================================================================
+19. DATA INTEGRITY AND CONCURRENCY REQUIREMENTS
+======================================================================
+
+Codex must design and test database-level protections for:
+
+- concurrent public booking of the same/colliding Time-Slot capacity;
+- concurrent group booking;
+- atomic fragmented group booking;
+- atomic rescheduling;
+- cancellation versus booking races;
+- staff override versus public booking races;
+- mode transition/effective-date races;
+- duplicate command/idempotency behavior;
+- Queue/Serving Order consistency;
+- BookingGroup invariants;
+- existing Appointment/Queue Number invariants.
+
+Application-level "check then insert" without database/transaction protection is
+not sufficient.
+
+======================================================================
+20. FRONTEND DEFERRED ITEMS
+======================================================================
+
+Detailed frontend implementation is NOT authorized by this record unless Codex
+is separately instructed to implement backend-compatible minimal changes.
+
+The following are explicitly deferred to frontend reconciliation:
+
+- exact Doctor Settings placement of Default Appointment Mode;
+- exact Edit Clinic placement of effective mode;
+- exact conditional placement of protected periods;
+- exact placement of maximum self-bookable duration;
+- Time-Slot patient booking screens;
+- available-time selectors;
+- fragmented group UI;
+- alternate-date/clinic UI;
+- staff-assisted-booking advisory presentation;
+- live Reservation Time/Serving Order presentation;
+- missed Time-Slot RESCHEDULE/CANCEL screens;
+- Doctor/Secretary operational Time-Slot UI.
+
+Backend APIs/models should nevertheless support these approved behaviors.
+
+======================================================================
+21. CODEX IMPLEMENTATION RESPONSIBILITIES
+======================================================================
+
+Codex is authorized to make routine technical decisions required to implement
+this record, including:
+
+- Prisma model/enum/relationship details;
+- migrations;
+- indexes and constraints;
+- DTOs;
+- validation schemas;
+- controllers/routes;
+- service organization;
+- transaction boundaries;
+- locking/concurrency implementation;
+- idempotency integration;
+- audit-event persistence;
+- test organization;
+- helper functions;
+- internal naming consistent with the existing codebase;
+- refactoring necessary to isolate shared versus mode-specific policies.
+
+Codex must NOT independently decide or change:
+
+- product behavior;
+- Appointment Mode semantics;
+- Secretary authority;
+- reservation rights;
+- patient recovery options;
+- group booking rules;
+- maximum-duration calculation described here;
+- staff discretion/override boundaries;
+- mode-transition behavior;
+- security/privacy policy;
+- material costs or external service additions.
+
+If existing code conflicts with this record or another higher-priority approved
+source, Codex must identify the conflict rather than silently preserve the code.
+
+======================================================================
+22. REQUIRED IMPLEMENTATION APPROACH
+======================================================================
+
+Codex should:
+
+1. Inspect the current working tree as the implementation baseline.
+2. Identify existing modules/models/tests affected by this record.
+3. Reconcile current code against approved sources before modifying it.
+4. Prefer extension/refactoring of shared systems over duplication.
+5. Implement schema changes with safe migrations.
+6. Implement authoritative Time-Slot availability logic.
+7. Implement transaction/concurrency protection.
+8. Extend public booking conversion.
+9. Extend staff-assisted booking/override behavior.
+10. Extend ClinicDay/Queue behavior only where Time-Slot specialization is
+    required.
+11. Extend audit/reporting persistence.
+12. Preserve existing Queue Mode behavior.
+13. Add/modify automated tests.
+14. Build/compile.
+15. Run the applicable test suites.
+16. Fix implementation-caused failures.
+17. Report actual commands/tests executed and their results.
+18. Provide Product Owner browser/API acceptance tests.
+19. Recommend a Git checkpoint only after verification.
+
+======================================================================
+23. MINIMUM AUTOMATED TEST COVERAGE
+======================================================================
+
+Tests must include, at minimum:
+
+A. MODE CONFIGURATION
+- Doctor default mode.
+- selective clinic application.
+- Secretary unauthorized access denied.
+- Secretary authorized draft workflow.
+- approval required before effectiveness.
+- Service-Date mode transition protection.
+- no mixed-mode Service Date.
+
+B. PUBLIC INDIVIDUAL BOOKING
+- Queue Mode regression behavior.
+- Time-Slot available-time calculation.
+- Service-duration addition.
+- protected periods.
+- 15-minute standardized-slot tolerance.
+- final availability recheck.
+- slot lost after OTP without invalidating valid OTP.
+- concurrent claim protection.
+- cancellation capacity release.
+- atomic rescheduling.
+
+C. MULTI-PERSON BOOKING
+- per-member Service-duration calculation.
+- per-member maximum allotment.
+- 90/90/90 with max 60 -> 180 scheduling workload.
+- 90/10/30 with max 60 -> 100 scheduling workload.
+- uninterrupted group availability.
+- no uninterrupted capacity recovery result.
+- fragmented same-day member availability.
+- atomic fragmented group finalization.
+- alternate-date calculation.
+- BookingGroup identity preserved.
+
+D. STAFF OPERATIONS
+- staff override warning/confirmation path.
+- public user cannot use staff override.
+- duplicate Reservation Time staff creation.
+- walk-in staff-assisted path.
+- audit of override.
+
+E. CLINICDAY / QUEUE
+- permanent Queue Number retained.
+- Reservation Time normal priority.
+- Queue Number does not replace Reservation Time priority.
+- Serving Order movement does not rewrite Reservation Time.
+- early/late clinic discretion paths.
+- NEXT/missed behavior.
+- no patient I'M HERE Time-Slot recovery action.
+- staff reinsertion.
+- Secretary cannot move patient into expired Reservation Time.
+- START/CLOSE/CANCEL regression behavior.
+
+F. AUDIT / SECURITY / IDEMPOTENCY
+- reservation changes reconstructable.
+- actor attribution.
+- mode change audit.
+- duplicate protected command behavior.
+- authorization boundary tests.
+- transaction rollback on partial group/reschedule failure.
+
+G. REGRESSION
+- existing Queue Mode tests remain passing unless an approved source explicitly
+  requires a changed expectation.
+- existing OTP/BookingDraft expiration behavior remains unchanged.
+- existing multi-person identity/privacy rules remain intact.
+
+======================================================================
+24. PRODUCT OWNER ACCEPTANCE BASELINE
+======================================================================
+
+After automated verification, Product Owner acceptance should confirm at a
+business-flow level:
+
+1. Queue Mode clinics continue operating as before.
+2. Doctor can configure a default Appointment Mode and apply it selectively.
+3. Secretary cannot change effective configuration without the approved
+   authority/draft/Doctor approval path.
+4. Time-Slot patient can select a valid Reservation Time.
+5. conflicting concurrent public booking cannot double-claim capacity.
+6. patient does not lose valid OTP merely because the selected time becomes
+   unavailable.
+7. Service duration affects later availability correctly.
+8. protected periods are unavailable to public booking without closing clinic
+   operations.
+9. group workload uses the approved per-member maximum calculation.
+10. group can remain together when continuous capacity exists.
+11. when it does not, patient sees fragmented same-day, another date/clinic,
+    and contact-clinic/staff-assisted alternatives.
+12. fragmented booking commits all members or none.
+13. Time-Slot Appointment retains Queue Number, Reservation Time and independent
+    Serving Order.
+14. clinic can exercise approved operational discretion without rewriting
+    Reservation Time.
+15. missed Time-Slot patient sees RESCHEDULE/CANCEL rather than I'M HERE.
+16. Secretary cannot move a patient into an expired Reservation Time.
+17. staff override is warned, explicitly confirmed and audited.
+18. changing clinic mode does not retroactively convert existing Appointments or
+    create a mixed-mode Service Date.
+19. audit/reporting can reconstruct material reservation changes.
+
+======================================================================
+25. IMPLEMENTATION GATE
+======================================================================
+
+This record authorizes backend implementation of the reconciled Time-Slot Mode
+integration described above, subject to the existing canonical Project Sources.
+
+It does not authorize undocumented feature expansion.
+
+Requirement -> Implementation -> Automated Verification -> Product Owner
+Acceptance -> Git Checkpoint -> Documentation Update.
+
+END OF RECORD

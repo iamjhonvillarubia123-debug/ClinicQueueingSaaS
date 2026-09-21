@@ -137,6 +137,10 @@ describe('BookingConfirmationAdmissionService', () => {
   function transactionWithRows(rowBatches: unknown[][]) {
     const batches = [...rowBatches];
     return {
+      appointmentModeConfiguration: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      appointment: { findFirst: jest.fn().mockResolvedValue(null) },
       $queryRaw: jest.fn(() => Promise.resolve(batches.shift() ?? [])),
       $executeRaw: jest.fn(() => Promise.resolve(1)),
     };

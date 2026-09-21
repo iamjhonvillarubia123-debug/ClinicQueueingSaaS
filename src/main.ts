@@ -1,13 +1,15 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NextFunction, Request, Response } from 'express';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const isProduction = process.env.NODE_ENV === 'production';
   const webAppOrigin = process.env.WEB_APP_ORIGIN;
 
+  app.useBodyParser('json', { limit: '1mb' });
   app.enableShutdownHooks();
 
   if (webAppOrigin) {

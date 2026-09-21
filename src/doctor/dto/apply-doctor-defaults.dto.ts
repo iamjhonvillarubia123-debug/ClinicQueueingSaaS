@@ -3,11 +3,16 @@ import {
   ArrayMinSize,
   ArrayUnique,
   IsArray,
+  IsDateString,
+  IsOptional,
   IsUUID,
   ValidateIf,
 } from 'class-validator';
 
 export class ApplyDoctorDefaultsDto {
+  @IsOptional()
+  @IsDateString({ strict: true })
+  appointmentModeEffectiveServiceDate?: string;
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(50)
