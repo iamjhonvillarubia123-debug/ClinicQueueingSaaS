@@ -90,7 +90,11 @@ export class BackupErasureReplayService {
       where: {
         OR: [{ appointmentId }, { resultAppointmentId: appointmentId }],
       },
-      data: { appointmentId: null, resultAppointmentId: null },
+      data: {
+        appointmentId: null,
+        resultAppointmentId: null,
+        privacyErasedAt: now,
+      },
     });
 
     await transaction.scheduledReminder.updateMany({
@@ -170,7 +174,12 @@ export class BackupErasureReplayService {
       where: {
         OR: [{ bookingGroupId }, { resultBookingGroupId: bookingGroupId }],
       },
-      data: { bookingGroupId: null, resultBookingGroupId: null },
+      data: {
+        bookingGroupId: null,
+        resultBookingGroupId: null,
+        resultBookingGroupAccessTokenId: null,
+        privacyErasedAt: now,
+      },
     });
 
     const groupOutboxes = await transaction.notificationOutbox.findMany({

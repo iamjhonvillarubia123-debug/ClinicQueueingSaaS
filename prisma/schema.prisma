@@ -251,6 +251,9 @@ enum SecretaryAccessProfile {
 }
 
 enum CommandType {
+  RESCHEDULE_APPOINTMENT
+  START_APPOINTMENT_SERVICE
+  PATIENT_CANCEL_APPOINTMENT
   CONVERT_BOOKING_DRAFT
   CREATE_STAFF_APPOINTMENT
   START_CLINIC_DAY_OPERATIONAL_NOTICE
@@ -604,7 +607,13 @@ model DoctorProfile {
   user                     User                            @relation(fields: [userId], references: [id], onDelete: Restrict)
 }
 
+enum AppointmentMode {
+  QUEUE_MODE
+  TIME_SLOT_MODE
+}
+
 model DoctorAccountSettings {
+  defaultAppointmentMode AppointmentMode @default(QUEUE_MODE)
   id                                       String   @id @default(uuid())
   doctorProfileId                          String   @unique
   defaultTimeZone                          String   @default("Asia/Manila") @db.VarChar(100)
@@ -802,6 +811,7 @@ model ApplicationNotification {
 }
 
 model PracticeLocation {
+  appointmentModeConfigurations AppointmentModeConfiguration[]
   id              String @id @default(uuid())
   doctorProfileId String
 
@@ -1037,6 +1047,7 @@ model PracticeStaffCapability {
 }
 
 model SecretarySettingsDraft {
+  appointmentModeProposal Json?
   id String @id @default(uuid())
   practiceLocationId    String
   authorPracticeStaffId String
@@ -1130,6 +1141,7 @@ model PracticeSchedule {
 }
 
 model DoctorPracticeScheduleDraft {
+  appointmentModeProposal Json?
   id String @id @default(uuid())
   practiceLocationId String @unique
   name              String? @db.VarChar(200)
@@ -1363,6 +1375,12 @@ model BookingGroup {
 }
 
 model Appointment {
+  appointmentMode AppointmentMode @default(QUEUE_MODE)
+  reservationAt DateTime? @db.Timestamptz(3)
+  originalReservationAt DateTime? @db.Timestamptz(3)
+  schedulingAllotmentMinutes Int?
+  serviceStartedAt DateTime? @db.Timestamptz(3)
+  reservationHistory AppointmentReservationEvent[]
   id               String @id @default(uuid())
   bookingReference String @unique @db.VarChar(64)
   practiceLocationId String
@@ -1884,6 +1902,7 @@ model SubscriptionEntitlementEvent {
 }
 
 model CommandIdempotency {
+  privacyErasedAt DateTime? @db.Timestamptz(3)
   id String @id @default(uuid())
   idempotencyKey     String      @db.VarChar(100)
   commandIdentityKey String      @unique @db.VarChar(64)
@@ -1950,6 +1969,8 @@ model CommandIdempotency {
 }
 
 model BookingDraft {
+  reservationAt DateTime? @db.Timestamptz(3)
+  fragmentedReservations Boolean @default(false)
   id               String             @id @default(uuid())
   bookingReference String?            @unique @db.VarChar(20)
   mode             BookingDraftMode   @default(INDIVIDUAL)
@@ -1990,6 +2011,7 @@ model BookingDraft {
 }
 
 model BookingDraftMember {
+  reservationAt DateTime? @db.Timestamptz(3)
   id String @id @default(uuid())
   bookingDraftId String
   memberOrder    Int

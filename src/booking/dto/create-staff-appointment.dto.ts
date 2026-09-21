@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsIn,
   IsNotEmpty,
@@ -19,6 +20,13 @@ import {
 } from './create-booking-draft.dto';
 
 export class CreateStaffAppointmentDto {
+  @IsOptional()
+  @IsDateString({ strict: true })
+  reservationAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  confirmAvailabilityOverride?: boolean;
   @IsUUID()
   practiceLocationId!: string;
 

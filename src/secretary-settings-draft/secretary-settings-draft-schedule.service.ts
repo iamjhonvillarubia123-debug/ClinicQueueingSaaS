@@ -13,6 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertSecretarySettingsDraftPracticeScheduleDto } from './dto/upsert-secretary-settings-draft-practice-schedule.dto';
 import { assertConfigurationDraftingAuthority } from './secretary-settings-draft-authority';
+import { parseAppointmentModeProposal } from '../schedule/appointment-mode.configuration';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -29,6 +30,38 @@ type LockedEditableDraft = {
 @Injectable()
 export class SecretarySettingsDraftScheduleService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async saveAppointmentModeProposal(
+    authenticatedUserId: string,
+    draftId: string,
+    value: unknown,
+  ) {
+    const proposal = parseAppointmentModeProposal(value);
+    return this.prisma.$transaction(async (transaction) => {
+      const draft = await this.lockEditableDraft(transaction, draftId);
+      this.assertEditableByCurrentRegularSecretary(draft, authenticatedUserId);
+      await assertConfigurationDraftingAuthority(
+        transaction,
+        draft.currentRegularPracticeStaffId!,
+      );
+      const actor = await transaction.user.findUnique({
+        where: { id: authenticatedUserId },
+        select: { accountStatus: true, administrativeRestrictionStatus: true },
+      });
+      if (
+        actor?.accountStatus !== 'ACTIVE' ||
+        actor.administrativeRestrictionStatus !== 'NONE'
+      )
+        throw new ForbiddenException(
+          'An eligible current secretary is required.',
+        );
+      await transaction.secretarySettingsDraft.update({
+        where: { id: draft.id },
+        data: { appointmentModeProposal: proposal },
+      });
+      return { saved: true, draftId: draft.id, proposal };
+    });
+  }
 
   async upsertPracticeSchedule(
     authenticatedUserId: string,

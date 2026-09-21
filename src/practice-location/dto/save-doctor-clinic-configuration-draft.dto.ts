@@ -8,6 +8,7 @@ import {
   IsEnum,
   IsInt,
   IsOptional,
+  IsObject,
   IsString,
   Matches,
   Max,
@@ -166,6 +167,9 @@ export class DoctorClinicDraftQuestionDto {
 }
 
 export class SaveDoctorClinicConfigurationDraftDto {
+  @IsOptional()
+  @IsObject()
+  appointmentModeProposal?: Record<string, unknown>;
   @ValidateNested()
   @Type(() => DoctorClinicDraftBasicInfoDto)
   basicInfo!: DoctorClinicDraftBasicInfoDto;

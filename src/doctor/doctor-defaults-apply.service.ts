@@ -16,6 +16,10 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApplyDoctorDefaultsDto } from './dto/apply-doctor-defaults.dto';
+import {
+  applyAppointmentModeProposal,
+  resolveAppointmentMode,
+} from '../schedule/appointment-mode.configuration';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_BOOKING_QUESTIONS = 5;
@@ -50,6 +54,7 @@ export class DoctorDefaultsApplyService {
         commandType,
         authenticatedUserId,
         targetIds,
+        dto.appointmentModeEffectiveServiceDate ?? null,
         dto.serviceTemplateIds ? [...dto.serviceTemplateIds].sort() : 'ALL',
         dto.bookingQuestionTemplateIds
           ? [...dto.bookingQuestionTemplateIds].sort()
@@ -165,7 +170,11 @@ export class DoctorDefaultsApplyService {
         allQuestions,
         dto.bookingQuestionTemplateIds,
       );
-      if (!serviceTemplates.length && !questionTemplates.length) {
+      if (
+        !serviceTemplates.length &&
+        !questionTemplates.length &&
+        !dto.appointmentModeEffectiveServiceDate
+      ) {
         throw new BadRequestException('Select at least one default template.');
       }
       const questionPlans = new Map<
@@ -184,6 +193,31 @@ export class DoctorDefaultsApplyService {
       }
 
       const now = new Date();
+      if (dto.appointmentModeEffectiveServiceDate) {
+        const settings =
+          await transaction.doctorAccountSettings.findUniqueOrThrow({
+            where: { doctorProfileId },
+          });
+        for (const practiceLocationId of targetIds) {
+          const effectiveServiceDate = dto.appointmentModeEffectiveServiceDate;
+          const config = await resolveAppointmentMode(
+            transaction,
+            practiceLocationId,
+            new Date(`${effectiveServiceDate}T00:00:00.000Z`),
+          );
+          await applyAppointmentModeProposal(
+            transaction,
+            practiceLocationId,
+            {
+              ...config,
+              appointmentMode: settings.defaultAppointmentMode,
+              effectiveServiceDate,
+            },
+            authenticatedUserId,
+            null,
+          );
+        }
+      }
       const command = await transaction.commandIdempotency.create({
         data: {
           idempotencyKey: key,

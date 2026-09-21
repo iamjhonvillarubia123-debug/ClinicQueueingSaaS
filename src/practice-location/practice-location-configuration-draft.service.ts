@@ -13,6 +13,10 @@ import {
 } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SaveDoctorClinicConfigurationDraftDto } from './dto/save-doctor-clinic-configuration-draft.dto';
+import {
+  parseAppointmentModeProposal,
+  applyAppointmentModeProposal,
+} from '../schedule/appointment-mode.configuration';
 
 @Injectable()
 export class PracticeLocationConfigurationDraftService {
@@ -34,6 +38,10 @@ export class PracticeLocationConfigurationDraftService {
     }
 
     this.validateSchedules(dto);
+    const modeProposal =
+      dto.appointmentModeProposal === undefined
+        ? undefined
+        : parseAppointmentModeProposal(dto.appointmentModeProposal);
     this.validateServices(dto);
     this.validateQuestions(dto);
 
@@ -96,6 +104,14 @@ export class PracticeLocationConfigurationDraftService {
             where: { id: practiceLocationId },
             data: basicInfo,
           });
+          if (modeProposal)
+            await applyAppointmentModeProposal(
+              transaction,
+              practiceLocationId,
+              modeProposal,
+              userId,
+              null,
+            );
 
           for (const row of this.scheduleRows(dto)) {
             const { weekday, ...data } = row;
@@ -160,8 +176,15 @@ export class PracticeLocationConfigurationDraftService {
 
         const draft = await transaction.doctorPracticeScheduleDraft.upsert({
           where: { practiceLocationId },
-          create: { practiceLocationId, ...basicInfo },
-          update: basicInfo,
+          create: {
+            practiceLocationId,
+            ...basicInfo,
+            ...(modeProposal ? { appointmentModeProposal: modeProposal } : {}),
+          },
+          update: {
+            ...basicInfo,
+            ...(modeProposal ? { appointmentModeProposal: modeProposal } : {}),
+          },
           select: { id: true },
         });
 

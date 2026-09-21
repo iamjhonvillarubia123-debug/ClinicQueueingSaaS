@@ -34,6 +34,8 @@ import { PublicBookingDuplicateUseExistingController } from './public-booking-du
 import { PublicBookingDuplicateUseExistingService } from './public-booking-duplicate-use-existing.service';
 import { PublicBookingEntryService } from './public-booking-entry.service';
 import { PublicBookingReplacementService } from './public-booking-replacement.service';
+import { ReservationManagementService } from './reservation-management.service';
+import { ReservationManagementController } from './reservation-management.controller';
 
 @Module({
   imports: [
@@ -49,6 +51,7 @@ import { PublicBookingReplacementService } from './public-booking-replacement.se
     FinancialModule,
   ],
   controllers: [
+    ReservationManagementController,
     BookingController,
     StaffAppointmentController,
     PublicBookingDuplicateUseExistingController,
@@ -56,6 +59,7 @@ import { PublicBookingReplacementService } from './public-booking-replacement.se
     BookingGroupMemberCancellationController,
   ],
   providers: [
+    ReservationManagementService,
     BookingService,
     StaffAppointmentService,
     BookingConfigurationService,

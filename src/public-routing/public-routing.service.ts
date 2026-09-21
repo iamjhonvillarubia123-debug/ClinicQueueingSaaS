@@ -299,8 +299,8 @@ export class PublicRoutingService {
   } {
     return Boolean(
       profile.isProfilePublic &&
-        profile.professionalTitle?.trim() &&
-        profile.specialization?.trim(),
+      profile.professionalTitle?.trim() &&
+      profile.specialization?.trim(),
     );
   }
 

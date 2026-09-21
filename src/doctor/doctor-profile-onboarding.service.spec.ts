@@ -76,7 +76,7 @@ describe('DoctorProfileOnboardingService', () => {
           userId: 'doctor-user',
           isProfilePublic: false,
           profilePhotoUrl: 'data:image/jpeg;base64,/9j/AA==',
-        }),
+        }) as unknown,
       }),
     );
   });

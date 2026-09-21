@@ -1,3 +1,4 @@
+import { resolveAppointmentMode } from '../schedule/appointment-mode.configuration';
 import { createHash } from 'crypto';
 import {
   ConflictException,
@@ -78,6 +79,7 @@ export class BookingGroupAddPersonService {
       suffix: dto.suffix?.trim() || null,
       existingPatientResponse: dto.existingPatientResponse,
       selectedServiceIds: [...dto.selectedServiceIds].sort(),
+      reservationAt: dto.reservationAt ?? null,
       answers: (dto.answers ?? []).map((answer) => ({
         bookingQuestionId: answer.bookingQuestionId,
         answerText: answer.answerText ?? null,
@@ -194,13 +196,42 @@ export class BookingGroupAddPersonService {
         group.practiceLocationId,
         group.serviceDate,
       );
-      await this.admission.assertCapacityAvailable(
+      const mode = await resolveAppointmentMode(
         transaction,
         group.practiceLocationId,
         group.serviceDate,
-        currentAvailability.maximumOperatingUntilAt,
-        estimatedServiceMinutes,
       );
+      if (mode.appointmentMode === 'TIME_SLOT_MODE' && !dto.reservationAt) {
+        throw new ConflictException(
+          'Select a Reservation Time for this Time-Slot appointment.',
+        );
+      }
+      const reservation = dto.reservationAt
+        ? (
+            await this.admission.claimReservations(transaction, {
+              practiceLocationId: group.practiceLocationId,
+              serviceDate: group.serviceDate,
+              members: [
+                {
+                  reservationAt: new Date(dto.reservationAt),
+                  actualMinutes: services.reduce(
+                    (n, s) => n + s.durationMinutes,
+                    0,
+                  ),
+                },
+              ],
+              groupMember: true,
+            })
+          )[0]
+        : null;
+      if (!reservation)
+        await this.admission.assertCapacityAvailable(
+          transaction,
+          group.practiceLocationId,
+          group.serviceDate,
+          currentAvailability.maximumOperatingUntilAt,
+          estimatedServiceMinutes,
+        );
 
       const queueNumber = await this.queueNumbers.allocateNext(
         transaction,
@@ -235,6 +266,27 @@ export class BookingGroupAddPersonService {
           mobileNumberHash: null,
           mobileNumberLastFour: null,
           activeAppointmentKey: null,
+          ...(reservation
+            ? {
+                appointmentMode: reservation.appointmentMode,
+                reservationAt: reservation.reservationAt,
+                originalReservationAt: reservation.originalReservationAt,
+                schedulingAllotmentMinutes:
+                  reservation.schedulingAllotmentMinutes,
+                estimatedServiceMinutes: reservation.estimatedServiceMinutes,
+                servingOrderKey: new Prisma.Decimal(
+                  reservation.reservationAt.getTime(),
+                ).plus(new Prisma.Decimal(queueNumber).div(1000000)),
+                reservationHistory: {
+                  create: {
+                    actorType: 'PATIENT',
+                    action: 'GROUP_MEMBER_ADDED',
+                    reservationAt: reservation.reservationAt,
+                    details: { bookingGroupId: group.id },
+                  },
+                },
+              }
+            : {}),
         },
         select: {
           id: true,

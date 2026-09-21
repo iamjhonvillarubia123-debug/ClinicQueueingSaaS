@@ -62,6 +62,9 @@ export class PracticeLocationOperationsService {
         status: true,
         serviceDate: true,
         estimatedServiceMinutes: true,
+        appointmentMode: true,
+        reservationAt: true,
+        serviceStartedAt: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -134,6 +137,13 @@ export class PracticeLocationOperationsService {
       status: appointment.status,
       serviceDate: appointment.serviceDate,
       estimatedServiceMinutes: appointment.estimatedServiceMinutes,
+      ...(appointment.appointmentMode === 'TIME_SLOT_MODE'
+        ? {
+            appointmentMode: appointment.appointmentMode,
+            reservationAt: appointment.reservationAt,
+            serviceStartedAt: appointment.serviceStartedAt,
+          }
+        : {}),
       patientName: [
         appointment.firstName,
         appointment.middleName,
@@ -305,6 +315,9 @@ export class PracticeLocationOperationsService {
         lastName: true,
         status: true,
         estimatedServiceMinutes: true,
+        appointmentMode: true,
+        reservationAt: true,
+        serviceStartedAt: true,
         servingOrderKey: true,
         waitingPlacementType: true,
         calledAt: true,
@@ -411,6 +424,9 @@ export class PracticeLocationOperationsService {
           lastName: true,
           status: true,
           estimatedServiceMinutes: true,
+          appointmentMode: true,
+          reservationAt: true,
+          serviceStartedAt: true,
           calledAt: true,
           completedAt: true,
           createdAt: true,
@@ -576,6 +592,9 @@ export class PracticeLocationOperationsService {
     lastName: string | null;
     status: AppointmentStatus;
     estimatedServiceMinutes: number;
+    appointmentMode?: string;
+    reservationAt?: Date | null;
+    serviceStartedAt?: Date | null;
     calledAt: Date | null;
     completedAt: Date | null;
     createdAt: Date;
@@ -591,6 +610,13 @@ export class PracticeLocationOperationsService {
           .join(' ') || 'Patient',
       status: appointment.status,
       estimatedServiceMinutes: appointment.estimatedServiceMinutes,
+      ...(appointment.appointmentMode === 'TIME_SLOT_MODE'
+        ? {
+            appointmentMode: appointment.appointmentMode,
+            reservationAt: appointment.reservationAt,
+            serviceStartedAt: appointment.serviceStartedAt,
+          }
+        : {}),
       serviceNames: appointment.bookedServices.map(
         (service) => service.serviceNameSnapshot,
       ),

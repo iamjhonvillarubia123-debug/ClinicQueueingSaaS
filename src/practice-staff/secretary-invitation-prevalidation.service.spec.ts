@@ -63,11 +63,7 @@ describe('SecretaryInvitationPrevalidationService', () => {
 
   it('allows an active verified Secretary to continue', async () => {
     await expect(
-      service.validateIdentifier(
-        'doctor-1',
-        'clinic-1',
-        'ana@example.test',
-      ),
+      service.validateIdentifier('doctor-1', 'clinic-1', 'ana@example.test'),
     ).resolves.toEqual({
       valid: true,
       existingSecretary: true,
@@ -79,11 +75,7 @@ describe('SecretaryInvitationPrevalidationService', () => {
     prisma.user.findFirst.mockResolvedValue(null);
 
     await expect(
-      service.validateIdentifier(
-        'doctor-1',
-        'clinic-1',
-        'closed@example.test',
-      ),
+      service.validateIdentifier('doctor-1', 'clinic-1', 'closed@example.test'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -124,11 +116,7 @@ describe('SecretaryInvitationPrevalidationService', () => {
     });
 
     await expect(
-      service.validateIdentifier(
-        'doctor-1',
-        'clinic-1',
-        'doctor@example.test',
-      ),
+      service.validateIdentifier('doctor-1', 'clinic-1', 'doctor@example.test'),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 

@@ -21,6 +21,7 @@ import { CrossLocationScheduleConflictService } from '../schedule/cross-location
 import { DoctorCalendarAvailabilityService } from '../schedule/doctor-calendar-availability.service';
 import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ScheduleResolutionService } from '../schedule/schedule-resolution.service';
+import { applyAppointmentModeProposal } from '../schedule/appointment-mode.configuration';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_BOOKING_QUESTIONS = 5;
@@ -28,6 +29,7 @@ const MAX_ACTIVE_BOOKING_QUESTIONS = 5;
 type TransactionClient = Prisma.TransactionClient;
 
 type LockedApprovalDraft = {
+  appointmentModeProposal: Prisma.JsonValue | null;
   id: string;
   practiceLocationId: string;
   status: SecretarySettingsDraftStatus;
@@ -142,6 +144,14 @@ export class SecretarySettingsDraftApprovalService {
         draft.practiceLocationId,
         serviceProposals,
       );
+      if (draft.appointmentModeProposal)
+        await applyAppointmentModeProposal(
+          transaction,
+          draft.practiceLocationId,
+          draft.appointmentModeProposal,
+          authenticatedUserId,
+          draft.id,
+        );
       await this.validateBookingQuestionResult(
         transaction,
         draft.practiceLocationId,
@@ -533,6 +543,7 @@ export class SecretarySettingsDraftApprovalService {
     const rows = await transaction.$queryRaw<LockedApprovalDraft[]>(Prisma.sql`
       SELECT
         d."id",
+        d."appointmentModeProposal",
         d."practiceLocationId",
         d."status",
         pl."lifecycleStatus",

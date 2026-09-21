@@ -211,7 +211,7 @@ describe('R1 Secretary password-reset parity (e2e)', () => {
     await request(app.getHttpServer())
       .post('/secretary/account/reactivate')
       .set('Idempotency-Key', `reactivate-${unique}`)
-      .send({ email, password: newPassword })
+      .send({ identifier: email, password: newPassword })
       .expect(201, { reactivated: true, replayed: false });
 
     const reactivated = await prisma.user.findUniqueOrThrow({

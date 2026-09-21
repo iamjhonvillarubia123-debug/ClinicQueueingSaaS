@@ -1,3 +1,4 @@
+import { resolveAppointmentMode } from '../schedule/appointment-mode.configuration';
 import {
   ConflictException,
   Injectable,
@@ -9,10 +10,15 @@ import {
 } from '../../generated/prisma/client';
 import { PublicServiceDateAvailabilityService } from '../schedule/public-service-date-availability.service';
 import { ActiveBookingIdentityService } from './active-booking-identity.service';
+import {
+  claimTimeSlotReservations,
+  ReservationRequest,
+} from '../schedule/time-slot-reservations';
 
 type TransactionClient = Prisma.TransactionClient;
 
 export type LockedConfirmationDraft = {
+  appointmentMode?: 'QUEUE_MODE' | 'TIME_SLOT_MODE';
   id: string;
   mode: 'INDIVIDUAL' | 'MULTI_PERSON';
   status: 'PENDING_OTP' | 'CONSUMED' | 'EXPIRED' | 'CANCELLED';
@@ -44,6 +50,10 @@ export class BookingConfirmationAdmissionService {
     private readonly activeBookingIdentity: ActiveBookingIdentityService,
   ) {}
 
+  claimReservations(transaction: TransactionClient, input: ReservationRequest) {
+    return claimTimeSlotReservations(transaction, this.availability, input);
+  }
+
   async lockAndValidateCurrentAdmission(
     transaction: TransactionClient,
     bookingDraftId: string,
@@ -58,6 +68,15 @@ export class BookingConfirmationAdmissionService {
     this.assertDraftCanConfirm(draft, now);
 
     await this.acquireDoctorScheduleLock(transaction, draft.doctorProfileId);
+    // Read again after the configuration lock: the selection may have changed
+    // while this confirmation waited for another transaction.
+    draft.appointmentMode = (
+      await resolveAppointmentMode(
+        transaction,
+        draft.practiceLocationId,
+        draft.serviceDate,
+      )
+    ).appointmentMode;
     const doctorState = await this.lockDoctorAdmissionState(
       transaction,
       draft.doctorUserId,

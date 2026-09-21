@@ -264,6 +264,9 @@ export class BookingService {
               data: {
                 bookingReference,
                 mode: BookingDraftMode.INDIVIDUAL,
+                reservationAt: dto.reservationAt
+                  ? new Date(dto.reservationAt)
+                  : null,
                 practiceLocationId: dto.practiceLocationId,
                 existingPatientResponse: dto.existingPatientResponse,
                 firstName: dto.firstName!.trim(),
@@ -381,6 +384,10 @@ export class BookingService {
               data: {
                 bookingReference,
                 mode: BookingDraftMode.MULTI_PERSON,
+                reservationAt: dto.reservationAt
+                  ? new Date(dto.reservationAt)
+                  : null,
+                fragmentedReservations: dto.fragmentedReservations ?? false,
                 practiceLocationId: dto.practiceLocationId,
                 firstName: null,
                 middleName: null,
@@ -418,6 +425,9 @@ export class BookingService {
                   data: {
                     bookingDraftId: parent.id,
                     memberOrder: preparedMember.memberOrder,
+                    reservationAt: preparedMember.member.reservationAt
+                      ? new Date(preparedMember.member.reservationAt)
+                      : null,
                     firstName: preparedMember.member.firstName.trim(),
                     middleName:
                       preparedMember.member.middleName?.trim() || null,

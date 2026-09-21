@@ -1,0 +1,1230 @@
+TIME-SLOT MODE BUSINESS RULES
+Version 1.0
+Date: 2026-09-19
+Status: APPROVED STANDALONE BUSINESS-RULE BASELINE — READY FOR EXISTING-SAAS RECONCILIATION
+Project: Queuing SaaS Project
+
+======================================================================
+1. PURPOSE AND SCOPE
+======================================================================
+
+This document records the approved working business rules for the proposed
+Time-Slot Mode.
+
+This Version 1.0 supersedes the working Version 0.2 dated 2026-09-18.
+It consolidates the approved standalone Time-Slot Mode business rules after
+availability-engine and appointment-lifecycle scenario testing.
+
+This document intentionally defines the Time-Slot Mode as an independent
+business system before decisions are made regarding:
+
+- integration with the existing Queue Mode;
+- database or persistence design;
+- backend/API implementation;
+- architecture;
+- shared or mode-specific frontend UI;
+- migration;
+- configuration ownership or placement;
+- technical status/enumeration design.
+
+Those matters are outside the scope of this baseline and must not be inferred
+from this document.
+
+This document preserves the approved standalone Time-Slot Mode business rules
+and is ready to serve as the business-rule basis for reconciliation with the
+existing SaaS. It is not, by itself, implementation authorization.
+
+======================================================================
+2. CORE BUSINESS CONCEPT
+======================================================================
+
+Time-Slot Mode is a reservation-priority queue.
+
+A patient books a scheduled appointment time range. The reservation establishes
+the patient's normal scheduled priority.
+
+Reservation Time and live Serving Order are separate concepts:
+
+RESERVATION TIME
+- represents the patient's current scheduled reservation;
+- establishes normal scheduled priority;
+- remains visible even when actual clinic operations deviate from schedule.
+
+SERVING ORDER
+- represents the actual live order in which patients are served;
+- may be managed by authorized clinic staff;
+- may differ from Reservation Time because of delays, walk-ins, late patients,
+  missed turns, clinic-assisted insertions, overlapping reservations, or other
+  clinic operational decisions.
+
+The SaaS protects reservation rights through visibility, warnings, patient
+information, and rescheduling. It does not absolutely force the clinic to
+follow the scheduled order. Actual serving decisions remain within authorized
+clinic operational discretion.
+
+======================================================================
+3. PATIENT BOOKING FLOW
+======================================================================
+
+TS-B01 — PUBLIC/QR ENTRY
+
+The patient continues to enter the appointment experience through the applicable
+Doctor/clinic QR or public appointment experience.
+
+No decision is made in this document regarding technical routing or UI sharing
+with the existing mode.
+
+
+TS-B02 — CLINIC SELECTION
+
+The patient chooses the applicable clinic/Practice Location and selects
+BOOK AN APPOINTMENT.
+
+
+TS-B03 — ACTIVE DATE SELECTION
+
+The patient is shown active dates available for booking for the selected clinic.
+
+Inactive or unavailable dates cannot be selected through patient self-service.
+
+
+TS-B04 — TIME SELECTION
+
+After selecting an active date, the patient is shown the available appointment
+time ranges for that date.
+
+The patient selects the desired available time.
+
+
+TS-B05 — SERVICES AND BOOKING QUESTIONS
+
+After selecting the desired appointment time, the patient proceeds through the
+applicable Services and Booking Questions.
+
+The approved conceptual flow is:
+
+SELECT CLINIC
+→ BOOK AN APPOINTMENT
+→ SELECT ACTIVE DATE
+→ SELECT AVAILABLE TIME
+→ SELECT SERVICES
+→ ANSWER BOOKING QUESTIONS
+→ BOOK APPOINTMENT
+→ OTP
+→ FINAL BOOKING RESULT
+
+
+TS-B06 — OTP
+
+After the patient submits BOOK APPOINTMENT, the applicable OTP verification is
+performed.
+
+Successful OTP verification verifies the applicable patient/booking attempt.
+
+OTP verification by itself does not reserve or guarantee the originally
+selected appointment time.
+
+
+======================================================================
+4. CONCURRENT BOOKING AND SLOT LOSS
+======================================================================
+
+TS-B07 — NO DOUBLE BOOKING THROUGH PATIENT SELF-SERVICE
+
+A patient does not obtain ownership of a selected appointment time merely by
+selecting it.
+
+If another patient successfully obtains the selected time before final booking
+completion, the later booking must not be silently placed into the now
+unavailable time.
+
+
+TS-B08 — SLOT LOSS AFTER SUCCESSFUL OTP IS NOT OTP FAILURE
+
+If the patient successfully completes OTP but the selected time has become
+unavailable, the OTP remains successfully verified.
+
+The failure concerns appointment availability, not verification.
+
+
+TS-B09 — CHOOSE ANOTHER TIME
+
+When the selected time becomes unavailable during booking, the patient receives
+an explanatory prompt and a CHOOSE ANOTHER TIME action.
+
+CHOOSE ANOTHER TIME returns the patient to the active-date selection for the
+current clinic.
+
+The patient is not automatically returned only to the previously selected date.
+
+
+TS-B10 — CHOOSE ANOTHER CLINIC AND OTP REUSE
+
+The conflict experience also provides CHOOSE ANOTHER CLINIC.
+
+The accompanying information explains that the patient may choose another
+applicable clinic under the same Doctor.
+
+A successfully completed OTP does not need to be repeated merely because the
+patient must choose another time or continue through the applicable
+same-Doctor clinic selection during the same valid booking continuation.
+
+The security/expiration duration of that verified continuation is not defined
+by this document and remains a later rule/design decision.
+
+
+======================================================================
+5. STANDARDIZED TIME SLOTS, SERVICE DURATION, AND AVAILABILITY
+======================================================================
+
+TS-B11 — STANDARDIZED 30-MINUTE RESERVATION SLOTS
+
+Patient-facing Time-Slot Mode availability uses standardized 30-minute
+reservation slots, for example:
+
+9:00 AM – 9:30 AM
+9:30 AM – 10:00 AM
+10:00 AM – 10:30 AM
+10:30 AM – 11:00 AM
+
+The system does not create irregular patient-facing reservation ranges merely
+from calculated expected completion times.
+
+
+TS-B12 — AVAILABILITY DEPENDS ON EXPECTED RESERVED WORKLOAD
+
+Availability of later standardized slots depends on the expected workload
+created by earlier booked patients.
+
+The system uses expected Service duration to determine which later standardized
+reservation slot may be opened.
+
+There is no separate clinic interval/buffer calculation in the approved
+Time-Slot availability model. Any Version 0.1 rule requiring such an interval
+or dynamically generated irregular start range is superseded.
+
+
+TS-B13 — MULTIPLE SERVICE DURATIONS ARE ADDITIVE
+
+Each applicable Service has a clinic-configured expected duration.
+
+When a patient selects multiple Services, their configured expected durations
+are added to determine the patient's expected service duration.
+
+Example:
+
+Consultation: 30 minutes
+ECG:          20 minutes
+Procedure:    40 minutes
+
+Calculated expected service duration: 90 minutes.
+
+
+TS-B13A — OPTIONAL MAXIMUM BOOKABLE SERVICE DURATION PER PATIENT
+
+The clinic may optionally configure a Maximum Bookable Service Duration Per
+Patient for patient self-booking.
+
+Its purpose is capacity protection, including preventing one patient from
+selecting enough Services to consume an unreasonable portion or all of the
+clinic's bookable schedule.
+
+If no maximum is configured, this optional limit does not independently restrict
+the additive Service-duration calculation.
+
+TS-B51 — MAXIMUM SELF-BOOKABLE SERVICE DURATION
+
+When the clinic has configured a Maximum Bookable Service Duration Per Patient,
+the additive duration of all Services selected by the patient is compared with
+that maximum.
+
+If the selected total exceeds the configured maximum:
+
+- patient self-booking for that Service combination is not permitted;
+- the system must not encourage the patient to remove Services merely to fit
+  within the limit;
+- the patient is informed that the selected Services require clinic-assisted
+  scheduling;
+- the patient is directed to contact/approach the clinic;
+- authorized clinic staff may arrange the Appointment using approved clinic
+  operational discretion.
+
+If no maximum is configured, this rule imposes no additional duration limit.
+
+
+TS-B48 — STANDARDIZED SLOT TOLERANCE RULE
+
+Expected completion is mapped to standardized 30-minute reservation slots using
+an inclusive 15-minute tolerance.
+
+When calculated expected completion falls within the first 15 minutes after a
+standardized slot begins, including exactly the 15-minute point, that same
+standardized slot may be opened as the next bookable reservation slot.
+
+When calculated expected completion is later than that inclusive 15-minute
+point, availability moves to the next standardized 30-minute slot.
+
+Examples:
+
+Expected completion    Next bookable standardized slot
+9:30 AM                9:30 AM – 10:00 AM
+9:44 AM                9:30 AM – 10:00 AM
+9:45 AM                9:30 AM – 10:00 AM
+9:46 AM                10:00 AM – 10:30 AM
+10:15 AM               10:00 AM – 10:30 AM
+10:45 AM               10:30 AM – 11:00 AM
+10:46 AM               11:00 AM – 11:30 AM
+
+This intentionally permits up to 15 minutes of calculated expected overlap so
+that a small expected overrun does not consume an entire additional 30-minute
+reservation block.
+
+
+TS-B48A — PROTECTED NON-BOOKABLE PERIODS
+
+The clinic may define periods that are not available for patient booking, such
+as a lunch break.
+
+Patient self-booking cannot reserve standardized slots within such a protected
+non-bookable period.
+
+A protected/non-bookable period does not by itself prohibit the clinic from
+continuing to operate to finish existing patients.
+
+Authorized clinic staff may exercise approved clinic operational discretion
+where an applicable staff override is permitted.
+
+
+TS-B52 — INDEPENDENT RESERVATION WORKLOAD CALCULATION
+
+Each Appointment's expected completion is calculated from that Appointment's
+own reserved standardized-slot start time plus its additive selected-Service
+duration.
+
+Expected workload is not chained forward from the calculated completion of the
+preceding patient.
+
+This preserves standardized reservation times even where the approved
+15-minute tolerance permits calculated overlap between consecutive patients.
+
+
+TS-B53 — AVAILABILITY RECALCULATION AFTER CAPACITY RELEASE
+
+Cancellation or successful rescheduling immediately releases the affected
+reservation and causes affected patient-bookable standardized-slot availability
+to be recalculated from the reservations that remain.
+
+A cancelled or moved long-duration Appointment may therefore reopen usable
+capacity beyond only its displayed 30-minute reservation slot.
+
+
+TS-B54 — STAFF OVERRIDE OF CALCULATED AVAILABILITY
+
+Authorized clinic staff may deliberately create or assign a reservation in a
+standardized slot that patient self-service considers unavailable.
+
+The system must provide an applicable conflict warning.
+
+The authorized operator may explicitly proceed despite the warning.
+
+The system does not automatically move, cancel, or repair existing reservations
+because staff deliberately accepted the conflict.
+
+
+TS-B55 — EQUAL-TIME DUPLICATE RESERVATIONS ARE CALCULATED INDEPENDENTLY
+
+Where authorized staff deliberately assigns two or more patients the same
+reservation start time, each Appointment's expected duration is calculated
+independently from that same reserved start time.
+
+Example:
+
+Anna: 10:00 AM + 30 minutes = expected completion 10:30 AM
+Ben:  10:00 AM + 30 minutes = expected completion 10:30 AM
+
+The system must not reinterpret the duplicate reservations as a sequential
+10:00 then 10:30 schedule.
+
+Both remain legitimate 10:00 reservations, and authorized clinic staff
+determines their live Serving Order.
+
+
+TS-B56 — LATEST EXPECTED COMPLETION GOVERNS FUTURE PUBLIC AVAILABILITY FOR
+OVERLAPPING RESERVATIONS
+
+Where overlapping or duplicate reservations produce different expected
+completion times, future patient self-service availability considers the latest
+expected completion produced by the overlapping workload.
+
+Example:
+
+Anna: 10:00 AM + 30 minutes = 10:30 AM
+Ben:  10:00 AM + 60 minutes = 11:00 AM
+
+The relevant expected completion for subsequent public availability is
+11:00 AM, subject to the standardized-slot rules.
+
+This calculation does not determine the relative Serving Order of the
+overlapping patients.
+
+
+======================================================================
+6. RESERVATION RIGHTS AND NORMAL PRIORITY
+======================================================================
+
+TS-B14 — SUCCESSFUL BOOKING CREATES A RESERVATION RIGHT
+
+A successfully booked Appointment creates a real reservation right associated
+with the patient's booked time range.
+
+The scheduled time is not merely an estimated queue time.
+
+The clinic is expected to respect the reservation, subject to the clinic's
+retained operational discretion.
+
+
+TS-B15 — SERVICE-DATE CONFIRMATION
+
+A patient may confirm the Appointment through the applicable Service Date
+confirmation process following the SMS notification.
+
+A confirmed patient is treated as intending to attend and the clinic is expected
+to respect the patient's reserved standardized time slot.
+
+Operational enforcement remains subject to clinic discretion.
+
+For an unconfirmed Appointment, clinic treatment may depend on clinic
+operations, but actions that may interfere with the still-existing reservation
+require the applicable warning prompts.
+
+An unconfirmed Appointment is not automatically cancelled merely because it is
+unconfirmed.
+
+Reservation protection applies to the patient's reserved standardized time
+slot. Passing that protected time does not itself cancel the Appointment.
+
+
+TS-B16 — EARLIER RESERVATION HAS NORMAL SCHEDULED PRIORITY
+
+Among patients who are present/waiting and otherwise eligible for service, an
+earlier scheduled reservation normally has greater scheduled priority than a
+later reservation.
+
+Early arrival by a later-scheduled patient does not automatically give that
+patient priority over an earlier valid reservation.
+
+
+TS-B57 — EARLY ARRIVAL DOES NOT CHANGE RESERVATION TIME
+
+A patient arriving before the reserved standardized slot retains the original
+reservation.
+
+Early arrival does not automatically grant earlier priority or rewrite the
+reservation.
+
+Authorized clinic staff may choose to serve the patient early under clinic
+operational discretion. Actual early service does not alter the recorded
+reservation time.
+
+
+TS-B17 — CLINIC DELAY DOES NOT ERASE LATER RESERVATIONS
+
+When an earlier consultation takes longer than expected, later patients'
+reservations remain intact.
+
+Their original reservation times are not rewritten merely because clinic
+operations are delayed.
+
+
+======================================================================
+7. CLINIC DISCRETION AND RESERVATION WARNINGS
+======================================================================
+
+TS-B18 — WARN, BUT DO NOT ABSOLUTELY ENFORCE SERVING ORDER
+
+The SaaS must warn authorized clinic staff when an intended serving or insertion
+decision may interfere with a still-valid scheduled reservation.
+
+The warning does not absolutely prohibit the clinic from proceeding.
+
+Authorized clinic staff retain operational discretion.
+
+
+TS-B19 — WALK-INS ARE SUPPORTED
+
+Walk-in patients may be accepted and entered by authorized clinic staff.
+
+The clinic decides whether to:
+
+- serve the walk-in;
+- make the walk-in wait;
+- insert the walk-in at another operational position.
+
+If the intended action may interfere with a still-valid reserved appointment,
+the system warns the operator.
+
+The operator may explicitly proceed despite the warning.
+
+
+======================================================================
+8. LIVE QUEUE
+======================================================================
+
+TS-B20 — TIME-SLOT MODE HAS A LIVE QUEUE
+
+Time-Slot Mode retains a live operational queue.
+
+The patient experience includes both reservation information and live queue
+information.
+
+Conceptually, the patient may be informed of:
+
+- the patient's scheduled appointment time/range;
+- the Queue Number currently being served;
+- the number of patients ahead.
+
+Reservation information and live queue information are separate.
+
+
+TS-B21 — STAFF RETAINS LIVE SERVING-ORDER DISCRETION
+
+Authorized clinic staff may manage the live operational order, including
+management of:
+
+- walk-ins;
+- late patients;
+- inserted patients;
+- waiting scheduled patients;
+- overlapping or duplicate reservations.
+
+Changing live Serving Order does not rewrite the patient's scheduled
+reservation.
+
+
+======================================================================
+9. LATE PATIENTS, MISSED TURNS, AND NEXT
+======================================================================
+
+TS-B22 — PASSING THE RESERVED TIME DOES NOT AUTOMATICALLY CANCEL
+
+A patient whose reserved appointment time has passed is not automatically
+cancelled.
+
+The patient is informed that the scheduled appointment time has passed and may
+use the applicable recovery options.
+
+
+TS-B23 — LATE PATIENT MAY STILL APPROACH THE CLINIC
+
+A late patient may approach clinic staff to determine whether the clinic can
+still accommodate the patient.
+
+The SaaS does not promise that accommodation will be possible.
+
+That decision remains with the clinic.
+
+
+TS-B24 — STAFF MAY ACCOMMODATE OR INSERT A LATE PATIENT
+
+Authorized clinic staff may decide whether and where to accommodate or insert a
+late patient into live operations.
+
+If the action affects another still-valid reservation, the system warns the
+operator.
+
+Staff retains final operational discretion.
+
+
+TS-B31 — NEXT MEANS MISSED CURRENT TURN
+
+NEXT is an operational queue action.
+
+When a patient is called but is not available to be served, authorized staff
+may select NEXT and proceed to another patient.
+
+NEXT means that the patient was not served when the patient's turn was called
+and clinic operations continued.
+
+NEXT does NOT:
+
+- cancel the Appointment;
+- complete the Appointment;
+- terminate the Appointment;
+- prohibit later clinic accommodation;
+- prohibit eligible self-rescheduling.
+
+The Appointment remains unresolved.
+
+
+TS-B38 — MISSED-TURN PATIENT DOES NOT AUTOMATICALLY RECLAIM PRIORITY
+
+A patient who missed the called turn and later becomes available does not
+automatically displace patients whom the clinic has already progressed to serve.
+
+The patient may:
+
+- self-reschedule into another available time; or
+- approach clinic staff for clinic-assisted accommodation.
+
+The clinic determines any subsequent operational placement.
+
+
+======================================================================
+10. NO AUTOMATIC CANCELLATION AND END OF CLINIC
+======================================================================
+
+TS-B25 — NO AUTOMATIC CANCELLATION FOR LATENESS OR ABSENCE
+
+The system does not automatically cancel an Appointment merely because:
+
+- the scheduled start has passed;
+- the scheduled range has ended;
+- the patient is late;
+- the patient is absent;
+- the patient did not appear when expected;
+- the patient missed the called turn.
+
+Cancellation requires an explicit authorized action by the patient or clinic
+staff.
+
+
+TS-B26 — UNRESOLVED APPOINTMENT AT END OF CLINIC
+
+An unresolved Appointment expires when the applicable clinic schedule ends.
+
+The final business/status terminology for this outcome, including whether it is
+represented or reported as EXPIRED, MISSED, NO_SHOW, or another approved term,
+remains unresolved and must be separately decided.
+
+
+======================================================================
+11. CANCELLATION
+======================================================================
+
+TS-B27 — CANCELLATION IS TERMINAL FOR THAT APPOINTMENT
+
+The patient and authorized clinic staff may explicitly cancel an Appointment
+through their applicable controls.
+
+CANCEL means the Appointment is explicitly terminated.
+
+After cancellation:
+
+- the reservation is released;
+- the Appointment cannot use the continuing Reschedule recovery path;
+- the patient must use the normal clinic booking process to obtain another
+  Appointment.
+
+CANCEL is not RESCHEDULE.
+
+NEXT is not CANCEL.
+
+
+TS-B60 — NO PATIENT SELF-CANCELLATION AFTER ACTIVE SERVICE BEGINS
+
+Patient self-cancellation is available before active consultation/service
+begins.
+
+Once active consultation/service has begun, patient self-cancellation is no
+longer available.
+
+Authorized clinic-side correction or handling is reserved for the applicable
+existing SaaS rules during reconciliation.
+
+
+TS-B27A — CANCELLATION RELEASES THE RESERVED STANDARDIZED SLOT
+
+When an Appointment is explicitly cancelled, its reserved standardized time
+slot is immediately released from that Appointment and becomes eligible to be
+opened again for reservation, subject to the other approved availability rules.
+
+
+======================================================================
+12. PATIENT SELF-RESCHEDULING
+======================================================================
+
+TS-B28 — RESCHEDULE REMAINS AVAILABLE WHILE UNRESOLVED
+
+As long as the Appointment/consultation has not been marked COMPLETED or
+CANCELLED, the patient has access to RESCHEDULE during the applicable clinic-day
+window when rescheduling remains possible.
+
+This includes an Appointment where the patient is:
+
+- waiting;
+- late;
+- past the reserved time;
+- passed through NEXT;
+- otherwise unresolved.
+
+COMPLETED and CANCELLED are terminal for patient rescheduling.
+
+Patient self-rescheduling also stops once active consultation/service has
+actually begun, as defined by TS-B59.
+
+
+TS-B29 — SAME-DAY, SAME-CLINIC RESCHEDULING IS THE FIRST RECOVERY PATH
+
+When the patient selects RESCHEDULE, the immediate self-service recovery
+experience first presents available appointment times for the same clinic and
+same Service Date.
+
+The broader experience may also provide:
+
+CHOOSE ANOTHER DATE
+
+and:
+
+CHOOSE ANOTHER CLINIC
+
+for applicable clinics under the same Doctor.
+
+
+TS-B34 — SELF-RESCHEDULING USES AVAILABLE SAME-DAY TIMES
+
+The patient may independently choose another currently available time on the
+same Service Date.
+
+The newly selected valid time becomes the patient's current reservation.
+
+
+TS-B58 — SUCCESSFUL RESCHEDULING REMOVES THE PREVIOUS LIVE PLACEMENT
+
+When a waiting, late, missed-turn, or otherwise eligible patient successfully
+reschedules, the patient is removed from the previous live Serving Order
+position.
+
+The patient cannot simultaneously retain the previous queue position and the
+new reservation.
+
+
+TS-B59 — NO PATIENT SELF-RESCHEDULING AFTER ACTIVE SERVICE BEGINS
+
+Patient self-rescheduling is available while the Appointment remains eligible
+and unresolved, but stops once active consultation/service has actually begun.
+
+Authorized clinic-side correction or handling is reserved for the applicable
+existing SaaS rules during reconciliation.
+
+
+TS-B35 — NO SAME-DAY AVAILABILITY DOES NOT CANCEL THE APPOINTMENT
+
+If there is no available same-day time for patient self-rescheduling, the
+system does not create or manufacture availability.
+
+The patient is advised that no appointment times are currently available for
+self-rescheduling today and that the Appointment has not been cancelled merely
+because no slot is available.
+
+The patient is advised to approach the clinic Secretary if the patient still
+wishes to be accommodated that day.
+
+
+TS-B36 — SECRETARY ASSISTANCE REMAINS AN ALTERNATIVE
+
+An unresolved patient does not have to use self-rescheduling.
+
+A patient who is late, waiting, has missed the called turn, or otherwise remains
+unserved may approach the clinic Secretary.
+
+Authorized clinic staff may determine whether and how the patient can still be
+accommodated.
+
+
+TS-B41 — PATIENT SELF-RESCHEDULING MUST RESPECT CALCULATED AVAILABILITY
+
+A patient using self-service RESCHEDULE may select only a time that the system
+currently identifies as available.
+
+The patient cannot intentionally create a duplicate or overlapping reservation
+through self-service.
+
+
+======================================================================
+13. CLINIC-ASSISTED ACCOMMODATION AND RESCHEDULING
+======================================================================
+
+TS-B37 — CLINIC ASSISTANCE IS NOT LIMITED BY PUBLIC SELF-SERVICE AVAILABILITY
+
+The absence of a publicly available self-service time does not absolutely
+prohibit authorized clinic staff from accommodating the patient.
+
+Clinic staff may determine that accommodation is operationally possible even
+when no public/self-service time is available.
+
+
+TS-B39 — RESCHEDULING REPLACES THE CURRENT RESERVATION
+
+When an unresolved Appointment is rescheduled, whether by the patient or by
+authorized clinic staff, the newly selected time becomes the Appointment's
+current scheduled reservation.
+
+The patient UI changes to show the new scheduled time.
+
+The previous scheduled time is no longer displayed as the patient's current
+reservation.
+
+The system must eventually preserve rescheduling history for audit, operational
+history, and reporting, but the technical persistence mechanism is outside this
+document.
+
+When rescheduling succeeds, the previous standardized time slot is immediately
+released from that Appointment and becomes eligible to be opened again for
+reservation, subject to the other approved availability rules.
+
+
+TS-B42 — CLINIC-ASSISTED RESCHEDULING MAY OVERRIDE AVAILABILITY
+
+Authorized clinic staff may reschedule a patient to a time that:
+
+- overlaps another Appointment;
+- duplicates another patient's scheduled time;
+- otherwise conflicts with normally calculated appointment availability.
+
+The system must warn the operator before such a conflicting reschedule is
+completed.
+
+The operator may explicitly proceed despite the conflict.
+
+
+TS-B43 — AUTHORIZED OVERRIDE CREATES A VALID RESERVATION
+
+When an authorized operator acknowledges a scheduling-conflict warning and
+proceeds, the resulting Appointment reservation is valid.
+
+The system must not subsequently treat one of the deliberately overlapping or
+duplicate Appointments as invalid merely because of the conflict.
+
+
+TS-B44 — PATIENT UI SHOWS THE ACTUAL CURRENT RESERVATION
+
+Following patient or clinic-assisted rescheduling, the patient's UI shows the
+actual newly assigned reservation.
+
+The patient does not need to be shown that clinic staff used an internal
+availability override merely because the resulting reservation overlaps another
+patient.
+
+Live queue information separately communicates actual operational position.
+
+
+======================================================================
+14. DUPLICATE/OVERLAPPING RESERVATIONS AND SERVING ORDER
+======================================================================
+
+TS-B45 — SECRETARY DETERMINES RELATIVE SERVING ORDER FOR CONFLICTING RESERVATIONS
+
+When two or more patients have the same or overlapping reserved appointment
+time because an authorized clinic operator deliberately allowed the scheduling
+conflict, the reservation time alone does not determine which conflicting
+patient must be served first.
+
+Authorized clinic staff determines their relative live Serving Order.
+
+Example:
+
+Anna: 10:00 AM – 10:30 AM
+Ben:  10:00 AM – 10:30 AM
+
+Both reservations are valid.
+
+The Secretary may operationally place Anna before Ben or Ben before Anna.
+
+
+TS-B46 — REORDERING DOES NOT CHANGE RESERVATION TIME
+
+Changing the relative Serving Order of duplicate or overlapping reservations
+does not change either patient's scheduled reservation.
+
+If Anna and Ben both hold 10:00 AM – 10:30 AM reservations, both continue to
+show that reservation even if the Secretary chooses which patient will be
+served first.
+
+Their live queue information reflects the actual Serving Order.
+
+
+TS-B47 — CLINIC SERVING-ORDER DISCRETION APPLIES TO OPERATIONAL EXCEPTIONS
+
+Clinic operational discretion over Serving Order also applies, subject to the
+approved warning rules, to circumstances including:
+
+- overlapping reservations;
+- duplicate reservations;
+- staff-inserted late patients;
+- walk-ins;
+- clinic-assisted accommodation.
+
+The SaaS maintains the reservation information and provides applicable
+warnings, while authorized clinic staff determines the actual operational
+serving sequence.
+
+
+======================================================================
+15. CLINIC DELAY AND PATIENT INFORMATION
+======================================================================
+
+TS-B30 — DELAYS MAY CHANGE OPERATIONAL EXPECTATION WITHOUT CHANGING RESERVATION
+
+When earlier consultations take longer than expected, the operational outlook
+for later patients may move.
+
+Existing reservations remain unchanged.
+
+A patient's UI continues to identify the patient's actual reserved appointment
+time and may separately communicate:
+
+- that the clinic is delayed;
+- the Queue Number currently being served;
+- the number of patients ahead;
+- that earlier confirmed/waiting patients remain ahead;
+- the availability of rescheduling when applicable.
+
+The system must not silently rewrite the original reservation merely because
+clinic operations are behind schedule.
+
+
+TS-B40 — PATIENT UI DISTINGUISHES RESERVATION FROM LIVE OPERATIONS
+
+While an Appointment remains unresolved, the patient experience must distinguish
+the patient's scheduled reservation from actual live clinic progression.
+
+Information requirements include, as applicable:
+
+- current scheduled appointment time/range;
+- current Queue Number being served;
+- number of patients ahead;
+- whether the patient's scheduled turn has passed;
+- whether RESCHEDULE is available;
+- direction to approach the clinic Secretary when self-service recovery is not
+  available.
+
+This section defines required business information, not final UI layout.
+
+
+======================================================================
+15A. SERVICE CHANGES AFTER BOOKING
+======================================================================
+
+TS-B49 — PATIENT DOES NOT SELF-CHANGE SERVICES AFTER BOOKING
+
+After a Time-Slot Appointment is successfully booked, the patient does not
+self-edit the selected Services.
+
+The patient-facing experience should reassure/direct the patient appropriately
+rather than requiring the patient to alter Services to preserve the reservation.
+
+
+TS-B50 — CLINIC-SIDE SERVICE CHANGES ARE RESERVED FOR EXISTING-SAAS RECONCILIATION
+
+Authorized clinic-side changes to Services after booking are intended to follow
+the applicable existing SaaS rules where those rules are determined to be
+shared during the later reconciliation phase.
+
+This standalone Time-Slot baseline does not redefine those existing rules.
+
+If a clinic-side Service change increases expected workload, later patients'
+existing reservations are not automatically rewritten. Live operational
+conditions and patients-ahead information reflect actual clinic progression.
+
+
+======================================================================
+16. GOVERNING BUSINESS PRINCIPLES
+======================================================================
+
+The approved rules establish the following governing principles:
+
+PRINCIPLE 1 — RESERVATION VERSUS EXACT SERVICE COMMENCEMENT
+
+Time-Slot Mode reserves scheduled appointment time. Actual consultation may
+begin later because of real clinic operations.
+
+A clinic delay does not rewrite the patient's reservation.
+
+
+PRINCIPLE 2 — RESERVATION TIME VERSUS SERVING ORDER
+
+Reservation Time determines normal scheduled priority.
+
+Serving Order determines actual live progression.
+
+The two must not be treated as the same business concept.
+
+
+PRINCIPLE 3 — PATIENT SELF-SERVICE RESPECTS AVAILABILITY
+
+Patient booking and patient self-rescheduling may use only system-calculated
+available appointment times.
+
+Patients cannot intentionally create duplicate or overlapping reservations
+through self-service.
+
+
+PRINCIPLE 4 — CLINIC STAFF RETAINS OPERATIONAL DISCRETION
+
+Authorized clinic staff may override calculated availability and manage live
+Serving Order when clinic operations require it.
+
+Where an action conflicts with an existing reservation, the SaaS must provide
+the applicable warning.
+
+An authorized operator may deliberately proceed despite that warning where the
+business rules permit.
+
+
+PRINCIPLE 5 — UNRESOLVED APPOINTMENTS REMAIN RECOVERABLE
+
+Lateness, absence, passing the reserved time, NEXT, or lack of public
+self-service availability do not by themselves cancel an Appointment.
+
+While the Appointment remains unresolved and eligible during the applicable
+clinic-day window, the patient may use approved recovery paths.
+
+COMPLETED and CANCELLED are terminal for patient self-rescheduling.
+
+
+PRINCIPLE 6 — NEXT AND CANCEL ARE FUNDAMENTALLY DIFFERENT
+
+NEXT records that clinic operations proceeded because the patient was not
+available when called.
+
+CANCEL explicitly terminates the Appointment.
+
+Implementation must never treat NEXT as an implicit cancellation.
+
+
+PRINCIPLE 7 — STAFF OVERRIDES DO NOT CORRUPT RESERVATIONS
+
+If authorized staff deliberately creates duplicate or overlapping reservations
+after acknowledging the required warning, those reservations are legitimate.
+
+The Secretary determines the live serving order among the conflicting patients.
+
+Reordering does not rewrite their scheduled reservation times.
+
+
+======================================================================
+17. APPROVED BUSINESS FLOW SUMMARY
+======================================================================
+
+NORMAL BOOKING:
+
+QR/PUBLIC APPOINTMENT ENTRY
+→ SELECT CLINIC
+→ BOOK AN APPOINTMENT
+→ SELECT ACTIVE DATE
+→ SELECT AVAILABLE TIME
+→ SELECT SERVICES
+→ ANSWER BOOKING QUESTIONS
+→ BOOK APPOINTMENT
+→ OTP
+→ FINAL AVAILABILITY VALIDATION
+→ SUCCESSFUL BOOKING
+
+
+CONCURRENT SLOT LOSS:
+
+OTP SUCCESSFUL
+→ SELECTED TIME NO LONGER AVAILABLE
+→ EXPLANATORY PROMPT
+→ CHOOSE ANOTHER TIME
+   → ACTIVE DATES FOR CURRENT CLINIC
+   → SELECT DATE
+   → SELECT AVAILABLE TIME
+   → COMPLETE BOOKING WITHOUT REPEATING OTP DURING VALID CONTINUATION
+
+OR
+
+→ CHOOSE ANOTHER CLINIC
+   → APPLICABLE CLINICS UNDER SAME DOCTOR
+   → CONTINUE APPLICABLE BOOKING SELECTION
+   → NO REPEATED OTP MERELY BECAUSE OF THE AVAILABILITY CONFLICT
+
+
+NORMAL LIVE OPERATION:
+
+BOOKED RESERVATION
+→ PATIENT ARRIVES/WAITS
+→ LIVE SERVING ORDER
+→ PATIENT CALLED
+
+IF SERVED:
+→ CONSULTATION
+→ COMPLETED
+
+IF NOT AVAILABLE WHEN CALLED:
+→ NEXT
+→ APPOINTMENT REMAINS UNRESOLVED
+→ PATIENT MAY SELF-RESCHEDULE OR APPROACH SECRETARY
+
+
+SELF-RESCHEDULING:
+
+UNRESOLVED APPOINTMENT
+→ RESCHEDULE
+→ AVAILABLE SAME-DAY TIMES FOR SAME CLINIC
+
+IF AVAILABLE:
+→ SELECT NEW TIME
+→ NEW TIME BECOMES CURRENT RESERVATION
+→ PATIENT UI SHOWS NEW TIME
+
+IF NONE AVAILABLE:
+→ NO AUTOMATIC CANCELLATION
+→ ADVISE PATIENT TO APPROACH CLINIC SECRETARY
+
+
+CLINIC-ASSISTED RESCHEDULING:
+
+UNRESOLVED APPOINTMENT
+→ SECRETARY/STAFF ASSISTANCE
+→ SELECT/ASSIGN OPERATIONALLY APPROPRIATE TIME
+
+IF NO CONFLICT:
+→ NEW TIME BECOMES CURRENT RESERVATION
+
+IF DUPLICATE/OVERLAP:
+→ SYSTEM WARNING
+→ STAFF MAY RETURN OR EXPLICITLY PROCEED
+→ IF PROCEEDED, RESERVATION IS VALID
+→ SECRETARY DETERMINES RELATIVE LIVE SERVING ORDER
+
+
+CANCELLATION:
+
+UNRESOLVED APPOINTMENT
+→ EXPLICIT CANCEL
+→ APPOINTMENT TERMINATED
+→ RESERVATION RELEASED
+→ NORMAL BOOKING PROCESS REQUIRED FOR A NEW APPOINTMENT
+
+
+======================================================================
+18. RECONCILIATION-RESERVED ITEMS
+======================================================================
+
+The standalone Time-Slot Mode business-rule design is approved for
+existing-SaaS reconciliation.
+
+The following matters are intentionally NOT independently redefined here
+because they require reconciliation with approved existing SaaS rules or later
+technical design:
+
+1. Detailed clinic-side Service-change mechanics and controls.
+2. Clinic opening/closing lifecycle and unresolved Appointment outcomes where
+   the existing Queue Mode already provides canonical clinic-day rules.
+3. Detailed reporting classifications where existing SaaS reporting/outcome
+   rules already exist.
+4. Exact security duration/expiration of OTP reuse during a valid booking
+   continuation.
+5. Database schema, persistence model, migrations, transactions, concurrency
+   mechanisms, and locking.
+6. API contracts and authorization implementation.
+7. Mode-selection configuration and ownership.
+8. Integration/reconciliation with existing Queue Mode business rules.
+9. Determination of shared versus mode-specific frontend UI and controls.
+10. Migration/compatibility behavior for existing clinics and Appointments.
+
+These are not unresolved standalone Time-Slot business rules. They are the
+next-phase reconciliation and implementation-design subjects.
+
+No implementation may infer answers to these items solely from this document.
+
+
+======================================================================
+19. CHANGE CONTROL
+======================================================================
+
+Status of this document:
+
+APPROVED STANDALONE BUSINESS-RULE BASELINE — TIME-SLOT MODE v1.0
+
+The rules recorded in Version 1.0, including TS-B01 through TS-B60 and
+associated sub-rules, reflect the approved standalone business decisions reached
+during Time-Slot Mode business-rule design and scenario testing.
+
+This document is approved as the standalone Time-Slot Mode business-rule
+baseline and is ready for reconciliation with the existing SaaS.
+
+It is not, by itself, implementation authorization.
+
+No architecture, database design, API behavior, frontend sharing strategy, or
+existing Queue Mode modification should be inferred solely from this baseline.
+
+Future work should preserve the sequence:
+
+BUSINESS RULE COMPLETION
+→ PRODUCT OWNER APPROVAL
+→ EXISTING-SAAS RECONCILIATION
+→ ARCHITECTURE/DATABASE/API DESIGN
+→ UI RECONCILIATION/DESIGN
+→ IMPLEMENTATION PLAN
+→ IMPLEMENTATION
+→ TESTING
+→ OWNER ACCEPTANCE
+→ GIT CHECKPOINT
+
+======================================================================
+20. VERSION 1.0 CONSOLIDATION AND APPROVAL NOTES
+======================================================================
+
+Version 1.0 supersedes the working Version 0.2.
+
+Version 1.0 incorporates the approved availability-engine and lifecycle
+scenario tests and locks the following additional rules:
+
+- TS-B51 Maximum Self-Bookable Service Duration.
+- TS-B52 Independent Reservation Workload Calculation.
+- TS-B53 Availability Recalculation After Capacity Release.
+- TS-B54 Staff Override of Calculated Availability.
+- TS-B55 Equal-Time Duplicate Reservations Are Calculated Independently.
+- TS-B56 Latest Expected Completion Governs Future Public Availability for
+  Overlapping Reservations.
+- TS-B57 Early Arrival Does Not Change Reservation Time.
+- TS-B58 Successful Rescheduling Removes the Previous Live Placement.
+- TS-B59 No Patient Self-Rescheduling After Active Service Begins.
+- TS-B60 No Patient Self-Cancellation After Active Service Begins.
+
+The scenario audit also confirmed the previously approved rules for:
+
+- morning confirmation and non-response;
+- clinic delay;
+- late arrival;
+- NEXT/missed turn;
+- waiting and self-rescheduling;
+- walk-ins;
+- protected non-bookable periods;
+- explicit cancellation;
+- clinic-assisted accommodation;
+- staff-created overlaps and duplicate reservations;
+- patient-facing separation of Reservation Time from live Serving Order;
+- inheritance/reconciliation of applicable existing SaaS clinic-close and
+  reporting behavior rather than creation of competing Time-Slot rules.
+
+Any earlier working statement inconsistent with Version 1.0 is superseded.
+
+======================================================================
+21. NEXT PHASE
+======================================================================
+
+The next controlled phase is EXISTING-SAAS RECONCILIATION.
+
+The reconciliation must determine, using the approved existing Project Sources
+as the primary source of truth:
+
+1. Which existing Queue Mode business rules are shared unchanged.
+2. Which rules are Time-Slot-specific.
+3. Which existing rules require mode-aware branching.
+4. Where clinic mode is configured and who is authorized to change it.
+5. Shared versus mode-specific clinic-day, Appointment, queue, Service,
+   confirmation, cancellation, rescheduling, and reporting behavior.
+6. Database and migration implications.
+7. Transaction/concurrency requirements, especially booking and rescheduling.
+8. API and authorization changes.
+9. Shared versus mode-specific frontend UI.
+10. Acceptance tests and migration/change-control requirements.
+
+The reconciliation phase must not silently modify either this approved
+Time-Slot business baseline or existing canonical Queue Mode business rules.
+Any material conflict must be escalated to the Product Owner.
+
+END OF DOCUMENT

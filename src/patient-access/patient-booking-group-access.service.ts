@@ -21,6 +21,9 @@ export type PatientBookingGroupAccess = {
     serviceDate: Date;
     servingProtectionEndedAt: Date | null;
     members: Array<{
+      appointmentMode: string;
+      reservationAt: Date | null;
+      serviceStartedAt: Date | null;
       bookingReference: string;
       queueNumber: number;
       status: AppointmentStatus;
@@ -75,6 +78,9 @@ export class PatientBookingGroupAccessService {
               select: {
                 bookingReference: true,
                 queueNumber: true,
+                appointmentMode: true,
+                reservationAt: true,
+                serviceStartedAt: true,
                 status: true,
                 servingOrderKey: true,
                 waitingPlacementType: true,

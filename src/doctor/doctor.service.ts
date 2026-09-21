@@ -21,6 +21,7 @@ import { UpdateDoctorAccountSettingsDto } from './dto/update-doctor-account-sett
 const MAX_PATIENT_ESTIMATED_SERVICE_MINUTES = 3 * 24 * 60;
 
 type DoctorDurationSettingsRow = {
+  defaultAppointmentMode: string;
   maximumEstimatedServiceMinutesPerPatient: number | null;
   defaultTimeZone: string;
   maximumAdvanceBookingDays: number;
@@ -143,7 +144,7 @@ export class DoctorService {
     const rows = await this.prisma.$queryRaw<DoctorDurationSettingsRow[]>(
       Prisma.sql`
         SELECT s."maximumEstimatedServiceMinutesPerPatient", s."defaultTimeZone",
-          s."maximumAdvanceBookingDays", s."allowOnlineBooking"
+          s."maximumAdvanceBookingDays", s."allowOnlineBooking", s."defaultAppointmentMode"
         FROM "DoctorAccountSettings" s
         INNER JOIN "DoctorProfile" d ON d."id" = s."doctorProfileId"
         INNER JOIN "User" u ON u."id" = d."userId"
@@ -187,6 +188,15 @@ export class DoctorService {
     }
 
     const changes: Prisma.Sql[] = [];
+    if (dto.defaultAppointmentMode !== undefined) {
+      if (
+        !['QUEUE_MODE', 'TIME_SLOT_MODE'].includes(dto.defaultAppointmentMode)
+      )
+        throw new BadRequestException('Invalid Appointment Mode.');
+      changes.push(
+        Prisma.sql`"defaultAppointmentMode" = ${dto.defaultAppointmentMode}::"AppointmentMode"`,
+      );
+    }
     if (maximumEstimatedServiceMinutesPerPatient !== undefined) {
       changes.push(
         Prisma.sql`"maximumEstimatedServiceMinutesPerPatient" = ${maximumEstimatedServiceMinutesPerPatient}`,
@@ -239,7 +249,7 @@ export class DoctorService {
           AND u."id" = d."userId" AND u."role" = 'DOCTOR'
           AND u."accountStatus" = 'ACTIVE' AND u."administrativeRestrictionStatus" = 'NONE'
         RETURNING s."maximumEstimatedServiceMinutesPerPatient", s."defaultTimeZone",
-          s."maximumAdvanceBookingDays", s."allowOnlineBooking"
+          s."maximumAdvanceBookingDays", s."allowOnlineBooking", s."defaultAppointmentMode"
       `,
     );
     const settings = rows[0];

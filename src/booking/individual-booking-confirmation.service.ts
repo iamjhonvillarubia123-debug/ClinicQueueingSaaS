@@ -31,6 +31,7 @@ type ConfirmIndividualBookingInput = {
 };
 
 type DraftSnapshot = {
+  reservationAt: Date | null;
   id: string;
   bookingReference: string;
   practiceLocationId: string;
@@ -112,6 +113,8 @@ export class IndividualBookingConfirmationService {
             practiceLocationId: true,
             serviceDate: true,
             queueNumber: true,
+            appointmentMode: true,
+            reservationAt: true,
             status: true,
           },
         });
@@ -138,6 +141,14 @@ export class IndividualBookingConfirmationService {
         transaction,
         input.bookingDraftId,
       );
+      if (
+        admission.draft.appointmentMode === 'QUEUE_MODE' &&
+        draft.reservationAt
+      ) {
+        throw new ConflictException(
+          'The clinic Appointment Mode changed. Review the booking configuration before confirming. Your existing verification has not been consumed.',
+        );
+      }
       const currentServices = await this.loadAndValidateServices(
         transaction,
         draft.practiceLocationId,
@@ -154,13 +165,32 @@ export class IndividualBookingConfirmationService {
         draft.practiceLocationId,
         draft.serviceDate,
       );
-      await this.admission.assertCapacityAvailable(
-        transaction,
-        draft.practiceLocationId,
-        draft.serviceDate,
-        admission.maximumOperatingUntilAt,
-        currentServices.authoritativeEstimatedServiceMinutes,
-      );
+      const reservation =
+        admission.draft.appointmentMode === 'TIME_SLOT_MODE'
+          ? (
+              await this.admission.claimReservations(transaction, {
+                practiceLocationId: draft.practiceLocationId,
+                serviceDate: draft.serviceDate,
+                members: [
+                  {
+                    reservationAt: draft.reservationAt,
+                    actualMinutes: currentServices.services.reduce(
+                      (sum, s) => sum + s.durationMinutes,
+                      0,
+                    ),
+                  },
+                ],
+              })
+            )[0]
+          : null;
+      if (!reservation)
+        await this.admission.assertCapacityAvailable(
+          transaction,
+          draft.practiceLocationId,
+          draft.serviceDate,
+          admission.maximumOperatingUntilAt,
+          currentServices.authoritativeEstimatedServiceMinutes,
+        );
 
       const queueNumber = await this.queueNumbers.allocateNext(
         transaction,
@@ -187,6 +217,27 @@ export class IndividualBookingConfirmationService {
           mobileNumberHash: draft.mobileNumberHash,
           mobileNumberLastFour: draft.mobileNumberLastFour,
           activeAppointmentKey: admission.activeAppointmentKey,
+          ...(reservation
+            ? {
+                appointmentMode: reservation.appointmentMode,
+                reservationAt: reservation.reservationAt,
+                originalReservationAt: reservation.originalReservationAt,
+                schedulingAllotmentMinutes:
+                  reservation.schedulingAllotmentMinutes,
+                estimatedServiceMinutes: reservation.estimatedServiceMinutes,
+                servingOrderKey: new Prisma.Decimal(
+                  reservation.reservationAt.getTime(),
+                ).plus(new Prisma.Decimal(queueNumber).div(1000000)),
+                reservationHistory: {
+                  create: {
+                    actorType: 'PATIENT',
+                    action: 'BOOKED',
+                    reservationAt: reservation.reservationAt,
+                    details: { fragmented: false },
+                  },
+                },
+              }
+            : {}),
         },
         select: {
           id: true,
@@ -194,6 +245,8 @@ export class IndividualBookingConfirmationService {
           practiceLocationId: true,
           serviceDate: true,
           queueNumber: true,
+          appointmentMode: true,
+          reservationAt: true,
           status: true,
         },
       });
@@ -260,7 +313,7 @@ export class IndividualBookingConfirmationService {
       });
 
       const confirmationMessage = this.buildConfirmationMessage(
-        draft,
+        { ...draft, reservationAt: reservation?.reservationAt ?? null },
         currentServices.practiceLocationName,
         queueNumber,
         issuedToken.rawToken,
@@ -332,6 +385,7 @@ export class IndividualBookingConfirmationService {
         practiceLocationId: true,
         serviceDate: true,
         estimatedServiceMinutes: true,
+        reservationAt: true,
         firstName: true,
         middleName: true,
         lastName: true,
@@ -630,6 +684,9 @@ export class IndividualBookingConfirmationService {
       practiceLocationName,
       draft.serviceDate.toISOString().slice(0, 10),
       `Queue number: ${queueNumber}.`,
+      ...(draft.reservationAt
+        ? [`Reservation: ${draft.reservationAt.toISOString()}.`]
+        : []),
       `View your booking: ${secureLink}`,
     ].join(' ');
   }

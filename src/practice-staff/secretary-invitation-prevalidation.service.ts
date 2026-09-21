@@ -32,8 +32,14 @@ export class SecretaryInvitationPrevalidationService {
     practiceLocationId: string,
     identifierInput: string,
   ) {
-    const identifier = parseAccountIdentifier(identifierInput, this.mobileNumbers);
-    await this.assertEligibleDoctorOwnsLocation(actorUserId, practiceLocationId);
+    const identifier = parseAccountIdentifier(
+      identifierInput,
+      this.mobileNumbers,
+    );
+    await this.assertEligibleDoctorOwnsLocation(
+      actorUserId,
+      practiceLocationId,
+    );
 
     const target = await this.prisma.user.findFirst({
       where: {
@@ -98,7 +104,8 @@ export class SecretaryInvitationPrevalidationService {
     return {
       valid: true as const,
       existingSecretary: true,
-      secretaryName: `${target.firstName ?? ''} ${target.lastName ?? ''}`.trim() || null,
+      secretaryName:
+        `${target.firstName ?? ''} ${target.lastName ?? ''}`.trim() || null,
     };
   }
 

@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RecurringScheduleConflictService } from '../schedule/recurring-schedule-conflict.service';
 import { ScheduleTimeService } from '../schedule/schedule-time.service';
 import { ApplyPracticeLocationConfigurationDraftDto } from './dto/apply-practice-location-configuration-draft.dto';
+import { applyAppointmentModeProposal } from '../schedule/appointment-mode.configuration';
 
 const IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -155,6 +156,14 @@ export class PracticeLocationConfigurationApplyService {
         }
 
         this.validateCompleteDraft(draft, optionsByQuestion);
+        if (draft.appointmentModeProposal)
+          await applyAppointmentModeProposal(
+            transaction,
+            location.id,
+            draft.appointmentModeProposal,
+            authenticatedUserId,
+            draft.id,
+          );
         await this.assertShortCodeAvailable(
           transaction,
           location.doctorProfileId,

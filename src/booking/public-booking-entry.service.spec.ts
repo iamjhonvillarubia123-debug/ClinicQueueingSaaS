@@ -2,6 +2,10 @@ import { PublicBookingEntryService } from './public-booking-entry.service';
 
 describe('PublicBookingEntryService', () => {
   const prisma = {
+    appointmentModeConfiguration: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    appointment: { findFirst: jest.fn().mockResolvedValue(null) },
     practiceLocation: { findUnique: jest.fn() },
   };
   const publicRouting = { getPracticeLocationPublicRoute: jest.fn() };

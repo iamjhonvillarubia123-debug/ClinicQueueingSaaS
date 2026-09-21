@@ -418,6 +418,13 @@ export class PracticeLocationService {
         countryCode: true,
         timeZone: true,
         isBookingEnabled: true,
+        appointmentModeConfigurations: {
+          orderBy: [
+            { effectiveServiceDate: 'desc' },
+            { createdAt: 'desc' },
+            { id: 'desc' },
+          ],
+        },
         currentRegularPracticeStaffId: true,
         currentRegularPracticeStaff: {
           select: {
@@ -463,6 +470,7 @@ export class PracticeLocationService {
         },
         doctorScheduleDraft: {
           select: {
+            appointmentModeProposal: true,
             name: true,
             shortCode: true,
             addressLine1: true,

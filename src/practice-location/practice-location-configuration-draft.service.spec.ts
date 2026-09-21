@@ -137,8 +137,8 @@ describe('PracticeLocationConfigurationDraftService', () => {
       transactionMock.doctorPracticeScheduleDraft.upsert,
     ).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ clinicPhoto: null }),
-        create: expect.objectContaining({ clinicPhoto: null }),
+        update: expect.objectContaining({ clinicPhoto: null }) as unknown,
+        create: expect.objectContaining({ clinicPhoto: null }) as unknown,
       }),
     );
   });
